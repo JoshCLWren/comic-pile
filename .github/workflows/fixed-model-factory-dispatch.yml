@@ -595,7 +595,17 @@ jobs:
           slots='.github/scripts/factory_worker_slots.py'
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             python3 "$slots" resolve --worker "$DISPATCH_WORKER" >/dev/null
-            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
+            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]' \
+              | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_quota_pause.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
+              | python3 .github/scripts/factory_state_operations.py filter)"
+            if [[ "$workers" == '[]' ]]; then
+              echo "Requested worker ${DISPATCH_WORKER} is not currently dispatchable; no claim"
+              echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+              echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
             max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
             [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
@@ -606,6 +616,7 @@ jobs:
             # Credential, quota and health checks run before the dispatch cap.
             workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
               | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_quota_pause.py filter \
               | python3 .github/scripts/factory_source_budget.py filter \
               | python3 .github/scripts/factory_state_operations.py filter \
               | python3 .github/scripts/factory_state_operations.py rank \
@@ -614,7 +625,13 @@ jobs:
           else
             source_count="$(python3 "$slots" sources | jq -r length)"
             workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
+              | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_quota_pause.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
+              | python3 .github/scripts/factory_state_operations.py filter \
+              | python3 .github/scripts/factory_state_operations.py rank \
               | jq -c --argjson cap "$source_count" '.[:$cap]')"
+            echo "Smoke/control-plane batch: $(jq -r length <<< "$workers") eligible workers"
           fi
 
           if [[ "$workers" == '[]' ]]; then
@@ -633,16 +650,8 @@ jobs:
             exit 1
           fi
 
-          # Scheduled candidates were credential-, source-budget- and
-          # runtime-health-filtered before the batch cap. Do not repeat broad
-          # GitHub/Neon state reads. Explicit workers receive the same checks
-          # here before anyone claims a lease.
-          if [[ "$EVENT_NAME" != schedule && ! ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
-            workers="$(python3 .github/scripts/factory_dispatch_credential_filter.py filter <<< "$workers")"
-            workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
-            workers="$(python3 .github/scripts/factory_state_operations.py filter <<< "$workers")"
-            workers="$(python3 .github/scripts/factory_state_operations.py rank <<< "$workers")"
-          fi
+          # All dispatch paths are filtered for credentials, quota, budget and
+          # runtime health before any worker is offered a lease.
           if [[ "$workers" == '[]' ]]; then
             echo 'No eligible provider slots; retaining cooldown and lease safeguards'
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"

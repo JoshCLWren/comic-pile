@@ -2232,7 +2232,12 @@ def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
 
 
 def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
-    """Allocate one worker to the selected target through the normal lease policy."""
+    """Allocate one worker to the selected target through the normal lease policy.
+
+    Targets that are currently ineligible or waiting on checks are deferred, not
+    treated as fatal dispatcher errors. This keeps CI-aware/manual dispatch from
+    crashing when the selected PR is simply not actionable yet.
+    """
     from factory_completion_controller import (
         capacity_report,
         durable_factory_state,
@@ -2249,11 +2254,24 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     )
     from factory_work_policy import worker_delivery_role
 
+    last_defer_reason: str | None = None
     for worker in sorted(
         {row['worker'] for row in workers},
         key=lambda worker: (worker_delivery_role(worker) != preferred_role, int(worker)),
     ):
-        candidate = assign(worker, target=(kind, number), requested_action=action)
+        try:
+            candidate = assign(worker, target=(kind, number), requested_action=action)
+        except RuntimeError as exc:
+            reason = str(exc)
+            if (
+                'blocked or still waiting on checks' in reason
+                or 'No eligible work on this target' in reason
+                or 'Requested action is unavailable' in reason
+                or 'not currently executable' in reason.lower()
+            ):
+                last_defer_reason = reason
+                break
+            raise
         if candidate is None:
             continue
         selected = (
@@ -2269,11 +2287,32 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
             # so another manual request cannot start duplicate work.
             raise RuntimeError('Could not confirm worker dispatch. Check Actions before retrying.') from None
         return {
-            'action': selected if action == 'advance' else action,
             'kind': candidate.kind,
             'number': candidate.number,
+            'action': selected if action == 'advance' else action,
+            'status': 'dispatched',
+            'worker': worker,
         }
-    raise RuntimeError('No eligible action or available independent worker. Check current stage, leases, and factory capacity.')
+    if last_defer_reason is not None:
+        print(f'[factory-controller] deferring {kind}:{number}: {last_defer_reason}', file=sys.stderr)
+        return {
+            'kind': kind,
+            'number': number,
+            'action': action,
+            'status': 'deferred',
+            'reason': last_defer_reason,
+        }
+    print(
+        f'[factory-controller] deferring {kind}:{number}: no eligible action or available independent worker',
+        file=sys.stderr,
+    )
+    return {
+        'kind': kind,
+        'number': number,
+        'action': action,
+        'status': 'deferred',
+        'reason': 'No eligible action or available independent worker. Check current stage, leases, and factory capacity.',
+    }
 
 
 

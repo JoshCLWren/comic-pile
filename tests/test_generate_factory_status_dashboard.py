@@ -239,6 +239,7 @@ def test_dashboard_keeps_existing_fleet_content_when_roster_is_stale():
 
 
 def test_opencode_panel_uses_observed_runs_without_network_probes() -> None:
+    """Test opencode panel uses observed runs without network probes."""
     attempt = {
         "source": "opencode-free",
         "model": "synthetic/current-provider-model",

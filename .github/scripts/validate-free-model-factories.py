@@ -6,14 +6,27 @@ Execution availability is proved only by a real worker run, not this validator.
 """
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-from factory_dispatch_credential_filter import filter_workers, worker_sources
-from factory_provider_candidates import discover
-from factory_provider_registry import PROVIDERS
-from factory_worker_slots import resolve, slot_count, slots, sources
+_SCRIPTS = ROOT / ".github" / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+_cred = importlib.import_module("factory_dispatch_credential_filter")
+filter_workers = _cred.filter_workers
+worker_sources = _cred.worker_sources
+_cand = importlib.import_module("factory_provider_candidates")
+discover = _cand.discover
+PROVIDERS = importlib.import_module("factory_provider_registry").PROVIDERS
+_slots = importlib.import_module("factory_worker_slots")
+resolve = _slots.resolve
+slot_count = _slots.slot_count
+slots = _slots.slots
+sources = _slots.sources
 
 WORKFLOWS = ROOT / ".github" / "workflows"
 

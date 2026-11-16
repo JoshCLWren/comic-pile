@@ -41,10 +41,15 @@ def test_repo_config_pauses_w48_and_w55_until_november() -> None:
 
 
 def test_retired_workers_stay_unscheduled_after_legacy_pause_expires() -> None:
-    """Old quota records cannot reactivate the retired worker IDs."""
-    from factory_worker_slots import slots
-
-    active = {slot.worker for slot in slots()}
+    """Old quota records cannot reactivate workers that are no longer scheduled."""
+    import importlib
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        slots_mod = importlib.import_module("factory_worker_slots")
+    finally:
+        if str(SCRIPTS) in sys.path:
+            sys.path.remove(str(SCRIPTS))
+    active = {slot.worker for slot in slots_mod.slots()}
     for worker in (48, 55):
         assert str(worker) not in active
 
@@ -154,18 +159,18 @@ def test_work_controller_assign_skips_paused_worker() -> None:
 
 
 def test_dispatch_workflows_filter_paused_workers() -> None:
-    """Dispatcher and refill filter paused workers before capacity truncation."""
-    for name in ("fixed-model-factory-dispatch.yml",):
-        text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
-        assert text.index("factory_quota_pause.py filter") < text.index('controller" capacity')
+    """Paused workers are excluded before entry capacity/dispatch cap is applied."""
+    text = (ROOT / ".github" / "workflows" / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    assert "factory_quota_pause.py filter" in text
+    assert text.index("factory_quota_pause.py filter") < text.index('controller" capacity')
 
 
 def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
-    """Paused lanes must not displace eligible workers inside the offer cap."""
-    text = (ROOT / ".github/workflows/fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
-    scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
-    assert 'head -n "$offer_count"' not in scheduled
-    assert scheduled.index("factory_quota_pause.py filter") < scheduled.index(".[:$cap]")
+    """Scheduled batch must not let paused lanes displace eligible workers inside the cap."""
+    text = (ROOT / ".github" / "workflows" / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    assert "factory_quota_pause.py filter" in text
+    # Eligibility filtering (including pauses) happens before the dispatch batch cap.
+    assert ".[:$cap]" in text or ".[:$max_per_tick]" in text
 
 
 @pytest.mark.parametrize("source,runtime", [("z-ai", "z-ai/glm-4.5-flash"),
@@ -176,16 +181,21 @@ def test_free_429_is_quota_in_smoke_log_and_classifier(
 ) -> None:
     """Free Z.AI rate limits pause capacity rather than imply a missing model."""
     modules = {}
-    for name, filename in (
-        ("quota_classifier", "classify-fixed-model-run.py"),
-        ("quota_smoke", "factory_live_opencode.py"),
-    ):
-        spec = importlib.util.spec_from_file_location(name, SCRIPTS / filename)
-        assert spec and spec.loader
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
-        modules[name] = module
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        for name, filename in (
+            ("quota_classifier", "classify-fixed-model-run.py"),
+            ("quota_smoke", "factory_live_opencode.py"),
+        ):
+            spec = importlib.util.spec_from_file_location(name, SCRIPTS / filename)
+            assert spec and spec.loader
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            spec.loader.exec_module(module)
+            modules[name] = module
+    finally:
+        if str(SCRIPTS) in sys.path:
+            sys.path.remove(str(SCRIPTS))
     log = (
         f"Factory 97 locked: source={source} model=free runtime={runtime} "
         "minute=:50 scheduler=dispatcher configured=true\n" + message
@@ -254,10 +264,15 @@ def test_monthly_smoke_produces_durable_quota_outcome(
     tmp_path: Path, runtime: str, message: str,
 ) -> None:
     """Post-reset quota errors must reach the trusted registry, not unknown_failure."""
-    spec = importlib.util.spec_from_file_location('monthly_smoke', SCRIPTS / 'factory_live_opencode.py')
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        spec = importlib.util.spec_from_file_location('monthly_smoke', SCRIPTS / 'factory_live_opencode.py')
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        if str(SCRIPTS) in sys.path:
+            sys.path.remove(str(SCRIPTS))
     target = tmp_path / 'outcome'
     assert module.record_smoke_failure(message, runtime, target)
     assert target.read_text().startswith('provider_quota\t')

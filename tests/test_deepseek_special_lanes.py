@@ -12,6 +12,7 @@ SLOTS = importlib.import_module("factory_worker_slots")
 
 
 def test_provider_slots_do_not_pin_retired_experiment_models() -> None:
+    """Provider-derived slots must not preserve retired experiment model pins."""
     dynamic = SLOTS.slots({"FACTORY_SLOTS_PER_PROVIDER": "2"})
     assert dynamic
     assert all("model" not in slot.as_record() for slot in dynamic)
@@ -19,6 +20,7 @@ def test_provider_slots_do_not_pin_retired_experiment_models() -> None:
 
 
 def test_old_manual_comparison_does_not_schedule_a_model_worker() -> None:
+    """Manual comparison workflows must not register scheduled factory workers."""
     for filename in (
         "deepseek-free-auth-comparison.yml",
         "opencode-deepseek-free-smoke.yml",
