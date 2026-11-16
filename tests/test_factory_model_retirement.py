@@ -26,6 +26,6 @@ def test_fibonacci_worker_backoff_is_durable_across_runtime_model_changes() -> N
 
 
 def test_fibonacci_delay_is_bounded_and_increases() -> None:
-    delays = [STATE.fibonacci_seconds(n) for n in range(1, 15)]
+    delays = [STATE.fibonacci_worker_delay(n) for n in range(1, 15)]
     assert all(0 < amount <= 86_400 for amount in delays)
     assert delays == sorted(delays)
