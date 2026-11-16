@@ -904,31 +904,71 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
-    # Registry comment identifiers are advisory and do not authorize writes.
-    # A model worker verifies the exact marker live before PATCH. Old/empty
-    # snapshots fall back to GitHub discovery rather than guessing IDs.
+    # Comment locators are compact, verified GitHub IDs, not a body cache.
+    # Read durable coordination first. The legacy registry body is consulted
+    # only once when a trusted marker has not yet been migrated.
     if worker:
         if not worker.isdecimal() or worker not in _roster():
             raise ValueError("invalid trusted worker for registry ID lookup")
-        raw = await conn.fetchval(
-            "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-            f"{repo}:registry-comments",
+        kinds = {"__heartbeat_id": "heartbeat", "__attempt_id": "attempt"}
+        scopes = {
+            key: f"registry-comment-id-v1:{kind}:worker:{worker}"
+            for key, kind in kinds.items()
+        }
+        recorded = await conn.fetch(
+            """SELECT scope,checkpoint FROM public.factory_reconciliation_cursor
+                WHERE repo=$1 AND scope=ANY($2::text[])""",
+            repo, list(scopes.values()),
         )
-        if isinstance(raw, str):
-            raw = json.loads(raw)
-        if isinstance(raw, list):
-            from factory_work_policy import comment_is_trusted
-            markers = {
-                "__heartbeat_id": f"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-{worker} -->",
-                "__attempt_id": f"<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-{worker} -->",
-            }
-            for key, marker in markers.items():
-                matches = [item for item in raw
-                           if isinstance(item, dict) and comment_is_trusted(item)
-                           and str(item.get("body") or "").startswith(marker)
-                           and str(item.get("id") or "").isdecimal()]
-                if matches:
-                    excluded[key] = [str(max(int(item["id"]) for item in matches))]
+        known = {
+            str(row["scope"]): str(row["checkpoint"] or "")
+            for row in recorded
+        }
+        missing = {
+            key: scope for key, scope in scopes.items()
+            if not known.get(scope, "").isdecimal() or int(known[scope]) <= 0
+        }
+        for key, scope in scopes.items():
+            if key not in missing:
+                excluded[key] = [known[scope]]
+        if missing:
+            raw = await conn.fetchval(
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
+                f"{repo}:registry-comments",
+            )
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            if isinstance(raw, list):
+                from factory_work_policy import comment_is_trusted
+                for key, scope in missing.items():
+                    marker_kind = "attempt-outcome" if key == "__attempt_id" else "heartbeat"
+                    marker = (f"<!-- factory-{marker_kind}:v1 "
+                              f"worker=opencode-free-model-factory-{worker} -->")
+                    matches = [
+                        item for item in raw
+                        if isinstance(item, dict) and comment_is_trusted(item)
+                        and str(item.get("body") or "").startswith(marker)
+                        and str(item.get("id") or "").isdecimal()
+                        and int(item["id"]) > 0
+                    ]
+                    if not matches:
+                        continue
+                    comment_id = str(max(int(item["id"]) for item in matches))
+                    # Store only the original GitHub ID. Never persist a
+                    # synthetic comment body or grant write authorization.
+                    await conn.execute(
+                        """INSERT INTO public.factory_reconciliation_cursor
+                             (repo,scope,checkpoint,checked_at)
+                           VALUES ($1,$2,$3,now())
+                           ON CONFLICT(repo,scope) DO UPDATE SET
+                             checkpoint=EXCLUDED.checkpoint, checked_at=now()
+                           WHERE factory_reconciliation_cursor.checkpoint IS NULL
+                              OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
+                              OR factory_reconciliation_cursor.checkpoint::bigint
+                                   < EXCLUDED.checkpoint::bigint""",
+                        repo, scope, comment_id,
+                    )
+                    excluded[key] = [comment_id]
     return excluded
 
 
