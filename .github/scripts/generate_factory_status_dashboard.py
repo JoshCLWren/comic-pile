@@ -19,7 +19,6 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 REPO_URL = f"https://github.com/{REPO}"
 OUTPUT = Path(os.environ.get("FACTORY_DASHBOARD_OUTPUT", "site/index.html"))
 SCRIPTS = Path(__file__).resolve().parent
-MANIFEST = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
 OWNER_RE = re.compile(r"^factory:(?P<worker>\d+)$")
 WORKER_RE = re.compile(r"^opencode-free-model-factory-(?P<worker>\d+)$")
 ATTEMPT_MARKER = "<!-- factory-attempt-outcome:v1 "
@@ -111,7 +110,12 @@ def latest_completion_funnel(comments: Iterable[Mapping[str, Any]]) -> dict[str,
     return {}
 
 
-def load_manifest_rows(path: Path) -> list[dict[str, str]]:
+def load_manifest_rows(path: Path | None = None) -> list[dict[str, str]]:
+    if path is None:
+        from factory_worker_slots import slots
+
+        return [slot.as_record() | {"model": ""} for slot in slots()]
+
     rows: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
@@ -380,31 +384,64 @@ def age_text(value: str, *, now: datetime) -> str:
     return f"{minutes // 1440}d ago"
 
 
-def collect_opencode_free_roster() -> dict[str, Any]:
-    """Load the live OpenCode free-roster probe, never aborting the dashboard."""
-    try:
-        probe = load_module(
-            "probe_opencode_free_roster_dashboard",
-            SCRIPTS / "probe_opencode_free_roster.py",
-        )
-        return probe.collect_roster().as_dict()
-    except Exception as exc:
-        return {
-            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "freshness": "stale",
-            "detail": (
-                "OpenCode free-roster probe failed; table is unknown/stale. "
-                f"{exc}"
-            ),
-            "connections": [],
-            "models": [],
-            "counts": {},
+def collect_opencode_free_roster(
+    view: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Show observed model outcomes, with zero standalone provider probes."""
+    attempts = (view or {}).get("attempts", {})
+    if not isinstance(attempts, Mapping):
+        attempts = {}
+    observed: dict[str, dict[str, str]] = {}
+    statuses = {
+        "success": "ok",
+        "no_work": "ok",
+        "model_unavailable": "unsupported",
+        "provider_quota": "rate_limited",
+        "provider_throttle": "rate_limited",
+    }
+    for attempt in attempts.values():
+        if not isinstance(attempt, Mapping):
+            continue
+        if attempt.get("source") != "opencode-free":
+            continue
+        model = str(attempt.get("model") or "").strip()
+        if not model:
+            continue
+        outcome = str(attempt.get("attempt outcome") or attempt.get("attempt_outcome") or "")
+        observed[model] = {
+            "model_id": model,
+            "status": statuses.get(outcome, "unknown"),
+            "detail": outcome or "catalog-listed, execution not yet verified",
+            "connection": "opencode-free",
+            "http_status": "",
         }
+    rows = list(observed.values())
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = row["status"]
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "freshness": "fresh" if rows else "stale",
+        "detail": (
+            "Based on trusted real worker outcomes. Catalog membership is only "
+            "a candidate; no separate smoke or pricing probe was run."
+        ),
+        "connections": [],
+        "models": rows,
+        "counts": counts,
+    }
 
 
 def load_expected_roster() -> dict[str, object]:
     """Read the active-worker authority rather than infer liveness from old comments."""
-    return json.loads((SCRIPTS.parent / "factory-expected-workers.json").read_text())
+    from factory_worker_slots import slots
+
+    return {
+        "expected_workers": [int(slot.worker) for slot in slots()],
+        "retired_workers": [],
+        "paused_workers": [],
+    }
 
 
 def collect_snapshot() -> dict[str, Any]:
@@ -425,7 +462,7 @@ def collect_snapshot() -> dict[str, Any]:
     active_workers = {str(worker) for worker in roster["expected_workers"]} - {
         str(worker) for worker in [*roster.get("retired_workers", []), *roster.get("paused_workers", [])]
     }
-    manifest_rows = [row for row in load_manifest_rows(MANIFEST) if row["worker"] in active_workers]
+    manifest_rows = [row for row in load_manifest_rows() if row["worker"] in active_workers]
     workers = [row["worker"] for row in manifest_rows]
     owned = completion.owned_worker_ids([*issues, *prs])
     slot_health = capacity.get("slot_health_counts") or {}
@@ -473,7 +510,7 @@ def collect_snapshot() -> dict[str, Any]:
     try:
         delivery_rows = delivery.collect_delivery_funnel(
             lambda endpoint: completion.gh_json(['api', f'repos/{REPO}/{endpoint}']),
-            load_manifest_rows(MANIFEST), now=datetime.now(timezone.utc),
+            load_manifest_rows(), now=datetime.now(timezone.utc),
             cache_path=Path(os.environ.get('FACTORY_FUNNEL_CACHE', 'site/funnel-cache.json')),
         )
         delivery_error = ''
@@ -525,7 +562,7 @@ def collect_snapshot() -> dict[str, Any]:
         "workers": worker_rows,
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
-        "opencode_free_roster": collect_opencode_free_roster(),
+        "opencode_free_roster": collect_opencode_free_roster(view),
     }
 
 

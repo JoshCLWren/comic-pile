@@ -181,26 +181,31 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   a separate trusted-main cleanup job releases the lease before the per-worker
   concurrency lock ends; started sessions keep their existing wrapper lifecycle.
 - Exact-head review assignments use the multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) while OmniRoute is dark; they must not smoke `auto/reasoning:free` or `auto/coding:free`.
-- UPDATE (2026-10-17): `opencode-free` now rotates among all live, provably free OpenCode 2 models at execution time, independent of OmniRoute and advisory TSV model pins. Free slots keep durable worker identities; `big-pickle` is one eligible free model, not an incentive to add duplicate fixed factories. A nonzero catalog price always disqualifies a model and the bounded model smoke remains mandatory.
-- INCIDENT (2026-09-06): OmniRoute is disabled (`FACTORY_OMNIROUTE_ENABLED=off` by default) after repeated free-pool instability. `auto/coding:free`, `auto/reasoning:free`, and `auto/best-free` are all OmniRoute routes and must not run. Service is restored through the pre-OmniRoute-only multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) with a separate multi-provider concurrency budget. do not restore the temporary `auto/best-free` capacity bridge. While OmniRoute is dark, `openrouter-free` retains pinned lanes; `opencode-free` uses live free-model rotation. Both prove execution with bounded smoke/session, rather than requiring pre-existing historical health evidence. `opencode-free` pins must stay on OpenCode free-roster ids (`big-pickle`, `*-free`, muse-spark variants); `openrouter-free` pins must stay on OpenRouter free-tier ids (`*:free` or `openrouter/free`) — never paid/stealth models. Re-enable OmniRoute only after Josh confirms gateway health by setting `FACTORY_OMNIROUTE_ENABLED=on` (live kill switch for worker refuse, lane configure, catalog discovery, and capacity).
+- UPDATE (2026-11-16): Runtime model selection is catalog driven across registered providers, with no fixed price or free-name eligibility gate. Actual execution determines model usability.
+- INCIDENT (2026-09-06): OmniRoute can remain disabled by its existing provider-health control. The other registered provider lanes operate independently and select models at runtime.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 
-## Fixed-model roster discovery and retirement
+## Runtime provider discovery and ephemeral models
 
-The factory roster `.github/free-model-factories.tsv` supplies durable worker IDs, scheduling buckets and legacy/provider-specific metadata. For `opencode-free` the model column is advisory; an execution-time catalog lookup and free-only policy select the actual model. NVIDIA, OpenRouter, and other fixed provider pins retain their existing semantics.
+Worker/lease capacity is derived from the provider integration registry by
+`factory_worker_slots.py`, never from manually approved model IDs. The
+dispatcher verifies credential availability, provider capacity, current
+ownership and runtime health before assignment. A new published model can
+be used without a roster-update PR. Current catalogs give **candidates**;
+successful useful execution and a verified PR or review result prove callability.
 
-`.github/workflows/factory-model-discovery.yml` runs on a six-hour schedule and on `workflow_dispatch`. It discovers live models with OpenCode CLI semantics (`opencode models opencode`, `opencode models nvidia`, and `opencode models openrouter` when OpenRouter pins exist), wrapping `scripts/opencode-model-catalog.sh` when present. NVIDIA catalog presence is judged only by that OpenCode nvidia list — never prune a NVIDIA pin solely because integrate.api.nvidia.com omitted it. Sticky `#1093` `factory-model-retired-410:v1` comments with `Source: nvidia` are the durable "turned off" signal the NVIDIA probe already fail-closes on. Discovery consumes those markers and retires matching bare model ids from the roster even when `opencode models nvidia` still lists them.
+Never gate on published price, a model name's `:free` suffix, or an old
+retirement pin. Follow real authentication failures, throttles, quotas,
+compatible-model metadata and bounded Fibonacci backoffs. The roster TSV,
+generated snapshot/worker lock and scheduled pin-retirement workflow have
+been deleted. Reintroducing them is not an acceptable provider migration.
 
-`opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
-
-The scheduled discovery workflow now audits live OpenCode Free models without allocating or retiring worker slots. New free models, including `big-pickle`, join the runtime rotation directly, so model catalog churn does not create a roster PR or duplicate factory identities. Catalog reports remain available for operators. For fixed providers, the workflow can still open a retirement PR when a pinned model disappears or a NVIDIA 410 marker proves permanent retirement. The generic planner retains its legacy manual add/retire capabilities, but the scheduled workflow calls `--dynamic-opencode-free --no-add-unused-free`. Permanent retirement evidence for other providers stays effective.
-
-Both discovery and the factory runner install the current OpenCode 2 release from `@opencode/cli@latest` using `.github/scripts/install-opencode-v2.sh`; the installer enforces the V2 major version but deliberately pins no exact release. The TSV now defines durable capacity/worker identities for OpenCode Free, not the complete set of models runnable by those slots. Discovery's roster-sync PR continues to reconcile legacy roster metadata, but it is not a prerequisite for execution of newly available free OpenCode models.
-
-Operator flow: fixed OpenCode Free workers directly select and smoke models from the live catalog. Scheduled **Factory Model Discovery** reports free entries, but opens a PR only for non-dynamic fixed-provider retirement. Any generated retirement PR must pass `validate-free-model-factories.py` and CI before merging. To audit locally use `python3 .github/scripts/factory_model_retirement.py plan --dynamic-opencode-free --no-add-unused-free --catalog-json tests/fixtures/opencode-catalog/keep-present.json`.
-
-Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_API_KEY` for Zen list auth), `NVIDIA_API_KEY` when NVIDIA pins must be listed, `OPENROUTER_API_KEY` when OpenRouter pins exist, and `PR_REBASE_TOKEN` so the retirement PR triggers pull-request workflows. A recorded `--catalog-json` fixture is the CI substitute when the `opencode` binary is unavailable.
+OpenCode and Kilo use their installed CLI discovery. Compatible HTTP
+providers use published `/models` contracts and their credentialed
+integration metadata. The exact advertised model identifier is passed
+unchanged to the runtime. Runner status and model choice belong in observed
+outcomes, not source-controlled provider inventory.
 
 ## Anti-loop rules
 

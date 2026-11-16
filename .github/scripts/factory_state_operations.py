@@ -47,13 +47,10 @@ def enabled() -> bool:
 
 
 def _roster() -> dict[str, tuple[str, str]]:
-    path = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    result: dict[str, tuple[str, str]] = {}
-    for row in path.read_text(encoding="utf-8").splitlines():
-        fields = row.split("\t")
-        if len(fields) >= 3 and fields[0].isdigit():
-            result[fields[0]] = (fields[1], fields[2])
-    return result
+    """Resolve current provider-derived worker identities, not a pin roster."""
+    from factory_worker_slots import slots
+
+    return {item.worker: (item.source, "") for item in slots()}
 
 
 async def ensure_schema(conn: Any) -> None:
@@ -139,8 +136,12 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     state = payload[0] if isinstance(payload, list) and payload else {}
     if not isinstance(state, dict):
         return None
-    # Changing the pin unblocks its lane without deleting history.
-    if state.get("source") and (state["source"], state.get("model")) != (source, model):
+    # A catalog-backed slot can execute a different published model each
+    # session. Do not erase its worker-level Fibonacci backoff simply because
+    # the TSV no longer contains a permanently pinned model ID.
+    if state.get("source") and state["source"] != source:
+        return None
+    if model and model != "@catalog" and state.get("model") != model:
         return None
     if state.get("suspended") is True:
         return "suspended after repeated failures (new pin or TTL will reenable)"
@@ -171,7 +172,8 @@ def attributable_model_failure(classification: str, proven: bool) -> bool:
 
 
 def historical_failure_streak(
-    rows: list[Any], run_id: int, source: str, model: str, *, model_only: bool,
+    rows: list[Any], run_id: int, source: str, model: str, *,
+    model_only: bool, model_independent: bool = False,
 ) -> int:
     """Recover a consecutive streak from trusted terminal Neon events.
 
@@ -189,10 +191,10 @@ def historical_failure_streak(
         previous_run = int(detail.get("run_id") or 0)
         if previous_run == 0 or previous_run >= run_id:
             continue
-        if detail.get("source") != source or detail.get("model") != model:
-            # The worker was repinned. Its older model should not carry a
-            # failure streak into this pin, even if it used the same model
-            # before the intervening assignment.
+        if (detail.get("source") != source or
+                (detail.get("model") != model and not model_independent)):
+            # Fixed pins reset their streak when repinned. Catalog-backed
+            # slots retain worker streak across real upstream model rotation.
             if not model_only:
                 break
             continue
@@ -217,7 +219,7 @@ def historical_failure_streak(
 
 async def _recent_streak(
     conn: Any, run_id: int, source: str, model: str, *,
-    worker: str | None = None,
+    worker: str | None = None, model_independent: bool = False,
 ) -> int:
     """Only query history once, while a new durable retry row is initialized."""
     if worker is None:
@@ -239,6 +241,7 @@ async def _recent_streak(
         )
     return historical_failure_streak(
         rows, run_id, source, model, model_only=worker is None,
+        model_independent=model_independent,
     )
 
 
@@ -409,9 +412,15 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 old = {}
             prior_run = int(old.get("run_id") or 0)
             if prior_run <= run_id:
-                same_pin = old.get("source") == source and old.get("model") == model
+                catalog_slot = roster[worker][1] == "" or roster[worker][1] == "@catalog"
+                same_pin = old.get("source") == source and (
+                    catalog_slot or old.get("model") == model
+                )
                 streak = (int(old.get("streak") or 0) if same_pin else
-                          await _recent_streak(conn, run_id, source, model, worker=worker)) + 1
+                          await _recent_streak(
+                              conn, run_id, source, model, worker=worker,
+                              model_independent=catalog_slot,
+                          )) + 1
                 suspended = streak >= WORKER_SUSPEND_AFTER
                 retry_at = (
                     None if suspended else

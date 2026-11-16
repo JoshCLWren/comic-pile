@@ -206,7 +206,7 @@ def _assert_current_demand_caps():
         def load_policy(self):
             return FakePolicy()
 
-        def load_manifest_candidates(self, manifest):
+        def load_manifest_candidates(self, manifest=None):
             return [{"worker": str(worker)} for worker in range(6, 16)]
 
         def owned_worker_ids(self, items):
@@ -266,7 +266,7 @@ def _assert_current_demand_multi_provider():
         def load_policy(self):
             return FakePolicy()
 
-        def load_manifest_candidates(self, manifest):
+        def load_manifest_candidates(self, manifest=None):
             return [{"worker": str(worker)} for worker in range(6, 16)]
 
         def owned_worker_ids(self, items):

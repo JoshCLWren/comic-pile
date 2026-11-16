@@ -30,7 +30,11 @@ def test_stale_worker_is_visible_without_retry_authority():
     report = heartbeat.heartbeat_health_from_view(
         view, {"expected_workers": [43]}, now=datetime(2026, 11, 16, 1, tzinfo=UTC),
     )
-    assert report["workers"][0]["freshness"] == "stale"
-    assert report["workers"][0]["runtime_status"] == "quota-limited"
+    workers = report["workers"]
+    assert isinstance(workers, list)
+    assert workers[0]["freshness"] == "stale"
+    assert workers[0]["runtime_status"] == "quota-limited"
     assert report["newest_active_age_seconds"] == 7200
-    assert "no per-worker stale retries" in report["recovery_policy"]
+    recovery = report["recovery_policy"]
+    assert isinstance(recovery, str)
+    assert "no per-worker stale retries" in recovery
