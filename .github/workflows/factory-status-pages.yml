@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/generate_factory_status_dashboard.py'
+      - '.github/scripts/factory_state_cache.py'
       - '.github/scripts/factory_delivery_funnel.py'
       - '.github/scripts/probe_opencode_free_roster.py'
       - '.github/scripts/factory_capacity_policy.py'
