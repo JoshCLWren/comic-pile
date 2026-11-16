@@ -652,19 +652,22 @@ jobs:
           fi
           body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
             "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          # Neon provides a candidate ID. Verify the marker live before PATCH;
-          # consult the full GitHub registry only when the shared snapshot misses.
+          # Use only the compact ID provided by trusted Neon preparation.
+          # 404 means a genuinely missing marker, while a rate limit/auth error
+          # must NOT cause a duplicate comment or a full-history scan.
           comment_id="${FACTORY_HEARTBEAT_COMMENT_ID:-}"
           if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
-            validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
-            [[ "$validated" == "$comment_id" ]] || comment_id=""
+            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-heartbeat-lookup-error")"; then
+              validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
+              [[ "$validated" == "$comment_id" ]] || comment_id=""
+            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
+              comment_id=""
+            else
+              echo '::error::Cannot verify heartbeat comment; refusing duplicate write or unbounded registry scan'
+              exit 1
+            fi
           else
             comment_id=""
-          fi
-          if [[ -z "$comment_id" ]]; then
-            comment_id="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | python3 .github/scripts/factory_registry_verify.py find --kind heartbeat --worker "$WORKER")"
           fi
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
@@ -962,19 +965,22 @@ jobs:
           fi
           body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
             "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          # Neon provides a candidate ID. Verify the marker live before PATCH;
-          # consult the full GitHub registry only when the shared snapshot misses.
+          # Use only the compact ID provided by trusted Neon preparation.
+          # 404 means a genuinely missing marker, while a rate limit/auth error
+          # must NOT cause a duplicate comment or a full-history scan.
           comment_id="${FACTORY_HEARTBEAT_COMMENT_ID:-}"
           if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
-            validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
-            [[ "$validated" == "$comment_id" ]] || comment_id=""
+            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-heartbeat-lookup-error")"; then
+              validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
+              [[ "$validated" == "$comment_id" ]] || comment_id=""
+            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
+              comment_id=""
+            else
+              echo '::error::Cannot verify heartbeat comment; refusing duplicate write or unbounded registry scan'
+              exit 1
+            fi
           else
             comment_id=""
-          fi
-          if [[ -z "$comment_id" ]]; then
-            comment_id="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | python3 .github/scripts/factory_registry_verify.py find --kind heartbeat --worker "$WORKER")"
           fi
           if [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
@@ -1034,15 +1040,21 @@ jobs:
           if [[ ! "$attempt_comment_id" =~ ^[1-9][0-9]*$ ]]; then
             attempt_comment_id=""
           fi
-          if [[ -z "$attempt_comment_id" ]]; then
-            attempt_comment_id="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | python3 .github/scripts/factory_registry_verify.py find --kind attempt --worker "$WORKER")"
-          fi
+          # Trusted preparation supplies a compact marker ID. A missing ID
+          # creates one marker; it never requires downloading issue #1093.
           existing_run=""
           if [[ -n "$attempt_comment_id" ]]; then
-            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" 2>/dev/null || true)"
+            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" 2>"$RUNNER_TEMP/factory-attempt-lookup-error")"; then
+              :
+            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-attempt-lookup-error"; then
+              attempt_comment_id=""
+              current=""
+            else
+              echo '::error::Cannot verify attempt comment; refusing duplicate write or unbounded registry scan'
+              exit 1
+            fi
             validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind attempt --worker "$WORKER" --id "$attempt_comment_id" <<< "$current" 2>/dev/null || true)"
-            if [[ "$validated" == "$attempt_comment_id" ]]; then
+            if [[ -n "$attempt_comment_id" && "$validated" == "$attempt_comment_id" ]]; then
               existing_body="$(jq -r '.body // empty' <<< "$current")"
               existing_run="$(sed -n 's/^Run: //p' <<< "$existing_body" | tail -1)"
             else
