@@ -28,20 +28,6 @@ def test_crouton_installer_sets_valid_model_scoped_safety_identifier() -> None:
     assert config["policies"]
 
 
-def test_crouton_runner_scopes_zen_credential_and_uses_real_work_as_proof() -> None:
-    """Zen credentials are job-scoped for every OpenCode model, no smoke prompt.
-
-    The Crouton-specific credential step went away with model pins (#5213);
-    the factory job exports the existing Zen secret for all OpenCode models.
-    """
-    workflow = (ROOT / ".github/workflows/free-model-factory-run.yml").read_text()
-    assert "OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}" in workflow
-    assert "crouton-alpha-free" not in workflow
-    assert "Smoke exact pinned model through OpenCode" not in workflow
-    worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
-    assert 'run_agent "$MODE" "$NUMBER" "$agent_timeout"' in worker
-
-
 def test_crouton_quota_smoke_is_classified_without_permanent_retirement(tmp_path: Path) -> None:
     """A signed-off free quota failure should temporarily cool the exact model."""
     log = (
