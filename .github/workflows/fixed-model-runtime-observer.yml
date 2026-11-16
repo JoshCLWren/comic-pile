@@ -131,19 +131,22 @@ jobs:
           comment_id="$(jq -r '.__attempt_id[0] // empty' <<< "$locators")"
           current=''
           if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
+            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-attempt-locator-error")"; then
+              :
+            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-attempt-locator-error"; then
+              comment_id=''
+              current=''
+            else
+              # A transient auth/quota error cannot establish that a marker
+              # is absent. Do not create a duplicate or scan full history.
+              echo '::error::Unable to verify attempt marker; leaving trusted Neon completion intact'
+              exit 1
+            fi
           else
             comment_id=''
           fi
-          if [[ -z "$comment_id" || -z "$current" ]]; then
-            # Cold-start only, following a missing or invalidated locator.
-            comment_id="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | python3 .github/scripts/factory_registry_verify.py find --kind attempt --worker "$WORKER")"
-            current=''
-          fi
-          if [[ -n "$comment_id" && -z "$current" ]]; then
-            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
-          fi
+          # A missing/invalid compact locator gets a fresh canonical marker;
+          # trusted verification below seeds its new ID in Neon.
           # Real validation follows: author, canonical worker and marker kind.
           verified="$(python3 -c 'import json,sys; sys.path.insert(0,".github/scripts"); from factory_registry_ingest import marker_ids; print(any(m["worker"]==sys.argv[1] and m["kind"]=="attempt" and m["id"]==sys.argv[2] for m in marker_ids([json.load(sys.stdin)])))' \
             "$WORKER" "$comment_id" <<< "$current" 2>/dev/null || true)"
