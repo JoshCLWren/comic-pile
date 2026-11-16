@@ -384,26 +384,53 @@ def age_text(value: str, *, now: datetime) -> str:
     return f"{minutes // 1440}d ago"
 
 
-def collect_opencode_free_roster() -> dict[str, Any]:
-    """Load the live OpenCode free-roster probe, never aborting the dashboard."""
-    try:
-        probe = load_module(
-            "probe_opencode_free_roster_dashboard",
-            SCRIPTS / "probe_opencode_free_roster.py",
-        )
-        return probe.collect_roster().as_dict()
-    except Exception as exc:
-        return {
-            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "freshness": "stale",
-            "detail": (
-                "OpenCode free-roster probe failed; table is unknown/stale. "
-                f"{exc}"
-            ),
-            "connections": [],
-            "models": [],
-            "counts": {},
+def collect_opencode_free_roster(
+    view: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Show observed model outcomes, with zero standalone provider probes."""
+    attempts = (view or {}).get("attempts", {})
+    if not isinstance(attempts, Mapping):
+        attempts = {}
+    observed: dict[str, dict[str, str]] = {}
+    statuses = {
+        "success": "ok",
+        "no_work": "ok",
+        "model_unavailable": "unsupported",
+        "provider_quota": "rate_limited",
+        "provider_throttle": "rate_limited",
+    }
+    for attempt in attempts.values():
+        if not isinstance(attempt, Mapping):
+            continue
+        if attempt.get("source") != "opencode-free":
+            continue
+        model = str(attempt.get("model") or "").strip()
+        if not model:
+            continue
+        outcome = str(attempt.get("attempt outcome") or attempt.get("attempt_outcome") or "")
+        observed[model] = {
+            "model_id": model,
+            "status": statuses.get(outcome, "unknown"),
+            "detail": outcome or "catalog-listed, execution not yet verified",
+            "connection": "opencode-free",
+            "http_status": "",
         }
+    rows = list(observed.values())
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = row["status"]
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "freshness": "fresh" if rows else "stale",
+        "detail": (
+            "Based on trusted real worker outcomes. Catalog membership is only "
+            "a candidate; no separate smoke or pricing probe was run."
+        ),
+        "connections": [],
+        "models": rows,
+        "counts": counts,
+    }
 
 
 def load_expected_roster() -> dict[str, object]:
@@ -535,7 +562,7 @@ def collect_snapshot() -> dict[str, Any]:
         "workers": worker_rows,
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
-        "opencode_free_roster": collect_opencode_free_roster(),
+        "opencode_free_roster": collect_opencode_free_roster(view),
     }
 
 
