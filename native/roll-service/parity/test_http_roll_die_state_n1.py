@@ -19,8 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.models import Issue, Thread, User
 from route_harness import (
     StatementBreakdown,
-    assert_budget_rejects_extra_and_n_plus_one,
-    assert_measured_budget_contract,
+    assert_declared_budget,
+    assert_measured_statement_breakdown,
+    assert_no_statement_growth,
     cargo_example_path,
     db_statement_breakdown,
     reset_statement_stats,
@@ -154,19 +155,19 @@ async def test_roll_die_state_statements_do_not_grow_with_library_size() -> None
         )
 
         print(f"small_delta={small_delta} large_delta={large_delta}", flush=True)
-        assert_measured_budget_contract(
+        assert_measured_statement_breakdown("GET", "/api/v2/roll/die-state", small_delta)
+        assert_measured_statement_breakdown("GET", "/api/v2/roll/die-state", large_delta)
+        assert_declared_budget(
             "GET",
             "/api/v2/roll/die-state",
-            small_delta,
-            large_delta,
+            small_delta.top_level,
+            large_delta.top_level,
         )
-        # The same budget test must reject a deliberately added extra query and
-        # an N+1 burst that only appears for the large fixture.
-        assert_budget_rejects_extra_and_n_plus_one(
+        assert_no_statement_growth(
             "GET",
             "/api/v2/roll/die-state",
-            small_delta,
-            large_delta,
+            small_delta.top_level,
+            large_delta.top_level,
         )
         assert small_delta.nested == large_delta.nested == 0
     finally:
