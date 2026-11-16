@@ -980,6 +980,82 @@ async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
     }
 
 
+
+async def _export_dashboard_retry(conn: Any, repo: str) -> dict[str, Any]:
+    """Bounded, read-only factory retry and capacity evidence for public status.
+
+    Never export credentials, raw comments, private agent prompts, or lease
+    tokens. These observations do not grant dispatch or merge authority.
+    """
+    rows = await conn.fetch(
+        """SELECT cache_key,payload,expires_at,updated_at
+           FROM public.factory_state_kv
+           WHERE cache_key LIKE $1 OR cache_key LIKE $2 OR cache_key LIKE $3
+           ORDER BY updated_at DESC LIMIT 750""",
+        f"factory-worker-backoff-v1:{repo}:%",
+        f"factory-model-backoff-v1:{repo}:%",
+        f"factory-provider-backoff-v1:{repo}:%",
+    )
+    backoffs = []
+    for row in rows:
+        key = str(row["cache_key"])
+        kind = ("worker" if key.startswith("factory-worker-backoff-v1:")
+                else "model" if key.startswith("factory-model-backoff-v1:")
+                else "provider")
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        record = payload[0] if isinstance(payload, list) and payload else {}
+        if not isinstance(record, dict):
+            continue
+        backoffs.append({
+            "kind": kind,
+            "worker": key.rsplit(":", 1)[-1] if kind == "worker" else "",
+            "source": str(record.get("source") or
+                          (key.rsplit(":", 1)[-1] if kind == "provider" else "")),
+            "model": str(record.get("model") or ""),
+            "outcome": str(record.get("outcome") or ""),
+            "streak": int(record.get("streak") or 0),
+            "delay_seconds": int(record.get("delay_seconds") or 0),
+            "suspended": record.get("suspended") is True,
+            "next_retry_at": record.get("next_retry_at"),
+            "until": row["expires_at"].isoformat() if kind == "provider" else None,
+            "run_id": int(record.get("run_id") or 0),
+            "updated_at": row["updated_at"].isoformat(),
+        })
+    reservations = await conn.fetch(
+        """SELECT worker,source,expires_at FROM public.factory_provider_reservation
+           WHERE repo=$1 AND expires_at>now() ORDER BY expires_at LIMIT 300""",
+        repo,
+    )
+    retries = await conn.fetch(
+        """SELECT pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id
+           FROM public.factory_pr_stage_retry
+           WHERE repo=$1 AND retry_after>now()
+           ORDER BY retry_after LIMIT 150""",
+        repo,
+    )
+    return {
+        "backoffs": backoffs,
+        "reservations": [
+            {"worker": r["worker"], "source": r["source"],
+             "expires_at": r["expires_at"].isoformat()} for r in reservations
+        ],
+        "pr_retries": [
+            {"pr": r["pr_number"], "head": r["head_sha"], "stage": r["stage"],
+             "attempts": r["attempts"], "outcome": r["outcome"],
+             "retry_after": r["retry_after"].isoformat(), "run_id": r["last_run_id"]}
+            for r in retries
+        ],
+    }
+
+
+def export_dashboard_retry(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Factory retry evidence is not connected")
+    return _run(_export_dashboard_retry, repo)
+
+
 def export_candidate_health(repo: str) -> dict[str, Any]:
     if not enabled():
         raise RuntimeError("Neon health unavailable; cannot prove executable candidates")
