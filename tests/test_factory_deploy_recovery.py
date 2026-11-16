@@ -318,7 +318,7 @@ def test_rate_limited_gh_api_defers_without_masking_other_403(
         recovery.subprocess, "run",
         failing_api("HTTP 403: API rate limit exceeded for installation"),
     )
-    with pytest.raises(recovery.GitHubQuotaDeferred):
+    with pytest.raises(recovery.GitHubQuotaDeferredError):
         recovery.gh_json(["api", "repos/example/repo/actions/runs"])
 
     monkeypatch.setattr(
@@ -334,7 +334,7 @@ def test_quota_deferred_main_does_not_mutate_incidents(
 ) -> None:
     """The existing 15-minute watchdog retries, without fake production success."""
     def deferred(_: str) -> None:
-        raise recovery.GitHubQuotaDeferred("GitHub API quota exhausted")
+        raise recovery.GitHubQuotaDeferredError("GitHub API quota exhausted")
     monkeypatch.setattr(recovery, "reconcile", deferred)
     monkeypatch.setenv("GITHUB_REPOSITORY", "example/repo")
     monkeypatch.setattr("sys.argv", ["factory_deploy_recovery.py"])

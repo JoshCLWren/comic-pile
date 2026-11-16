@@ -16,7 +16,7 @@ DEPLOY_JOB_NAME = "Migrate Neon and deploy exact main SHA"
 RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 
 
-class GitHubQuotaDeferred(RuntimeError):
+class GitHubQuotaDeferredError(RuntimeError):
     """GitHub cannot provide trustworthy evidence until its API quota resets."""
 
 
@@ -79,7 +79,7 @@ def gh_json(arguments: list[str]) -> object:
         if any(marker in message for marker in (
             "rate limit exceeded", "secondary rate limit", "abuse detection"
         )):
-            raise GitHubQuotaDeferred("GitHub API quota exhausted") from None
+            raise GitHubQuotaDeferredError("GitHub API quota exhausted") from None
         raise
     return json.loads(result.stdout)
 
@@ -372,7 +372,7 @@ def main() -> None:
     parser.parse_args()
     try:
         reconcile(os.environ["GITHUB_REPOSITORY"])
-    except GitHubQuotaDeferred:
+    except GitHubQuotaDeferredError:
         # No issue mutation or deployment-success assertion without evidence.
         # The 15-minute scheduled recovery will retry after quota reset.
         print("Production recovery deferred: GitHub API rate limited; existing incidents unchanged")

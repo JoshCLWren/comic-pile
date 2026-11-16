@@ -420,7 +420,7 @@ def test_migration_lane_classifies_actual_api_quota_not_permissions(
         module.subprocess, "run",
         failure("gh: API rate limit exceeded for installation"),
     )
-    with pytest.raises(module.GitHubQuotaDeferred):
+    with pytest.raises(module.GitHubQuotaDeferredError):
         module.run_gh(["api", "repos/example/repo/pulls?state=open"])
 
     monkeypatch.setattr(
@@ -438,10 +438,10 @@ def test_migration_lane_quota_failure_preserves_pending_migrations(
     writes: list[int] = []
 
     def unavailable() -> list[object]:
-        raise module.GitHubQuotaDeferred("GitHub installation API quota exhausted")
+        raise module.GitHubQuotaDeferredError("GitHub installation API quota exhausted")
 
     monkeypatch.setattr(module, "current_migration_prs", unavailable)
     monkeypatch.setattr(module, "replace_labels", lambda *_: writes.append(1))
-    with pytest.raises(module.GitHubQuotaDeferred):
+    with pytest.raises(module.GitHubQuotaDeferredError):
         module.reconcile()
     assert writes == []
