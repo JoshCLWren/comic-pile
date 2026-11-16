@@ -118,10 +118,14 @@
       if(running||["changes-requested","blocked","review","ci"].includes(t))
         items.push({type:"pr",id:p.number,title:p.title,detail:"PR #"+p.number+" · "+t+(running?" · CI in progress":""),
           action:next("pr",p),priority:running?3:t==="changes-requested"?1:2,updated:p.updated_at});}
+    for(const w of workers)if(w.delivery_outcome==="persisted"&&w.delivery_pr&&w.attempt_outcome&&w.attempt_outcome!=="success")
+      items.push({type:"worker",id:w.worker,title:"Code delivered despite execution failure",
+        detail:"Worker "+w.worker+" · "+w.attempt_outcome+" · persisted PR #"+w.delivery_pr,
+        action:"Inspect persisted PR and retry accounting separately",priority:2,updated:w.updated});
     for(const r of s.runs)if(r.status==="completed"&&["failure","timed_out","cancelled"].includes(r.conclusion))
       items.push({type:"run",id:r.id,title:r.name,detail:"Run "+r.id+" · "+r.conclusion,
         action:"Inspect execution and persisted delivery separately",priority:4,updated:r.updated_at});
-    const rows=items.filter(x=>{const f={...extract(x.type,x.type==="pr"?s.prs.find(p=>p.number===x.id):s.runs.find(r=>r.id===x.id)),all:x.title};
+    const rows=items.filter(x=>{const f={...extract(x.type,x.type==="pr"?s.prs.find(p=>p.number===x.id):x.type==="worker"?workers.find(w=>w.worker===x.id):s.runs.find(r=>r.id===x.id)),all:x.title};
       return (!s.text||JSON.stringify(f).toLowerCase().includes(s.text.toLowerCase()))&&
         keys.every(k=>!s.filters[k]||String(f[k]||"").toLowerCase().includes(s.filters[k].toLowerCase()));})
       .sort((a,b)=>a.priority-b.priority||Date.parse(b.updated)-Date.parse(a.updated));
@@ -138,11 +142,12 @@
   };
   const workerView=()=>'<div class="f-panel"><div class="f-head"><div><h2>Provider-derived worker slots</h2>'+
     '<p>No pinned model roster. Missing heartbeat does not mean crashed.</p></div>'+status(filtered("worker",workers).length+" matching")+'</div>'+
-    filters()+table(["Worker","Provider / model","Activity","Latest attempt","Work / lease","Retry / evidence"],
+    filters()+table(["Worker","Provider / model","Activity","Execution","Persisted delivery","Work / lease","Retry / evidence"],
       filtered("worker",workers).map(w=>row([
         inspect("worker",w.worker,"#"+w.worker)+'<div class="f-small">'+e(w.display_name)+'</div>',
         e(w.runtime_source||"Unobserved")+'<div class="f-small">'+e(w.runtime_model||"No executed model")+'</div>',
         status(w.activity||w.health),status(w.attempt_outcome||"No attempt"),
+        w.delivery_outcome==="persisted"&&w.delivery_pr?status("Persisted")+" "+link(gh+"/pull/"+w.delivery_pr,"PR #"+w.delivery_pr):status(w.delivery_outcome||"Unverified"),
         ((w.work||[]).length?(w.work||[]).map(i=>link(i.url,i.kind+" #"+i.number)).join(" · "):'<span class="f-muted">No GitHub owner</span>')+
         ((retry.reservations||[]).some(v=>v.worker===String(w.worker))?'<div class="f-small">Capacity reserved until '+e(date((retry.reservations||[]).find(v=>v.worker===String(w.worker)).expires_at))+'</div>':""),
         (backoff("worker",b=>b.worker===String(w.worker))?e(cooldown(backoff("worker",b=>b.worker===String(w.worker))))+"<div class=\"f-small\">":"")+
