@@ -68,6 +68,7 @@ def test_registry_is_integration_metadata_not_model_allowlist(registry):
 
 def test_workflow_consumes_registry():
     runner = Path(".github/workflows/free-model-factory-run.yml").read_text()
-    assert "factory_provider_registry.py resolve" in runner
+    # Lane resolution checks credentials via the registry without a model ID.
+    assert "factory_provider_registry.py credentials --source" in runner
     assert "factory_provider_registry.py config" in runner
     assert "base_url='https://" not in runner

@@ -7,6 +7,9 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "factory_completion_controller.py"
 CONTROLLER_PATH = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "factory-work-controller.py"
+# The controller lazily imports sibling modules (factory_worker_slots, ...).
+if str(SCRIPT.parent) not in sys.path:
+    sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("factory_completion_controller", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 controller = importlib.util.module_from_spec(SPEC)
@@ -160,9 +163,10 @@ def test_completion_selection_prefers_review_capacity_at_high_backlog():
     assert len(selected) == 12
 
 
-def test_health_state_fails_closed_without_runtime_evidence():
+def test_unproven_dynamic_slot_is_unknown_but_may_run_first_execution():
+    """Dynamic catalog slots need one real execution to establish health (#5213)."""
     assert controller.worker_health_state("41", {}, now_epoch=100) == "unknown"
-    assert not controller.worker_is_executable("41", {}, now_epoch=100)
+    assert controller.worker_is_executable("41", {}, now_epoch=100)
 
 
 def test_health_state_distinguishes_unavailable_cooling_and_recovery():
@@ -217,6 +221,7 @@ def test_no_work_keeps_worker_executable():
 
 
 def test_capacity_report_names_only_executable_candidates():
+    """Unavailable models are excluded; unproven slots may run once (#5213)."""
     candidates = [
         {"worker": "41", "provider": "opencode-free", "model": "mimo"},
         {"worker": "42", "provider": "nvidia", "model": "retired"},
@@ -227,7 +232,7 @@ def test_capacity_report_names_only_executable_candidates():
         "42": ("model_unavailable", 100),
     }
     report = controller.capacity_report(candidates, health, now_epoch=100)
-    assert report["executable_capacity"] == 1
+    assert report["executable_capacity"] == 2
     assert report["health_counts"] == {
         "unknown": 1,
         "healthy": 1,
@@ -236,23 +241,17 @@ def test_capacity_report_names_only_executable_candidates():
         "unavailable": 1,
     }
     assert report["executable_candidates"] == [
-        {
-            "worker": "41",
-            "provider": "opencode-free",
-            "model": "mimo",
-            "health": "healthy",
-        }
+        {"worker": "41", "provider": "opencode-free", "model": "mimo", "health": "healthy"},
+        {"worker": "43", "provider": "openrouter-free", "model": "unknown", "health": "unknown"},
     ]
-    assert report["executable_slot_capacity"] == 1
+    assert report["executable_slot_capacity"] == 2
     assert report["candidate_health_counts"] == report["health_counts"]
-    assert report["executable_candidate_count"] == 1
+    assert report["executable_candidate_count"] == 2
     assert report["executable_provider_models"] == [
-        {
-            "provider": "opencode-free",
-            "model": "mimo",
-            "health": "healthy",
-        }
+        {"provider": "opencode-free", "model": "mimo", "health": "healthy"},
+        {"provider": "openrouter-free", "model": "unknown", "health": "unknown"},
     ]
+    assert all(row["worker"] != "42" for row in report["executable_candidates"])
 
 
 def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
@@ -334,8 +333,12 @@ def test_catalog_success_makes_peer_capability_slots_executable():
     assert controller.worker_is_executable("40", health, now_epoch=now)
 
 
-def test_catalog_provider_cooling_suppresses_all_peer_slots():
-    """Canonical provider-wide evidence removes every shared catalog slot."""
+def test_catalog_model_failure_cools_only_its_own_slot():
+    """A failed catalog model must not suppress peer models on its provider.
+
+    Provider/account-wide breakers live in Neon account backoffs; one model's
+    provider_failure is model-scoped evidence only.
+    """
     comments = [
         {
             "author_association": "OWNER",
@@ -362,11 +365,12 @@ def test_catalog_provider_cooling_suppresses_all_peer_slots():
     )
 
     assert controller.worker_health_state("39", health, now_epoch=now) == "cooling"
-    assert controller.worker_health_state("40", health, now_epoch=now) == "cooling"
+    assert controller.worker_health_state("40", health, now_epoch=now) != "cooling"
+    assert controller.worker_is_executable("40", health, now_epoch=now)
 
 
-def test_legacy_catalog_provider_outage_still_suppresses_peer_slots():
-    """Historical provider_unavailable evidence remains actionable."""
+def test_legacy_catalog_provider_outage_cools_only_its_own_slot():
+    """Historical provider_unavailable evidence stays actionable for its slot."""
     comments = [
         {
             "author_association": "OWNER",
@@ -393,7 +397,8 @@ def test_legacy_catalog_provider_outage_still_suppresses_peer_slots():
     )
 
     assert controller.worker_health_state("39", health, now_epoch=now) == "cooling"
-    assert controller.worker_health_state("40", health, now_epoch=now) == "cooling"
+    assert controller.worker_health_state("40", health, now_epoch=now) != "cooling"
+    assert controller.worker_is_executable("40", health, now_epoch=now)
 
 
 def test_native_omniroute_intents_are_executable_without_backing_model_health():

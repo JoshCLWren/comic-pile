@@ -26,12 +26,16 @@ def test_provider_catalogs_never_turn_into_model_pins(source: str) -> None:
         parsed = CATALOG.discover(source, "opencode/synthetic-a\nopencode/synthetic-b\n")
         assert {m.model for m in parsed.candidates} == {"synthetic-a", "synthetic-b"}
     else:
+        # OpenRouter's free endpoint type is the ":free" variant, not a price.
+        suffix = ":free" if source == "openrouter-free" else ""
         payload = json.dumps({"data": [
-            {"id": "synthetic/a", "pricing": {"input": 9, "output": 2}},
-            {"id": "synthetic/b"},
+            {"id": f"synthetic/a{suffix}", "pricing": {"input": 9, "output": 2}},
+            {"id": f"synthetic/b{suffix}"},
         ]})
         parsed = CATALOG.discover(source, payload)
-        assert {m.model for m in parsed.candidates} == {"synthetic/a", "synthetic/b"}
+        assert {m.model for m in parsed.candidates} == {
+            f"synthetic/a{suffix}", f"synthetic/b{suffix}",
+        }
 
 
 def test_temporary_failure_does_not_retire_a_catalog_model() -> None:

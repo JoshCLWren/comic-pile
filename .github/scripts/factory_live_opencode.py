@@ -228,7 +228,7 @@ def main() -> None:
         args.catalog.read_text(encoding="utf-8"),
         args.worker,
         args.rotation,
-        args.comments,
+        comments_path=args.comments,
         exclusions_path=args.exclusions_file,
         attempted=set(args.attempted),
         provider=args.provider,

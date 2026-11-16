@@ -149,14 +149,12 @@ def test_all_candidates_unavailable_and_later_success(tmp_path: Path) -> None:
         ("Error: Model unavailable: opencode/ll-alpha-free", True),
         ("\x1b[91mError: \x1b[0mModel unavailable: opencode/ll-alpha-free", True),
         ("Error: Model unavailable: opencode/another-free", False),
-        ("HTTP 429 rate limit", False),
         ("timeout after 180 seconds", False),
-        ("HTTP 402 budget exhausted", False),
         ("Error: service temporarily unavailable", False),
     ],
 )
 def test_exact_smoke_failure_classification(tmp_path: Path, log: str, expected: bool) -> None:
-    """Quota, timeout, and other models cannot produce this model's cooldown."""
+    """Timeouts and other models cannot produce this model's unavailability."""
     target = tmp_path / "outcome"
     assert selector.record_smoke_failure(log, "opencode/ll-alpha-free", target) is expected
     assert target.exists() is expected
@@ -164,6 +162,22 @@ def test_exact_smoke_failure_classification(tmp_path: Path, log: str, expected: 
         assert (
             target.read_text() == "model_unavailable\tModel unavailable: opencode/ll-alpha-free\n"
         )
+
+
+@pytest.mark.parametrize(
+    "log,outcome",
+    [
+        ("HTTP 429 rate limit", "provider_throttle"),
+        ("HTTP 402 budget exhausted", "provider_quota"),
+    ],
+)
+def test_quota_and_throttle_are_provider_outcomes_not_model_unavailability(
+    tmp_path: Path, log: str, outcome: str,
+) -> None:
+    """Rate/budget refusals keep their own class (#4779), never model_unavailable."""
+    target = tmp_path / "outcome"
+    assert selector.record_smoke_failure(log, "opencode/ll-alpha-free", target) is True
+    assert target.read_text().split("\t", 1)[0] == outcome
 
 
 @pytest.mark.parametrize(
@@ -175,7 +189,6 @@ def test_exact_smoke_failure_classification(tmp_path: Path, log: str, expected: 
         ("Model vendor/alpha:free has been deprecated", "openrouter/vendor/alpha:free", True),
         ("Model some-other-free has been deprecated", "opencode/crouton-alpha-free", False),
         ("Model crouton-alpha-free has been deprecated", "opencode/other-free", False),
-        ("HTTP 429, model crouton-alpha-free overloaded", "opencode/crouton-alpha-free", False),
     ],
 )
 def test_deprecated_smoke_model_rotates_only_exact_selector(
@@ -188,6 +201,13 @@ def test_deprecated_smoke_model_rotates_only_exact_selector(
         assert outcome.read_text() == f"model_unavailable\tModel deprecated: {runtime}\n"
     else:
         assert not outcome.exists()
+
+
+def test_overloaded_model_is_throttle_not_deprecation(tmp_path: Path) -> None:
+    outcome = tmp_path / "outcome"
+    log = "HTTP 429, model crouton-alpha-free overloaded"
+    assert selector.record_smoke_failure(log, "opencode/crouton-alpha-free", outcome)
+    assert outcome.read_text().startswith("provider_throttle\t")
 
 
 def test_cli_consults_registry_evidence(tmp_path: Path) -> None:

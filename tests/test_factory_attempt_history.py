@@ -83,6 +83,9 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     # This retry-history fixture explicitly simulates retired worker 48.
     # Production dispatch must still require real roster membership.
     monkeypatch.setattr(CONTROLLER, "worker_sources", lambda: {"46": "kilo-auto", "48": "nvidia", "53": "nvidia"})
+    # Simulated NVIDIA workers are credentialed, so a None result for 48 is
+    # caused by retry history, not by a missing credential.
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     monkeypatch.setattr(CONTROLLER, "quota_pause_for", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "runtime_quota_block_reason", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "worker_has_active_lease", lambda worker: False)

@@ -12,6 +12,28 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/free-model-factory-run.yml"
+SCRIPTS = ROOT / ".github/scripts"
+
+
+def _generated_slot_ids(count: int = 3) -> list[str]:
+    """Real provider-derived worker identities (the TSV roster was removed)."""
+    import sys
+
+    sys.path.insert(0, str(SCRIPTS))
+    import factory_worker_slots
+
+    return sorted(slot.worker for slot in factory_worker_slots.slots())[:count]
+
+
+def _stage_release_scripts(tmp_path: Path) -> Path:
+    """Copy the real slot resolver and a controller stand-in into a sandbox."""
+    scripts = tmp_path / ".github/scripts"
+    scripts.mkdir(parents=True)
+    for name in ("factory_worker_slots.py", "factory_provider_registry.py"):
+        (scripts / name).write_text((SCRIPTS / name).read_text())
+    controller = scripts / "factory-work-controller.py"
+    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    return controller
 
 
 def test_cleanup_waits_for_factory_and_excludes_started_sessions() -> None:
@@ -66,19 +88,18 @@ def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> No
     """Run the real job command with a stand-in controller and restricted DSN."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     release = workflow["jobs"]["release_post_session_lease"]["steps"][3]
-    controller = tmp_path / ".github/scripts/factory-work-controller.py"
-    controller.parent.mkdir(parents=True)
-    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    _stage_release_scripts(tmp_path)
+    worker = _generated_slot_ids(1)[0]
     dsn = tmp_path / "restricted-dsn"
     dsn.write_text("test-only-connection")
     result = subprocess.run(
         ["bash", "-c", release["run"]], cwd=tmp_path,
-        env={**os.environ, "FACTORY_WORKER": "45", "GITHUB_RUN_ID": "43455638659",
+        env={**os.environ, "FACTORY_WORKER": worker, "GITHUB_RUN_ID": "43455638659",
              "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"test-claim"}'},
         capture_output=True, text=True, check=True,
     )
     assert json.loads(result.stdout) == [
-        "release", "--worker", "45", "--claim-id", "test-claim", "--reason",
+        "release", "--worker", worker, "--claim-id", "test-claim", "--reason",
         "post-session-exit-run-43455638659",
     ]
 
@@ -120,16 +141,14 @@ def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     assert workflow["permissions"]["pull-requests"] == "write"
 
 
-@pytest.mark.parametrize("worker", ["1", "58", "99", "100", "104", "107"])
+@pytest.mark.parametrize("worker", _generated_slot_ids())
 def test_cleanup_calls_existing_controller_with_run_provenance(
     tmp_path: Path, worker: str,
 ) -> None:
     """Execute the workflow shell against a controller stand-in, without GitHub writes."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     release = workflow["jobs"]["release_pre_session_lease"]["steps"][3]
-    controller = tmp_path / ".github/scripts/factory-work-controller.py"
-    controller.parent.mkdir(parents=True)
-    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    _stage_release_scripts(tmp_path)
     dsn = tmp_path / "restricted-dsn"
     dsn.write_text("not-a-real-connection")
     result = subprocess.run(
@@ -143,7 +162,7 @@ def test_cleanup_calls_existing_controller_with_run_provenance(
     ]
 
 
-@pytest.mark.parametrize("worker", ["", "0", "00", "0104", "1000", "local", "104; echo injected"])
+@pytest.mark.parametrize("worker", ["", "0", "00", "0104", "local", "104; echo injected"])
 def test_cleanup_rejects_invalid_worker_before_invoking_controller(
     tmp_path: Path, worker: str,
 ) -> None:
@@ -158,6 +177,27 @@ def test_cleanup_rejects_invalid_worker_before_invoking_controller(
     assert result.returncode == 1
     assert result.stdout == ""
     assert result.stderr == "Invalid worker ID; refusing lease recovery\n"
+
+def test_cleanup_rejects_unknown_decimal_worker_before_invoking_controller(
+    tmp_path: Path,
+) -> None:
+    """A well-formed but unprovisioned ID is refused by the real slot resolver."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    release = workflow["jobs"]["release_pre_session_lease"]["steps"][3]
+    controller = _stage_release_scripts(tmp_path)
+    controller.write_text("raise AssertionError('controller must not run')\n")
+    dsn = tmp_path / "restricted-dsn"
+    dsn.write_text("test-only-connection")
+    result = subprocess.run(
+        ["bash", "-c", release["run"]], cwd=tmp_path,
+        env={**os.environ, "FACTORY_WORKER": "1000", "GITHUB_RUN_ID": "41323597249",
+             "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"c"}'},
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode != 0
+    assert "unknown or inactive worker slot" in result.stderr
+    assert "controller must not run" not in result.stderr
+
 
 def test_cleanup_refuses_label_release_without_neon_connection(tmp_path: Path) -> None:
     """Neon outage must not release GitHub labels while retaining the DB claim."""

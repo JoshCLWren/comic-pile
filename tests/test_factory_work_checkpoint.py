@@ -224,7 +224,7 @@ def test_finalize_adopts_saved_ancestry_and_updates_same_pr_without_reapplying(t
         'log() { echo "$*" >&2; }',
         # Clean worktree after adoption must still validate the entire initial diff.
         'reject_out_of_scope_diff() { [[ "$3" == "$EXPECTED_HEAD" ]]; }',
-        'factory_run_fast_checks() { git diff "$1" HEAD -- tracked.rs | rg "fn persisted" >&2; }',
+        'factory_run_fast_checks() { git diff --no-ext-diff --no-color "$1" HEAD -- tracked.rs | rg "fn persisted" >&2; }',
         'find_overlapping_factory_pr() { printf "{}"; }',
         'factory_advance_display() { printf test; }',
         'factory_push_credential() { printf "pat\\tplaceholder"; }',

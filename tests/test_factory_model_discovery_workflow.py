@@ -1,90 +1,56 @@
-"""Contract tests for the factory model discovery workflow."""
+"""Contract tests for runtime model discovery after the roster removal (#5213).
+
+The scheduled roster discovery workflow and its TSV were removed: workers
+discover provider catalogs at execution time and real work establishes
+callability. These tests keep that contract from regressing.
+"""
 
 from pathlib import Path
 
 
-WORKFLOW = (
-    Path(__file__).resolve().parents[1]
-    / ".github"
-    / "workflows"
-    / "factory-model-discovery.yml"
-)
-FACTORY_RUN = (
-    Path(__file__).resolve().parents[1]
-    / ".github"
-    / "workflows"
-    / "free-model-factory-run.yml"
-)
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github" / "workflows"
+FACTORY_RUN = WORKFLOWS / "free-model-factory-run.yml"
 
 
-def test_discovery_workflow_is_scheduled_and_dispatchable() -> None:
-    """Operators can dispatch discovery; the schedule does not wait for Harvy."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "schedule:" in workflow
-    assert "workflow_dispatch:" in workflow
-    assert "cron: '17 */6 * * *'" in workflow
-    assert "factory_model_retirement.py" in workflow
-    assert "factory/model-retirement" in workflow
-    assert "validate-free-model-factories.py" in workflow
+def test_no_scheduled_roster_discovery_workflow_exists() -> None:
+    """Model discovery happens per execution, never by regenerating a roster."""
+    assert not (WORKFLOWS / "factory-model-discovery.yml").exists()
+    assert not (ROOT / ".github" / "free-model-factories.tsv").exists()
+    for workflow in WORKFLOWS.glob("*.yml"):
+        text = workflow.read_text(encoding="utf-8")
+        assert "factory/model-retirement" not in text, workflow.name
+        assert "--dynamic-opencode-free" not in text, workflow.name
 
 
-def test_discovery_uses_opencode_cli_not_omniroute_or_integrate_api() -> None:
-    """Roster truth is OpenCode CLI catalogs, not OmniRoute or NVIDIA HTTP."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "opencode models nvidia" in workflow
-    assert "integrate.api.nvidia.com" in workflow
-    assert "never integrate.api.nvidia.com" in workflow
-    assert "omniroute/auto" not in workflow
-    assert "auto/best-free" not in workflow
-    assert "OPENCODE_ZEN_API_KEY" in workflow
-    assert "NVIDIA_API_KEY" in workflow
-    assert "MISTRAL_API_KEY" in workflow
-    assert "catalog_fixture" in workflow
-
-
-def test_discovery_and_runner_use_unpinned_opencode_v2() -> None:
-    """Both workflows use the current OpenCode 2 release, not repository pins."""
-    discovery = WORKFLOW.read_text(encoding="utf-8")
+def test_runner_discovers_catalogs_at_execution_time() -> None:
     runner = FACTORY_RUN.read_text(encoding="utf-8")
-    installer = (
-        Path(__file__).resolve().parents[1]
-        / ".github"
-        / "scripts"
-        / "install-opencode-v2.sh"
-    ).read_text(encoding="utf-8")
+    selector = runner.split("- name: Select execution candidate at dispatch time", 1)[1]
+    selector = selector.split("- name:", 1)[0]
+    assert "bash scripts/opencode-model-catalog.sh opencode verbose refresh" in selector
+    assert "kilo models kilo-auto --refresh" in selector
+    assert "factory_runtime_model_select.py" in selector
+    assert "Nothing\n          # uses a checked-in model ID" in selector
+
+
+def test_runner_uses_unpinned_opencode_v2() -> None:
+    """The runner uses the current OpenCode 2 release, not repository pins."""
+    runner = FACTORY_RUN.read_text(encoding="utf-8")
+    installer = (ROOT / ".github" / "scripts" / "install-opencode-v2.sh").read_text(
+        encoding="utf-8"
+    )
     assert "npm view @opencode/cli versions --json" in installer
     assert '"@opencode/cli@$candidate"' in installer
     assert "No working published OpenCode v2 CLI" in installer
-    for workflow in (discovery, runner):
-        assert "bash .github/scripts/install-opencode-v2.sh" in workflow
-        assert "OPENCODE_VERSION:" not in workflow
-        assert "OPENCODE_LINUX_X64_SHA256:" not in workflow
+    assert "bash .github/scripts/install-opencode-v2.sh" in runner
+    assert "OPENCODE_VERSION:" not in runner
+    assert "OPENCODE_LINUX_X64_SHA256:" not in runner
 
 
-def test_discovery_keeps_dynamic_opencode_workers_without_roster_churn() -> None:
-    """New free models run immediately without generated roster PRs."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "--dynamic-opencode-free" in workflow
-    assert "--no-add-unused-free" in workflow
-    assert "steps.plan.outputs.retire" in workflow
-    assert "steps.plan.outputs.add" not in workflow
-    assert "ADD_UNUSED_FREE" not in workflow
-    assert "factory/model-retirement" in workflow
-    assert "PR_REBASE_TOKEN is required" in workflow
-
-
-def test_discovery_consumes_nvidia_410_markers_from_issue_1093() -> None:
-    """Discovery consumes sticky HTTP 410 evidence from actual NVIDIA work."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
+def test_nvidia_410_evidence_comes_from_actual_assigned_work() -> None:
+    """Sticky HTTP 410 evidence is only recorded from real NVIDIA work."""
     runner = FACTORY_RUN.read_text(encoding="utf-8")
-
-    assert "issues/1093/comments" in workflow
-    assert "--retirement-comments" in workflow
-    assert "factory-model-retired-410:v1" in workflow
     report = runner.split("      - name: Report terminal heartbeat", 1)[1]
     assert 'if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]' in report
     assert "retirement_marker='<!-- factory-model-retired-410:v1 -->'" in report
     assert "Confirmed HTTP 410 during actual assigned work" in report
-    assert 'gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in runner
