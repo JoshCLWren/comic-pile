@@ -734,6 +734,56 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
         )
+        // Continuity plans v1 routes (cutover from Python)
+        .route("/api/v1/continuity-plans/", get(continuity_plans::list_continuity_plans))
+        .route("/api/v1/continuity-plans/", post(continuity_plans::create_continuity_plan))
+        .route("/api/v1/continuity-plans/{plan_id}", get(continuity_plans::get_continuity_plan))
+        .route("/api/v1/continuity-plans/{plan_id}", put(continuity_plans::update_continuity_plan))
+        .route("/api/v1/continuity-plans/{plan_id}", delete(continuity_plans::delete_continuity_plan))
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(continuity_plans::get_continuity_plan_membership),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(continuity_plans::link_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(continuity_plans::list_release_sources),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(continuity_plans::list_release_sources_for_reader),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(continuity_plans::create_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            get(continuity_plans::get_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(continuity_plans::update_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(continuity_plans::delete_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(continuity_plans::adopt_reading_order),
+        )
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(taste_discoveries::dismiss_taste_discovery),
