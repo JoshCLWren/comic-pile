@@ -73,17 +73,23 @@ def classify(log: str) -> dict[str, Any]:
             detail="dynamic provider slot failed before selecting a model",
         ))
     model = model_event["model"]
-    runtime_match = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
+    # A previous candidate's quota error cannot classify a later candidate.
+    # The trusted worker prints this boundary immediately before each run_agent.
+    boundary = log.rfind("FACTORY_EXECUTION_CANDIDATE: source=")
+    execution_log = log[boundary:] if boundary >= 0 else log
+    runtime_match = re.search(r"FACTORY_EXECUTION_CANDIDATE: source=\S+ model=\S+ runtime=(\S+)", execution_log)
+    if runtime_match is None:
+        runtime_match = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
     runtime = runtime_match[1] if runtime_match else f"{source}/{model}"
     lock = (
         f"Factory {worker} locked: source={source} model={model} "
         f"runtime={runtime} minute=:00 scheduler=dynamic configured={str(configured).lower()}\n"
     )
-    result = canonical.classify(lock + log)
+    result = canonical.classify(lock + execution_log)
     # Account-wide refusal is different from one inaccessible model. Do not
     # turn a failed model into a provider-wide outage or rate limit.
     executed_lines = "\n".join(
-        line for line in log.splitlines() if "\x1b[36;1m" not in line
+        line for line in execution_log.splitlines() if "\x1b[36;1m" not in line
     )
     if _ACCOUNT_CREDITS.search(executed_lines):
         result = replace(result, outcome="PROVIDER QUOTA", outcome_class="provider_quota",
