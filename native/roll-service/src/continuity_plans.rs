@@ -351,13 +351,15 @@ pub async fn list_continuity_plans(
     let plans: Vec<ContinuityPlanListItem> = rows
         .iter()
         .map(|row| {
+            let lanes_json_val: serde_json::Value = row.get(5);
             let lanes_json: Vec<serde_json::Value> =
-                serde_json::from_value(row.get(5).clone()).unwrap_or_default();
+                serde_json::from_value(lanes_json_val).unwrap_or_default();
             let lane_count = lanes_json.len().saturating_sub(0).max(1);
             
             // Calculate step count from nodes_json
+            let nodes_json_val: serde_json::Value = row.get(7);
             let nodes: Vec<serde_json::Value> =
-                serde_json::from_value(row.get(7).clone()).unwrap_or_default();
+                serde_json::from_value(nodes_json_val).unwrap_or_default();
             let step_count = nodes.len() as i32;
             
             // Extract source paths from nodes
@@ -1124,8 +1126,8 @@ pub struct ReadingPlanDependencyLinkRequest {
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
     params((
-        "plan_id" = i32, Path, description = "Continuity plan identifier",
-        "dependency_id" = i32, Path, description = "Dependency identifier"
+        ("plan_id"=i32, Path, description = "Continuity plan identifier"),
+        ("dependency_id"=i32, Path, description = "Dependency identifier")
     )),
     request_body = ReadingPlanDependencyLinkRequest,
     responses(
@@ -1239,8 +1241,8 @@ pub async fn link_plan_dependency_edge(
     tag = "continuity-plans",
     operation_id = "continuity_plans_unlink_dependency",
     params((
-        ("plan_id" = i32, Path, description = "Continuity plan identifier"),
-        ("dependency_id" = i32, Path, description = "Dependency identifier")
+        ("plan_id"=i32, Path, description = "Continuity plan identifier"),
+        ("dependency_id"=i32, Path, description = "Dependency identifier")
     )),
     responses(
         (status = 204, description = "Dependency unlinked"),
