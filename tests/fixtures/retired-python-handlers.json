@@ -199,7 +199,14 @@
     "module": "app.api.issue",
     "name": "get_issue"
   },
-  
+  {
+    "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_series_import_status"
+  },
   {
     "path": "/api/v1/creators",
     "methods": [
