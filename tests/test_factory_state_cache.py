@@ -280,8 +280,14 @@ def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypa
     assert "created_at < now() - interval '30 days'" in sql
     assert "detail->>'repo'=$4 OR detail->>'repository'=$4" in sql
     assert "event_type IN ('cache_refresh'," in sql
-    assert "worker_assigned" not in sql
-    assert "worker_completed" not in sql
+    # Lifecycle history is removable only after 30 days AND explicit repo
+    # provenance. Unscoped historical events are never guessed or deleted.
+    assert "event_type IN ('cache_refresh'," in sql
+    assert "'worker_assigned'" in sql
+    assert "'worker_completed'" in sql
+    assert "'worker_heartbeat'" in sql
+    assert "'worker_failed'" in sql
+    assert "detail->>'repo'=$4 OR detail->>'repository'=$4" in sql
     assert "DELETE FROM public.factory_state_events" in sql
     assert "factory_state_kv" not in sql
     assert "factory_provider_reservation" not in sql
@@ -291,6 +297,17 @@ def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypa
         cache._prune_retired_events("JoshCLWren/comic-pile", 1001)
     with pytest.raises(ValueError, match="scope"):
         cache._prune_retired_events("other-repo", 100)
+
+
+def test_worker_event_writers_tag_all_future_lifecycle_events_with_repo():
+    ledger = (Path(__file__).resolve().parents[1] /
+              ".github/scripts/factory_state_ledger.py").read_text()
+    assert "'source', $6::text, 'repo', $7::text" in ledger
+    assert "'targets',$5::jsonb,'repo',$6::text" in ledger
+    assert 'json.dumps({**entry, "repo": repo})' in ledger
+    # Repository scoping must be applied by the trusted collector, not
+    # accepted from worker-supplied event payloads.
+    assert 'json.dumps(entry)' not in ledger
 
 
 def test_retired_check_projection_cleanup_is_scoped_and_bounded(monkeypatch):
