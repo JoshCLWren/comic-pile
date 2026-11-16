@@ -205,7 +205,8 @@
       "GET"
     ],
     "module": "app.api.comicvine_resolution",
-    "name": "api_series_import_status"
+    "name": "api_series_import_status",
+    "status": "active-fallback"
   },
   {
     "path": "/api/v1/creators",
