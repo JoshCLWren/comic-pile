@@ -6,9 +6,12 @@
 //! response shapes expected by existing clients.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
-    reading_constraints::ValidatedReadingInputs, reading_eligibility,
-    reading_graph::cycle_conflict, reading_list::{
+    auth::AuthenticatedUser,
+    db, option_inputs, reading_blocker_projection,
+    reading_constraints::ValidatedReadingInputs,
+    reading_eligibility,
+    reading_graph::cycle_conflict,
+    reading_list::{
         ReadingListBlockerExplanation, ReadingListDependency, ReadingListReader,
         ReadingListReaderEntry,
     },
