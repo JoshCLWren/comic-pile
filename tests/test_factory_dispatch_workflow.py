@@ -23,17 +23,13 @@ def test_push_smoke_workers_are_derived_from_current_provider_rows() -> None:
     assert ".github/scripts/factory_candidate_health.py" in workflow
 
 
-def test_stale_run_cancellation_retries_transient_status_race() -> None:
+def test_controller_deployment_preserves_active_sessions_and_recovers_leases() -> None:
+    """A new controller revision must not cancel useful in-flight work."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "cancel_succeeded=false" in workflow
-    assert "for _ in {1..15}; do" in workflow
-    assert '[[ "$current_status" == completed ]]' in workflow
-    assert '[[ "$current_status" == queued || "$current_status" == in_progress ]]' in workflow
-    assert 'cancel_output=""' in workflow
-    assert 'grep -qi "workflow run that is completed"' in workflow
-    assert 'status_from_cancel=true' in workflow
-    assert 'if [[ "$status_from_cancel" != true ]]; then' in workflow
+    assert 'gh run cancel' not in workflow
+    assert 'release_cancelled_worker_leases' not in workflow
+    assert 'python3 "$controller" reconcile' in workflow
+    assert 'Existing sessions keep their pinned workflow' in workflow
 
 
 def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection() -> None:
@@ -216,6 +212,27 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
         assert "if: steps.api_budget.outputs.allow == 'true'" in section
 
 
+def test_targeted_dispatch_defers_without_fake_worker_failure_when_rest_quota_is_low() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    target = workflow.split("- name: Advance selected issue or pull request", 1)[1].split(
+        "- name: Report quota-deferred targeted dispatch", 1
+    )[0]
+    assert "if: inputs.target && steps.api_budget.outputs.allow == 'true'" in target
+    assert "dispatch-target" in target
+    assert "ALLOW:" not in target
+    assert 'echo "::error::Factory API quota is low' not in target
+
+    deferred = workflow.split(
+        "- name: Report quota-deferred targeted dispatch", 1
+    )[1].split("- name: Reconcile serialized migration finalization lane", 1)[0]
+    assert "if: inputs.target && steps.api_budget.outputs.allow != 'true'" in deferred
+    assert "was NOT executed" in deferred
+    assert "GITHUB_STEP_SUMMARY" in deferred
+    assert "without a claim, work attempt, or lease mutation" in deferred
+    assert "dispatch-target" not in deferred
+    assert "exit 1" not in deferred
+
+
 def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
@@ -258,7 +275,7 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> Non
     assert ".base.ref == 'main'" in wake
     assert "!github.event.pull_request.draft" in wake
     assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
-    assert "--ref main -f mode=roster" in wake
+    assert '--ref main -f target="pr:$PR_NUMBER" -f action=advance' in wake
     assert "from factory_eligibility import is_manual_only" in wake
     assert "is manual-only; no dispatch" in wake
 
@@ -427,3 +444,17 @@ def test_dispatch_batch_reconciles_once_before_per_worker_claims() -> None:
     assert 'if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then' in workflow
     assert "python3 \"$controller\" reconcile" in workflow
     assert "dispatch_assigned_worker \"$worker\"" in workflow
+
+
+def test_all_cooling_or_quota_exhausted_roster_is_idle_not_failed() -> None:
+    """Valid zero-capacity roster preserves model health and ends the chain."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    resolve_step = workflow.split("      - name: Resolve and dispatch fixed workers", 1)[1].split(
+        "      - name: Offer one unclaimed PR to local Ollama reviewer", 1
+    )[0]
+    assert "No executable workers in this roster tick" in resolve_step
+    assert '"dispatched_count=0" >> "$GITHUB_OUTPUT"' in resolve_step
+    assert '"dispatch_failed=false" >> "$GITHUB_OUTPUT"' in resolve_step
+    assert 'if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then' in resolve_step
+    assert "Dispatcher resolved no workers for smoke run" in resolve_step
+    assert "Dispatcher resolved no workers' >&2; exit 1" not in resolve_step

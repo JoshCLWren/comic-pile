@@ -194,10 +194,11 @@ def ensure_wait_label() -> None:
 
 
 def open_pull_requests() -> list[dict[str, Any]]:
-    pages = gh_json(
+    from factory_discovery import discovered_pull_requests
+
+    return discovered_pull_requests(REPO, lambda: flatten_pages(gh_json(
         ["api", "--paginate", "--slurp", f"repos/{REPO}/pulls?state=open&per_page=100"]
-    )
-    return flatten_pages(pages)
+    )))
 
 
 def pr_changed_files(pr_number: int) -> list[dict[str, Any]]:
@@ -216,7 +217,10 @@ def current_migration_prs() -> list[MigrationPr]:
             continue
         if bool(pr.get("draft")):
             continue
-        if not ((set(labels) & STAGE_LABELS) or WAIT_LABEL in labels):
+        # Building/blocked PRs cannot occupy or wait for a finalization
+        # slot unless explicitly marked as migration waiters. Avoid one
+        # paginated changed-files read for every irrelevant factory PR.
+        if not ((set(labels) & set(FINALIZATION_STAGES)) or WAIT_LABEL in labels):
             continue
         number = int(pr.get("number") or 0)
         if number <= 0:
@@ -348,11 +352,14 @@ def release_pr(pr: MigrationPr) -> None:
 
 
 def reconcile() -> dict[str, Any]:
-    ensure_wait_label()
     migration_prs = current_migration_prs()
     by_number = {pr.number: pr for pr in migration_prs}
     holder, park, release = plan_lane(migration_prs)
 
+    # Only a genuine park transition needs a GitHub label-existence probe.
+    # Read-only sweeps and waiter releases already have the label.
+    if park:
+        ensure_wait_label()
     for number in park:
         pr = by_number[number]
         if pr.active_owner is not None:

@@ -189,12 +189,8 @@ def main() -> None:
     assert "'.github/scripts/kilo-auto-factory-run.sh'" in dispatcher
     for required in (
         'group: fixed-model-factory-dispatch',
-        'queued in_progress',
-        'gh run cancel "$run_id"',
-        'release_cancelled_worker_leases',
-        'factory:unowned',
-        'another worker already owns it',
-        'takeover observed',
+        '-f assignment="$assignment"',
+        'Existing sessions keep their pinned workflow',
         'python3 "$controller" reconcile',
         'python3 "$controller" capacity',
         'MAX_WORKERS_PER_TICK:-12',
@@ -216,6 +212,8 @@ def main() -> None:
         'Trustworthy zero-work tick: ending bounded roster session',
     ):
         assert required in dispatcher, f'deployment/assignment fence missing: {required}'
+
+    assert 'gh run cancel' not in dispatcher, 'controller deploy must preserve live workers'
 
     entry = ENTRY.read_text(encoding='utf-8')
     assert 'workflow_dispatch:' in entry
@@ -274,9 +272,9 @@ def main() -> None:
         'MISTRAL_API_KEY',
         'factory/model-retirement',
         'integrate.api.nvidia.com',
-        '--retirement-comments',
-        'issues/1093/comments',
-        'factory-model-retired-410:v1',
+        '--retired-models-json',
+        'export-candidate-health',
+        '.status == "retired"',
         '--no-add-unused-free',
         '--dynamic-opencode-free',
         '.github/free-model-factories.tsv',
