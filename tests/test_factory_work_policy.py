@@ -181,15 +181,19 @@ def test_unresolved_contributor_record_does_not_block_an_independent_worker():
 
 def roster_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin worker execution capabilities so fork routing is deterministic."""
-    factory_roster = importlib.import_module("factory_roster")
-    monkeypatch.setattr(
-        factory_roster,
-        "load_roster_rows",
-        lambda *args, **kwargs: [
-            {"worker": "46", "source": "kilo-auto"},
-            {"worker": "11", "source": "opencode-free"},
-        ],
-    )
+    from types import SimpleNamespace
+
+    from factory_worker_slots import resolve as _resolve
+
+    def synthetic_slot(worker: str):
+        source = {"46": "kilo-auto", "11": "opencode-free"}.get(worker)
+        if source is None:
+            raise ValueError("unknown synthetic slot")
+        return SimpleNamespace(source=source)
+
+    del _resolve
+    slots = __import__("factory_worker_slots")
+    monkeypatch.setattr(slots, "resolve", synthetic_slot)
 
 
 def test_fork_review_goes_to_a_tool_capable_worker(monkeypatch: pytest.MonkeyPatch) -> None:
