@@ -29,7 +29,9 @@ _MODEL = re.compile(
 _COOLING = re.compile(
     r"factory catalog: [^\n]+: catalog contained no eligible candidates outside cooldown", re.I
 )
-_ACCOUNT_CREDITS = re.compile(r"add usage credits or subscribe", re.I)
+_ACCOUNT_CREDITS = re.compile(
+    r"add usage credits or subscribe|api key budget limit exceeded", re.I
+)
 _MODEL_ACCESS = re.compile(r"free tier users do not have access to this model", re.I)
 
 
@@ -85,7 +87,7 @@ def classify(log: str) -> dict[str, Any]:
     )
     if _ACCOUNT_CREDITS.search(executed_lines):
         result = replace(result, outcome="PROVIDER QUOTA", outcome_class="provider_quota",
-                         detail="provider explicitly requires account usage credits")
+                         detail="provider account usage credits or key budget exhausted")
     elif _MODEL_ACCESS.search(executed_lines):
         result = replace(result, outcome="MODEL MISSING", outcome_class="model_unavailable",
                          detail="provider account tier denied this model; other models remain eligible")

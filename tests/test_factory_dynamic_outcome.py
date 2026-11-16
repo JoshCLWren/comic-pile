@@ -83,3 +83,35 @@ def test_unselected_catalog_errors_do_not_blame_entire_provider():
     )
     assert result["outcome_class"] == "control_plane_failure"
     assert result["model"] == ""
+
+
+def test_monthly_api_key_budget_limit_is_account_quota_not_model_throttle():
+    """A provider-level key cap cannot be fixed by rotating to another model."""
+    observed = (
+        "Error: API key budget limit exceeded (monthly limit). "
+        "Contact your org admin. $0.01 of $0.01 used; "
+        "resets 2026-12-01T00:00:00.000Z."
+    )
+    result = module.classify(session("generic-gateway", observed))
+    assert result["source"] == "generic-gateway"
+    assert result["model"] == "synthetic/review-model"
+    assert result["outcome_class"] == "provider_quota"
+    assert result["persisted_work"] is False
+    assert result["delivery_outcome"] == "none"
+
+
+def test_monthly_api_key_limit_also_applies_to_legacy_locked_sessions():
+    """The two classifier paths agree without a provider/model roster."""
+    result = module.classify(
+        "Factory 42 locked: source=generic-gateway model=synthetic/model "
+        "runtime=generic-gateway/synthetic/model minute=:00 "
+        "scheduler=test configured=true\n"
+        "Error: API key budget limit exceeded (monthly limit). "
+        "$0.01 of $0.01 used\n"
+    )
+    assert result["outcome_class"] == "provider_quota"
+
+
+def test_unrelated_per_model_throttle_remains_transient():
+    result = module.classify(session("generic-gateway", "Error: HTTP 429 Too Many Requests"))
+    assert result["outcome_class"] == "provider_throttle"
