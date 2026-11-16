@@ -922,36 +922,39 @@ pub async fn adopt_reading_order(
     let lane_id = payload.lane_id.unwrap_or_else(|| "adopted".to_string());
     let lane_name = payload.lane_name.unwrap_or_else(|| "Adopted".to_string());
 
-    // Create the plan first to get the plan_id
-    let lanes_json = serde_json::to_string(&serde_json::json!([{
-        "id": lane_id,
-        "name": lane_name,
-        "order": 0
-    ]])).unwrap();
-    let nodes_json = serde_json::to_string(&serde_json::json!([
-        {
+    // Build nodes JSON
+    let mut nodes_val = serde_json::Value::Array(Vec::new());
+    for (idx, thread_id) in thread_ids.iter().enumerate() {
+        nodes_val.as_array_mut().unwrap().push(serde_json::json!({
             "id": format!("ro-{}", order_id * 1000 + thread_id),
             "node_type": "thread",
             "ref_id": thread_id,
             "lane_id": lane_id,
             "position": idx,
-            "label": null,
-            "source_role": null,
-            "source_confidence": null,
-            "source_explanation": null,
-            "source_paths": null,
-            "source_cbl_placements": null,
-            "source_story_arc_ids": null,
-            "source_target_story_arc_id": null,
-            "reader_role": null,
-            "reader_optional": null,
+            "label": null as Option<&str>,
+            "source_role": null as Option<&str>,
+            "source_confidence": null as Option<&str>,
+            "source_explanation": null as Option<&str>,
+            "source_paths": null as Option<Vec<&str>>,
+            "source_cbl_placements": null as Option<Vec<serde_json::Value>>,
+            "source_story_arc_ids": null as Option<Vec<String>>,
+            "source_target_story_arc_id": null as Option<&str>,
+            "reader_role": null as Option<&str>,
+            "reader_optional": null as Option<bool>,
             "is_checkpoint": false,
-            "checkpoint_target_ref_id": null,
-            "checkpoint_target_ref_ids": [],
-            "convergence_gate": []
-        }
-        for idx, thread_id in thread_ids.iter().enumerate()
-    ]))).unwrap();
+            "checkpoint_target_ref_id": null as Option<i32>,
+            "checkpoint_target_ref_ids": Vec::<i32>::new(),
+            "convergence_gate": Vec::<serde_json::Value>::new()
+        }));
+    }
+
+    // Create the plan first to get the plan_id
+    let lanes_json = serde_json::to_string(&serde_json::Value::Array(vec![serde_json::json!({
+        "id": lane_id,
+        "name": lane_name,
+        "order": 0
+    })])).unwrap();
+    let nodes_json = serde_json::to_string(&nodes_val).unwrap();
 
     let row = tx
         .query_one(
@@ -967,6 +970,16 @@ pub async fn adopt_reading_order(
 
     let plan_id: i32 = row.get(0);
 
+    // Insert continuity plan membership with the correct plan_id
+    for (idx, thread_id) in thread_ids.iter().enumerate() {
+        tx.execute(
+            "INSERT INTO reading_plan_issues (plan_id, issue_id, display_position, node_id) VALUES ($1, $2, $3, $4)",
+            &[&plan_id, thread_id, &(idx as i32), &format!("ro-{}-{}", order_id, thread_id)],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
     // Mark as adopted from reading order
     tx.execute(
         "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at) VALUES ($1, $2, NOW())",
@@ -974,6 +987,8 @@ pub async fn adopt_reading_order(
     )
     .await
     .map_err(db::query_error)?;
+
+    tx.commit().await.map_err(db::query_error)?;
 
     let result = ContinuityPlanResponse {
         id: plan_id,
@@ -986,7 +1001,6 @@ pub async fn adopt_reading_order(
         updated_at: row.get(7),
     };
 
-    tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
