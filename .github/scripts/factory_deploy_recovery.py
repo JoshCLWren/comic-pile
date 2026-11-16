@@ -22,7 +22,9 @@ def fetch_run_jobs(run_id: int, *, repository: str) -> list[Mapping[str, object]
         payload = gh_json(["run", "view", str(run_id), "--repo", repository, "--json", "jobs"])
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
-    return mappings(payload.get("jobs")) if isinstance(payload, Mapping) else None
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("jobs"), list):
+        return None
+    return mappings(payload["jobs"])
 
 
 def latest_attempted_deploy_run(
@@ -142,7 +144,7 @@ def merged_repair(failed: Mapping[str, object], repository: str) -> int | None:
 
 def successful_smokes(run: Mapping[str, object]) -> bool:
     """Require actual successful migration/deploy and both post-deploy probes."""
-    for job in mappings(run.get("jobs")):
+    for job in mappings(run.get("jobs") or []):
         if job.get("name") != DEPLOY_JOB_NAME or job.get("conclusion") != "success":
             continue
         passed = {
@@ -196,7 +198,7 @@ def attempt_revision(run: Mapping[str, object], repository: str) -> str | None:
 def incident_body(run: Mapping[str, object], selected_sha: str | None = None) -> str:
     """Build sanitized repair instructions from run metadata, never raw logs."""
     failures: list[str] = []
-    for job in mappings(run.get("jobs")):
+    for job in mappings(run.get("jobs") or []):
         for step in mappings(job.get("steps", [])):
             if step.get("conclusion") in RED_CONCLUSIONS:
                 failures.append(str(step.get("name")))
@@ -224,14 +226,10 @@ def incident_body(run: Mapping[str, object], selected_sha: str | None = None) ->
 
 def reconcile(repository: str) -> None:
     """Create/update one repair incident or close it after proven recovery."""
+    # Bounded current evidence, not the entire historical deployment ledger.
+    # The former --paginate --slurp loop exhausted installation REST quota.
     payload = gh_json(
-        [
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/workflows/deploy-production.yml/runs"
-            "?per_page=100",
-        ]
+        ["api", f"repos/{repository}/actions/workflows/deploy-production.yml/runs?per_page=20"]
     )
     latest = latest_attempted_deploy_run(
         payload, jobs_loader=lambda run_id: fetch_run_jobs(run_id, repository=repository)

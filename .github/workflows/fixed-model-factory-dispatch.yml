@@ -79,10 +79,11 @@ permissions:
   issues: write
   pull-requests: write
 
-# Coalesce duplicate ingress events for this workflow only. The job-level
-# shared group below serializes every lease writer without canceling other lanes.
+# Coalesce repeated targeted wakeups for the same target and action. Distinct
+# manual actions and measurements stay independent; an in-progress dispatch is
+# never cancelled. The job-level group still serializes every lease writer.
 concurrency:
-  group: ${{ (inputs.target || inputs.measure) && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
+  group: ${{ inputs.target && format('factory-target-{0}-{1}', inputs.target, inputs.action || 'advance') || inputs.measure && format('factory-measure-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
   queue: single
   cancel-in-progress: false
 
