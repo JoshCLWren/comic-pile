@@ -136,26 +136,36 @@ def _prune_obsolete_discovery(repo: str, batch_size: int = 200) -> int:
 
 
 def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
-    """Bound obsolete audit noise and retain useful lifecycle history for 30 days."""
-    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
+    """Prune retired repository-owned event noise, never unscoped histories.
+
+    Older worker events may lack a repository identifier, so age alone cannot
+    authorize their deletion. Only explicitly scoped historical observation
+    events can expire; worker lifecycle and coordination histories stay intact.
+    """
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
         raise ValueError('invalid cleanup scope or batch size')
-    patterns = [
-        f'factory-github-get-v1:{repo}:%',
-        f'factory-projection-v1:{repo}:%',
-        f'{repo}:%',
-    ]
+    github_prefix = f'factory-github-get-v1:{repo}:'
+    projection_prefix = f'factory-projection-v1:{repo}:'
+    retired_lists = [f'{repo}:open-issues', f'{repo}:open-prs']
     row = _run(
         """WITH retired AS (
              SELECT id FROM public.factory_state_events
-              WHERE created_at < now() - interval '30 days'
-                 OR (event_type='cache_refresh' AND detail->>'key' LIKE ANY($1::text[]))
-                 OR (event_type='target_reconciled' AND detail->>'target' LIKE $2)
-              ORDER BY id LIMIT $3
+              WHERE (event_type='cache_refresh'
+                     AND (left(detail->>'key', length($1))=$1
+                          OR left(detail->>'key', length($2))=$2
+                          OR detail->>'key'=ANY($3::text[])))
+                 OR (event_type='target_reconciled'
+                     AND left(detail->>'target', length($2))=$2)
+                 OR (created_at < now() - interval '30 days'
+                     AND (detail->>'repo'=$4 OR detail->>'repository'=$4)
+                     AND event_type IN ('cache_refresh',
+                                        'target_reconciled', 'target_changed'))
+              ORDER BY id LIMIT $5
            ), removed AS (
              DELETE FROM public.factory_state_events AS events USING retired
               WHERE events.id=retired.id RETURNING events.id
            ) SELECT count(*) AS deleted FROM removed""",
-        patterns, f'factory-projection-v1:{repo}:%', batch_size, one=True,
+        github_prefix, projection_prefix, retired_lists, repo, batch_size, one=True,
     )
     return int(row['deleted'])
 
