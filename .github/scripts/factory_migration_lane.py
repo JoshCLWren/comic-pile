@@ -48,7 +48,7 @@ class LaneConflictError(RuntimeError):
     """Raised when more than one migration finalizer still has an active lease."""
 
 
-class GitHubQuotaDeferred(RuntimeError):
+class GitHubQuotaDeferredError(RuntimeError):
     """GitHub rate-limited an authoritative lane read/write; retry later."""
 
 
@@ -159,7 +159,7 @@ def run_gh(args: list[str], *, input_json: object | None = None, check: bool = T
         if any(marker in detail.lower() for marker in (
             "rate limit exceeded", "secondary rate limit", "abuse detection"
         )):
-            raise GitHubQuotaDeferred("GitHub installation API quota exhausted")
+            raise GitHubQuotaDeferredError("GitHub installation API quota exhausted")
         raise RuntimeError(f"{' '.join(command)} failed ({proc.returncode}): {detail}")
     return proc.stdout
 
@@ -407,7 +407,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except GitHubQuotaDeferred:
+    except GitHubQuotaDeferredError:
         # Keep migration PR owners and stages untouched until GitHub API reset.
         # Regular dispatcher/recovery schedules provide the next attempt.
         print(json.dumps({"status": "deferred", "reason": "github_api_rate_limit"}, sort_keys=True))
