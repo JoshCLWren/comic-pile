@@ -382,6 +382,11 @@ def test_regular_status_job_prunes_only_in_trusted_controller():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
     assert "cron: '*/15 * * * *'" in workflow
+    # A cleanup implementation merge must kick off the trusted status job.
+    # Scheduled Actions can be delayed under heavy repository load.
+    push_paths = workflow.split("  push:", 1)[1].split("permissions:", 1)[0]
+    assert "'.github/scripts/factory_state_cache.py'" in push_paths
+    assert "'.github/workflows/factory-status-pages.yml'" in push_paths
     assert "Prune retired discovery and audit events" in workflow
     assert "factory_state_cache.py prune-obsolete" in workflow
     assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-obsolete")
