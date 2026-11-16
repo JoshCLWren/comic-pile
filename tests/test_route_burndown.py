@@ -190,6 +190,18 @@ def test_full_surface_matches_deployed_ingress() -> None:
                 ]
                 if operation.get("exclude_from_inventory"):
                     assert not matches, "retired Python declarations must remain excluded"
+                    # Excluding a declaration retires it from the Python-handler
+                    # surface only. The operation stays a live browser-callable
+                    # route on its declared ingress, so cutover accounting must
+                    # keep seeing it there.
+                    declared_destination = operation.get("dest")
+                    if declared_destination is not None:
+                        assert (
+                            _resolve_destination(
+                                str(operation["method"]), str(operation["path"]), routes
+                            )
+                            == declared_destination
+                        ), "retired Python declarations must keep their deployed ingress"
                 else:
                     assert len(matches) == 1
                     assert matches[0]["ingress_destination"] == operation["dest"]
