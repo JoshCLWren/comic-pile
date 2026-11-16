@@ -146,6 +146,7 @@ jobs:
       FACTORY_WORKER_48_APP_PRIVATE_KEY: ${{ secrets.FACTORY_WORKER_48_APP_PRIVATE_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
@@ -199,74 +200,42 @@ jobs:
         shell: bash
         env:
           REQUESTED_WORKER: ${{ inputs.worker }}
-          EXISTING_OPENCODE_KEY: ${{ (inputs.worker == '88' || inputs.worker == '90') && (secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY) || '' }}
         run: |
           set -Eeuo pipefail
-          row="$(awk -F '\t' -v worker="$REQUESTED_WORKER" '$1 == worker {print; exit}' .github/free-model-factories.tsv)"
-          [[ -n "$row" ]] || { echo "No fixed-model lane for worker ${REQUESTED_WORKER}" >&2; exit 1; }
-          IFS=$'\t' read -r worker source model minute scheduler display <<< "$row"
-          [[ "$worker" == "$REQUESTED_WORKER" ]]
-          # Deliberate comparison: two anonymous and two authenticated DeepSeek factories.
-          # Other OpenCode free lanes continue to use dynamic catalog selection.
-          case "$worker" in
-            87|89) deepseek_mode=anonymous ;;
-            88|90) deepseek_mode=authenticated ;;
-            *) deepseek_mode=normal ;;
-          esac
-          if [[ "$deepseek_mode" != normal ]]; then
-            [[ "$source" == opencode-free && "$model" == deepseek-v4.1-flash-free ]] || {
-              echo "::error::DeepSeek experiment worker $worker must use exact OpenCode Free model"
-              exit 1
-            }
-          fi
-
+          slot="$(python3 .github/scripts/factory_worker_slots.py resolve --worker "$REQUESTED_WORKER")"
+          worker="$(jq -er '.worker' <<< "$slot")"
+          source="$(jq -er '.source' <<< "$slot")"
+          minute="$(jq -er '.minute' <<< "$slot")"
+          scheduler="$(jq -er '.scheduler' <<< "$slot")"
+          display="$(jq -er '.display_name' <<< "$slot")"
+          model=''
+          runtime_model=''
+          deepseek_mode=normal
+          branch_suffix="$source"
           configure_adapter=false
           case "$source" in
-            opencode-free|openrouter-free)
-              runtime_model="${source%-free}/${model}"
-              branch_suffix='catalog-free'
+            opencode-free|openrouter-free|kilo-auto)
               configured=true
-              reason='catalog-backed-free-code-slot'
-              ;;
-            kilo-auto)
-              runtime_model="kilo/${model}"
-              branch_suffix='kilo-auto'
-              configured=true
-              reason='configured-anonymous-free'
+              reason='catalog-discovery-at-execution'
               ;;
             omniroute-free)
-              runtime_model="omniroute/${model}"
-              branch_suffix='omniroute'
-              if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
-                if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
-                  configured=true
-                  reason='configured-omniroute'
-                else
-                  configured=false
-                  reason='missing-omniroute-credentials'
-                fi
+              if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]] &&
+                 [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
+                configured=true
+                reason='configured-omniroute'
               else
                 configured=false
-                reason='omniroute-disabled-incident'
+                reason='omniroute-unconfigured'
               fi
               ;;
             *)
-              # Source -> provider ID, credential gate, and model selector
-              # come from one typed registry, never ad hoc shell aliases.
-              resolution="$(python3 .github/scripts/factory_provider_registry.py resolve --source "$source" --model "$model")"
-              runtime_model="$(jq -er '.runtime_model' <<< "$resolution")"
-              branch_suffix="$(jq -er '.branch_suffix' <<< "$resolution")"
+              # The integration registry checks credentials without any model ID.
+              resolution="$(python3 .github/scripts/factory_provider_registry.py credentials --source "$source")"
               configured="$(jq -er '.configured | tostring' <<< "$resolution")"
               reason="$(jq -er '.reason' <<< "$resolution")"
               configure_adapter="$(jq -er '.configure_adapter | tostring' <<< "$resolution")"
               ;;
           esac
-
-          if [[ "$deepseek_mode" == authenticated && -z "${EXISTING_OPENCODE_KEY:-}" ]]; then
-            configured=false
-            reason='missing-OpenCode-credential'
-          fi
-
           {
             echo "deepseek_mode=$deepseek_mode"
             echo "worker=$worker"
@@ -281,8 +250,8 @@ jobs:
             echo "configured=$configured"
             echo "reason=$reason"
           } >> "$GITHUB_OUTPUT"
-          printf 'Factory %s locked: source=%s model=%s runtime=%s minute=:%02d scheduler=%s configured=%s\n' \
-            "$worker" "$source" "$model" "$runtime_model" "$minute" "$scheduler" "$configured"
+          printf 'Factory %s assigned dynamic provider slot: source=%s configured=%s\n' \
+            "$worker" "$source" "$configured"
 
       - name: Configure git identity
         env:
@@ -320,18 +289,6 @@ jobs:
       - name: Install current OpenCode 2
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         run: bash .github/scripts/install-opencode-v2.sh
-
-      - name: Configure authenticated DeepSeek OpenCode credential
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode == 'authenticated'
-        shell: bash
-        env:
-          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
-        run: |
-          set -Eeuo pipefail
-          [[ -n "${EXISTING_OPENCODE_KEY:-}" ]] || { echo "::error::Existing OpenCode API key unavailable"; exit 1; }
-          echo "::add-mask::$EXISTING_OPENCODE_KEY"
-          printf 'OPENCODE_API_KEY=%s\n' "$EXISTING_OPENCODE_KEY" >> "$GITHUB_ENV"
-          echo 'Authenticated DeepSeek uses existing OpenCode credential and exact free model'
 
       - name: Install pinned Kilo CLI release
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
@@ -373,257 +330,73 @@ jobs:
             printf 'control_plane_failure\tTrusted Neon model snapshot unavailable\n' > "$discovery_outcome"
             exit 1
           }
-          # Dynamic free slots rotate within a live catalog. Pinned slots must
-          # honor the Neon eligibility decision before contacting a provider.
-          if [[ "$SOURCE" != openrouter-free && "$SOURCE" != vercel-ai-gateway ]] &&
-             [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
-             jq -e --arg source "$SOURCE" --arg model "$LANE_MODEL" \
-               '(.[$source] // []) | index($model) != null' "$exclusions_file" >/dev/null; then
-            printf 'model_unavailable\tPinned model excluded by trusted Neon health\n' > "$discovery_outcome"
-            exit 1
-          fi
-
+          # Selection happens after the relevant CLI is installed. Nothing
+          # uses a checked-in model ID, cost limit, or worker/model mapping.
           case "$SOURCE" in
-            cloudflare-workers-ai) ;&
-            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
-            nvidia|kilo-auto|z-ai|ollama-cloud|mistral|orcarouter|requesty)
-              # These adapters cannot enumerate reliably. Preserve the lane
-              # request and let the existing real invocation/probe prove it.
-              {
-                echo "source=$SOURCE"
-                echo "model=$LANE_MODEL"
-                echo "runtime_model=$LANE_RUNTIME_MODEL"
-                echo "display=$LANE_DISPLAY"
-                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-by-runtime-evidence"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-            vercel-ai-gateway)
-              # Published model IDs are candidates. Execution proves actual availability.
-              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
-                  --source "$SOURCE" --worker "$WORKER" \
-                  --exclusions-file "$exclusions_file")"; then
-                printf 'control_plane_failure\tVercel catalog unavailable or empty\n' > "$discovery_outcome"
+            kilo-auto)
+              catalog="$RUNNER_TEMP/factory-kilo-catalog"
+              kilo models --refresh > "$catalog" || {
+                printf 'provider_failure\tKilo CLI catalog unavailable\n' > "$discovery_outcome"
                 exit 1
-              fi
-              model="$(jq -er '.model' <<< "$selection")"
-              {
-                echo "source=$SOURCE"
-                echo "model=$model"
-                echo "runtime_model=vercel/$model"
-                echo "display=Vercel Free · $model"
-                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-from-published-catalog"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
+              }
+              selection="$(python3 .github/scripts/factory_kilo_catalog.py \
+                --catalog "$catalog" --worker "$WORKER" \
+                --exclusions-file "$exclusions_file")"
               ;;
             opencode-free)
-              if [[ "$DEEPSEEK_MODE" != normal ]]; then
-                catalog="$RUNNER_TEMP/deepseek-pinned-models.txt"
-                bash scripts/opencode-model-catalog.sh opencode plain refresh > "$catalog"
-                grep -Fx "$LANE_RUNTIME_MODEL" "$catalog" >/dev/null || {
-                  printf 'model_unavailable\tPinned free DeepSeek absent from OpenCode catalog\n' > "$discovery_outcome"
-                  echo "::error::Pinned free DeepSeek absent from OpenCode catalog"
-                  exit 1
-                }
-                {
-                  echo "source=opencode-free"
-                  echo "model=$LANE_MODEL"
-                  echo "runtime_model=$LANE_RUNTIME_MODEL"
-                  echo "display=DeepSeek V4.1 Flash Free ($DEEPSEEK_MODE)"
-                  echo "branch_suffix=opencode-free"
-                  echo "reason=deepseek-pinned-$DEEPSEEK_MODE"
-                } >> "$GITHUB_OUTPUT"
-                echo "Factory $WORKER pinned to $LANE_RUNTIME_MODEL ($DEEPSEEK_MODE); rotation disabled"
-                exit 0
-              fi
-              # Models are selected at execution, after OpenCode 2 installation.
               catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
-              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog"
-              comments_file="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
-              # Decision comes from trusted Entry/Neon, not a registry scan.
-              printf '[]\n' > "$comments_file"
-              result="$(python3 .github/scripts/factory_live_opencode.py \
-                --catalog "$catalog" --worker "$WORKER" --comments "$comments_file" \
-                --exclusions-file "$exclusions_file" \
-                --rotation "${GITHUB_RUN_NUMBER:-0}")"
-              model="$(jq -er '.model' <<< "$result")"
-              runtime_model="$(jq -er '.runtime_model' <<< "$result")"
-              {
-                echo "source=opencode-free"
-                echo "model=$model"
-                echo "runtime_model=$runtime_model"
-                echo "display=OpenCode Free · $model"
-                echo "branch_suffix=opencode-free"
-                echo "reason=selected-from-live-free-catalog"
-              } >> "$GITHUB_OUTPUT"
-              echo "Factory $WORKER selected $runtime_model from $(jq -r '.candidate_count' <<< "$result") free OpenCode models"
-              exit 0
-              ;;
-            openrouter-free)
-              # Resolve OpenRouter candidates from its current catalog, regardless of pricing.
-              # The same policy holds regardless of OmniRoute's state.
-              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
-                  --source "$SOURCE" --worker "$WORKER" \
-                  --exclusions-file "$exclusions_file")"; then
-                printf 'control_plane_failure\tOpenRouter catalog unavailable or empty\n' > "$discovery_outcome"
+              bash scripts/opencode-model-catalog.sh opencode verbose refresh > "$catalog" || {
+                printf 'provider_failure\tOpenCode live catalog unavailable\n' > "$discovery_outcome"
                 exit 1
-              fi
-              model="$(jq -er '.model' <<< "$selection")"
-              {
-                echo "source=$SOURCE"
-                echo "model=$model"
-                echo "runtime_model=openrouter/$model"
-                echo "display=OpenRouter Free · $model"
-                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-from-published-catalog"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
+              }
+              comments_file="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
+              printf '[]\n' > "$comments_file"
+              selection="$(python3 .github/scripts/factory_live_opencode.py \
+                --catalog "$catalog" --worker "$WORKER" --comments "$comments_file" \
+                --exclusions-file "$exclusions_file" --rotation "${GITHUB_RUN_NUMBER:-0}")"
+              ;;
+            openrouter-free|vercel-ai-gateway)
+              selection="$(python3 .github/scripts/factory_published_model_catalog.py \
+                --source "$SOURCE" --worker "$WORKER" \
+                --exclusions-file "$exclusions_file")" || {
+                printf 'provider_failure\tPublished model catalog unavailable\n' > "$discovery_outcome"
+                exit 1
+              }
+              ;;
+            omniroute-free)
+              catalog="$RUNNER_TEMP/factory-omniroute-catalog.json"
+              curl --silent --show-error --fail-with-body \
+                --connect-timeout 5 --max-time 30 \
+                --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
+                "${OMNIROUTE_BASE_URL%/}/models" > "$catalog" || {
+                printf 'provider_failure\tOmniRoute catalog unavailable\n' > "$discovery_outcome"
+                exit 1
+              }
+              selection="$(python3 .github/scripts/factory_runtime_model_select.py \
+                --source "$SOURCE" --worker "$WORKER" --catalog-json "$catalog" \
+                --exclusions-file "$exclusions_file")"
               ;;
             *)
-              printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
-              exit 1
+              selection="$(python3 .github/scripts/factory_runtime_model_select.py \
+                --source "$SOURCE" --worker "$WORKER" \
+                --exclusions-file "$exclusions_file")" || {
+                printf 'provider_failure\tAuthenticated provider catalog unavailable\n' > "$discovery_outcome"
+                exit 1
+              }
               ;;
           esac
 
-          discover_provider() {
-            local provider="$1"
-            local catalog="$2"
-            python3 .github/scripts/factory_provider_candidates.py \
-              --provider "$provider" --catalog "$catalog"
-          }
-
-          catalog_candidates='[]'
-          catalog_successes=0
-          catalog_failures=()
-
-          opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
-          if bash scripts/opencode-model-catalog.sh opencode plain refresh > "$opencode_catalog"; then
-            if opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")" \
-              && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$opencode_discovery"; then
-              if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
-                catalog_successes=$((catalog_successes + 1))
-                candidates="$(jq -c '.candidates // []' <<< "$opencode_discovery")"
-                catalog_candidates="$(jq -cn \
-                  --argjson left "$catalog_candidates" --argjson right "$candidates" \
-                  '$left + $right | unique_by([.provider, .model])')"
-              else
-                catalog_failures+=('OpenCode returned an invalid model catalog')
-              fi
-            else
-              catalog_failures+=('OpenCode candidate adapter failed')
-            fi
-          else
-            catalog_failures+=('OpenCode model discovery command failed')
-          fi
-
-          if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
-            openrouter_catalog="$RUNNER_TEMP/factory-openrouter-catalog"
-            if curl --silent --show-error --fail-with-body \
-              --connect-timeout 5 --max-time 30 \
-              --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
-              https://openrouter.ai/api/v1/models > "$openrouter_catalog"; then
-              if openrouter_discovery="$(discover_provider openrouter-free "$openrouter_catalog")" \
-                && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$openrouter_discovery"; then
-                if [[ "$(jq -r '.status' <<< "$openrouter_discovery")" != invalid ]]; then
-                  catalog_successes=$((catalog_successes + 1))
-                  candidates="$(jq -c '.candidates // []' <<< "$openrouter_discovery")"
-                  catalog_candidates="$(jq -cn \
-                    --argjson left "$catalog_candidates" --argjson right "$candidates" \
-                    '$left + $right | unique_by([.provider, .model])')"
-                else
-                  catalog_failures+=('OpenRouter returned an invalid model catalog')
-                fi
-              else
-                catalog_failures+=('OpenRouter candidate adapter failed')
-              fi
-            else
-              catalog_failures+=('OpenRouter model catalog request failed')
-            fi
-          fi
-
-          if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]] && [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
-            omniroute_catalog="$RUNNER_TEMP/factory-omniroute-catalog"
-            if curl --silent --show-error --fail-with-body \
-              --connect-timeout 5 --max-time 30 --retry 5 --retry-all-errors --retry-delay 5 \
-              --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
-              "${OMNIROUTE_BASE_URL%/}/models" > "$omniroute_catalog"; then
-              if omniroute_discovery="$(discover_provider omniroute-free "$omniroute_catalog")" \
-                && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$omniroute_discovery"; then
-                if [[ "$(jq -r '.status' <<< "$omniroute_discovery")" != invalid ]]; then
-                  catalog_successes=$((catalog_successes + 1))
-                  candidates="$(jq -c '.candidates // []' <<< "$omniroute_discovery")"
-                  catalog_candidates="$(jq -cn \
-                    --argjson left "$catalog_candidates" --argjson right "$candidates" \
-                    '$left + $right | unique_by([.provider, .model])')"
-                else
-                  catalog_failures+=('OmniRoute returned an invalid model catalog')
-                fi
-              else
-                catalog_failures+=('OmniRoute candidate adapter failed')
-              fi
-            else
-              catalog_failures+=('OmniRoute model catalog request failed')
-            fi
-          fi
-
-          candidate_count="$(jq 'length' <<< "$catalog_candidates")"
-          if (( candidate_count == 0 )); then
-            if (( catalog_successes == 0 )); then
-              IFS=';' failure_detail="${catalog_failures[*]}"
-              printf 'provider_unavailable\t%s\n' \
-                "${failure_detail:-No catalog provider was executable}" > "$discovery_outcome"
-            else
-              printf 'model_unavailable\tLive catalogs exposed no policy-eligible candidate\n' \
-                > "$discovery_outcome"
-            fi
-            exit 1
-          fi
-
-          discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
-          comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
-          jq -cn --argjson candidates "$catalog_candidates" \
-            '{candidates: $candidates}' > "$discovery_file"
-          # The trusted preparation job already sent a compact durable
-          # model/provider health projection. Do not enumerate registry history.
-          printf '[]\n' > "$comments_file"
-          health_file="$RUNNER_TEMP/factory-candidate-health.json"
-          printf '%s\n' "$FACTORY_CANDIDATE_HEALTH" > "$health_file"
-          selection="$(python3 .github/scripts/factory_candidate_health.py \
-            --discovery "$discovery_file" --comments "$comments_file" \
-            --durable-health "$health_file" --worker "$WORKER")"
-          source="$(jq -r '.selected.provider // empty' <<< "$selection")"
-          model="$(jq -r '.selected.model // empty' <<< "$selection")"
-          runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
-          health_state="$(jq -r '.selected.health_state // empty' <<< "$selection")"
-          if [[ -z "$source" || -z "$model" || -z "$runtime_model" ]]; then
-            failure_outcome="$(jq -r '.failure_outcome // "unknown_failure"' <<< "$selection")"
-            failure_detail="$(jq -r '.detail // "candidate health selection failed"' <<< "$selection")"
-            printf '%s\t%s\n' "$failure_outcome" "$failure_detail" > "$discovery_outcome"
-            exit 1
-          fi
-
-          case "$source" in
-            opencode-free) branch_suffix='opencode-free' ;;
-            openrouter-free) branch_suffix='openrouter' ;;
-            omniroute-free) branch_suffix='omniroute' ;;
-            *)
-              printf 'control_plane_failure\tSelected unsupported catalog provider: %s\n' \
-                "$source" > "$discovery_outcome"
-              exit 1
-              ;;
-          esac
+          model="$(jq -er '.model' <<< "$selection")"
+          runtime_model="$(jq -er '.runtime_model' <<< "$selection")"
           {
-            echo "source=$source"
+            echo "source=$SOURCE"
             echo "model=$model"
             echo "runtime_model=$runtime_model"
-            echo "display=${source} · ${model}"
-            echo "branch_suffix=$branch_suffix"
-            echo "reason=selected-${health_state}-from-live-provider-catalog"
+            echo "display=$SOURCE · $model"
+            echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+            echo "reason=selected-from-live-runtime-catalog"
           } >> "$GITHUB_OUTPUT"
-          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
-            "$WORKER" "$source" "$model" "$runtime_model" "$health_state"
+          echo "Factory $WORKER discovered $runtime_model; real work verifies callability"
 
       - name: Report selected executor heartbeat
         if: always()
@@ -677,21 +450,6 @@ jobs:
 
       # Crouton's OpenCode Zen free route can reject anonymous runner requests.
       # Do not change the anonymous DeepSeek comparison or other model lanes.
-      - name: Configure existing Zen credential for Crouton Alpha
-        if: steps.lane.outputs.configured == 'true' && steps.executor.outputs.source == 'opencode-free' && steps.executor.outputs.model == 'crouton-alpha-free'
-        shell: bash
-        env:
-          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
-        run: |
-          set -Eeuo pipefail
-          if [[ -n "${EXISTING_OPENCODE_KEY:-}" ]]; then
-            echo "::add-mask::$EXISTING_OPENCODE_KEY"
-            printf 'OPENCODE_API_KEY=%s\n' "$EXISTING_OPENCODE_KEY" >> "$GITHUB_ENV"
-            echo 'Using existing OpenCode Zen credential for zero-cost Crouton Alpha'
-          else
-            echo 'No existing Zen credential; Crouton will use anonymous free quota'
-          fi
-
       - name: Configure selected OmniRoute capacity
         if: vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
