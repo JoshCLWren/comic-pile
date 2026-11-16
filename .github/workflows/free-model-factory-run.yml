@@ -92,6 +92,7 @@ jobs:
       heartbeat_id: ${{ steps.prepare.outputs.heartbeat_id }}
       attempt_id: ${{ steps.prepare.outputs.attempt_id }}
       candidate_health: ${{ steps.prepare.outputs.candidate_health }}
+      fleet_sources: ${{ steps.prepare.outputs.fleet_sources }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -122,6 +123,9 @@ jobs:
           candidate_health="$(python3 .github/scripts/factory_state_operations.py export-candidate-health --repo "$GITHUB_REPOSITORY")"
           jq -e '.models | type == "array"' <<< "$candidate_health" >/dev/null
           echo "candidate_health=$candidate_health" >> "$GITHUB_OUTPUT"
+          fleet_sources="$(python3 .github/scripts/factory_state_operations.py export-fleet-failover-sources --repo "$GITHUB_REPOSITORY" --worker "$FACTORY_WORKER")"
+          jq -e 'type == "array" and all(.[]; type == "string")' <<< "$fleet_sources" >/dev/null
+          echo "fleet_sources=$fleet_sources" >> "$GITHUB_OUTPUT"
           echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
           echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
 
@@ -135,6 +139,7 @@ jobs:
     env:
       FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}
       FACTORY_CANDIDATE_HEALTH: ${{ needs.validate_assignment.outputs.candidate_health }}
+      FACTORY_FLEET_SOURCES: ${{ needs.validate_assignment.outputs.fleet_sources }}
       FACTORY_HEARTBEAT_COMMENT_ID: ${{ needs.validate_assignment.outputs.heartbeat_id }}
       FACTORY_ATTEMPT_COMMENT_ID: ${{ needs.validate_assignment.outputs.attempt_id }}
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
@@ -329,6 +334,7 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
           exclusions_file="$RUNNER_TEMP/factory-neon-model-exclusions.json"
           printf '%s\n' "$FACTORY_MODEL_EXCLUSIONS" > "$exclusions_file"
+          printf '%s\n' "$FACTORY_FLEET_SOURCES" > "$RUNNER_TEMP/factory-fleet-sources.json"
           jq -e 'type == "object" and all(.[]; type == "array")' "$exclusions_file" >/dev/null || {
             printf 'control_plane_failure\tTrusted Neon model snapshot unavailable\n' > "$discovery_outcome"
             exit 1
