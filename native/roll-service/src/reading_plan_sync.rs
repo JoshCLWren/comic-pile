@@ -1,41 +1,76 @@
-//! Same-path Rust cutover for the browser-called reading-plan-sync status
-//! operation (#4851, parent #4335).
+//! Same-path Rust cutover for browser-called reading-plan-sync operations
+//! (#4851, parent #4335).
 //!
 //! Preserves the Python `app/api/reading_plan_sync.py` wire contract at the
 //! same HTTP method and exact path:
 //!
 //! * `GET /api/v1/reading-plan-sync/status`
+//! * `POST /api/v1/reading-plan-sync/sync` (in progress; not yet routed to
+//!   native until parity is complete)
 //!
-//! `POST /api/v1/reading-plan-sync/sync` remains on the Python handler: its
-//! provider adoption pipeline is a separate, much larger port and must not be
-//! replaced by a placeholder that reports success without syncing anything.
-//! The native router therefore does not claim that path.
-//!
-//! The status operation is merged into the generated native same-path OpenAPI
-//! contract (`same_path_openapi.rs`), so the checked-in contract and the
-//! frontend generated client describe the native handler alongside the
-//! still-Python sync operation.
-//!
-//! The sync POST port is deliberately deferred to a dedicated factory session
-//! (PR #5139 review, 2026-11-16). A faithful port must reproduce the shared
-//! ComicVine client's request-ledger pacing (180 requests/hour across all
-//! processes), throttle cooldown, and response disk cache — all load-bearing
-//! for the Python cron path that keeps running after cutover — plus the
-//! savepoint-retry external-identity upsert, the reader/thread/source lock
-//! chain with post-fetch staleness reload, the deferred position unique
-//! constraint, plan membership rebuild, and Pydantic-exact wire rendering. A
-//! port that skipped any of those would diverge from Python semantics or
-//! exhaust the shared provider budget, which is worse than the current
-//! shadowed state. `reading_plan_sync_service.py` remains the executable
-//! specification for that port.
+//! Status is a direct read of persisted release-source state. The sync POST
+//! must mirror the user-triggered `sync_released_issues` behavior: evaluate
+//! only the authenticated user's enabled sources, adopt released ComicVine
+//! issues, and preserve Python wire/auth/ownership/SQL/transaction semantics.
 
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SyncRequest {
+    #[schema(value_type = String, format = "date-time")]
+    pub as_of: String,
+    #[serde(default = "default_refresh")]
+    pub refresh: bool,
+}
+
+fn default_refresh() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct SourceSyncFailure {
+    pub source_id: i32,
+    pub plan_id: i32,
+    pub thread_id: i32,
+    pub volume_id: i32,
+    pub error: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct SyncReport {
+    pub total_sources: i64,
+    pub enabled_sources: i64,
+    pub checked_sources: i64,
+    pub successful_sources: i64,
+    pub failed_sources: i64,
+    pub issues_checked: i64,
+    pub created_issues: i64,
+    pub reused_issues: i64,
+    pub future_skips: i64,
+    pub unknown_date_skips: i64,
+    pub conflicts: i64,
+    pub issue_failures: i64,
+    #[serde(default)]
+    pub excluded_sources: i64,
+    #[serde(default)]
+    pub excluded_issues: i64,
+    #[serde(default)]
+    pub skipped_sources: i64,
+    pub failures: Vec<SourceSyncFailure>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct SyncResponse {
+    pub success: bool,
+    pub message: String,
+    pub result: SyncReport,
+}
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
      rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at \
@@ -107,6 +142,101 @@ pub async fn get_sync_status(
         enabled_sources: enabled,
         sources,
     }))
+}
+
+fn report_message(report: &SyncReport) -> String {
+    format!(
+        "Sync completed: {} successful, {} failed, {} created, {} reused, {} sources and {} issues excluded",
+        report.successful_sources,
+        report.failed_sources,
+        report.created_issues,
+        report.reused_issues,
+        report.excluded_sources,
+        report.excluded_issues
+    )
+}
+
+fn parse_as_of(value: &str) -> Result<DateTime<Utc>, ApiError> {
+    if let Ok(dt) = DateTime::parse_from_rfc3339(value) {
+        return Ok(dt.with_timezone(&Utc));
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f") {
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S") {
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f") {
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+    }
+    if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S") {
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+    }
+    Err(ApiError::Unprocessable(
+        "as_of must be a valid datetime".to_string(),
+    ))
+}
+
+pub async fn sync_released_issues_endpoint(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<SyncRequest>,
+) -> Result<Json<SyncResponse>, ApiError> {
+    let _as_of = parse_as_of(&payload.as_of)?;
+    let _refresh = payload.refresh;
+    // Minimal parity scaffold: report counts for the user's sources. Full
+    // ComicVine roster fetch/adoption parity is implemented incrementally.
+    let connection = db::checkout(&state).await?;
+    let total_sources: i64 = connection
+        .query_one(
+            "SELECT COUNT(*) FROM reading_plan_release_sources rps \
+             JOIN continuity_plans cp ON cp.id = rps.plan_id \
+             WHERE cp.user_id = $1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let enabled_sources: i64 = connection
+        .query_one(
+            "SELECT COUNT(*) FROM reading_plan_release_sources rps \
+             JOIN continuity_plans cp ON cp.id = rps.plan_id \
+             WHERE cp.user_id = $1 AND rps.enabled = true",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+
+    if enabled_sources == 0 {
+        let report = SyncReport {
+            total_sources,
+            enabled_sources,
+            checked_sources: 0,
+            successful_sources: 0,
+            failed_sources: 0,
+            issues_checked: 0,
+            created_issues: 0,
+            reused_issues: 0,
+            future_skips: 0,
+            unknown_date_skips: 0,
+            conflicts: 0,
+            issue_failures: 0,
+            excluded_sources: 0,
+            excluded_issues: 0,
+            skipped_sources: 0,
+            failures: Vec::new(),
+        };
+        return Ok(Json(SyncResponse {
+            success: report.failed_sources == 0 && report.issue_failures == 0,
+            message: report_message(&report),
+            result: report,
+        }));
+    }
+
+    Err(ApiError::ServiceUnavailable(
+        "reading-plan-sync POST native implementation in progress".to_string(),
+    ))
 }
 
 #[utoipa::path(
