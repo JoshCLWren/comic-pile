@@ -30,7 +30,7 @@ _COOLING = re.compile(
     r"factory catalog: [^\n]+: catalog contained no eligible candidates outside cooldown", re.I
 )
 _ACCOUNT_CREDITS = re.compile(
-    r"add usage credits or subscribe|api key budget limit exceeded", re.I
+    r"add usage credits or subscribe|api key budget limit exceeded|insufficient balance or no resource package|please recharge", re.I
 )
 _MODEL_ACCESS = re.compile(r"free tier users do not have access to this model", re.I)
 
@@ -55,9 +55,14 @@ def classify(log: str) -> dict[str, Any]:
         return asdict(canonical.classify(log))
     worker, source = match["worker"], match["source"]
     configured = match["configured"].lower() == "true"
+    # A trusted worker can rotate sources inside one lease. Its terminal
+    # classification belongs to the last executed provider/model, never the
+    # dispatch-time source or an earlier candidate's log.
+    boundary = log.rfind("FACTORY_EXECUTION_CANDIDATE: source=")
+    execution_log = log[boundary:] if boundary >= 0 else log
     model_event = next(
-        (event for event in reversed(list(_MODEL.finditer(log)))
-         if event["worker"] == worker and event["source"] == source),
+        (event for event in reversed(list(_MODEL.finditer(execution_log)))
+         if event["worker"] == worker),
         None,
     )
     if model_event is None:
@@ -73,10 +78,7 @@ def classify(log: str) -> dict[str, Any]:
             detail="dynamic provider slot failed before selecting a model",
         ))
     model = model_event["model"]
-    # A previous candidate's quota error cannot classify a later candidate.
-    # The trusted worker prints this boundary immediately before each run_agent.
-    boundary = log.rfind("FACTORY_EXECUTION_CANDIDATE: source=")
-    execution_log = log[boundary:] if boundary >= 0 else log
+    source = model_event["source"]
     runtime_match = re.search(r"FACTORY_EXECUTION_CANDIDATE: source=\S+ model=\S+ runtime=(\S+)", execution_log)
     if runtime_match is None:
         runtime_match = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
