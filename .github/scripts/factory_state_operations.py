@@ -47,13 +47,10 @@ def enabled() -> bool:
 
 
 def _roster() -> dict[str, tuple[str, str]]:
-    path = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    result: dict[str, tuple[str, str]] = {}
-    for row in path.read_text(encoding="utf-8").splitlines():
-        fields = row.split("\t")
-        if len(fields) >= 3 and fields[0].isdigit():
-            result[fields[0]] = (fields[1], fields[2])
-    return result
+    """Resolve current provider-derived worker identities, not a pin roster."""
+    from factory_worker_slots import slots
+
+    return {item.worker: (item.source, "") for item in slots()}
 
 
 async def ensure_schema(conn: Any) -> None:
@@ -144,7 +141,7 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     # the TSV no longer contains a permanently pinned model ID.
     if state.get("source") and state["source"] != source:
         return None
-    if model != "@catalog" and state.get("model") != model:
+    if model and model != "@catalog" and state.get("model") != model:
         return None
     if state.get("suspended") is True:
         return "suspended after repeated failures (new pin or TTL will reenable)"
