@@ -892,30 +892,14 @@ def active_fixed_workers() -> ActiveWorkerResult:
     numeric_unresolved = {value for value in unresolved_run_ids if value.isdigit()}
     if numeric_unresolved:
         try:
-            if os.environ.get('FACTORY_STATE_DSN_FILE'):
-                # Reuse the incremental, shared Neon registry rather than
-                # independently re-paginating ~2,000 heartbeat comments.
-                from factory_completion_controller import registry_comments
-                comments = registry_comments()
-            else:
-                pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
-                if not isinstance(pages, list):
-                    return ActiveWorkerResult(workers, unresolved_run_ids)
-                comments = flatten_pages(pages)
+            from factory_runtime_view import run_workers
+            matches = run_workers(REPO, sorted(numeric_unresolved))
+            for run_id, worker in matches.items():
+                if run_id in numeric_unresolved and worker.isdecimal() and is_authorized_fixed_worker(worker):
+                    workers.add(int(worker))
+                    unresolved_run_ids.discard(run_id)
         except Exception as exc:
-            print(f'[factory-controller] registry read unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
-            return ActiveWorkerResult(workers, unresolved_run_ids)
-        if not isinstance(comments, list):
-            return ActiveWorkerResult(workers, unresolved_run_ids)
-        for comment in comments:
-            if not isinstance(comment, dict) or not comment_is_trusted(comment):
-                continue
-            body = str(comment.get('body') or '')
-            run_match = re.search(r'(?m)^Run:\s*(\d+)\s*$', body)
-            worker_match = re.search(r'(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$', body)
-            if run_match and worker_match and (run_match.group(1) in numeric_unresolved):
-                workers.add(int(worker_match.group(1)))
-                unresolved_run_ids.discard(run_match.group(1))
+            print(f'[factory-controller] run-to-worker evidence unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
     now_epoch = int(time.time())
     for run_id, run in unresolved_runs.items():
         if run_id not in unresolved_run_ids:
@@ -1327,20 +1311,8 @@ def runtime_quota_block_reason(worker: str) -> str | None:
             return None if allowed else "; ".join(blocked)
     except Exception as exc:
         print(f"[factory-controller] Neon health unavailable: {type(exc).__name__}", file=sys.stderr)
-    from factory_completion_controller import (
-        latest_worker_health, registry_comments,
-    )
-
-    now = int(time.time())
-    health = latest_worker_health(
-        registry_comments(), trusted=comment_is_trusted, candidates=[], now_epoch=now,
-    )
-    for peer, (outcome, updated) in health.items():
-        until = quota_reset_epoch(source, updated)
-        if sources.get(peer) == source and outcome == 'provider_quota' and updated <= now < until:
-            reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            return f'Factory {worker} paused until {reset}: provider_quota on shared {source} account'
-    return None
+    # Provider status is mandatory; an outage is not permission to spend.
+    return f"Factory {worker} deferred: shared provider health unavailable"
 
 
 def is_authorized_fixed_worker(worker: str) -> bool:
@@ -2245,14 +2217,13 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     """Allocate one worker to the selected target through the normal lease policy."""
     from factory_completion_controller import (
         capacity_report,
-        latest_worker_health,
+        durable_factory_state,
         load_manifest_candidates,
-        registry_comments,
     )
 
     if number <= 0:
         raise ValueError('Select a positive issue or PR number.')
-    health = latest_worker_health(registry_comments(), trusted=comment_is_trusted)
+    _view, health = durable_factory_state()
     manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
     capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])

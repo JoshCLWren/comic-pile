@@ -513,38 +513,41 @@ def load_policy() -> Any:
     return policy
 
 
-def registry_comments() -> list[dict[str, Any]]:
-    """Use one Neon registry snapshot, paging GitHub only for changed comments."""
-    scripts = str(Path(__file__).resolve().parent)
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    from factory_state_cache import cached_json, compact_registry_comments, incremental_comments
-    from factory_work_policy import comment_is_trusted
+def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, Any], dict[str, tuple[str, int]]]:
+    """Read repository-scoped trusted events and model health, no comment cache."""
+    from factory_runtime_view import export_view
+    from factory_candidate_health import durable_attempt_evidence, rank_candidates
 
-    def fetch_since(since: str | None) -> list[dict[str, Any]]:
-        endpoint = f"repos/{REPO}/issues/1093/comments?per_page=100"
-        if since:
-            from urllib.parse import quote
-            endpoint += f"&since={quote(since, safe='')}"
-        pages = gh_json(["api", "--paginate", "--slurp", endpoint])
-        changes = flatten_pages(pages)
-        # The trusted completion collector turns edited heartbeat comments into
-        # deduplicated lifecycle events. Worker/model jobs receive no DSN.
-        try:
-            from factory_state_ledger import record_heartbeat_comments
-            record_heartbeat_comments(REPO, changes)
-        except Exception as exc:
-            print(f"[factory-completion] Neon heartbeat ingestion deferred ({type(exc).__name__})", file=sys.stderr)
-        return changes
+    view = export_view(REPO)
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    health: dict[str, tuple[str, int]] = {}
+    for worker, attempt in (view.get("attempts") or {}).items():
+        updated = parse_time(attempt.get("updated"))
+        if updated is not None:
+            health[str(worker)] = (str(attempt.get("attempt outcome") or ""), updated)
 
-    return cached_json(
-        f"{REPO}:registry-comments",
-        lambda previous: compact_registry_comments(
-            incremental_comments(previous, fetch_since),
-            trusted=comment_is_trusted,
-        ),
-        ttl_seconds=900,
-    )
+    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+    candidates = load_manifest_candidates(manifest)
+    evidence = durable_attempt_evidence(view["health"], now_epoch=now_epoch)
+    discovered = [
+        {"provider": row["provider"], "model": row["model"],
+         "runtime_model": ("omniroute/" + row["model"] if row["provider"] == "omniroute-free"
+                           else row["model"]), "discovered_by": "configured_policy"}
+        for row in candidates
+    ]
+    ranked = rank_candidates(discovered, [], now_epoch=now_epoch, evidence_override=evidence)
+    states = {
+        "native_route": ("success", now_epoch),
+        "healthy": ("success", now_epoch),
+        "degraded": ("unknown_failure", now_epoch - FAILURE_COOLDOWN_SECONDS - 1),
+        "cooling": ("unknown_failure", now_epoch),
+        "unavailable": ("model_unavailable", now_epoch),
+    }
+    for candidate, ranked_item in zip(candidates, ranked):
+        state = states.get(ranked_item.health_state)
+        if state is not None:
+            health[candidate["worker"]] = state
+    return view, health
 
 
 def owned_worker_ids(items: Iterable[Mapping[str, Any]]) -> set[str]:
@@ -605,8 +608,7 @@ def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]
     workers = load_manifest_workers(manifest)
     owned = owned_worker_ids([*issues, *prs])
     try:
-        comments = registry_comments()
-        health = latest_worker_health(comments, trusted=policy.comment_is_trusted)
+        _view, health = durable_factory_state(now_epoch=now_epoch)
     except RuntimeError as exc:
         print(
             f"[factory-completion] heartbeat health unavailable; "
