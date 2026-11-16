@@ -416,6 +416,94 @@ fn confirmed_changes_match(
     left == right
 }
 
+fn normalize_checkpoint_targets(
+    issue_ids: &[i32],
+    checkpoint_issue_ids: Option<&Vec<i32>>,
+    checkpoint_targets: Option<&BTreeMap<i32, Vec<i32>>>,
+    previous_entries: &[CustomCBLEntryResponse],
+) -> Result<BTreeMap<i32, Vec<i32>>, ApiError> {
+    let membership: BTreeSet<i32> = issue_ids.iter().copied().collect();
+    let checkpoint_set: BTreeSet<i32> = checkpoint_issue_ids
+        .map(|ids| ids.iter().copied().collect())
+        .unwrap_or_default();
+    if !checkpoint_set.is_subset(&membership) {
+        return Err(ApiError::Unprocessable(
+            json!({"code": "custom_cbl_invalid_checkpoint_targets"}).to_string(),
+        ));
+    }
+
+    let mut targets = if let Some(requested) = checkpoint_targets {
+        requested.clone()
+    } else {
+        let mut preserved = BTreeMap::new();
+        for (index, entry) in previous_entries.iter().enumerate() {
+            let entry_targets = if !entry.checkpoint_target_issue_ids.is_empty() {
+                entry.checkpoint_target_issue_ids.clone()
+            } else if entry.is_checkpoint {
+                previous_entries
+                    .get(index + 1)
+                    .map(|next| vec![next.issue_id])
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let filtered: Vec<i32> = entry_targets
+                .into_iter()
+                .filter(|target| membership.contains(target))
+                .collect();
+            if membership.contains(&entry.issue_id)
+                && match checkpoint_issue_ids {
+                    Some(_) => checkpoint_set.contains(&entry.issue_id),
+                    None => true,
+                }
+                && !filtered.is_empty()
+            {
+                preserved.insert(entry.issue_id, filtered);
+            }
+        }
+        preserved
+    };
+
+    if checkpoint_targets.is_none() {
+        for (position, source) in issue_ids.iter().enumerate() {
+            if checkpoint_set.contains(source) && !targets.contains_key(source) {
+                let default_target = issue_ids
+                    .get(position + 1)
+                    .copied()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                targets.insert(*source, default_target);
+            }
+        }
+    }
+
+    targets.retain(|_, values| !values.is_empty());
+    for (source, values) in &targets {
+        let unique: BTreeSet<i32> = values.iter().copied().collect();
+        if !membership.contains(source)
+            || unique.len() != values.len()
+            || unique.contains(source)
+            || !unique.is_subset(&membership)
+        {
+            return Err(ApiError::Unprocessable(
+                json!({"code": "custom_cbl_invalid_checkpoint_targets"}).to_string(),
+            ));
+        }
+    }
+    Ok(targets)
+}
+
+fn issue_not_owned(issue_ids: &[i32], owned: &BTreeSet<i32>) -> ApiError {
+    let missing: Vec<i32> = issue_ids
+        .iter()
+        .copied()
+        .filter(|issue_id| !owned.contains(issue_id))
+        .collect();
+    ApiError::Unprocessable(
+        json!({"code": "custom_cbl_issue_not_owned", "issue_ids": missing}).to_string(),
+    )
+}
+
 async fn load_list_entries_for_export(
     tx: &Transaction<'_>,
     list_id: i32,
@@ -646,7 +734,7 @@ async fn load_thread_volume_candidates(
              JOIN external_identities ei ON ei.id = tem.external_identity_id
              WHERE t.id = ANY($1) AND t.user_id = $2
                AND tem.status = 'confirmed'
-               AND ei.entity_type = 'volume'
+               AND ei.entity_type = 'series'
                AND ei.provider = 'comicvine'",
             &[&thread_ids, &user_id],
         )
@@ -660,7 +748,7 @@ async fn load_thread_volume_candidates(
              JOIN catalog_series cs ON cs.id = t.catalog_series_id
              JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id
              WHERE t.id = ANY($1) AND t.user_id = $2
-               AND ei.entity_type = 'volume'
+               AND ei.entity_type = 'series'
                AND ei.provider = 'comicvine'",
             &[&thread_ids, &user_id],
         )
@@ -672,8 +760,9 @@ async fn load_thread_volume_candidates(
     for row in confirmed.iter().chain(catalog.iter()) {
         let thread_id: i32 = row.get(0);
         let external_id: String = row.get(1);
-        let key = format!("comicvine:{}", external_id);
-        candidates.entry(thread_id).or_default().insert(key);
+        if let Some(key) = normalized_volume_key(&format!("comicvine:{}", external_id)) {
+            candidates.entry(thread_id).or_default().insert(key);
+        }
     }
 
     let mut result = Vec::new();
@@ -705,11 +794,8 @@ async fn resolve_volume_identity_ids(
     }
     let mut candidates = std::collections::HashSet::new();
     for key in keys {
-        if let Some(rest) = key.strip_prefix("comicvine:") {
-            if rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty() {
-                candidates.insert(rest.to_string());
-                candidates.insert(format!("4050-{}", rest));
-            }
+        for variant in volume_external_id_variants(key) {
+            candidates.insert(variant);
         }
     }
     if candidates.is_empty() {
@@ -719,8 +805,8 @@ async fn resolve_volume_identity_ids(
     let rows = tx
         .query(
             "SELECT id, external_id FROM external_identities
-             WHERE provider = 'comicvine' AND entity_type = 'volume'
-             AND external_id = ANY($1::text[])",
+              WHERE provider = 'comicvine' AND entity_type = 'series'
+              AND external_id = ANY($1::text[])",
             &[&candidate_vec],
         )
         .await
@@ -730,8 +816,9 @@ async fn resolve_volume_identity_ids(
     for row in rows {
         let id: i32 = row.get(0);
         let external_id: String = row.get(1);
-        let canonical = format!("comicvine:{}", external_id);
-        resolved.insert(canonical, id);
+        if let Some(canonical) = normalized_volume_key(&format!("comicvine:{}", external_id)) {
+            resolved.insert(canonical, id);
+        }
     }
     let mut result = std::collections::HashMap::new();
     for key in keys {
@@ -776,7 +863,14 @@ async fn validate_projection(
 
 fn guard_version(current: &str, expected: Option<&str>) -> Result<(), ApiError> {
     if let Some(expected) = expected {
-        if current != expected {
+        let matches = match (
+            timestamp_token_to_utc(current),
+            timestamp_token_to_utc(expected),
+        ) {
+            (Some(current_at), Some(expected_at)) => current_at == expected_at,
+            _ => current == expected,
+        };
+        if !matches {
             return Err(ApiError::with_status(
                 StatusCode::CONFLICT,
                 json!({
@@ -807,7 +901,7 @@ pub async fn list_custom_cbls(
                     (SELECT count(*)::int FROM custom_cbl_entries e WHERE e.list_id=l.id)
              FROM custom_cbl_lists l
              WHERE l.user_id=$1
-             ORDER BY lower(l.name), l.id",
+              ORDER BY l.updated_at DESC, l.id DESC",
             &[&user.id()],
         )
         .await
@@ -858,7 +952,7 @@ pub async fn create_custom_cbl(
     let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
     if owned.len() != request.issue_ids.len() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError::NotFound("Issue not found".to_string()));
+        return Err(issue_not_owned(&request.issue_ids, &owned));
     }
 
     let row = tx
@@ -876,12 +970,12 @@ pub async fn create_custom_cbl(
         .await
         .map_err(db::query_error)?;
     let list_id: i32 = row.get(0);
-    let checkpoints: BTreeSet<i32> = request
-        .checkpoint_issue_ids
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
+    let checkpoint_targets = normalize_checkpoint_targets(
+        &request.issue_ids,
+        request.checkpoint_issue_ids.as_ref(),
+        request.checkpoint_targets.as_ref(),
+        &[],
+    )?;
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let intent = request
             .entry_intents
@@ -893,10 +987,8 @@ pub async fn create_custom_cbl(
             return Err(ApiError::BadRequest("Invalid gate".to_string()));
         }
         let skipped = intent.is_some_and(|value| value.skipped);
-        let targets = request
-            .checkpoint_targets
-            .as_ref()
-            .and_then(|targets| targets.get(issue_id))
+        let targets = checkpoint_targets
+            .get(issue_id)
             .cloned()
             .unwrap_or_default();
         tx.execute(
@@ -908,7 +1000,7 @@ pub async fn create_custom_cbl(
                 &list_id,
                 issue_id,
                 &(position as i32),
-                &checkpoints.contains(issue_id),
+                &checkpoint_targets.contains_key(issue_id),
                 &serde_json::to_string(&targets).map_err(|e| {
                     tracing::debug!(
                         error_kind = crate::error_kind(&e),
@@ -1097,24 +1189,14 @@ pub async fn update_custom_cbl(
     }
     let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
     if owned != unique {
-        return Err(ApiError::NotFound("Issue not found".into()));
+        return Err(issue_not_owned(&request.issue_ids, &owned));
     }
-    let checkpoints: BTreeSet<i32> = request
-        .checkpoint_issue_ids
-        .as_ref()
-        .map(|ids| ids.iter().copied().collect())
-        .unwrap_or_else(|| {
-            old_entries
-                .iter()
-                .filter(|entry| entry.is_checkpoint)
-                .map(|entry| entry.issue_id)
-                .collect()
-        });
-    if !checkpoints.is_subset(&unique) {
-        return Err(ApiError::Unprocessable(
-            "custom_cbl_invalid_checkpoint_targets".to_string(),
-        ));
-    }
+    let checkpoint_targets = normalize_checkpoint_targets(
+        &request.issue_ids,
+        request.checkpoint_issue_ids.as_ref(),
+        request.checkpoint_targets.as_ref(),
+        &old_entries,
+    )?;
     tx.execute(
         "UPDATE custom_cbl_lists
          SET name=$3,description=$4,mode=$5,updated_at=NOW()
@@ -1147,41 +1229,10 @@ pub async fn update_custom_cbl(
             .map(|entry| entry.skipped)
             .or_else(|| old.map(|entry| entry.skipped))
             .unwrap_or(false);
-        let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
-            Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
-            None => {
-                if checkpoints.contains(issue_id) {
-                    old.map(|entry| {
-                        entry
-                            .checkpoint_target_issue_ids
-                            .iter()
-                            .copied()
-                            .filter(|target| unique.contains(target))
-                            .collect()
-                    })
-                    .unwrap_or_else(|| {
-                        request
-                            .issue_ids
-                            .get(position + 1)
-                            .copied()
-                            .into_iter()
-                            .collect()
-                    })
-                } else {
-                    vec![]
-                }
-            }
-        };
-        let valid: BTreeSet<i32> = targets.iter().copied().collect();
-        if targets.len() != valid.len()
-            || !valid.is_subset(&unique)
-            || valid.contains(issue_id)
-            || (!checkpoints.contains(issue_id) && !targets.is_empty())
-        {
-            return Err(ApiError::Unprocessable(
-                "custom_cbl_invalid_checkpoint_targets".to_string(),
-            ));
-        }
+        let targets = checkpoint_targets
+            .get(issue_id)
+            .cloned()
+            .unwrap_or_default();
         let targets_json = serde_json::to_string(&targets).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
