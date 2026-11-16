@@ -2242,8 +2242,7 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     if number <= 0:
         raise ValueError('Select a positive issue or PR number.')
     _view, health = durable_factory_state()
-    manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
-    capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
+    capacity = capacity_report(load_manifest_candidates(), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])
     preferred_role = 'starter' if kind == 'issue' else (
         'finisher' if action in {'review-findings', 'ci-repair'} else ''

@@ -255,8 +255,7 @@ def latest_worker_health(
             priorities[worker] = priority_value
 
     if candidates is None:
-        manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-        candidates = load_manifest_candidates(manifest)
+        candidates = load_manifest_candidates()
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     trusted_comments = (
         tuple(comment for comment in comment_rows if trusted(comment))
@@ -379,7 +378,7 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
     return result
 
 
-def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
+def load_manifest_candidates(path: Path | None = None) -> list[dict[str, str]]:
     """Resolve current provider slots without source-controlled model pins.
 
     Synthetic fixture paths remain readable for migration-level unit tests;
@@ -387,7 +386,7 @@ def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
     """
     from factory_worker_slots import slots
 
-    if path.name == "free-model-factories.tsv":
+    if path is None:
         return [
             {"worker": item.worker, "provider": item.source, "model": ""}
             for item in slots()
@@ -405,7 +404,7 @@ def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
     return candidates
 
 
-def load_manifest_workers(path: Path) -> list[str]:
+def load_manifest_workers(path: Path | None = None) -> list[str]:
     """Read current configured worker IDs from the fixed-model manifest."""
     return [candidate["worker"] for candidate in load_manifest_candidates(path)]
 
@@ -522,8 +521,7 @@ def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, An
         if updated is not None:
             health[str(worker)] = (str(attempt.get("attempt outcome") or ""), updated)
 
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    candidates = load_manifest_candidates(manifest)
+    candidates = load_manifest_candidates()
     evidence = durable_attempt_evidence(view["health"], now_epoch=now_epoch)
     # Project provider-level catalog evidence to all capability slots exactly
     # as the historical registry path did. A model failure on one dynamic
@@ -595,8 +593,7 @@ def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]
             "assignments": [],
         }
 
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    workers = load_manifest_workers(manifest)
+    workers = load_manifest_workers()
     owned = owned_worker_ids([*issues, *prs])
     try:
         _view, health = durable_factory_state(now_epoch=now_epoch)
