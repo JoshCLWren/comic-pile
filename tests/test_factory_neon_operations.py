@@ -321,6 +321,21 @@ def test_missing_credentials_are_not_inference_failures():
     assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
 
 
+def test_one_model_failure_does_not_cool_an_entire_provider():
+    """Catalog model failures leave independent models on the same provider usable."""
+    for source in ("vercel-ai-gateway", "ollama-cloud", "mistral", "pollinations"):
+        for outcome in ("provider_failure", "provider_throttle"):
+            assert operations.model_scoped_transient(source, outcome)
+            assert not operations.provider_scoped_transient(source, outcome)
+        assert operations.provider_scoped_transient(source, "provider_quota")
+        assert not operations.model_scoped_transient(source, "provider_quota")
+    for source in operations.MODEL_SCOPED_SOURCES:
+        assert operations.model_scoped_transient(source, "provider_quota")
+        assert not operations.provider_scoped_transient(source, "provider_quota")
+    for outcome in ("model_unavailable", "model_policy_violation", "unknown_failure"):
+        assert not operations.provider_scoped_transient("mistral", outcome)
+
+
 def test_all_actionable_model_failures_use_fibonacci_without_credential_penalty():
     # Every real inference failure class must count; credential, checkout,
     # and controller failures belong to the worker, not an unrelated model.
