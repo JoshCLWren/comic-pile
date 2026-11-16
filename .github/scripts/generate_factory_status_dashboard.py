@@ -563,6 +563,7 @@ def collect_snapshot() -> dict[str, Any]:
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
         "opencode_free_roster": collect_opencode_free_roster(view),
+        "candidate_health": view.get("health") or {"models": [], "providers": []},
     }
 
 
@@ -863,7 +864,16 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 def main() -> int:
     snapshot = collect_snapshot()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(render_dashboard(snapshot), encoding="utf-8")
+    # Embed the existing trusted snapshot and UI in the same published HTML.
+    # No new per-refresh GitHub commits, static roster, or API credentials.
+    payload = json.dumps(snapshot, ensure_ascii=True, separators=(",", ":"))
+    payload = payload.replace("<", r"\\u003c").replace(">", r"\\u003e").replace("&", r"\\u0026")
+    css = (SCRIPTS / "factory_fleet_console.css").read_text(encoding="utf-8")
+    js = (SCRIPTS / "factory_fleet_console.js").read_text(encoding="utf-8")
+    page = render_dashboard(snapshot)
+    page = page.replace("</head>", f"<style>{css}</style></head>", 1)
+    page = page.replace("</body>", f'<script id="fleet-snapshot" type="application/json">{payload}</script><script>{js}</script></body>', 1)
+    OUTPUT.write_text(page, encoding="utf-8")
     print(json.dumps(snapshot, sort_keys=True))
     return 0
 
