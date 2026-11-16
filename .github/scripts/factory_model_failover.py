@@ -13,7 +13,10 @@ import os
 import sys
 from pathlib import Path
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+import shutil
+import subprocess
 
 
 class ExhaustedCandidatesError(ValueError):
@@ -114,9 +117,82 @@ def select_next_fleet(
     raise ExhaustedCandidatesError("no eligible provider/model combination remains")
 
 
+
+def discover_fleet_catalogs(
+    eligible_sources: set[str],
+    *,
+    cache: Path,
+    env: Mapping[str, str],
+    existing_catalogs: Mapping[str, Path] | None = None,
+) -> dict[str, Any]:
+    """Take one canonical snapshot per assignment; never probe model inference.
+
+    Catalog endpoints may fail independently. Missing credentials skip only
+    that provider, not its neighbors. Failed catalog reads are not attributed
+    to any model's health or quota.
+    """
+    from factory_provider_registry import PROVIDERS, missing_credentials
+    from factory_runtime_model_select import provider_catalog
+
+    if cache.is_file():
+        saved = json.loads(cache.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict):
+            raise ValueError("invalid trusted fleet catalog snapshot")
+        return saved
+
+    files = existing_catalogs or {}
+    def fetch(source: str) -> tuple[str, Any]:
+        if source in files and files[source].is_file():
+            return source, files[source].read_text(encoding="utf-8")
+        if source == "opencode-free":
+            if not shutil.which("opencode"):
+                raise ValueError("OpenCode CLI missing")
+            run = subprocess.run(
+                ["opencode", "models", "opencode", "--refresh"],
+                check=True, capture_output=True, text=True, timeout=35,
+            )
+            return source, run.stdout
+        if source == "kilo-auto":
+            if not shutil.which("kilo"):
+                raise ValueError("Kilo CLI missing")
+            run = subprocess.run(
+                ["kilo", "models", "kilo-auto", "--refresh"],
+                check=True, capture_output=True, text=True, timeout=35,
+            )
+            return source, run.stdout
+        if source == "openrouter-free":
+            if not env.get("OPENROUTER_API_KEY"):
+                raise ValueError("OpenRouter credentials missing")
+            from factory_published_model_catalog import published_catalog
+            return source, published_catalog(source)
+        spec = PROVIDERS.get(source)
+        if spec is None or missing_credentials(spec, env):
+            raise ValueError("provider credentials or canonical integration missing")
+        if source == "vercel-ai-gateway":
+            from factory_published_model_catalog import published_catalog
+            return source, published_catalog(source)
+        return source, provider_catalog(source, env)
+
+    discovered: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(eligible_sources)))) as executor:
+        pending = {executor.submit(fetch, s): s for s in sorted(eligible_sources)}
+        for future in as_completed(pending):
+            try:
+                source, catalog = future.result()
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                continue
+            discovered[source] = catalog
+    cache.write_text(json.dumps(discovered, sort_keys=True), encoding="utf-8")
+    return discovered
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
+    parser.add_argument("--eligible-sources-file", type=Path)
+    parser.add_argument("--fleet-catalog-cache", type=Path)
+    parser.add_argument("--attempted-pair", action="append", default=[])
+    parser.add_argument("--blocked-provider", action="append", default=[])
     parser.add_argument("--worker", required=True)
     parser.add_argument("--exclusions-file", type=Path, required=True)
     parser.add_argument("--catalog-file", type=Path)
@@ -154,11 +230,35 @@ def main() -> int:
                 from factory_runtime_model_select import provider_catalog
                 catalog_json = provider_catalog(args.source, os.environ)
             args.catalog_cache.write_text(json.dumps(catalog_json), encoding="utf-8")
-        selected = select_next(
-            args.source, args.worker, set(args.attempted), exclusions,
-            catalog_text=catalog_text, catalog_json=catalog_json,
-            rotation=args.rotation,
-        )
+        if args.eligible_sources_file is None:
+            selected = select_next(
+                args.source, args.worker, set(args.attempted), exclusions,
+                catalog_text=catalog_text, catalog_json=catalog_json,
+                rotation=args.rotation,
+            )
+        else:
+            sources = json.loads(args.eligible_sources_file.read_text(encoding="utf-8"))
+            if not isinstance(sources, list) or not all(isinstance(s, str) for s in sources):
+                raise ValueError("invalid trusted fleet capacity projection")
+            if args.fleet_catalog_cache is None:
+                raise ValueError("fleet catalog cache missing")
+            files = {args.source: args.catalog_file} if args.catalog_file else {}
+            catalogs = discover_fleet_catalogs(
+                set(sources), cache=args.fleet_catalog_cache,
+                env=os.environ, existing_catalogs=files,
+            )
+            pairs: set[tuple[str, str]] = set()
+            for raw in args.attempted_pair:
+                pair = json.loads(raw)
+                if not isinstance(pair, list) or len(pair) != 2 or not all(
+                    isinstance(s, str) for s in pair
+                ):
+                    raise ValueError("invalid attempted provider/model pair")
+                pairs.add((pair[0], pair[1]))
+            selected = select_next_fleet(
+                args.worker, args.source, pairs, set(args.blocked_provider),
+                exclusions, catalogs, set(sources), rotation=args.rotation,
+            )
     except ExhaustedCandidatesError as exc:
         print(f"factory failover exhausted: {exc}", file=sys.stderr)
         return 3
