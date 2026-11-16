@@ -119,7 +119,7 @@ pub struct ContinuityPlanWrite {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nodes: Vec<ContinuityPlanNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_updated_at: Option<DateTime<Utc>>,
+    pub expected_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -619,7 +619,7 @@ pub async fn update_continuity_plan(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
-    let expected_version: Option<String> = payload.expected_updated_at.map(|dt| format_timestamp(dt));
+    let expected_version: Option<String> = payload.expected_updated_at.clone();
     let current_updated_at: String = existing.get(3);
     
     if let Some(ref expected) = expected_version {
@@ -1124,8 +1124,8 @@ pub struct ReadingPlanDependencyLinkRequest {
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
     params((
-        ("plan_id" = i32, Path, description = "Continuity plan identifier"),
-        ("dependency_id" = i32, Path, description = "Dependency identifier")
+        "plan_id" = i32, Path, description = "Continuity plan identifier",
+        "dependency_id" = i32, Path, description = "Dependency identifier"
     )),
     request_body = ReadingPlanDependencyLinkRequest,
     responses(
