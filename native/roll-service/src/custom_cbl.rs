@@ -582,12 +582,6 @@ fn normalized_volume_key(key: &str) -> Option<String> {
                 ));
             }
         }
-        if rest
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-        {
-            return Some(format!("comicvine:{}", rest));
-        }
     }
     None
 }
