@@ -444,3 +444,17 @@ def test_dispatch_batch_reconciles_once_before_per_worker_claims() -> None:
     assert 'if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then' in workflow
     assert "python3 \"$controller\" reconcile" in workflow
     assert "dispatch_assigned_worker \"$worker\"" in workflow
+
+
+def test_all_cooling_or_quota_exhausted_roster_is_idle_not_failed() -> None:
+    """Valid zero-capacity roster preserves model health and ends the chain."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    resolve_step = workflow.split("      - name: Resolve and dispatch fixed workers", 1)[1].split(
+        "      - name: Offer one unclaimed PR to local Ollama reviewer", 1
+    )[0]
+    assert "No executable workers in this roster tick" in resolve_step
+    assert '"dispatched_count=0" >> "$GITHUB_OUTPUT"' in resolve_step
+    assert '"dispatch_failed=false" >> "$GITHUB_OUTPUT"' in resolve_step
+    assert 'if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then' in resolve_step
+    assert "Dispatcher resolved no workers for smoke run" in resolve_step
+    assert "Dispatcher resolved no workers' >&2; exit 1" not in resolve_step
