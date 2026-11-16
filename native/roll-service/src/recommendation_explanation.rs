@@ -490,8 +490,11 @@ mod tests {
     fn legacy_random_intent_without_a_selection_method_still_explains_bypass() {
         let context = json!({"intent": "intent_random"});
         let factors = project_recommendation_context(Some(&context), None);
-        assert_eq!(factors.len(), 1);
-        assert_eq!(factors[0].code, "random");
+        // Python appends both the legacy intent factor and the derived
+        // weighting-bypass explanation.
+        let codes: Vec<&str> = factors.iter().map(|f| f.code.as_str()).collect();
+        assert_eq!(codes, vec!["intent_random", "random"]);
+        assert_eq!(factors[1].detail.as_deref(), Some("Weighting was bypassed"));
     }
 
     #[test]
@@ -523,11 +526,13 @@ mod tests {
     }
 
     #[test]
-    fn taste_bank_detail_is_only_kept_when_the_map_has_none() {
+    fn taste_bank_detail_falls_back_to_the_persisted_detail() {
         let context = json!({
-            "taste_bank_factors": [{"code": "taste_high_affinity", "detail": "ignored"}]
+            "taste_bank_factors": [{"code": "taste_high_affinity", "detail": "persisted"}]
         });
         let factors = project_recommendation_context(Some(&context), None);
-        assert_eq!(factors[0].detail, None);
+        // The canonical map row for `taste_high_affinity` carries no fixed
+        // detail, so Python keeps the persisted one.
+        assert_eq!(factors[0].detail.as_deref(), Some("persisted"));
     }
 }
