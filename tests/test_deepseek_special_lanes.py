@@ -21,9 +21,10 @@ def test_provider_slots_do_not_pin_retired_experiment_models() -> None:
 
 def test_old_manual_comparison_does_not_schedule_a_model_worker() -> None:
     """Manual comparison workflows must not register scheduled factory workers."""
-    # The worker-74 pinned DeepSeek smoke was removed with the TSV roster.
-    assert not (ROOT / ".github/workflows/opencode-deepseek-free-smoke.yml").exists()
-    for filename in ("deepseek-free-auth-comparison.yml",):
+    for filename in (
+        "deepseek-free-auth-comparison.yml",
+        "opencode-deepseek-free-smoke.yml",
+    ):
         workflow = (ROOT / ".github/workflows" / filename).read_text()
         assert "  schedule:" not in workflow
         assert "  pull_request:" not in workflow

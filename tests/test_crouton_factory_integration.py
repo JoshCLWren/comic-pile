@@ -29,14 +29,17 @@ def test_crouton_installer_sets_valid_model_scoped_safety_identifier() -> None:
 
 
 def test_crouton_runner_scopes_zen_credential_and_uses_real_work_as_proof() -> None:
-    """Zen credentials are job-scoped for every OpenCode model, no smoke prompt.
-
-    The Crouton-specific credential step went away with model pins (#5213);
-    the factory job exports the existing Zen secret for all OpenCode models.
-    """
+    """Credential-scoped Crouton runs the real task, not an extra smoke prompt."""
     workflow = (ROOT / ".github/workflows/free-model-factory-run.yml").read_text()
-    assert "OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}" in workflow
-    assert "crouton-alpha-free" not in workflow
+    selection = workflow.index("- name: Select execution candidate at dispatch time")
+    auth = workflow.index("- name: Configure existing Zen credential for Crouton Alpha")
+    work = workflow.index("- name: Run continuous fixed-model factory session")
+    assert selection < auth < work
+    auth_step = workflow[auth:workflow.index("\n      - name:", auth + 1)]
+    assert "steps.executor.outputs.source == 'opencode-free'" in auth_step
+    assert "steps.executor.outputs.model == 'crouton-alpha-free'" in auth_step
+    assert "secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY" in auth_step
+    assert "OPENCODE_API_KEY=%s" in auth_step
     assert "Smoke exact pinned model through OpenCode" not in workflow
     worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
     assert 'run_agent "$MODE" "$NUMBER" "$agent_timeout"' in worker
@@ -51,9 +54,11 @@ def test_crouton_quota_smoke_is_classified_without_permanent_retirement(tmp_path
     outcome_path = tmp_path / "outcome"
     assert selector.record_smoke_failure(log, "opencode/crouton-alpha-free", outcome_path)
     assert outcome_path.read_text() == (
-        "provider_quota\tProvider account quota or budget exhausted for "
-        "opencode/crouton-alpha-free\n"
+        "provider_quota\tOpenCode free quota exhausted for opencode/crouton-alpha-free\n"
     )
+    other_path = tmp_path / "other"
+    assert not selector.record_smoke_failure(log, "openrouter/stealth/crouton-alpha", other_path)
+    assert not other_path.exists()
 
     now = int(datetime(2026, 11, 4, 17, 27, 47, tzinfo=UTC).timestamp())
     attempt = {

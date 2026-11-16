@@ -452,9 +452,7 @@ def test_workflow_invokes_stale_pr_decay():
     # Distinguish from stale workflow-run cancellation: the workflow also
     # contains run-cleanup logic but the test specifically asserts the
     # controller stale subcommand is present.
-    # In-flight worker runs are never cancelled by a controller revision
-    # (see test_factory_dispatch_workflow); stale PR decay is the controller's.
-    assert "gh run cancel" not in text
+    assert "gh run cancel" in text  # run cleanup exists but is distinct
 
 
 def test_workflow_invokes_stale_pr_decay_distinct_from_run_cleanup():
@@ -470,8 +468,8 @@ def test_workflow_invokes_stale_pr_decay_distinct_from_run_cleanup():
     assert "factory-work-controller.py stale" in text, (
         "Controller stale subcommand must be present in the dispatched workflow."
     )
-    # Run cancellation is not a substitute: the dispatcher never cancels runs.
-    assert "gh run cancel" not in text
+    # But mere presence of run-cleanup is insufficient.
+    assert "gh run cancel" in text  # run cleanup is separate from controller stale
 
 
 def test_calculate_percentile_interpolation():
