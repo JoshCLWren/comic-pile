@@ -1,89 +1,41 @@
-"""Tests for the free-model factory's explicit retirement policy."""
+"""Factory slots come from provider integrations, models from live catalogs."""
 
-import json
+from __future__ import annotations
+
+import importlib
+import sys
 from pathlib import Path
 
-
-def test_unusable_models_are_locked_out_of_the_factory_roster() -> None:
-    """Retirement removes scheduling capacity without erasing historical evidence."""
-    roster = Path(".github/free-model-factories.tsv").read_text()
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    retired = {48, 55, 74, 87, 88, 89, 90}
-    assert retired.isdisjoint(lock["expected_workers"])
-    assert retired.issubset(lock["retired_workers"])
-    retired_models = {
-        "codestral-latest",
-        "nemotron-3-nano:30b",
-        "deepseek-v4.1-flash-free",
-    }
-    assert retired_models.issubset(lock["retired_models"])
-    active = {
-        int(line.split("\t", 1)[0])
-        for line in roster.splitlines()
-        if line and not line.startswith("#")
-    }
-    assert retired.isdisjoint(active)
-    assert "mistral-small" not in roster
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / ".github/scripts"))
+SLOTS = importlib.import_module("factory_worker_slots")
 
 
-def test_second_glm_lane_reuses_free_pin_with_half_hour_offset() -> None:
-    """New capacity uses a fresh identity and the existing free provider/key."""
-    rows = {
-        fields[0]: fields
-        for line in Path('.github/free-model-factories.tsv').read_text().splitlines()
-        if line and not line.startswith('#')
-        for fields in [line.split('\t')]
-    }
-    original, duplicate = rows['54'], rows['97']
-    assert duplicate[1:3] == original[1:3] == ['z-ai', 'glm-4.5-flash']
-    assert (int(duplicate[3]) - int(original[3])) % 60 == 30
-    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
-    assert 97 in lock['expected_workers'] and 97 not in lock['retired_workers']
+def test_no_model_roster_or_expected_worker_lock_is_committed() -> None:
+    assert not (ROOT / ".github/free-model-factories.tsv").exists()
+    assert not (ROOT / ".github/factory-expected-workers.json").exists()
+    assert not (ROOT / ".github/factory-roster-snapshot.json").exists()
 
 
-def test_second_kilo_lane_shares_free_route_and_offsets_schedule() -> None:
-    """The Kilo duplicate is another slot on the existing anonymous free route."""
-    rows = {
-        fields[0]: fields
-        for line in Path('.github/free-model-factories.tsv').read_text().splitlines()
-        if line and not line.startswith('#')
-        for fields in [line.split('\t')]
-    }
-    original, duplicate = rows['46'], rows['98']
-    assert duplicate[1:3] == original[1:3] == ['kilo-auto', 'kilo-auto/free']
-    assert (int(duplicate[3]) - int(original[3])) % 60 == 30
-    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
-    assert 98 in lock['expected_workers'] and 98 not in lock['retired_workers']
-    workflow = Path('.github/workflows/free-model-factory-run.yml').read_text()
-    assert 'Smoke Kilo Auto Free through Kilo CLI' not in workflow
-    assert 'Run continuous fixed-model factory session' in workflow
+def test_provider_workers_have_stable_id_and_no_model_field() -> None:
+    generated = SLOTS.slots({"FACTORY_SLOTS_PER_PROVIDER": "2"})
+    assert len(generated) == len(SLOTS.sources()) * 2
+    assert len({s.worker for s in generated}) == len(generated)
+    assert all("model" not in s.as_record() for s in generated)
 
 
-def test_current_free_openrouter_coding_candidates_replace_retired_inkling_workers() -> None:
-    """New worker identities use explicit zero-price pins and retire stale catalog IDs."""
-    rows = {
-        fields[0]: fields
-        for line in Path(".github/free-model-factories.tsv").read_text().splitlines()
-        if line and not line.startswith("#")
-        for fields in [line.split("\t")]
-    }
-    expected = {
-        "108": "thinkingmachines/inkling-2-small:free",
-        "109": "baidu/ernie-5.5-flash-preview:free",
-        "110": "inclusionai/ling-3.2-flash:free",
-    }
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    for worker, model in expected.items():
-        if worker in rows:
-            assert rows[worker][1:3] == ["openrouter-free", "@catalog"]
-            assert int(worker) in lock["expected_workers"]
-        else:
-            # Catalog discovery may legitimately retire ephemeral free routes.
-            assert int(worker) in lock["retired_workers"]
-            assert model in lock["retired_models"]
-    assert {"52", "53"}.isdisjoint(rows)
-    assert {52, 53}.issubset(lock["retired_workers"])
-    assert {
-        "thinkingmachines/inkling:free",
-        "thinkingmachines/inkling-small:free",
-    }.issubset(lock["retired_models"])
+def test_dispatch_and_execution_share_dynamic_slot_registry() -> None:
+    dispatcher = (ROOT / ".github/workflows/fixed-model-factory-dispatch.yml").read_text()
+    runner = (ROOT / ".github/workflows/free-model-factory-run.yml").read_text()
+    assert 'python3 "$slots" offer' in dispatcher
+    assert "factory_worker_slots.py resolve" in runner
+    assert "factory_runtime_model_select.py" in runner
+    assert "factory_live_opencode.py" in runner
+    assert "factory_kilo_catalog.py" in runner
+    assert "Run continuous fixed-model factory session" in runner
+
+
+def test_free_price_policy_is_not_a_model_selection_gate() -> None:
+    runner = (ROOT / ".github/workflows/free-model-factory-run.yml").read_text()
+    assert "Require Vercel model to remain zero-price" not in runner
+    assert "selected-from-live-runtime-catalog" in runner
