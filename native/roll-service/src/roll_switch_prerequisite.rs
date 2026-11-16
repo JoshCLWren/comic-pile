@@ -620,16 +620,22 @@ mod tests {
         // first: the owner-scoped session update matches no row.
         let intruder = AuthenticatedUser::for_test(2);
         let tx = client.transaction().await.unwrap();
-        let error = persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
+        // The write fails closed: the session is owner-scoped and the event
+        // ownership trigger rejects a foreign writer, so nothing is persisted.
+        assert!(persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
             .await
-            .unwrap_err();
+            .is_err());
         tx.commit().await.unwrap();
-        assert_eq!(error.status(), StatusCode::CONFLICT);
-        // The owner's session was never touched.
+        // The owner's session and the audit trail are untouched.
         let pending = client
             .query_one("SELECT pending_thread_id FROM sessions WHERE id=1", &[])
             .await
             .unwrap();
         assert_eq!(pending.get::<_, Option<i32>>(0), None);
+        let events = client
+            .query_one("SELECT count(*)::int FROM events", &[])
+            .await
+            .unwrap();
+        assert_eq!(events.get::<_, i32>(0), 0);
     }
 }
