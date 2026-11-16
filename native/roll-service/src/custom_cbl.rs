@@ -2120,6 +2120,276 @@ pub struct DeleteOverlapParams {
     pub expected_updated_at: Option<String>,
 }
 
+// ========================================================================
+// Documentation-only OpenAPI operations for the same-path native contract.
+// These describe the live handlers above; they are not mounted anywhere.
+// ========================================================================
+
+/// Documentation-only operation for the custom CBL list.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls",
+    tag = "custom-cbls",
+    responses(
+        (status = 200, description = "Editable custom CBL lists owned by the reader", body = Vec<CustomCBLListItem>),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_custom_cbls_documentation() {}
+
+/// Documentation-only operation for custom CBL creation.
+#[utoipa::path(
+    post,
+    path = "/api/v1/custom-cbls",
+    tag = "custom-cbls",
+    request_body = CustomCBLWrite,
+    responses(
+        (status = 201, description = "Custom CBL created from real issues", body = CustomCBLResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Request body failed validation"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_custom_cbl_documentation() {}
+
+/// Documentation-only operation for custom CBL issue search.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls/issue-search",
+    tag = "custom-cbls",
+    params(
+        ("q" = Option<String>, Query, description = "Case-insensitive title or issue-number filter"),
+        ("limit" = Option<i32>, Query, description = "Maximum results, 1-100 (default 30)")
+    ),
+    responses(
+        (status = 200, description = "Matching owned issues", body = Vec<CustomCBLIssueSearchResult>),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn search_custom_cbl_issues_documentation() {}
+
+/// Documentation-only operation for one custom CBL.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls/{list_id}",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    responses(
+        (status = 200, description = "The owned custom CBL", body = CustomCBLResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_custom_cbl_documentation() {}
+
+/// Documentation-only operation for custom CBL replacement.
+#[utoipa::path(
+    put,
+    path = "/api/v1/custom-cbls/{list_id}",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    request_body = CustomCBLWrite,
+    responses(
+        (status = 200, description = "The updated custom CBL", body = CustomCBLResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 422, description = "Request body failed validation"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn update_custom_cbl_documentation() {}
+
+/// Documentation-only operation for custom CBL export.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls/{list_id}/export",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    responses(
+        (status = 200, description = "Portable .cbl XML document", content((String = "application/xml"))),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn export_custom_cbl_documentation() {}
+
+/// Documentation-only operation for the custom CBL reader.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls/{list_id}/reader",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    responses(
+        (status = 200, description = "Reader with canonical availability", body = ReadingListReader),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn read_custom_cbl_documentation() {}
+
+/// Documentation-only operation for overlap decisions read.
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    responses(
+        (status = 200, description = "Saved overlap decisions and version token", body = OverlapDecisionSetResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_overlap_decisions_documentation() {}
+
+/// Documentation-only operation for overlap decision save.
+#[utoipa::path(
+    put,
+    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+    tag = "custom-cbls",
+    params(("list_id" = i32, Path, description = "Owned custom CBL identifier")),
+    request_body = OverlapDecisionWrite,
+    responses(
+        (status = 200, description = "Updated overlap decisions and version token", body = OverlapDecisionSetResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 409, description = "Stale version token"),
+        (status = 422, description = "Unusable or cyclic choice"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn save_overlap_decision_documentation() {}
+
+/// Documentation-only operation for overlap decision removal.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+    tag = "custom-cbls",
+    params(
+        ("list_id" = i32, Path, description = "Owned custom CBL identifier"),
+        ("decision_id" = i32, Path, description = "Overlap decision identifier"),
+        ("expected_updated_at" = Option<String>, Query, description = "Decision version token the client last read")
+    ),
+    responses(
+        (status = 200, description = "Updated overlap decisions and version token", body = OverlapDecisionSetResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 409, description = "Stale version token"),
+        (status = 422, description = "Cycle conflict"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_overlap_decision_documentation() {}
+
+/// Documentation-only operation for Reading Plan application.
+#[utoipa::path(
+    post,
+    path = "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+    tag = "custom-cbls",
+    params(
+        ("list_id" = i32, Path, description = "Owned custom CBL identifier"),
+        ("plan_id" = i32, Path, description = "Continuity plan identifier")
+    ),
+    request_body = CustomCBLApplyRequest,
+    responses(
+        (status = 200, description = "Reading Plan updated with the custom CBL merged into one lane", body = CustomCBLApplyResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading List not found"),
+        (status = 409, description = "Stale plan version token"),
+        (status = 422, description = "Empty list, unknown lane, or cycle conflict"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn apply_custom_cbl_documentation() {}
+
+/// Same-path native contract document for the custom CBL endpoints.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native Custom CBL API",
+        version = "1.0.0",
+        description = "Generated contract for operations served by the native Rust router at the original custom-CBL URLs."
+    ),
+    paths(
+        list_custom_cbls_documentation,
+        create_custom_cbl_documentation,
+        search_custom_cbl_issues_documentation,
+        get_custom_cbl_documentation,
+        update_custom_cbl_documentation,
+        export_custom_cbl_documentation,
+        read_custom_cbl_documentation,
+        get_overlap_decisions_documentation,
+        save_overlap_decision_documentation,
+        delete_overlap_decision_documentation,
+        apply_custom_cbl_documentation,
+    ),
+    components(schemas(
+        CustomCBLEntryIntent,
+        CustomCBLEntryResponse,
+        CustomCBLListItem,
+        CustomCBLResponse,
+        CustomCBLPredecessorChange,
+        CustomCBLIssueSearchResult,
+        CustomCBLWrite,
+        CustomCBLApplyRequest,
+        CustomCBLApplyResponse,
+        OverlapDecisionItem,
+        OverlapVolumeCandidate,
+        OverlapDecisionSetResponse,
+        OverlapDecisionWrite,
+        crate::reading_list::ReadingListReader,
+        crate::reading_list::ReadingListReaderEntry,
+        crate::reading_list::ReadingListDependency,
+        crate::reading_list::ReadingListBlockerExplanation,
+    )),
+    modifiers(&CustomCblSecurityAddon)
+)]
+pub(crate) struct CustomCblApi;
+
+struct CustomCblSecurityAddon;
+
+impl utoipa::Modify for CustomCblSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
