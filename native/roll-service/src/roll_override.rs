@@ -352,12 +352,14 @@ pub(crate) async fn persist_override(
     let event_id: i32 = row.get(0);
 
     tx.execute(
+        // `created_at` is NOT NULL without a server default, so the writer
+        // supplies it the same way the SQLAlchemy model default does.
         "INSERT INTO recommendation_contexts
-           (event_id,schema_version,intent,intent_source,intent_confidence,
+           (event_id,schema_version,created_at,intent,intent_source,intent_confidence,
             bandwidth,bandwidth_source,bandwidth_confidence,candidate_factors,
             final_weight,effort_minutes,effort_band,effort_source,
             effort_confidence,effort_sample_count,random_bypass,balanced_neutrality)
-         VALUES ($1,2,'balanced','manual_override',1.0,
+         VALUES ($1,2,NOW(),'balanced','manual_override',1.0,
                  'balanced','manual_override',1.0,NULL,
                  1.0,NULL,'unknown','unknown',
                  0.0,0,false,true)",

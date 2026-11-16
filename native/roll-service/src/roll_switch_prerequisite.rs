@@ -582,7 +582,7 @@ mod tests {
                  VALUES (200, 20, '2', 'unread', now(), 1);
                  INSERT INTO sessions
                      (id, user_id, started_at, start_die, pending_thread_id, pending_issue_id)
-                 VALUES (1, 1, NOW(), 6, 10, 100);"#,
+                 VALUES (1, 1, NOW(), 6, 20, 200);"#,
         )
         .await;
         let user = AuthenticatedUser::for_test(1);
