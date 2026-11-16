@@ -192,6 +192,14 @@ def test_recovery_watchdog_uses_trusted_bounded_neon_runtime_view() -> None:
     assert "factory_registry_ingest.py" in workflow
     assert "registry_comments()" not in workflow
     assert "uses: ./.github/actions/factory-state-cache" in workflow
+    # A healthy Neon view must not spend another GitHub API request.
+    # If reconciliation fails, recovery must not launch from stale evidence.
+    health_first = workflow.index("refresh_health")
+    registry = workflow.index("if ! python3 .github/scripts/factory_registry_ingest.py")
+    dispatch = workflow.index("gh workflow run fixed-model-factory-dispatch.yml")
+    assert health_first < registry < dispatch
+    assert "dispatcher recovery deferred" in workflow
+    assert "An active factory heartbeat is fresh; no GitHub registry read" in workflow
 
 
 def test_unchanged_snapshot_extends_ttl_without_rewriting_payload(monkeypatch, tmp_path):
