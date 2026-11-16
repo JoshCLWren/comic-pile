@@ -91,7 +91,8 @@
     if(type==="model"){const b=backoff("model",v=>v.source===x.provider&&v.model===x.model);return (b?.suspended||b?.next_retry_at&&Date.parse(b.next_retry_at)>Date.now()||x.until&&x.until*1000>Date.now())?"Respect durable cooldown":"Require real execution proof";}
     return "Check lease, dependencies, and priority";};
   const evidence=(type,x)=>type==="pr"?gh+"/pull/"+x.number:type==="issue"?gh+"/issues/"+x.number:
-    type==="run"?gh+"/actions/runs/"+x.id:type==="worker"&&x.attempt_run?gh+"/actions/runs/"+x.attempt_run:gh+"/issues/1093";
+    type==="run"?gh+"/actions/runs/"+x.id:type==="worker"&&x.attempt_run?gh+"/actions/runs/"+x.attempt_run:
+    type==="model"&&x.run?gh+"/actions/runs/"+x.run:gh+"/issues/1093";
   const detail=(type,id)=>{const items=type==="worker"?workers:type==="model"?models:type==="pr"?s.prs:type==="issue"?s.issues:s.runs;
     const x=items.find(a=>String(type==="worker"?a.worker:type==="model"?a.provider+"/"+a.model:type==="pr"||type==="issue"?a.number:a.id)===String(id));
     if(!x)return;const url=evidence(type,x);
