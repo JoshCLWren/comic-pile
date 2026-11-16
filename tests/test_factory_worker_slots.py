@@ -19,11 +19,11 @@ def test_provider_additions_do_not_renumber_existing_sources() -> None:
     assert first == SLOTS.worker_id(source, 0)
     assert first.isdecimal()
     assert int(first) > 1_000_000_000
-    assert SLOTS.resolve(first, {"MAX_WORKERS_PER_TICK": "2"}).source == source
+    assert SLOTS.resolve(first, {"FACTORY_SLOTS_PER_PROVIDER": "2"}).source == source
 
 
 def test_slots_are_unique_and_model_agnostic() -> None:
-    all_slots = SLOTS.slots({"MAX_WORKERS_PER_TICK": "3"})
+    all_slots = SLOTS.slots({"FACTORY_SLOTS_PER_PROVIDER": "3"})
     assert len(all_slots) == 3 * len(SLOTS.sources())
     assert len({item.worker for item in all_slots}) == len(all_slots)
     assert {item.source for item in all_slots} == set(SLOTS.sources())
@@ -31,7 +31,7 @@ def test_slots_are_unique_and_model_agnostic() -> None:
 
 
 def test_source_diverse_offer_and_rotation() -> None:
-    env = {"MAX_WORKERS_PER_TICK": "2"}
+    env = {"FACTORY_SLOTS_PER_PROVIDER": "2"}
     first, second = SLOTS.offer(0, env), SLOTS.offer(1, env)
     assert set(first) == set(second)
     assert first != second
@@ -39,12 +39,12 @@ def test_source_diverse_offer_and_rotation() -> None:
 
 
 def test_invalid_slots_do_not_resolve() -> None:
-    env = {"MAX_WORKERS_PER_TICK": "2"}
+    env = {"FACTORY_SLOTS_PER_PROVIDER": "2"}
     with pytest.raises(ValueError):
         SLOTS.resolve("42", env)
     with pytest.raises(ValueError):
         SLOTS.worker_id("not-a-real-provider", 0)
     with pytest.raises(ValueError):
-        SLOTS.slot_count({"MAX_WORKERS_PER_TICK": "0"})
+        SLOTS.slot_count({"FACTORY_SLOTS_PER_PROVIDER": "0"})
     with pytest.raises(ValueError):
         SLOTS.slot_count({"FACTORY_SLOTS_PER_PROVIDER": "invalid"})
