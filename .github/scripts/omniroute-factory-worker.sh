@@ -373,7 +373,8 @@ stage_trusted_review_controller() {
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
     # Bind model provenance to a trusted main checkout snapshot, not PR data.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-    cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+    cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
+    cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
     cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
