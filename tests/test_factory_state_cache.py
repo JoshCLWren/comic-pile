@@ -392,3 +392,19 @@ def test_factory_dashboard_reuses_one_run_local_inventory():
     # Run-local discovery prevents duplicate all-issues/all-PRs enumerations
     # within one render. It does not grant cross-run authority.
     assert "FACTORY_DISCOVERY_DIR" not in workflow.split("      - name: Configure shared Neon factory discovery cache", 1)[0]
+
+
+def test_runtime_worker_never_paginates_full_registry_on_missing_marker() -> None:
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/free-model-factory-run.yml").read_text()
+    assert '--paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' not in workflow
+    assert "FACTORY_HEARTBEAT_COMMENT_ID:" in workflow
+    assert "FACTORY_ATTEMPT_COMMENT_ID:" in workflow
+    assert "refusing duplicate write or unbounded registry scan" in workflow
+    assert "factory_registry_verify.py verify --kind heartbeat" in workflow
+    assert "factory_registry_verify.py verify --kind attempt" in workflow
+    assert workflow.count("factory-heartbeat-lookup-error") == 4
+    assert "factory-attempt-lookup-error" in workflow
+    # A missing marker is created through an ordinary targeted POST,
+    # not reconstructed from a historical cache or unauthenticated list.
+    assert 'gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments"' in workflow
