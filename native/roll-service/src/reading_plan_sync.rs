@@ -281,37 +281,6 @@ async fn load_release_exclusions(
     Ok(out)
 }
 
-async fn has_confirmed_thread_volume(
-    connection: &deadpool_postgres::Client,
-    thread_id: i32,
-    external_identity_id: i32,
-) -> Result<bool, ApiError> {
-    let confirmed = connection
-        .query_opt(
-            "SELECT 1 FROM thread_external_series_mappings \
-             WHERE thread_id = $1 AND external_identity_id = $2 AND status = 'confirmed' \
-             LIMIT 1",
-            &[&thread_id, &external_identity_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    if !confirmed {
-        return Ok(false);
-    }
-    let identity_ok = connection
-        .query_opt(
-            "SELECT 1 FROM external_identities \
-             WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'series' \
-             LIMIT 1",
-            &[&external_identity_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    Ok(identity_ok)
-}
-
 #[allow(dead_code)]
 fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
     if issue_number.is_empty() {
@@ -385,7 +354,11 @@ fn issue_identity(row: &Value) -> Option<String> {
     } else {
         raw.to_string().trim_matches('"').trim().to_string()
     };
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 fn issue_number_from_row(row: &Value) -> Option<String> {
@@ -398,20 +371,219 @@ fn issue_number_from_row(row: &Value) -> Option<String> {
     } else {
         raw.to_string().trim_matches('"').trim().to_string()
     };
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
-async fn create_issues_in_natural_order(
-    connection: &deadpool_postgres::Client,
+fn external_url_from_row(row: &Value, issue_id: &str) -> Option<String> {
+    let raw = row.get("site_detail_url");
+    if let Some(s) = raw.and_then(Value::as_str) {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    Some(format!(
+        "https://comicvine.gamespot.com/issue/4000-{issue_id}/"
+    ))
+}
+
+fn issue_metadata_from_row(row: &Value) -> Value {
+    let mut map = serde_json::Map::new();
+    for key in [
+        "name",
+        "issue_number",
+        "cover_date",
+        "store_date",
+        "date_last_updated",
+    ] {
+        if let Some(value) = row.get(key) {
+            if !value.is_null() {
+                map.insert(key.to_string(), value.clone());
+            }
+        }
+    }
+    if let Some(volume) = row.get("volume").and_then(Value::as_object) {
+        if let Some(name) = volume.get("name").and_then(Value::as_str) {
+            let trimmed = name.trim();
+            if !trimmed.is_empty() {
+                map.insert(
+                    "volume_name".to_string(),
+                    Value::String(trimmed.to_string()),
+                );
+            }
+        }
+    }
+    Value::Object(map)
+}
+
+async fn upsert_external_issue_identity(
+    tx: &tokio_postgres::Transaction<'_>,
+    external_id: &str,
+    external_url: Option<&str>,
+    metadata: &Value,
+) -> Result<i32, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT id, metadata_json FROM external_identities \
+             WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = $1 \
+             FOR UPDATE",
+            &[&external_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if let Some(existing) = row {
+        let id: i32 = existing.get(0);
+        // Preserve existing metadata on retry when present; update URL if newly provided.
+        if let Some(url) = external_url {
+            tx.execute(
+                "UPDATE external_identities SET external_url = COALESCE($1, external_url), updated_at = NOW() WHERE id = $2",
+                &[&url, &id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+        return Ok(id);
+    }
+    let created = tx
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2, $3::jsonb, NOW(), NOW()) RETURNING id",
+            &[&external_id, &external_url, &metadata],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(created.get(0))
+}
+
+async fn ensure_confirmed_issue_mapping(
+    tx: &tokio_postgres::Transaction<'_>,
+    issue_id: i32,
+    external_identity_id: i32,
+) -> Result<(), ApiError> {
+    // Avoid conflicting confirmed mapping for a different identity on same issue in a way that breaks uniqueness;
+    // best-effort upsert matching Python link semantics.
+    tx.execute(
+        "INSERT INTO issue_external_identity_mappings \
+         (issue_id, external_identity_id, status, evidence_source, evidence_json, confidence, created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'comicvine_issue_adoption', '{}'::jsonb, 1.0, NOW(), NOW()) \
+         ON CONFLICT (issue_id, external_identity_id) DO UPDATE \
+         SET status = 'confirmed', evidence_source = COALESCE(issue_external_identity_mappings.evidence_source, EXCLUDED.evidence_source), \
+             confidence = COALESCE(issue_external_identity_mappings.confidence, EXCLUDED.confidence), updated_at = NOW()",
+        &[&issue_id, &external_identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+async fn recalculate_thread_tracking(
+    tx: &tokio_postgres::Transaction<'_>,
+    thread_id: i32,
+    user_id: i32,
+    created_any: bool,
+) -> Result<(), ApiError> {
+    // Derive counters from issue rows (Issue.status/position). Mirror Python's apply_thread_issue_tracking_state behavior.
+    let rows = tx
+        .query(
+            "SELECT id, status FROM issues WHERE thread_id = $1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let total = rows.len() as i32;
+    let mut unread = 0_i32;
+    let mut next_unread: Option<i32> = None;
+    let mut read_count = 0_i32;
+    for row in &rows {
+        let status: String = row.get(1);
+        if status == "unread" {
+            unread += 1;
+            if next_unread.is_none() {
+                next_unread = Some(row.get(0));
+            }
+        } else if status == "read" {
+            read_count += 1;
+        }
+    }
+    let progress = if total <= 0 || read_count == 0 {
+        "unread"
+    } else if unread == 0 {
+        "completed"
+    } else {
+        "in_progress"
+    };
+
+    let thread_row = tx
+        .query_one(
+            "SELECT total_issues, next_unread_issue_id, status FROM threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let was_unmigrated: bool = thread_row
+        .try_get::<_, Option<i32>>(0)
+        .ok()
+        .flatten()
+        .is_none();
+    let had_next: bool = thread_row
+        .try_get::<_, Option<i32>>(1)
+        .ok()
+        .flatten()
+        .is_some();
+    let old_status: String = thread_row.get(2);
+
+    let mut new_status = old_status.clone();
+    let mut reseat_to_front = false;
+    if next_unread.is_none() {
+        new_status = "completed".to_string();
+    } else if was_unmigrated || !had_next {
+        if !was_unmigrated && old_status == "completed" {
+            reseat_to_front = true;
+        }
+        new_status = "active".to_string();
+    }
+
+    if reseat_to_front {
+        tx.execute(
+            "UPDATE threads SET queue_position = queue_position + 1 WHERE user_id = $1 AND status = 'active' AND id <> $2",
+            &[&user_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    tx.execute(
+        "UPDATE threads SET total_issues = $1, issues_remaining = $2, next_unread_issue_id = $3, reading_progress = $4, status = $5, queue_position = CASE WHEN $6 THEN 1 ELSE queue_position END WHERE id = $7",
+        &[&total, &unread, &next_unread, &progress, &new_status, &reseat_to_front, &thread_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    if created_any {
+        tx.execute(
+            "INSERT INTO events (type, timestamp, thread_id) VALUES ('issues_created', NOW(), $1)",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
+async fn create_issues_in_natural_order_tx(
+    tx: &tokio_postgres::Transaction<'_>,
     thread_id: i32,
     new_issue_numbers: &[String],
 ) -> Result<Vec<(i32, String, i32)>, ApiError> {
-    // Returns (issue_id, issue_number, position) for created issues.
     if new_issue_numbers.is_empty() {
         return Ok(Vec::new());
     }
 
-    let rows = connection
+    let rows = tx
         .query(
             "SELECT id, issue_number, position FROM issues WHERE thread_id = $1 \
              ORDER BY position, id FOR UPDATE",
@@ -442,16 +614,11 @@ async fn create_issues_in_natural_order(
             }
         }
         if !updates.is_empty() {
-            connection
-                .execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+            tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
                 .await
                 .map_err(db::query_error)?;
             for (id, pos) in &updates {
-                connection
-                    .execute(
-                        "UPDATE issues SET position = $1 WHERE id = $2",
-                        &[pos, id],
-                    )
+                tx.execute("UPDATE issues SET position = $1 WHERE id = $2", &[pos, id])
                     .await
                     .map_err(db::query_error)?;
             }
@@ -460,7 +627,7 @@ async fn create_issues_in_natural_order(
         let mut created = Vec::new();
         for number in new_issue_numbers {
             if let Some(&pos) = target_positions.get(number) {
-                let row = connection
+                let row = tx
                     .query_one(
                         "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
                          VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
@@ -476,12 +643,11 @@ async fn create_issues_in_natural_order(
         return Ok(created);
     }
 
-    // Ambiguous placement: append after current last position.
     let max_pos = existing.iter().map(|(_, _, p)| *p).max().unwrap_or(0);
     let mut created = Vec::new();
     for (idx, number) in new_issue_numbers.iter().enumerate() {
         let pos = max_pos + (idx as i32) + 1;
-        let row = connection
+        let row = tx
             .query_one(
                 "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
                  VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
@@ -510,9 +676,7 @@ fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
 }
 
 #[allow(dead_code)]
-async fn comicvine_get(
-    path_and_query: &str,
-) -> Result<Value, String> {
+async fn comicvine_get(path_and_query: &str) -> Result<Value, String> {
     let connect = async {
         let tcp = tokio::net::TcpStream::connect((COMICVINE_HOST, 443))
             .await
@@ -536,7 +700,10 @@ async fn comicvine_get(
             .header("user-agent", "ComicPile/1.0")
             .body(Empty::<Bytes>::new())
             .map_err(|e| e.to_string())?;
-        let mut response = sender.send_request(request).await.map_err(|e| e.to_string())?;
+        let mut response = sender
+            .send_request(request)
+            .await
+            .map_err(|e| e.to_string())?;
         if !response.status().is_success() {
             return Err(format!("HTTP {}", response.status()));
         }
@@ -570,17 +737,19 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
             "/api/issues/?api_key={api_key}&format=json&filter=volume:{volume_id}&limit=100&offset={offset}"
         );
         let payload = comicvine_get(&path).await?;
-        let status_code = payload.get("status_code").and_then(Value::as_i64).unwrap_or(1);
+        let status_code = payload
+            .get("status_code")
+            .and_then(Value::as_i64)
+            .unwrap_or(1);
         if status_code != 1 {
-            return Err(format!(
-                "ComicVine API error: {:?}",
-                payload.get("error")
-            ));
+            return Err(format!("ComicVine API error: {:?}", payload.get("error")));
         }
         let results = payload
             .get("results")
             .and_then(Value::as_array)
-            .ok_or_else(|| "ComicVine /issues response did not contain a results list".to_string())?;
+            .ok_or_else(|| {
+                "ComicVine /issues response did not contain a results list".to_string()
+            })?;
         if expected_total.is_none() {
             expected_total = payload
                 .get("number_of_total_results")
@@ -613,6 +782,8 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
     Ok(rows)
 }
 
+type SourceTxOutcome = Result<(bool, i64, i64, i64, i64, i64, i64, i64, i64, i64, bool), ApiError>;
+
 pub async fn sync_released_issues_endpoint(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -620,7 +791,7 @@ pub async fn sync_released_issues_endpoint(
 ) -> Result<Json<SyncResponse>, ApiError> {
     let as_of = parse_as_of(&payload.as_of)?;
     let _refresh = payload.refresh;
-    let connection = db::checkout(&state).await?;
+    let mut connection = db::checkout(&state).await?;
 
     let all_rows = connection
         .query(
@@ -691,8 +862,8 @@ pub async fn sync_released_issues_endpoint(
             let error = "COMICVINE_API_KEY is required".to_string();
             let mut failures = Vec::with_capacity(enabled_rows.len());
             for source in &enabled_rows {
-                let volume_id = parse_volume_id(&source.provider_volume_id, source.source_id)
-                    .unwrap_or(-1);
+                let volume_id =
+                    parse_volume_id(&source.provider_volume_id, source.source_id).unwrap_or(-1);
                 failures.push(SourceSyncFailure {
                     source_id: source.source_id,
                     plan_id: source.plan_id,
@@ -785,9 +956,6 @@ pub async fn sync_released_issues_endpoint(
 
         report.checked_sources += sources.len() as i64;
         for source in &sources {
-            // Per-source evaluation with partial parity: exclusions, confirmed
-            // volume mapping, and release-date gating. Full adoption/extension
-            // and last_synced_at persistence remain pending.
             if exclusions.excludes_source(source.thread_id, volume_id) {
                 report.successful_sources += 1;
                 report.excluded_sources += 1;
@@ -795,181 +963,274 @@ pub async fn sync_released_issues_endpoint(
                 continue;
             }
 
-            let confirmed = has_confirmed_thread_volume(
-                &connection,
-                source.thread_id,
-                source.external_identity_id,
-            )
-            .await?;
-            if !confirmed {
-                report.failed_sources += 1;
-                report.failures.push(SourceSyncFailure {
-                    source_id: source.source_id,
-                    plan_id: source.plan_id,
-                    thread_id: source.thread_id,
-                    volume_id,
-                    error: format!(
-                        "Volume {volume_id} is no longer a confirmed ComicVine mapping for thread {}",
-                        source.thread_id
-                    ),
-                });
-                continue;
-            }
+            let tx = connection
+                .build_transaction()
+                .start()
+                .await
+                .map_err(db::query_error)?;
 
-            // Lock reader and thread for ownership/consistency checks.
-            connection
-                .execute(
+            let source_result: SourceTxOutcome = async {
+                tx.execute(
                     "SELECT id FROM users WHERE id = $1 FOR UPDATE",
                     &[&user.id()],
                 )
                 .await
                 .map_err(db::query_error)?;
-            // Re-verify thread ownership matches plan user and lock thread row.
-            let thread_ok = connection
-                .query_opt(
-                    "SELECT 1 FROM threads t JOIN continuity_plans cp ON cp.id = $2 \
-                     WHERE t.id = $1 AND t.user_id = $3 AND cp.user_id = $3 FOR UPDATE OF t",
-                    &[&source.thread_id, &source.plan_id, &user.id()],
-                )
-                .await
-                .map_err(db::query_error)?
-                .is_some();
-            if !thread_ok {
-                report.failed_sources += 1;
-                report.failures.push(SourceSyncFailure {
-                    source_id: source.source_id,
-                    plan_id: source.plan_id,
-                    thread_id: source.thread_id,
-                    volume_id,
-                    error: format!(
-                        "Thread {} is not owned by plan {}'s user",
-                        source.thread_id, source.plan_id
-                    ),
-                });
-                continue;
-            }
 
-            let mut source_issues_checked: i64 = 0;
-            let mut source_future_skips: i64 = 0;
-            let mut source_unknown_date_skips: i64 = 0;
-            let mut source_excluded_issues: i64 = 0;
-            let mut source_issue_failures: i64 = 0;
-            #[allow(unused_mut, unused_assignments)]
-            let mut source_created: i64 = 0;
-            let mut source_reused: i64 = 0;
-            let mut source_conflicts: i64 = 0;
-            let mut source_had_releasable = false;
-
-            for row in &roster {
-                source_issues_checked += 1;
-                let Some(issue_id_str) = issue_identity(row) else {
-                    source_issue_failures += 1;
-                    continue;
-                };
-                let store_date = parse_store_date(row.get("store_date"));
-                match store_date {
-                    None => {
-                        source_unknown_date_skips += 1;
-                        continue;
-                    }
-                    Some(date) if date > as_of => {
-                        source_future_skips += 1;
-                        continue;
-                    }
-                    Some(_) => {}
-                }
-
-                let Some(issue_number) = issue_number_from_row(row) else {
-                    source_issue_failures += 1;
-                    continue;
-                };
-
-                source_had_releasable = true;
-
-                // Find existing owned issue by confirmed ComicVine identity.
-                let existing_by_identity: Option<(i32, i32)> = connection
+                let confirmed = tx
                     .query_opt(
-                        "SELECT i.id, i.thread_id \
-                         FROM issues i \
-                         JOIN threads t ON t.id = i.thread_id \
-                         JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
-                         JOIN external_identities e ON e.id = m.external_identity_id \
-                         WHERE t.user_id = $1 AND m.status = 'confirmed' \
-                           AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
-                           AND e.external_id = $2 \
-                         ORDER BY i.id LIMIT 1",
-                        &[&user.id(), &issue_id_str],
+                        "SELECT 1 FROM thread_external_series_mappings \
+                         WHERE thread_id = $1 AND external_identity_id = $2 AND status = 'confirmed' LIMIT 1",
+                        &[&source.thread_id, &source.external_identity_id],
                     )
                     .await
                     .map_err(db::query_error)?
-                    .map(|r| (r.get(0), r.get(1)));
-
-                let (existing_issue_id, existing_thread_id) = if let Some(found) = existing_by_identity {
-                    (Some(found.0), Some(found.1))
+                    .is_some();
+                let identity_ok = if confirmed {
+                    tx.query_opt(
+                        "SELECT 1 FROM external_identities \
+                         WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'series' LIMIT 1",
+                        &[&source.external_identity_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .is_some()
                 } else {
-                    // Find in target thread by issue number.
-                    let in_thread: Option<i32> = connection
+                    false
+                };
+                if !confirmed || !identity_ok {
+                    return Err(ApiError::Unprocessable(format!(
+                        "Volume {volume_id} is no longer a confirmed ComicVine mapping for thread {}",
+                        source.thread_id
+                    )));
+                }
+
+                let thread_ok = tx
+                    .query_opt(
+                        "SELECT 1 FROM threads t JOIN continuity_plans cp ON cp.id = $2 \
+                         WHERE t.id = $1 AND t.user_id = $3 AND cp.user_id = $3 FOR UPDATE OF t",
+                        &[&source.thread_id, &source.plan_id, &user.id()],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .is_some();
+                if !thread_ok {
+                    return Err(ApiError::Unprocessable(format!(
+                        "Thread {} is not owned by plan {}'s user",
+                        source.thread_id, source.plan_id
+                    )));
+                }
+
+                // Re-check source is still enabled/current.
+                let source_current = tx
+                    .query_opt(
+                        "SELECT enabled FROM reading_plan_release_sources WHERE id = $1",
+                        &[&source.source_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .and_then(|r| r.get::<_, Option<bool>>(0))
+                    .unwrap_or(false);
+                if !source_current {
+                    return Ok((true, 0, 0, 0, 0, 0, 0, 0, 0, 0, true)); // skipped
+                }
+
+                let mut source_issues_checked: i64 = 0;
+                let mut source_future_skips: i64 = 0;
+                let mut source_unknown_date_skips: i64 = 0;
+                let mut source_excluded_issues: i64 = 0;
+                let mut source_issue_failures: i64 = 0;
+                let mut source_created: i64 = 0;
+                let mut source_reused: i64 = 0;
+                let mut source_conflicts: i64 = 0;
+                let mut created_any = false;
+
+                #[derive(Clone)]
+                struct ReleasableIssue {
+                    cv_issue_id: String,
+                    issue_number: String,
+                    row: Value,
+                }
+                let mut to_create: Vec<ReleasableIssue> = Vec::new();
+                let mut releasable_existing: Vec<(i32, bool)> = Vec::new(); // (issue_id, excluded)
+
+                for row in &roster {
+                    source_issues_checked += 1;
+                    let Some(issue_id_str) = issue_identity(row) else {
+                        source_issue_failures += 1;
+                        continue;
+                    };
+                    let store_date = parse_store_date(row.get("store_date"));
+                    match store_date {
+                        None => {
+                            source_unknown_date_skips += 1;
+                            continue;
+                        }
+                        Some(date) if date > as_of => {
+                            source_future_skips += 1;
+                            continue;
+                        }
+                        Some(_) => {}
+                    }
+                    let Some(issue_number) = issue_number_from_row(row) else {
+                        source_issue_failures += 1;
+                        continue;
+                    };
+
+                    let existing_by_identity: Option<(i32, i32)> = tx
                         .query_opt(
-                            "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = $2",
-                            &[&source.thread_id, &issue_number],
+                            "SELECT i.id, i.thread_id \
+                             FROM issues i \
+                             JOIN threads t ON t.id = i.thread_id \
+                             JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
+                             JOIN external_identities e ON e.id = m.external_identity_id \
+                             WHERE t.user_id = $1 AND m.status = 'confirmed' \
+                               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+                               AND e.external_id = $2 \
+                             ORDER BY i.id LIMIT 1",
+                            &[&user.id(), &issue_id_str],
                         )
                         .await
                         .map_err(db::query_error)?
-                        .map(|r| r.get(0));
-                    (in_thread, in_thread.map(|_| source.thread_id))
-                };
+                        .map(|r| (r.get(0), r.get(1)));
 
-                if let Some(eid) = existing_issue_id {
-                    if existing_thread_id == Some(source.thread_id) {
-                        if exclusions.issue_ids.contains(&eid) || exclusions.thread_ids.contains(&source.thread_id) {
-                            source_excluded_issues += 1;
-                        } else {
-                            source_reused += 1;
-                            // Extension for reused issues pending.
-                        }
+                    let (existing_issue_id, existing_thread_id) = if let Some(found) = existing_by_identity {
+                        (Some(found.0), Some(found.1))
                     } else {
-                        source_conflicts += 1;
+                        let in_thread: Option<i32> = tx
+                            .query_opt(
+                                "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = $2 FOR UPDATE",
+                                &[&source.thread_id, &issue_number],
+                            )
+                            .await
+                            .map_err(db::query_error)?
+                            .map(|r| r.get(0));
+                        (in_thread, in_thread.map(|_| source.thread_id))
+                    };
+
+                    if let Some(eid) = existing_issue_id {
+                        if existing_thread_id == Some(source.thread_id) {
+                            let excluded = exclusions.issue_ids.contains(&eid) || exclusions.thread_ids.contains(&source.thread_id);
+                            if excluded {
+                                source_excluded_issues += 1;
+                            } else {
+                                source_reused += 1;
+                            }
+                            // Ensure/link identity for in-thread issue when found by number without confirmed mapping.
+                            if existing_by_identity.is_none() {
+                                let ext_url = external_url_from_row(row, &issue_id_str);
+                                let metadata = issue_metadata_from_row(row);
+                                let identity_id = upsert_external_issue_identity(&tx, &issue_id_str, ext_url.as_deref(), &metadata).await?;
+                                ensure_confirmed_issue_mapping(&tx, eid, identity_id).await?;
+                            }
+                            releasable_existing.push((eid, excluded));
+                        } else {
+                            source_conflicts += 1;
+                        }
+                        continue;
                     }
-                    continue;
+
+                    to_create.push(ReleasableIssue { cv_issue_id: issue_id_str, issue_number, row: row.clone() });
                 }
 
-                // New issue creation/adoption not yet implemented.
-                source_issue_failures += 1;
+                if !to_create.is_empty() {
+                    let new_numbers: Vec<String> = to_create.iter().map(|i| i.issue_number.clone()).collect();
+                    let created = create_issues_in_natural_order_tx(&tx, source.thread_id, &new_numbers).await?;
+                    source_created += created.len() as i64;
+                    created_any = !created.is_empty();
+                    // Map created issue numbers back to releasable rows (by number).
+                    let mut by_number: HashMap<String, &ReleasableIssue> = HashMap::new();
+                    for item in &to_create {
+                        by_number.entry(item.issue_number.clone()).or_insert(item);
+                    }
+                    for (issue_id, number, _pos) in &created {
+                        if let Some(item) = by_number.get(number) {
+                            let ext_url = external_url_from_row(&item.row, &item.cv_issue_id);
+                            let metadata = issue_metadata_from_row(&item.row);
+                            let identity_id = upsert_external_issue_identity(&tx, &item.cv_issue_id, ext_url.as_deref(), &metadata).await?;
+                            ensure_confirmed_issue_mapping(&tx, *issue_id, identity_id).await?;
+                        }
+                    }
+                    // Newly created issues in target thread are releasable/adopted (unless thread excluded, already handled).
+                    // Plan extension for created/reused issues is still pending full parity.
+                }
+
+                if created_any || source_reused > 0 {
+                    recalculate_thread_tracking(&tx, source.thread_id, user.id(), created_any).await?;
+                    // Best-effort: blocked status refresh parity is not fully implemented in native path yet.
+                }
+
+                if source_issue_failures == 0 {
+                    tx.execute(
+                        "UPDATE reading_plan_release_sources SET last_synced_at = NOW() WHERE id = $1",
+                        &[&source.source_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+                }
+
+                Ok((source_issue_failures == 0, source_issues_checked, source_created, source_reused, source_future_skips, source_unknown_date_skips, source_conflicts, source_issue_failures, 0i64, source_excluded_issues, false))
             }
+            .await;
 
-            report.issues_checked += source_issues_checked;
-            report.future_skips += source_future_skips;
-            report.unknown_date_skips += source_unknown_date_skips;
-            report.excluded_issues += source_excluded_issues;
-            report.issue_failures += source_issue_failures;
-            report.created_issues += source_created;
-            report.reused_issues += source_reused;
-            report.conflicts += source_conflicts;
-
-            let source_ok = source_issue_failures == 0;
-            if source_ok {
-                report.successful_sources += 1;
-                // Mark synced for successful sources (best-effort in this flow).
-                if source_had_releasable || source_issues_checked >= 0 {
-                    let now = Utc::now();
-                    let _ = connection
-                        .execute(
-                            "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = $2",
-                            &[&now, &source.source_id],
-                        )
-                        .await;
+            match source_result {
+                Ok((
+                    ok,
+                    issues_checked,
+                    created,
+                    reused,
+                    future_skips,
+                    unknown_date_skips,
+                    conflicts,
+                    issue_failures,
+                    _excluded_sources,
+                    excluded_issues,
+                    skipped,
+                )) => {
+                    report.issues_checked += issues_checked;
+                    report.created_issues += created;
+                    report.reused_issues += reused;
+                    report.future_skips += future_skips;
+                    report.unknown_date_skips += unknown_date_skips;
+                    report.conflicts += conflicts;
+                    report.issue_failures += issue_failures;
+                    report.excluded_issues += excluded_issues;
+                    if skipped {
+                        report.successful_sources += 1;
+                        report.skipped_sources += 1;
+                        tx.rollback().await.map_err(db::query_error)?;
+                        continue;
+                    }
+                    if ok {
+                        tx.commit().await.map_err(db::query_error)?;
+                        report.successful_sources += 1;
+                    } else {
+                        tx.rollback().await.map_err(db::query_error)?;
+                        report.failed_sources += 1;
+                        report.failures.push(SourceSyncFailure {
+                            source_id: source.source_id,
+                            plan_id: source.plan_id,
+                            thread_id: source.thread_id,
+                            volume_id,
+                            error: format!("Native sync adoption incomplete: {issue_failures} issue(s) could not be adopted"),
+                        });
+                    }
                 }
-            } else {
-                report.failed_sources += 1;
-                report.failures.push(SourceSyncFailure {
-                    source_id: source.source_id,
-                    plan_id: source.plan_id,
-                    thread_id: source.thread_id,
-                    volume_id,
-                    error: format!(
-                        "Native sync adoption incomplete: {source_issue_failures} issue(s) could not be adopted"
-                    ),
-                });
+                Err(ApiError::Unprocessable(msg)) => {
+                    tx.rollback().await.map_err(db::query_error)?;
+                    report.failed_sources += 1;
+                    report.failures.push(SourceSyncFailure {
+                        source_id: source.source_id,
+                        plan_id: source.plan_id,
+                        thread_id: source.thread_id,
+                        volume_id,
+                        error: msg,
+                    });
+                }
+                Err(e) => {
+                    tx.rollback().await.map_err(db::query_error)?;
+                    return Err(e);
+                }
             }
         }
     }
