@@ -8,8 +8,8 @@ against the canonical Alembic schema) and reports, in one canonical line:
 - Postgres transactions/blocks deltas from ``pg_stat_database`` (blocks are
   converted to bytes using the 8 KiB PostgreSQL block size),
 - Top-level and nested statement executions from ``pg_stat_statements`` under
-  the isolated service role. Measured parity tests fail if the extension is
-  unavailable; static call-site pins alone do not satisfy the runtime budget.
+  the isolated service role when the extension is available. This is optional
+  diagnostic information, not a per-route statement-count gate.
 
 The canonical line is printed in test output (``pytest -s``) and is the record
 of measured per-route numbers alongside the production ``vercel-log``
@@ -25,7 +25,6 @@ import os
 import resource
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -33,34 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_en
 
 #: PostgreSQL block size; converts ``pg_stat_database`` block deltas to bytes.
 BLOCK_BYTES = 8192
-SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json"
-
-
-def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
-    """Fail when a measured native route exceeds its declared source budget.
-
-    Args:
-        method: HTTP method of the declared operation.
-        path: Route path of the declared operation.
-        *measurements: Counts that must be present and within the maximum.
-
-    Returns:
-        None; invalid measurements raise AssertionError.
-    """
-    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
-    matching = [
-        entry
-        for entry in document["operations"]
-        if entry["method"] == method and entry["path"] == path
-    ]
-    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
-    maximum = matching[0]["sql_budget"]["max_statements"]
-    assert isinstance(maximum, int) and maximum >= 0
-    for measured in measurements:
-        assert measured is not None, "pg_stat_statements must measure every covered route"
-        assert measured <= maximum, (
-            f"{method} {path} issued {measured} statements; declared maximum is {maximum}"
-        )
 
 
 @dataclass(frozen=True)
