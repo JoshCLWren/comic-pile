@@ -982,7 +982,7 @@ pub async fn adopt_reading_order(
     // Update the membership to have the correct plan_id
     tx.execute(
         "UPDATE reading_plan_issues SET plan_id = $1 WHERE node_id LIKE $2",
-        &[&plan_id, &format!("ro-{{}}-%".replace("{}", &order_id.to_string()))],
+        &[&plan_id, &format!("ro-{}-%", order_id)],
     )
     .await
     .map_err(db::query_error)?;
