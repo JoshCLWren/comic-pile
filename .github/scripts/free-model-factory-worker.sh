@@ -588,7 +588,20 @@ select_next_eligible_model() {
         return 1
       fi
     fi
+    # Make the new active identity durable before executing it. One trusted
+    # GitHub write associates the pair with the *existing* assignment and head.
+    # The Neon lease and target labels never change during model rotation.
     stop_work_checkpoint
+    transition_stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    transition_body="$(printf '%s\nWorker: %s\nTarget: %s/%s\nExpected head: %s\nPrevious source: %s\nSource: %s\nModel: %s\nRuntime: %s\nUpdated: %s\nRun: %s' \
+      "<!-- factory-fleet-transition:v1 run=$GITHUB_RUN_ID -->" \
+      "$WORKER_ID" "$MODE" "$NUMBER" "${EXPECTED_HEAD:-}" \
+      "$SOURCE" "$next_source" "$next_model" "$next_runtime" "$transition_stamp" "$GITHUB_RUN_ID")"
+    if ! gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
+      -f body="$transition_body" >/dev/null; then
+      record_terminal_outcome control_plane_failure "failed durable fleet-transition provenance"
+      return 1
+    fi
     SOURCE="$next_source"
     MODEL="$next_model"
     RUNTIME_MODEL="$next_runtime"
