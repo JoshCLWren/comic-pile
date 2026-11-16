@@ -48,6 +48,17 @@ jobs:
             tests/test_factory_worker_slots.py \
             tests/test_factory_runtime_model_select.py \
             tests/test_factory_kilo_catalog.py \
-            tests/test_factory_neon_operations.py
+            tests/test_factory_neon_operations.py \
+            tests/test_factory_full_completion_controller.py \
+            tests/test_factory_work_controller_runtime.py \
+            tests/test_factory_source_budget.py \
+            tests/test_factory_quota_pause.py \
+            tests/test_factory_fast_merge.py \
+            tests/test_factory_trusted_policy_staging.py \
+            tests/test_factory_work_policy.py \
+            tests/test_factory_heartbeat_health.py \
+            tests/test_generate_factory_status_dashboard.py
+      - name: Verify worker identities in JavaScript
+        run: node --test .github/scripts/factory-expected-workers.test.cjs
       - name: Verify dynamic factory wiring and safety contracts
         run: python3 .github/scripts/validate-free-model-factories.py
