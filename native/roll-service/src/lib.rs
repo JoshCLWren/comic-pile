@@ -41,6 +41,7 @@ pub mod reading_mode;
 pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
+pub mod reading_plan_sync;
 pub mod reading_session;
 pub mod releases;
 pub mod roll_exclusions;
@@ -541,6 +542,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
+        )
+        .route(
+            "/api/v1/reading-plan-sync/status",
+            get(reading_plan_sync::get_sync_status),
+        )
+        .route(
+            "/api/v1/reading-plan-sync/sync",
+            post(reading_plan_sync::sync_released_issues_endpoint),
         )
         .route(
             "/api/v2/queue-entries/{thread_id}",

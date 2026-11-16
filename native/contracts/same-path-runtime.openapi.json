@@ -2133,6 +2133,81 @@
         ]
       }
     },
+    "/api/v1/reading-plan-sync/status": {
+      "get": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync_status",
+        "responses": {
+          "200": {
+            "description": "Sync state for every release source owned by the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-plan-sync/sync": {
+      "post": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User-triggered sync report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid request"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/releases/": {
       "get": {
         "tags": [
@@ -9370,6 +9445,37 @@
           }
         }
       },
+      "SourceSyncFailure": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "plan_id",
+          "thread_id",
+          "volume_id",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volume_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "StartupMetricsResponse": {
         "type": "object",
         "properties": {
@@ -9422,6 +9528,191 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "SyncReport": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "checked_sources",
+          "successful_sources",
+          "failed_sources",
+          "issues_checked",
+          "created_issues",
+          "reused_issues",
+          "future_skips",
+          "unknown_date_skips",
+          "conflicts",
+          "issue_failures",
+          "failures"
+        ],
+        "properties": {
+          "checked_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceSyncFailure"
+            }
+          },
+          "future_skips": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_failures": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issues_checked": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reused_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "skipped_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successful_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unknown_date_skips": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncRequest": {
+        "type": "object",
+        "required": [
+          "as_of"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "result"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SyncReport"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncStatusResponse": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "properties": {
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncStatusSource"
+            }
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncStatusSource": {
+        "type": "object",
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
