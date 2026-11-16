@@ -188,7 +188,6 @@ fn parse_as_of(value: &str) -> Result<DateTime<Utc>, ApiError> {
     ))
 }
 
-#[allow(dead_code)]
 fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
     let value = value?;
     if value.is_null() {
@@ -220,13 +219,97 @@ fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct EnabledSourceRow {
     source_id: i32,
     plan_id: i32,
     thread_id: i32,
     external_identity_id: i32,
     provider_volume_id: String,
+}
+
+#[derive(Debug, Default)]
+struct Exclusions {
+    volume_ids: std::collections::HashSet<i32>,
+    thread_ids: std::collections::HashSet<i32>,
+    issue_ids: std::collections::HashSet<i32>,
+}
+
+impl Exclusions {
+    fn excludes_source(&self, thread_id: i32, volume_id: i32) -> bool {
+        self.thread_ids.contains(&thread_id) || self.volume_ids.contains(&volume_id)
+    }
+}
+
+async fn load_release_exclusions(
+    connection: &deadpool_postgres::Client,
+    user_id: i32,
+) -> Result<Exclusions, ApiError> {
+    let rows = connection
+        .query(
+            "SELECT provider, external_volume_id, thread_id, issue_id \
+             FROM collection_exclusions WHERE user_id = $1 ORDER BY id",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut out = Exclusions::default();
+    for row in &rows {
+        let provider: Option<String> = row.get(0);
+        let external_volume_id: Option<String> = row.get(1);
+        let thread_id: Option<i32> = row.get(2);
+        let issue_id: Option<i32> = row.get(3);
+        if let Some(tid) = thread_id {
+            out.thread_ids.insert(tid);
+        }
+        if let Some(iid) = issue_id {
+            out.issue_ids.insert(iid);
+        }
+        if provider.as_deref() == Some("comicvine") {
+            if let Some(vol) = external_volume_id {
+                let text = vol.trim().strip_prefix("4050-").unwrap_or(vol.trim());
+                if !text.chars().all(|c| c.is_ascii_digit()) || text.is_empty() {
+                    return Err(ApiError::Internal(
+                        "Collection exclusion has an invalid ComicVine volume identity".to_string(),
+                    ));
+                }
+                if let Ok(id) = text.parse::<i32>() {
+                    out.volume_ids.insert(id);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+async fn has_confirmed_thread_volume(
+    connection: &deadpool_postgres::Client,
+    thread_id: i32,
+    external_identity_id: i32,
+) -> Result<bool, ApiError> {
+    let confirmed = connection
+        .query_opt(
+            "SELECT 1 FROM thread_external_series_mappings \
+             WHERE thread_id = $1 AND external_identity_id = $2 AND status = 'confirmed' \
+             LIMIT 1",
+            &[&thread_id, &external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    if !confirmed {
+        return Ok(false);
+    }
+    let identity_ok = connection
+        .query_opt(
+            "SELECT 1 FROM external_identities \
+             WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'series' \
+             LIMIT 1",
+            &[&external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    Ok(identity_ok)
 }
 
 fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
@@ -385,6 +468,8 @@ pub async fn sync_released_issues_endpoint(
     }
     let enabled_sources = enabled_rows.len() as i64;
 
+    let exclusions = load_release_exclusions(&connection, user.id()).await?;
+
     if enabled_sources == 0 {
         let report = SyncReport {
             total_sources,
@@ -516,24 +601,73 @@ pub async fn sync_released_issues_endpoint(
         };
 
         report.checked_sources += sources.len() as i64;
-        // Full per-source/per-issue adoption parity (exclusions, confirmed
-        // mapping checks, identity upsert/link, natural-order insert,
-        // tracking recalculation, plan extension, mark_synced) is still
-        // pending. Fail closed for now rather than reporting false success.
         for source in &sources {
-            report.failed_sources += 1;
-            report.failures.push(SourceSyncFailure {
-                source_id: source.source_id,
-                plan_id: source.plan_id,
-                thread_id: source.thread_id,
-                volume_id,
-                error: format!(
-                    "Source sync not yet fully implemented in native handler ({} roster rows fetched)",
-                    roster.len()
-                ),
-            });
+            // Per-source evaluation with partial parity: exclusions, confirmed
+            // volume mapping, and release-date gating. Full adoption/extension
+            // and last_synced_at persistence remain pending.
+            if exclusions.excludes_source(source.thread_id, volume_id) {
+                report.successful_sources += 1;
+                report.excluded_sources += 1;
+                report.skipped_sources += 1;
+                continue;
+            }
+
+            let confirmed = has_confirmed_thread_volume(
+                &connection,
+                source.thread_id,
+                source.external_identity_id,
+            )
+            .await?;
+            if !confirmed {
+                report.failed_sources += 1;
+                report.failures.push(SourceSyncFailure {
+                    source_id: source.source_id,
+                    plan_id: source.plan_id,
+                    thread_id: source.thread_id,
+                    volume_id,
+                    error: format!(
+                        "Volume {volume_id} is no longer a confirmed ComicVine mapping for thread {}",
+                        source.thread_id
+                    ),
+                });
+                continue;
+            }
+
+            let mut issues_checked: i64 = 0;
+            let mut future_skips: i64 = 0;
+            let mut unknown_date_skips: i64 = 0;
+            let mut releasable: i64 = 0;
+            for row in &roster {
+                issues_checked += 1;
+                let store_date = parse_store_date(row.get("store_date"));
+                match store_date {
+                    None => unknown_date_skips += 1,
+                    Some(date) if date > as_of => future_skips += 1,
+                    Some(_) => releasable += 1,
+                }
+            }
+            report.issues_checked += issues_checked;
+            report.future_skips += future_skips;
+            report.unknown_date_skips += unknown_date_skips;
+
+            if releasable > 0 {
+                // Adoption/extension not yet implemented; fail this source
+                // rather than claiming success without persisting releases.
+                report.failed_sources += 1;
+                report.failures.push(SourceSyncFailure {
+                    source_id: source.source_id,
+                    plan_id: source.plan_id,
+                    thread_id: source.thread_id,
+                    volume_id,
+                    error: format!(
+                        "Native sync adoption pending for {releasable} releasable issue(s)"
+                    ),
+                });
+            } else {
+                report.successful_sources += 1;
+                // last_synced_at marking pending (requires transaction semantics).
+            }
         }
-        let _ = (as_of, &roster);
     }
 
     Ok(Json(SyncResponse {
