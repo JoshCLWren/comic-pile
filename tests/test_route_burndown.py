@@ -496,6 +496,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "custom-cbl",
         "demo",
         "dependencies",
+        "issue-identity-cbl-catalog",
         "issues",
         "metrics",
         "preferences",
