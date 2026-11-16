@@ -775,6 +775,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fetch_session_state_reads_the_canonical_json_snooze_columns() {
+        // Regression: the canonical Alembic schema types `snoozed_thread_ids`
+        // and `skipped_thread_ids` as `json` (#4850). A direct
+        // `try_get::<Option<Vec<i32>>>` on those columns is a client-side type
+        // mismatch that mapped to a 500 for every authenticated manual pick.
+        let _admin = crate::test_support::required_test_admin_url();
+        let (mut client, _db) = seeded(
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      snoozed_thread_ids, skipped_thread_ids, timezone)
+                 VALUES (1, 1, NOW(), 8, 10, '[5]'::json, '[6]'::json,
+                         'America/Chicago');"#,
+        )
+        .await;
+        let tx = client.transaction().await.unwrap();
+        let (pending, snoozed, skipped, timezone) =
+            fetch_session_state(&tx, 1, 1).await.expect("canonical session read");
+        tx.rollback().await.unwrap();
+        assert_eq!(pending, Some(10));
+        assert_eq!(snoozed, Some(vec![5]));
+        assert_eq!(skipped, Some(vec![6]));
+        assert_eq!(timezone.as_deref(), Some("America/Chicago"));
+
+        // A session without any snooze/skip rows keeps the Python `None` shape.
+        client
+            .batch_execute(
+                r#"INSERT INTO sessions
+                       (id, user_id, started_at, start_die)
+                   VALUES (2, 1, NOW(), 8);"#,
+            )
+            .await
+            .unwrap();
+        let tx = client.transaction().await.unwrap();
+        let (pending, snoozed, skipped, timezone) =
+            fetch_session_state(&tx, 2, 1).await.expect("empty session read");
+        tx.rollback().await.unwrap();
+        assert_eq!(pending, None);
+        assert_eq!(snoozed, None);
+        assert_eq!(skipped, None);
+        assert_eq!(timezone, None);
+    }
+
+    #[tokio::test]
     async fn persist_override_writes_the_event_context_and_session_pointer() {
         let _admin = crate::test_support::required_test_admin_url();
         let (mut client, _db) = seeded(
