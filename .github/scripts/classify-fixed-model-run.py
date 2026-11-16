@@ -36,6 +36,17 @@ LOCK_RE = re.compile(
     re.IGNORECASE,
 )
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
+DYNAMIC_SLOT_RE = re.compile(
+    r"Factory (?P<worker>\d+) assigned dynamic provider slot: "
+    r"source=(?P<source>\S+) configured=(?P<configured>true|false)", re.I,
+)
+DYNAMIC_MODEL_RE = re.compile(
+    r"\[factory:(?P<worker>\d+)\]\[source:(?P<source>[^\]\n]+)\]"
+    r"\[model:(?P<model>[^\]\n]+)\]",
+)
+DYNAMIC_COOLDOWN_RE = re.compile(
+    r"factory catalog: [^\n]+: catalog contained no eligible candidates outside cooldown", re.I,
+)
 # Account-level quota/budget exhaustion. Unlike a transient throttle this does
 # not clear within minutes, so it gets its own class (and a quota pause).
 QUOTA_RE = re.compile(
@@ -44,7 +55,8 @@ QUOTA_RE = re.compile(
     r"reached your [a-z ]*usage limit|"
     r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
     r"quota[ _](?:exceeded|exhausted)|free-models-per-day-high-balance|"
-    r"rate limit exceeded: free-models-per-day[^\\s]*",
+    r"rate limit exceeded: free-models-per-day[^\\s]*|"
+    r"add usage credits or subscribe|account (?:credits|balance) (?:depleted|exhausted)",
     re.I,
 )
 RATE_LIMIT_RE = re.compile(
@@ -60,7 +72,8 @@ RATE_LIMIT_RE = re.compile(
 MODEL_MISSING_RE = re.compile(
     r"pinned .*model is not currently (?:exposed|invokable)|unknown model|model .*not found|"
     r"model .*not available|"
-    r"model .*does not exist|(?:http(?: status)?|status(?: code)?)[ :]+(?:404|410)\b|"
+    r"model .*does not exist|free tier users do not have access to this model|"
+    r"(?:http(?: status)?|status(?: code)?)[ :]+(?:404|410)\b|"
     r"\b(?:404 not found|410 gone)\b",
     re.I,
 )
@@ -276,10 +289,29 @@ def classify(log: str) -> Result:
     """
     log = _runtime_evidence(log)
     lock = LOCK_RE.search(log)
-    if not lock:
-        return Result()
-
-    values = lock.groupdict()
+    if lock:
+        values = lock.groupdict()
+    else:
+        # Provider-derived slots no longer emit the former "Factory N locked"
+        # marker. Without this fallback every live rejection was classified
+        # unknown_failure, so durable model/source backoffs got no causal data.
+        slot = DYNAMIC_SLOT_RE.search(log)
+        if not slot:
+            return Result()
+        values = slot.groupdict()
+        selected = next(
+            (entry for entry in reversed(list(DYNAMIC_MODEL_RE.finditer(log)))
+             if entry["worker"] == values["worker"]
+             and entry["source"] == values["source"]),
+            None,
+        )
+        values["model"] = selected["model"] if selected else ""
+        runtime = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
+        values["runtime"] = runtime[1] if runtime else (
+            f"{values['source']}/{values['model']}" if selected else ""
+        )
+        values["minute"] = "00"
+        values["scheduler"] = "dynamic-slot"
     configured = values["configured"].lower() == "true"
     target_matches = list(TARGET_RE.finditer(log))
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
@@ -323,6 +355,14 @@ def classify(log: str) -> Result:
             outcome="HEALTHY / IDLE",
             outcome_class="no_work",
             detail="no assignment was leased; model inference was skipped",
+        )
+
+    # No selected candidate was invoked because each one is still cooling.
+    # This is idle capacity, not a fresh provider failure.
+    if DYNAMIC_COOLDOWN_RE.search(log):
+        return Result(
+            **common, outcome="HEALTHY / IDLE", outcome_class="no_work",
+            detail="provider catalog had no candidate outside its existing cooldown",
         )
 
     # An actual assigned NVIDIA invocation returned HTTP 410. No extra probe.
@@ -1063,6 +1103,45 @@ class ClassifierTests(unittest.TestCase):
         )
         self.assertEqual(result.outcome, "HEALTHY / IDLE")
         self.assertEqual(result.outcome_class, "no_work")
+
+    def test_dynamic_slot_quota_without_legacy_lock(self) -> None:
+        log = (
+            "Factory 1001 assigned dynamic provider slot: source=ollama-cloud configured=true\n"
+            "[factory:1001][source:ollama-cloud][model:synthetic/alpha] "
+            "checked out pr #33 on factory/work\n"
+            "Error: Add usage credits or subscribe and save up to 66%\n"
+            "[factory:1001][source:ollama-cloud][model:synthetic/alpha] "
+            "agent exit status 1 for pr #33\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.worker, "1001")
+        self.assertEqual(result.model, "synthetic/alpha")
+        self.assertEqual(result.source, "ollama-cloud")
+        self.assertEqual(result.outcome_class, "provider_quota")
+        self.assertFalse(result.exact_model_proven)
+
+    def test_dynamic_slot_model_rejected_for_account_tier(self) -> None:
+        log = (
+            "Factory 1002 assigned dynamic provider slot: source=vercel-ai-gateway configured=true\n"
+            "[factory:1002][source:vercel-ai-gateway][model:synthetic/beta] "
+            "checked out pr #34 on factory/work\n"
+            "Error: Free tier users do not have access to this model. Upgrade to paid credits.\n"
+            "[factory:1002][source:vercel-ai-gateway][model:synthetic/beta] "
+            "agent exit status 1 for pr #34\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.model, "synthetic/beta")
+        self.assertEqual(result.outcome_class, "model_unavailable")
+
+    def test_dynamic_slot_fully_cooled_catalog_is_idle(self) -> None:
+        log = (
+            "Factory 1003 assigned dynamic provider slot: source=mistral configured=true\n"
+            "factory catalog: mistral: catalog contained no eligible candidates outside cooldown\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.worker, "1003")
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.exact_model_proven)
 
     def test_all_representative_results_use_canonical_taxonomy(self) -> None:
         """Regression guard forbids legacy runtime outcome classes."""
