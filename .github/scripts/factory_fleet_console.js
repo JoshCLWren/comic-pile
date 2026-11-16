@@ -28,9 +28,9 @@
   const stage = x => (labels(x).find(l=>/^factory:(review|ci|ready|changes-requested|blocked|building|unowned)$/.test(l))||"unclassified").replace("factory:","");
   const owner = x => (labels(x).find(l=>/^factory:[0-9]+$/.test(l))||"").replace("factory:","");
   const inFlight = x => ["queued","in_progress","waiting","pending","requested"].includes(x.status);
-  const ciFor = sha => s.runs.filter(r=>r.head_sha===sha&&inFlight(r));
+  const ciFor = pr => s.runs.filter(r=>inFlight(r)&&(r.head_sha===pr.head?.sha||(r.pull_requests||[]).some(p=>p.number===pr.number)));
   const status = value => { const v=String(value||"unknown");
-    const kind=/^(success|healthy|proven|ready|completed|merged|ok)$/i.test(v)?"good":
+    const kind=/^(success|healthy|proven|ready|completed|merged|persisted|ok)$/i.test(v)?"good":
       /fail|error|blocked|unavailable|throttle|quota|cool|timeout|changes-requested|cancel/i.test(v)?"bad":
       /running|progress|queued|waiting|pending|review|^ci$/i.test(v)?"info":"warn";
     return '<span class="f-status '+kind+'">'+e(v)+'</span>'; };
@@ -72,7 +72,7 @@
     if(type==="model")return {provider:x.provider,model:x.model,run:x.run,failure:x.outcome};
     if(type==="provider")return {provider:x.provider,failure:x.outcome};
     if(type==="pr")return {worker:owner(x),pr:x.number,issue:(x.body||"").match(/(?:closes|refs|fixes)\s+#(\d+)/i)?.[1]||"",
-      run:ciFor(x.head?.sha).map(r=>r.id).join(","),failure:stage(x),all:x.title};
+      run:ciFor(x).map(r=>r.id).join(","),failure:stage(x),all:x.title};
     if(type==="issue")return {worker:owner(x),issue:x.number,failure:stage(x),all:x.title};
     return {run:x.id,pr:(x.pull_requests||[]).map(p=>p.number).join(","),failure:x.conclusion||x.status,all:x.name};};
   const filtered=(type,rows)=>rows.filter(x=>{const f=extract(type,x);
@@ -82,7 +82,7 @@
     keys.map(k=>'<input data-filter="'+k+'" placeholder="'+e(k[0].toUpperCase()+k.slice(1))+'" aria-label="Filter '+e(k)+'" value="'+e(s.filters[k])+'">').join("")+
     '<button class="f-button" data-clear>Clear</button></div>';
   const next=(type,x)=>{if(type==="pr"){
-      if(ciFor(x.head?.sha).length)return "Wait for CI, do not assign";
+      if(ciFor(x).length)return "Wait for CI, do not assign";
       return ({"changes-requested":"Repair review findings",review:"Independent exact-head review",ci:"Verify exact-head checks",
         ready:"Verify merge gates",blocked:"Resolve documented blocker",building:"Check active lease before takeover"})[stage(x)]||"Inspect policy and next action";
     }
@@ -114,7 +114,7 @@
   };
   const persist=()=>{try{localStorage.setItem("comicpile-fleet-notes-v1",JSON.stringify(s.actions));}catch{}};
   const attention=()=>{const items=[];
-    for(const p of s.prs){const t=stage(p),running=ciFor(p.head?.sha).length;
+    for(const p of s.prs){const t=stage(p),running=ciFor(p).length;
       if(running||["changes-requested","blocked","review","ci"].includes(t))
         items.push({type:"pr",id:p.number,title:p.title,detail:"PR #"+p.number+" · "+t+(running?" · CI in progress":""),
           action:next("pr",p),priority:running?3:t==="changes-requested"?1:2,updated:p.updated_at});}
@@ -170,9 +170,9 @@
       ])),"No model evidence for this filter")+"</div>";
   };
   const prView=()=>'<div class="f-panel"><div class="f-head"><div><h2>Open pull requests</h2>'+
-    '<p>In-flight CI is matched by exact head SHA. Never assign against a running check.</p></div>'+status(s.prs.length+" fetched")+'</div>'+
+    '<p>In-flight CI is matched by head SHA or PR association. Never assign against a running check.</p></div>'+status(s.prs.length+" fetched")+'</div>'+
     filters()+table(["PR / head","Stage","Owner","CI","Next action","Updated"],filtered("pr",s.prs).map(p=>{
-      const ci=ciFor(p.head?.sha);
+      const ci=ciFor(p);
       return row([inspect("pr",p.number,"#"+p.number+" "+p.title)+'<div class="f-small">'+e((p.head?.sha||"").slice(0,10))+'</div>',
         status(stage(p)),e(owner(p)||"Unowned"),ci.length?ci.map(r=>link(r.html_url,r.status)).join(" · "):"No in-flight run observed",
         e(next("pr",p)) + ((retry.pr_retries||[]).find(x=>x.pr===p.number&&x.head===p.head?.sha)?.retry_after ? " · stage retry pending" : "") ,e(age(p.updated_at))]);}),"No matching PRs")+"</div>";
