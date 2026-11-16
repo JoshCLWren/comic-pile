@@ -28,8 +28,8 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::sync::Arc;
+use serde_json::{json, Value};
+use std::{collections::HashSet, sync::Arc};
 
 /// Request body for accepting one current recovery recommendation.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

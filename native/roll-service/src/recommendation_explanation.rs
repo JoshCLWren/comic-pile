@@ -263,7 +263,7 @@ pub fn project_recommendation_context(
     }
 
     if let Some(primary_score) = context.get("primary_score") {
-        if let Some(code) = primary_score.get("code").and_then(|v| v.as_str) {
+        if let Some(code) = primary_score.get("code").and_then(serde_json::Value::as_str) {
             if !code.is_empty() {
                 if let Some(factor) = primary_score_factor(code) {
                     factors.push(factor);

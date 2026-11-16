@@ -25,7 +25,9 @@ use crate::{
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::HashSet, sync::Arc};
+use std::str::FromStr;
+use chrono::Timelike;
+use std::sync::Arc;
 use tokio_postgres::IsolationLevel;
 
 /// The Python handler's canonical manual-pick algorithm/control identifiers.
@@ -33,7 +35,7 @@ const RECOMMENDATION_ALGORITHM_VERSION: &str = "v1-contextual";
 const CONTROL_MODE_CONTEXTUAL: &str = "contextual";
 
 /// Request body for the manual override.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RollOverrideRequest {
     /// Reader-selected thread identifier.
     pub thread_id: i32,
@@ -61,15 +63,14 @@ pub struct RollOverrideResponse {
 }
 
 /// The stored thread projection the Python handler reads before the commit.
-struct OverrideThread {
-    id: i32,
-    title: String,
-    format: String,
-    issues_remaining: i32,
-    total_issues: Option<i32>,
-    reading_progress: Option<String>,
-    status: String,
-    is_blocked: bool,
+pub(crate) struct OverrideThread {
+    pub(crate) id: i32,
+    pub(crate) title: String,
+    pub(crate) format: String,
+    pub(crate) total_issues: Option<i32>,
+    pub(crate) reading_progress: Option<String>,
+    pub(crate) status: String,
+    pub(crate) is_blocked: bool,
 }
 
 /// Mirror `app.models.thread.normalize_format_value`.
@@ -189,7 +190,7 @@ fn build_rolling_recommendation_context(
 /// Resolve the session's current local hour, mirroring `_get_local_hour_from_timezone`.
 fn local_hour(timezone: Option<&str>) -> Option<i32> {
     let timezone = timezone?;
-    let zone: chrono_tz::Tz = timezone.parse().ok()?;
+    let zone = chrono_tz::Tz::from_str(timezone).ok()?;
     Some(chrono::Utc::now().with_timezone(&zone).hour() as i32)
 }
 
@@ -201,7 +202,7 @@ async fn fetch_thread_for_update(
 ) -> Result<Option<OverrideThread>, ApiError> {
     let row = tx
         .query_opt(
-            "SELECT id, title, format, issues_remaining, total_issues,
+            "SELECT id, title, format, total_issues,
                     reading_progress, status, is_blocked
              FROM threads
              WHERE id = $1 AND user_id = $2
@@ -216,11 +217,10 @@ async fn fetch_thread_for_update(
                 id: row.try_get(0).map_err(db::query_error)?,
                 title: row.try_get(1).map_err(db::query_error)?,
                 format: row.try_get(2).map_err(db::query_error)?,
-                issues_remaining: row.try_get(3).map_err(db::query_error)?,
-                total_issues: row.try_get(4).map_err(db::query_error)?,
-                reading_progress: row.try_get(5).map_err(db::query_error)?,
-                status: row.try_get(6).map_err(db::query_error)?,
-                is_blocked: row.try_get(7).map_err(db::query_error)?,
+                total_issues: row.try_get(3).map_err(db::query_error)?,
+                reading_progress: row.try_get(4).map_err(db::query_error)?,
+                status: row.try_get(5).map_err(db::query_error)?,
+                is_blocked: row.try_get(6).map_err(db::query_error)?,
             })
         })
         .transpose()?)
@@ -635,7 +635,6 @@ mod tests {
             id,
             title: format!("Series {id}"),
             format: "Comic".into(),
-            issues_remaining: 3,
             total_issues: Some(10),
             reading_progress: Some("in_progress".into()),
             status: "active".into(),
@@ -783,7 +782,7 @@ mod tests {
     #[tokio::test]
     async fn persist_override_writes_the_event_context_and_session_pointer() {
         let _admin = crate::test_support::required_test_admin_url();
-        let (client, _db) = seeded(
+        let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
                      (id, user_id, title, format, issues_remaining, status, queue_position,
@@ -803,7 +802,6 @@ mod tests {
             id: 10,
             title: "First".into(),
             format: "Comic".into(),
-            issues_remaining: 2,
             total_issues: Some(4),
             reading_progress: Some("in_progress".into()),
             status: "active".into(),
@@ -889,7 +887,7 @@ mod tests {
     #[tokio::test]
     async fn persist_override_binds_an_empty_reason_code_array() {
         let _admin = crate::test_support::required_test_admin_url();
-        let (client, _db) = seeded(
+        let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
                      (id, user_id, title, format, issues_remaining, status, queue_position)
@@ -904,7 +902,6 @@ mod tests {
             id: 10,
             title: "First".into(),
             format: "Comic".into(),
-            issues_remaining: 1,
             total_issues: None,
             reading_progress: None,
             status: "active".into(),
