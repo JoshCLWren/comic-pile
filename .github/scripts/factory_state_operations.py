@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from factory_state_metrics import connect as measured_connect
+
 from factory_state_cache import _dsn
 
 SCHEMA = [
@@ -64,8 +66,7 @@ async def ensure_schema(conn: Any) -> None:
 
 
 async def _connection() -> Any:
-    import asyncpg
-    return await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=15)
+    return await measured_connect(dsn=_dsn(), timeout=8, command_timeout=15)
 
 
 def _run(fn: Any, *args: Any) -> Any:

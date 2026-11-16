@@ -8,6 +8,11 @@ on:
     - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
+      measure:
+        description: Count trusted Neon operations for this cycle without logging SQL
+        required: false
+        default: false
+        type: boolean
       source_run_id:
         description: Advisory Entry completion that woke this scheduling cycle
         required: false
@@ -77,7 +82,7 @@ permissions:
 # Coalesce duplicate ingress events for this workflow only. The job-level
 # shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: ${{ inputs.target && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
+  group: ${{ (inputs.target || inputs.measure) && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
   queue: single
   cancel-in-progress: false
 
@@ -105,6 +110,10 @@ jobs:
 
       - name: Initialize run-local scheduling memory
         run: echo "FACTORY_DISCOVERY_DIR=$RUNNER_TEMP/factory-discovery" >> "$GITHUB_ENV"
+
+      - name: Enable bounded factory query measurements
+        if: inputs.measure
+        run: echo "FACTORY_STATE_METRICS_FILE=$RUNNER_TEMP/factory-query-counts.jsonl" >> "$GITHUB_ENV"
 
       - name: Install factory syntax parsers
         uses: ./.github/actions/factory-syntax
@@ -811,6 +820,11 @@ jobs:
           echo "Dispatching automatic local Ollama review of PR #${pr}"
           gh workflow run local-ollama-review.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f "pr=${pr}"
+
+      - name: Report factory query measurements
+        if: always() && inputs.measure
+        run: |
+          python3 .github/scripts/factory_state_metrics.py "$RUNNER_TEMP/factory-query-counts.jsonl" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Queue roster successor outside assignment lease lock
         if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
