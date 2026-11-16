@@ -624,10 +624,6 @@ fn timestamp_token_to_utc(value: &str) -> Option<chrono::DateTime<chrono::Utc>> 
         .ok()
 }
 
-fn structured_unprocessable(detail: serde_json::Value) -> ApiError {
-    ApiError::Unprocessable(detail.to_string())
-}
-
 async fn load_overlap_decisions(
     tx: &Transaction<'_>,
     user_id: i32,
