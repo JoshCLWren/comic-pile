@@ -30,7 +30,6 @@
   "app/api/issue_identity.py",
   "app/api/metrics.py",
   "app/api/performance_metric.py",
-  "app/api/ping.py",
   "app/api/preferences.py",
   "app/api/prerequisite.py",
   "app/api/rate.py",

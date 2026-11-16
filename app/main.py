@@ -311,9 +311,10 @@ logger.info(
 )
 
 
-#: Route prefixes whose routers are registered before deferred loading starts.
-#: A request for one of these answers from the already-registered table and must
-#: not pay to register anything else (issue #3479).
+#: Route prefixes whose routers are registered before deferred loading starts,
+#: plus probe paths that must never trigger deferred registration or heavy init.
+#: A request for one of these answers must not pay to register anything else
+#: (issue #3479). ``/api/ping`` is served by native Rust ingress in production.
 _EAGER_ROUTE_PREFIXES: tuple[str, ...] = (
     "/api/ping",
     "/api/metrics",
@@ -343,17 +344,13 @@ def _register_lightweight_routers(app: FastAPI) -> None:
     These routers have zero or negligible import overhead and are needed for
     basic functionality and cold-start mitigation.
     """
-    # Lightweight ping endpoint for cold-start mitigation (issue #1389).
-    # Zero database/ORM overhead; keeps Vercel serverless functions warm.
-    from app.api import ping
-
-    app.include_router(ping.router, prefix="/api", tags=["ping"])
-
     # Dependency-free compatibility endpoint for the retired keep-alive probe
     # (issues #3480, #4129). Older clients may still call it, but it must not
     # open a Neon connection or postpone scale-to-zero. Mounted under /api/v1
     # and kept out of the generated client schema
     # (include_in_schema=False), like the bounded health probes.
+    # ``/api/ping`` is now served same-path by native Rust ingress; see
+    # ``docs/api/route-fragments/ping.json`` and ``api/native_roll.rs``.
     from app.api import keepalive
 
     app.include_router(keepalive.router, prefix="/api/v1", tags=["keepalive"])
@@ -370,10 +367,11 @@ def _register_lightweight_routers(app: FastAPI) -> None:
 def register_all_routers(app: FastAPI, environment: str) -> None:
     """Register every router in the historical order.
 
-    Router modules are imported lazily inside each mount so that a cold ping
+    Router modules are imported lazily inside each mount so that a cold probe
     invocation does not load the full import graph. Registration order is the
-    historical ``include_router`` order: lightweight (ping, metrics, keepalive)
-    then every deferred mount from :mod:`app.router_mounts`.
+    historical ``include_router`` order: lightweight (metrics, keepalive) then
+    every deferred mount from :mod:`app.router_mounts``. ``/api/ping`` is served
+    by native Rust ingress in production.
 
     Args:
         app: The FastAPI application instance.
