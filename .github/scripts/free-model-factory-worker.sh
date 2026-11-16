@@ -527,6 +527,85 @@ if (( agent_timeout < 300 )); then
   exit 1
 fi
 
+# Fail over only inside this provider and this lease. Each discovered model is
+# attempted at most once; persistent failures are recorded by the trusted shell,
+# never inferred from model-authored text or a successful process exit.
+attempted_models=()
+record_model_failover_failure() {
+  local failed_model="$1" classification="$2" stamp body
+  stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  body="$(printf '%s\nWorker: %s\nModel: %s\nSource: %s\nOutcome: failure\nAttempt outcome: %s\nUpdated: %s\nRun: %s' \
+    "<!-- factory-model-failover:v1 run=$GITHUB_RUN_ID -->" \
+    "$WORKER_ID" "$failed_model" "$SOURCE" "$classification" "$stamp" "$GITHUB_RUN_ID")"
+  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
+    -f body="$body" >/dev/null
+}
+
+select_next_eligible_model() {
+  local next_json next_model next_runtime state candidate_status
+  local -a select_args=(--source "$SOURCE" --worker "$WORKER" \
+    --rotation "$GITHUB_RUN_NUMBER" \
+    --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json")
+  local prior
+  for prior in "${attempted_models[@]}"; do
+    select_args+=(--attempted "$prior")
+  done
+  case "$SOURCE" in
+    opencode-free)
+      select_args+=(--catalog-file "$RUNNER_TEMP/factory-opencode-free-catalog") ;;
+    kilo-auto)
+      select_args+=(--catalog-file "$RUNNER_TEMP/factory-kilo-catalog") ;;
+  esac
+  while :; do
+    if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" \
+      "${select_args[@]}")"; then
+      log "No further eligible models in $SOURCE; retaining the failed attempt's outcome"
+      return 1
+    fi
+    next_model="$(jq -er '.model' <<< "$next_json")" || return 1
+    next_runtime="$(jq -er '.runtime_model' <<< "$next_json")" || return 1
+    attempted_models+=("$next_model")
+    select_args+=(--attempted "$next_model")
+    if [[ "$SOURCE" != opencode-free && "$SOURCE" != openrouter-free && \
+          "$SOURCE" != kilo-auto ]]; then
+      # OpenCode-compatible custom providers declare one exact model at a time.
+      # Merge the newly published model into the existing runtime configuration.
+      local config_file="$HOME/.config/opencode/opencode.json"
+      local candidate_config="$RUNNER_TEMP/factory-failover-config.json"
+      if ! python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_provider_registry.py" \
+          config --source "$SOURCE" --model "$next_model" > "$candidate_config"; then
+        log "Cannot configure discovered $SOURCE/$next_model; stopping failover"
+        return 1
+      fi
+      jq -s '.[0] * .[1]' "$config_file" "$candidate_config" > "$candidate_config.merged" || return 1
+      mv "$candidate_config.merged" "$config_file"
+      chmod 600 "$config_file"
+    fi
+    if [[ "$SOURCE" != kilo-auto ]]; then
+      candidate_status=0
+      bash "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh" "$next_runtime" || candidate_status=$?
+      if (( candidate_status == 3 )); then
+        log "Discovered $next_runtime absent from executable OpenCode catalog, trying the next candidate"
+        record_model_failover_failure "$next_model" model_unavailable || return 1
+        continue
+      fi
+      if (( candidate_status != 0 )); then
+        record_terminal_outcome control_plane_failure "OpenCode catalog unreadable during model failover"
+        return 1
+      fi
+    fi
+    # The checkpoint process captures model provenance when started. Restart
+    # it before inference so saved code is attributed to the model that wrote it.
+    stop_work_checkpoint
+    MODEL="$next_model"
+    RUNTIME_MODEL="$next_runtime"
+    DISPLAY="$SOURCE · $MODEL"
+    start_work_checkpoint
+    log "Failing model excluded; attempting $SOURCE/$MODEL on the existing lease"
+    return 0
+  done
+}
+
 agent_attempt=1
 agent_status=0
 transient_failure=0
@@ -540,6 +619,32 @@ while :; do
   if (( agent_status == 0 )); then
     transient_failure=0
     break
+  fi
+  # The actual inference failed. For model-scoped provider failures, advance
+  # through *all* discovered eligible models, not the same pinned model twice.
+  # Never reassign a claimed issue/PR or discard changes already checkpointed.
+  record_agent_failure_outcome "$agent_status"
+  failure_class="$(cut -f1 "$TERMINAL_OUTCOME_FILE")"
+  if [[ "$SOURCE" != omniroute-free && "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
+    case "$failure_class" in
+      provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
+        if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
+          attempted_models+=("$MODEL")
+          if ! record_model_failover_failure "$MODEL" "$failure_class"; then
+            record_terminal_outcome control_plane_failure "failed to record exact model failure before failover"
+            break
+          fi
+          if select_next_eligible_model; then
+            agent_attempt=1
+            available="$(remaining)"
+            agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
+            (( agent_timeout >= 300 )) || break
+            continue
+          fi
+        fi
+        break
+        ;;
+    esac
   fi
   if ! is_transient_agent_failure "$agent_status"; then
     transient_failure=0
