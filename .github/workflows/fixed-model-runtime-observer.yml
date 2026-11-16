@@ -129,22 +129,31 @@ jobs:
           locators="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions \
             --repo "$GITHUB_REPOSITORY" --worker "$WORKER")"
           comment_id="$(jq -r '.__attempt_id[0] // empty' <<< "$locators")"
+          current=''
           if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
             current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
-            verified="$(python3 -c 'import json,sys; sys.path.insert(0,".github/scripts"); from factory_registry_ingest import marker_ids; print(bool(marker_ids([json.load(sys.stdin)])))' <<< "$current" 2>/dev/null || true)"
-            [[ "$verified" == True ]] || comment_id=''
           else
             comment_id=''
           fi
-          if [[ -z "$comment_id" ]]; then
-            # Cold-start only: full GitHub scan prevents duplicate marker creation.
-            # The resulting trusted ID is persisted so subsequent jobs use GET.
+          if [[ -z "$comment_id" || -z "$current" ]]; then
+            # Cold-start only, following a missing or invalidated locator.
             comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
               | jq -r --arg marker "$marker" '[.[] | select(.body | startswith($marker)) | .id] | last // empty')"
+            current=''
+          fi
+          if [[ -n "$comment_id" && -z "$current" ]]; then
+            current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>/dev/null || true)"
+          fi
+          # Real validation follows: author, canonical worker and marker kind.
+          verified="$(python3 -c 'import json,sys; sys.path.insert(0,".github/scripts"); from factory_registry_ingest import marker_ids; print(any(m["worker"]==sys.argv[1] and m["kind"]=="attempt" and m["id"]==sys.argv[2] for m in marker_ids([json.load(sys.stdin)])))' \
+            "$WORKER" "$comment_id" <<< "$current" 2>/dev/null || true)"
+          if [[ "$verified" != True ]]; then
+            comment_id=''
+            current=''
           fi
           existing_run=''
           if [[ -n "$comment_id" ]]; then
-            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" --jq '.body' \
+            existing_run="$(jq -r '.body // ""' <<< "$current" \
               | sed -n 's/^Run: //p' | tail -1)"
           fi
           if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > RUN_ID )); then
