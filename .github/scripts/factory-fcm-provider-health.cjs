@@ -26,7 +26,8 @@ const results = [];
 
 function classify(code) {
   if (code === '200') return 'HTTP_OK';
-  if (code === '401' || code === '403') return 'AUTH_FAILED';
+  if (code === '401') return 'AUTH_FAILED';
+  if (code === '403') return 'ACCESS_DENIED';
   if (code === '402') return 'PAYMENT_REQUIRED';
   if (code === '429') return 'RATE_LIMITED';
   if (code === '404' || code === '410') return 'MODEL_UNAVAILABLE';
@@ -38,13 +39,14 @@ function classify(code) {
 function summarizedStatus(probes) {
   if (probes.some((p) => p.status === 'HTTP_OK')) return 'PASS_HTTP';
   if (!probes.length) return 'NO_MODELS';
-  const terminal = probes.find((p) => ['AUTH_FAILED', 'PAYMENT_REQUIRED', 'RATE_LIMITED'].includes(p.status));
+  const terminal = probes.find((p) => ['AUTH_FAILED', 'ACCESS_DENIED', 'PAYMENT_REQUIRED', 'RATE_LIMITED'].includes(p.status));
   return terminal?.status || 'NO_WORKING_MODEL_IN_SAMPLE';
 }
 
 async function examine(provider, source) {
   const key = getApiKey({}, provider);
-  if (!key) {
+  // Kilo and LLM7 intentionally permit anonymous probes.
+  if (!key && !source.noKeyNeeded) {
     return { provider, name: source.name || provider, status: 'NO_KEY', checked: 0, probes: [] };
   }
   // MODELS is FCM's active catalog projection and excludes upstream-retired
@@ -63,7 +65,7 @@ async function examine(provider, source) {
     // exhaust a provider's quota checking additional models after success.
     if (scope === 'sample' && status === 'HTTP_OK') break;
     // Stop when auth, billing, or rate limits are provider-wide.
-    if (['AUTH_FAILED', 'PAYMENT_REQUIRED', 'RATE_LIMITED'].includes(status)) break;
+    if (['AUTH_FAILED', 'ACCESS_DENIED', 'PAYMENT_REQUIRED', 'RATE_LIMITED'].includes(status)) break;
   }
   return {
     provider, name: source.name || provider,
