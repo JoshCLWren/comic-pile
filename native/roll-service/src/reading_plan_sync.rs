@@ -985,14 +985,20 @@ pub async fn sync_released_issues_endpoint(
         }));
     }
 
+    // Test-only roster injection: JSON object {"<volume_id>": [issue,...], "_fail_<volume_id>": "error"}
+    let mock_rosters: Option<Value> = std::env::var("RUST_ROLL_SYNC_MOCK_ROSTER_JSON")
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+
     // Match Python: missing API key fails all enabled sources with the
-    // client-construction error message.
+    // client-construction error message (unless test mocks are injected).
     let api_key = match std::env::var("COMICVINE_API_KEY")
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
     {
         Some(key) => key,
+        None if mock_rosters.is_some() => String::new(),
         None => {
             let error = "COMICVINE_API_KEY is required".to_string();
             let mut failures = Vec::with_capacity(enabled_rows.len());
@@ -1071,7 +1077,23 @@ pub async fn sync_released_issues_endpoint(
     }
 
     for (volume_id, sources) in volume_groups {
-        let roster = match fetch_volume_issues(&api_key, volume_id).await {
+        let roster = if let Some(ref mocks) = mock_rosters {
+            let fail_key = format!("_fail_{volume_id}");
+            if let Some(msg) = mocks.get(&fail_key).and_then(Value::as_str) {
+                Err(msg.to_string())
+            } else if let Some(rows) = mocks.get(volume_id.to_string()).and_then(Value::as_array) {
+                Ok(rows
+                    .iter()
+                    .filter(|r| r.is_object())
+                    .cloned()
+                    .collect::<Vec<Value>>())
+            } else {
+                Ok(Vec::new())
+            }
+        } else {
+            fetch_volume_issues(&api_key, volume_id).await
+        };
+        let roster = match roster {
             Ok(roster) => roster,
             Err(error) => {
                 let message = format!("Volume sync failed: {error}");
