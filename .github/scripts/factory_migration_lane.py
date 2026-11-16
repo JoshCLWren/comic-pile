@@ -194,10 +194,11 @@ def ensure_wait_label() -> None:
 
 
 def open_pull_requests() -> list[dict[str, Any]]:
-    pages = gh_json(
+    from factory_discovery import discovered_pull_requests
+
+    return discovered_pull_requests(REPO, lambda: flatten_pages(gh_json(
         ["api", "--paginate", "--slurp", f"repos/{REPO}/pulls?state=open&per_page=100"]
-    )
-    return flatten_pages(pages)
+    )))
 
 
 def pr_changed_files(pr_number: int) -> list[dict[str, Any]]:

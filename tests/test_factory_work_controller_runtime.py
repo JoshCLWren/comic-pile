@@ -1274,10 +1274,10 @@ def test_batch_assignment_omits_redundant_reconciliation(
     assert sweeps == ["stale", "labels"]
 
 
-def test_release_label_write_updates_exact_neon_projection(
+def test_release_label_write_updates_run_local_discovery(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Releasing a PR synchronizes its GitHub-authoritative owner to Neon."""
+    """A label write updates only this dispatcher run, with no Neon projection."""
     events: list[str] = []
     monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
     monkeypatch.setattr(
@@ -1296,16 +1296,16 @@ def test_release_label_write_updates_exact_neon_projection(
         lambda *_args, **_kwargs: events.append("github-write") or "[]",
     )
     monkeypatch.setattr(
-        controller, "refresh_trusted_label_write",
-        lambda repo, number, *, is_pr: events.append(
-            f"neon:{repo}:{number}:{is_pr}"
-        ) or True,
+        controller, "update_labels",
+        lambda repo, kind, number, labels: events.append(
+            f"local:{repo}:{number}:{kind}:{any(row['name'] == 'factory:unowned' for row in labels)}"
+        ),
     )
     assert controller.replace_factory_labels(5060, "factory:unowned") is True
-    assert events == ["github-write", "neon:JoshCLWren/comic-pile:5060:True"]
+    assert events == ["github-write", "local:JoshCLWren/comic-pile:5060:pr:True"]
 
 
-def test_failed_projection_refresh_does_not_undo_github_release(
+def test_failed_local_discovery_refresh_does_not_undo_github_release(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Projection failure must not strand a successful GitHub label release."""
@@ -1323,8 +1323,8 @@ def test_failed_projection_refresh_does_not_undo_github_release(
         lambda *_args, **_kwargs: events.append("github-write") or "[]",
     )
     def unavailable(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("Neon unavailable")
+        raise OSError("local scheduling memory unavailable")
 
-    monkeypatch.setattr(controller, "refresh_trusted_label_write", unavailable)
+    monkeypatch.setattr(controller, "update_labels", unavailable)
     assert controller.replace_factory_labels(4843, "factory:unowned") is True
     assert events == ["github-write"]

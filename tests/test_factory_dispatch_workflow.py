@@ -254,7 +254,7 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> Non
     assert ".base.ref == 'main'" in wake
     assert "!github.event.pull_request.draft" in wake
     assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
-    assert "--ref main -f mode=roster" in wake
+    assert '--ref main -f target="pr:$PR_NUMBER" -f action=advance' in wake
     assert "from factory_eligibility import is_manual_only" in wake
     assert "is manual-only; no dispatch" in wake
 

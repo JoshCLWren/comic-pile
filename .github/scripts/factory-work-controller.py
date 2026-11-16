@@ -28,8 +28,7 @@ from factory_review_policy import recorded_pr_contributors, trusted_comment_bodi
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
-from factory_state_cache import cached_json
-from factory_state_projection import projected_json, reconcile_snapshot, refresh_trusted_label_write
+from factory_discovery import canonical_target, discover, update_labels
 from factory_state_ledger import acquire_lease, release_lease, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -77,41 +76,33 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 
 def list_issues() -> list[dict[str, Any]]:
-    """Use shared Neon projections; discover only on a cache refresh."""
-    projected = projected_json(REPO, "issue")
-    if projected is not None:
-        return cast(list[dict[str, Any]], projected)
-
-    def fetch_issues(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        issues = cast(list[dict[str, Any]], gh_json([
-            'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
-            '--json', 'number,title,body,labels,createdAt,updatedAt',
-        ]))
-        # Only a genuinely live GitHub read may advance the reconciliation
-        # watermark. A cached read skips this callback entirely.
-        reconcile_snapshot(REPO, "issue", issues, started)
-        return issues
-
-    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=450)
+    """Read one run-local discovery inventory; authorization stays live."""
+    hint = os.environ.get('FACTORY_DISCOVERY_TARGET', '')
+    if re.fullmatch(r'(issue|pr):[1-9][0-9]*', hint):
+        kind, raw_number = hint.split(':')
+        number = int(raw_number)
+        if kind == 'pr':
+            pr = list_prs()[0]
+            number = linked_issue_from_pr(pr)
+            if number is None:
+                return []
+        return [canonical_target('issue', target_json(number))]
+    return discover(REPO, 'issue', lambda: cast(list[dict[str, Any]], gh_json([
+        'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
+        '--json', 'number,title,body,labels,createdAt,updatedAt',
+    ])))
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """Use Neon PR projections; keep exact-head review/merge gates live."""
-    projected = projected_json(REPO, "pr")
-    if projected is not None:
-        return cast(list[dict[str, Any]], projected)
-
-    def fetch_prs(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        prs = cast(list[dict[str, Any]], gh_json([
-            'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
-            '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
-        ]))
-        reconcile_snapshot(REPO, "pr", prs, started)
-        return prs
-
-    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=450)
+    """Share PR discovery only within this trusted job, never between runs."""
+    hint = os.environ.get('FACTORY_DISCOVERY_TARGET', '')
+    if re.fullmatch(r'pr:[1-9][0-9]*', hint):
+        number = int(hint.split(':')[1])
+        return discover(REPO, 'pr', lambda: [canonical_target('pr', live_pr_state(number))])
+    return discover(REPO, 'pr', lambda: cast(list[dict[str, Any]], gh_json([
+        'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
+        '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
+    ])))
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -248,20 +239,13 @@ def last_github_update_epoch(item: dict[str, Any], *, now_epoch: int) -> int | N
     return epoch if 0 < epoch <= now_epoch else None
 
 
-def refresh_projection_after_label_change(number: int, target: dict[str, Any]) -> None:
-    """Refresh the specific authoritative target, never use Neon to authorize a label PUT."""
-    if not os.environ.get("FACTORY_STATE_DSN_FILE"):
-        return
+def refresh_discovery_after_label_change(number: int, target: dict[str, Any]) -> None:
+    """Update only local scheduling memory; never persist GitHub projections."""
     try:
-        refresh_trusted_label_write(REPO, number, is_pr="pull_request" in target)
-    except Exception as exc:
-        # A completed GitHub release must still discharge its transactional
-        # Neon lease; the 30-minute full-snapshot expiry repairs missed writes.
-        print(
-            f"[factory-controller] target #{number} projection refresh deferred "
-            f"({type(exc).__name__}); GitHub labels remain authoritative",
-            file=sys.stderr,
-        )
+        update_labels(REPO, 'pr' if 'pull_request' in target else 'issue',
+                      number, target.get('labels') or [])
+    except (OSError, ValueError):
+        print('[factory-controller] local discovery refresh unavailable; live claim checks remain required', file=sys.stderr)
 
 
 def replace_factory_labels(
@@ -343,7 +327,8 @@ def replace_factory_labels(
         labels.append('ralph-status:pending')
     
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
-    refresh_projection_after_label_change(number, target)
+    target['labels'] = [{'name': name} for name in sorted(set(labels))]
+    refresh_discovery_after_label_change(number, target)
     return True
 
 
@@ -1188,9 +1173,13 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
 
 
 def worker_has_active_lease(worker: str) -> bool:
-    """Return whether a fixed-model worker already owns open work."""
-    owner = f'factory:{worker}'
-    return any(current_owner == owner for _, current_owner in owned_targets())
+    """Check this worker's GitHub ownership independently of candidate discovery."""
+    if not worker.isdecimal():
+        raise ValueError('invalid worker')
+    rows = gh_json(['api', f'repos/{REPO}/issues?state=open&labels=factory%3A{worker}&per_page=1'])
+    if not isinstance(rows, list):
+        raise RuntimeError('worker ownership lookup unavailable')
+    return bool(rows)
 
 
 def omniroute_free_entry_cap() -> int:
@@ -1823,7 +1812,7 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         # Model-side releases can precede trusted cleanup and
                         # lack a webhook. Refresh only truly unowned targets.
                         if not active_owners:
-                            refresh_projection_after_label_change(number, current)
+                            refresh_discovery_after_label_change(number, current)
                         # Never overwrite ownership assigned to a newer worker.
                         already_released.append(number)
                         continue
@@ -2332,9 +2321,13 @@ def main() -> int:
     explain_parser = subparsers.add_parser('explain')
     explain_parser.add_argument('--issue', required=True, type=int)
     explain_parser.add_argument('--json', action='store_true', help='Emit JSON instead of text')
+    subparsers.add_parser('snapshot')
     subparsers.add_parser('signal-completion')
     subparsers.add_parser('signal-roster')
     args = parser.parse_args()
+    if args.command == 'snapshot':
+        print(json.dumps({'issues': list_issues(), 'prs': list_prs()}))
+        return 0
     if args.command == 'reconcile':
         released = reconcile_stale_leases()
         repaired = reconcile_contradictory_labels()
