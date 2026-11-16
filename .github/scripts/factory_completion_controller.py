@@ -518,7 +518,7 @@ def load_policy() -> Any:
 def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, Any], dict[str, tuple[str, int]]]:
     """Read repository-scoped trusted events and model health, no comment cache."""
     from factory_runtime_view import export_view
-    from factory_candidate_health import durable_attempt_evidence, rank_candidates
+    from factory_candidate_health import durable_attempt_evidence
 
     view = export_view(REPO)
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
