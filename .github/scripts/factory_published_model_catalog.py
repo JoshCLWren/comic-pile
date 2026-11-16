@@ -133,7 +133,15 @@ def main(argv: list[str] | None = None) -> int:
     except (PublishedCatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(f"factory catalog: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"source": args.source, "model": model, "catalog_listed": True}))
+    from factory_provider_registry import PROVIDERS
+
+    spec = PROVIDERS.get(args.source)
+    runtime_provider = spec.provider if spec else args.source.removesuffix("-free")
+    print(json.dumps({
+        "source": args.source, "model": model,
+        "runtime_model": f"{runtime_provider}/{model}",
+        "catalog_listed": True,
+    }))
     return 0
 
 
