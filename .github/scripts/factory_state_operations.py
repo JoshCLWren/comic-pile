@@ -557,7 +557,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
         # only when the exact model actually ran. Never blame the model for
         # checkout, credential, or controller failures.
         model_key = f"factory-model-backoff-v1:{repo}:source:{source}:model:{model}"
-        if attributed and not delivered and attributable_model_failure(classification, proven):
+        if (attributed and not terminal_account_scope and not delivered
+                and attributable_model_failure(classification, proven)):
             # Serialize first updates too, when no KV row exists to lock yet.
             await conn.fetchval(
                 "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", model_key,
@@ -700,6 +701,18 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         source,model = pair
         m,b = models.get(pair),budgets.get(source)
         retry_reason = worker_backoff_reason(backoffs.get(worker), source, model, now)
+        # Inference cooldown lives on the exact source/model or provider account.
+        # Older worker-scoped retry records must not suppress other fleet models.
+        worker_record = backoffs.get(worker)
+        if worker_record:
+            raw = worker_record["payload"]
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            worker_state = raw[0] if isinstance(raw, list) and raw else {}
+            if isinstance(worker_state, dict) and worker_state.get("outcome") in (
+                MODEL_RETRY_CLASSES | {"model_retired_410"}
+            ):
+                retry_reason = None
         model_retry = worker_backoff_reason(model_backoffs.get(pair), source, model, now)
         if source in provider_backoffs:
             rejected.append(f"{worker}: provider account {source} cooling")
