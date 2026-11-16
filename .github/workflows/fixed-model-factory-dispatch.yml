@@ -252,25 +252,35 @@ jobs:
         run: python3 .github/scripts/factory-work-controller.py snapshot > "$RUNNER_TEMP/factory-discovery.json"
 
       - name: Advance selected issue or pull request
-        if: inputs.target
+        if: inputs.target && steps.api_budget.outputs.allow == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ inputs.target }}
           ACTION: ${{ inputs.action }}
-          ALLOW: ${{ steps.api_budget.outputs.allow }}
         run: |
           set -Eeuo pipefail
-          if [[ "$ALLOW" != true ]]; then
-            echo "::error::Factory API quota is low. Retry after the quota resets."
-            exit 1
-          fi
           if ! [[ "$TARGET" =~ ^(issue|pr):([1-9][0-9]*)$ ]]; then
             echo "::error::Select a valid issue or pull request."
             exit 1
           fi
           python3 .github/scripts/factory-work-controller.py dispatch-target \
             --kind "${BASH_REMATCH[1]}" --number "${BASH_REMATCH[2]}" --action "$ACTION"
+
+      - name: Report quota-deferred targeted dispatch without failing a worker
+        if: inputs.target && steps.api_budget.outputs.allow != 'true'
+        shell: bash
+        env:
+          TARGET: ${{ inputs.target }}
+          QUOTA_DEFERRED: ${{ steps.api_budget.outputs.quota_deferred }}
+          API_RESET_EPOCH: ${{ steps.api_budget.outputs.reset_epoch }}
+        run: |
+          set -Eeuo pipefail
+          echo "Target ${TARGET} was NOT executed because the installation API budget was unavailable or below reserve." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$QUOTA_DEFERRED" == true && "$API_RESET_EPOCH" =~ ^[0-9]+$ ]]; then
+            echo "REST quota reset epoch: ${API_RESET_EPOCH}. The hourly recovery dispatcher can retry after reset." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "::notice::Targeted dispatch deferred without a claim, work attempt, or lease mutation"
 
       - name: Reconcile serialized migration finalization lane
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
