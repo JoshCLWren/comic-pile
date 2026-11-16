@@ -139,8 +139,9 @@ def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
     """Prune retired repository-owned event noise, never unscoped histories.
 
     Older worker events may lack a repository identifier, so age alone cannot
-    authorize their deletion. Only explicitly scoped historical observation
-    events can expire; worker lifecycle and coordination histories stay intact.
+    authorize their deletion. New lifecycle events include verified repository
+    provenance and may expire after 30 days; transactional leases, provider
+    reservations, worker metrics, model cooldowns and retries remain intact.
     """
     if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
         raise ValueError('invalid cleanup scope or batch size')
@@ -159,7 +160,11 @@ def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
                  OR (created_at < now() - interval '30 days'
                      AND (detail->>'repo'=$4 OR detail->>'repository'=$4)
                      AND event_type IN ('cache_refresh',
-                                        'target_reconciled', 'target_changed'))
+                                        'target_reconciled', 'target_changed',
+                                        'worker_assigned', 'worker_started',
+                                        'worker_heartbeat', 'worker_outcome_signal',
+                                        'worker_released', 'worker_failed',
+                                        'worker_completed', 'worker_idle'))
               ORDER BY id LIMIT $5
            ), removed AS (
              DELETE FROM public.factory_state_events AS events USING retired
