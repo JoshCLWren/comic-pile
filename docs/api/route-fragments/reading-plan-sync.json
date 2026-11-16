@@ -1,7 +1,8 @@
 {
   "family": "reading-plan-sync",
   "owned_path_patterns": [
-    "^/api/v1/reading-plan-sync/status$"
+    "^/api/v1/reading-plan-sync/status$",
+    "^/api/v1/reading-plan-sync/sync$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -18,6 +19,14 @@
       "path": "/api/v1/reading-plan-sync/status",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading-plan-sync/status$",
+      "owning_issue": 4851
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-plan-sync/sync",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-plan-sync/sync$",
       "owning_issue": 4851
     }
   ]

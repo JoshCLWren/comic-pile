@@ -782,7 +782,6 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
     Ok(rows)
 }
 
-
 async fn extend_adopted_issue_to_following_plans(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
@@ -816,7 +815,9 @@ async fn extend_adopted_issue_to_following_plans(
             )
             .await
             .map_err(db::query_error)?;
-        let Some(plan_row) = plan else { continue; };
+        let Some(plan_row) = plan else {
+            continue;
+        };
 
         let exists = tx
             .query_opt(
@@ -830,13 +831,17 @@ async fn extend_adopted_issue_to_following_plans(
             continue;
         }
 
-        let nodes_json: Value = plan_row.try_get::<_, Value>(0).unwrap_or(Value::Array(Vec::new()));
+        let nodes_json: Value = plan_row
+            .try_get::<_, Value>(0)
+            .unwrap_or(Value::Array(Vec::new()));
         let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
         let mut max_pos: i64 = -1;
         let mut already_in_json = false;
         for node in &nodes {
             if let Some(pos) = node.get("position").and_then(Value::as_i64) {
-                if pos > max_pos { max_pos = pos; }
+                if pos > max_pos {
+                    max_pos = pos;
+                }
             }
             if node.get("node_type").and_then(Value::as_str) == Some("issue")
                 && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
@@ -1350,6 +1355,23 @@ pub async fn sync_released_issues_endpoint(
 }
 
 #[utoipa::path(
+    post,
+    path = "/api/v1/reading-plan-sync/sync",
+    tag = "reading-plan-sync",
+    operation_id = "reading_plan_sync",
+    request_body = SyncRequest,
+    responses(
+        (status = 200, description = "User-triggered sync report", body = SyncResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid request"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn sync_released_issues_documentation() {}
+
+#[utoipa::path(
     get,
     path = "/api/v1/reading-plan-sync/status",
     tag = "reading-plan-sync",
@@ -1366,8 +1388,8 @@ pub fn get_sync_status_documentation() {}
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(get_sync_status_documentation),
-    components(schemas(SyncStatusSource, SyncStatusResponse)),
+    paths(sync_released_issues_documentation, get_sync_status_documentation),
+    components(schemas(SyncRequest, SyncResponse, SyncReport, SourceSyncFailure, SyncStatusSource, SyncStatusResponse)),
     modifiers(&ReadingPlanSyncSecurityAddon)
 )]
 pub struct ReadingPlanSyncApi;
