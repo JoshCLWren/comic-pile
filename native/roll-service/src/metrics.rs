@@ -18,11 +18,6 @@ pub struct StartupMetricsResponse {
     pub startup_duration: Option<f64>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct PingResponse {
-    pub status: String,
-}
-
 fn now_epoch_secs() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -86,15 +81,6 @@ pub fn get_metrics_documentation() {}
     responses((status = 200, description = "Simple application startup metrics", body = StartupMetricsResponse))
 )]
 pub fn get_v1_metrics_documentation() {}
-
-/// OpenAPI documentation for the lightweight cold-start probe.
-#[utoipa::path(
-    get,
-    path = "/api/ping",
-    tag = "health",
-    responses((status = 200, description = "Alive response", body = PingResponse))
-)]
-pub fn ping_documentation() {}
 
 #[cfg(test)]
 mod tests {

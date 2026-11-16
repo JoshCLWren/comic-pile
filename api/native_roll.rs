@@ -70,15 +70,7 @@ async fn native_metrics(method: Method, OriginalUri(uri): OriginalUri) -> Respon
     response
 }
 
-/// Lightweight cold-start probe without requiring database or auth state.
-async fn native_ping() -> Response {
-    let mut response = Json(serde_json::json!({"status": "alive"})).into_response();
-    response
-        .headers_mut()
-        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
-    eprintln!("native_roll route=/api/ping runtime=rust status=200");
-    response
-}
+
 
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
 
@@ -231,7 +223,6 @@ async fn native_not_found() -> Response {
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
-        .route("/api/ping", get(native_ping).options(native_ping))
         .route("/api/metrics", get(native_metrics))
         .route("/api/v1/metrics", get(native_metrics))
         .route("/api/v1/identity-inbox", get(native_dispatch))

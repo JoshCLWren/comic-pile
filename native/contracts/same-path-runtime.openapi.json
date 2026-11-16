@@ -1,11 +1,3 @@
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on shared package cache
-    Blocking waiting for file lock on build directory
-   Compiling comicpile-roll-service v0.1.0 (/mnt/extra/josh/code/comic-pile-5285-ping-rust/native/roll-service)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 59.19s
-     Running `/mnt/bigdata/rust-build-cache/comic-pile-native/debug/examples/same_path_openapi`
 {
   "openapi": "3.1.0",
   "info": {
@@ -376,27 +368,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StartupMetricsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/ping": {
-      "get": {
-        "tags": [
-          "health"
-        ],
-        "summary": "OpenAPI documentation for the lightweight cold-start probe.",
-        "operationId": "ping_documentation",
-        "responses": {
-          "200": {
-            "description": "Alive response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PingResponse"
                 }
               }
             }
@@ -6650,17 +6621,6 @@
         ],
         "properties": {
           "message": {
-            "type": "string"
-          }
-        }
-      },
-      "PingResponse": {
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "status": {
             "type": "string"
           }
         }

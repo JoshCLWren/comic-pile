@@ -226,7 +226,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/health/live",
             "/api/health/warmup",
             "/api/instance/warm",
-            "/api/ping",
+
             "/api/roll/bootstrap",
             "/api/roll/override",
             "/api/roll/events/{event_id}/recommendation-explanation",
