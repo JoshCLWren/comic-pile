@@ -12,10 +12,11 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
-class ExhaustedCandidates(ValueError):
+class ExhaustedCandidatesError(ValueError):
     """The provider has no eligible model that has not been attempted."""
 
 
@@ -37,7 +38,7 @@ def select_next(
         if catalog_text is None:
             raise ValueError("trusted OpenCode catalog snapshot missing")
         if not (set(catalog_models(catalog_text, provider=source)) - excluded):
-            raise ExhaustedCandidates("no eligible unattempted OpenCode models")
+            raise ExhaustedCandidatesError("no eligible unattempted OpenCode models")
         return select_model(
             catalog_text, int(worker), rotation,
             attempted=excluded, provider=source,
@@ -48,7 +49,7 @@ def select_next(
         if catalog_text is None:
             raise ValueError("trusted Kilo catalog snapshot missing")
         if not (set(discover_models(catalog_text)) - excluded):
-            raise ExhaustedCandidates("no eligible unattempted Kilo models")
+            raise ExhaustedCandidatesError("no eligible unattempted Kilo models")
         return choose(catalog_text, worker, excluded)
     if source == "openrouter-free":
         from factory_published_model_catalog import (
@@ -59,7 +60,7 @@ def select_next(
 
         catalog = catalog_json if catalog_json is not None else published_catalog(source)
         if not (set(catalog_model_ids(source, catalog)) - excluded):
-            raise ExhaustedCandidates("no eligible unattempted OpenRouter free models")
+            raise ExhaustedCandidatesError("no eligible unattempted OpenRouter free models")
         model = choose_model(source, worker, catalog, excluded)
         return {"source": source, "model": model, "runtime_model": f"openrouter/{model}"}
 
@@ -69,7 +70,7 @@ def select_next(
     catalog = catalog_json if catalog_json is not None else provider_catalog(source, os.environ)
     if not any(candidate.model not in excluded
                for candidate in discover(source, json.dumps(catalog)).candidates):
-        raise ExhaustedCandidates(f"no eligible unattempted {source} models")
+        raise ExhaustedCandidatesError(f"no eligible unattempted {source} models")
     return select(source, worker, catalog, {source: sorted(excluded)})
 
 
@@ -118,7 +119,7 @@ def main() -> int:
             catalog_text=catalog_text, catalog_json=catalog_json,
             rotation=args.rotation,
         )
-    except ExhaustedCandidates as exc:
+    except ExhaustedCandidatesError as exc:
         print(f"factory failover exhausted: {exc}", file=sys.stderr)
         return 3
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
