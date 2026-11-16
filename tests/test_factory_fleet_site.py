@@ -59,7 +59,7 @@ def test_site_embeds_trusted_snapshot_without_another_published_artifact(
 
 
 def test_site_has_no_model_roster_or_mutating_github_api() -> None:
-    js = (SCRIPTS / "factory_fleet_console.js").read_text()
+    js = (SCRIPTS / "factory_fleet_console.cjs").read_text()
     assert "data.candidate_health" in js
     assert "data.workers" in js
     assert "data.retry" in js
@@ -78,5 +78,5 @@ def test_console_javascript_syntax() -> None:
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js not installed")
-    subprocess.run([node, "--check", str(SCRIPTS / "factory_fleet_console.js")],
+    subprocess.run([node, "--check", str(SCRIPTS / "factory_fleet_console.cjs")],
                    check=True, capture_output=True, text=True)
