@@ -335,7 +335,7 @@ jobs:
           case "$SOURCE" in
             kilo-auto)
               catalog="$RUNNER_TEMP/factory-kilo-catalog"
-              kilo models --refresh > "$catalog" || {
+              kilo models kilo-auto --refresh > "$catalog" || {
                 printf 'provider_failure\tKilo CLI catalog unavailable\n' > "$discovery_outcome"
                 exit 1
               }
