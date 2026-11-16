@@ -661,6 +661,24 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
                WHERE cache_key LIKE $1 AND expires_at>now()""",
             f"factory-worker-backoff-v1:{repo}:worker:%")
     }
+    # Only a proven account-scoped failure can stop a provider's other models.
+    # Historical model-only quota records in provider_budget are insufficient.
+    provider_backoffs: dict[str, Any] = {}
+    for row in await conn.fetch(
+        """SELECT cache_key,payload,expires_at FROM public.factory_state_kv
+           WHERE cache_key LIKE $1 AND expires_at>now()""",
+        f"factory-provider-backoff-v1:{repo}:source:%"
+    ):
+        key = str(row["cache_key"])
+        prefix = f"factory-provider-backoff-v1:{repo}:source:"
+        if not key.startswith(prefix):
+            continue
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        state = payload[0] if isinstance(payload, list) and payload else {}
+        if isinstance(state, dict) and state.get("outcome") in {"provider_quota", "provider_failure"}:
+            provider_backoffs[key.removeprefix(prefix)] = state
     model_backoffs = {}
     for row in await conn.fetch(
         """SELECT cache_key,payload,expires_at FROM public.factory_state_kv
@@ -683,7 +701,9 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         m,b = models.get(pair),budgets.get(source)
         retry_reason = worker_backoff_reason(backoffs.get(worker), source, model, now)
         model_retry = worker_backoff_reason(model_backoffs.get(pair), source, model, now)
-        if retry_reason:
+        if source in provider_backoffs:
+            rejected.append(f"{worker}: provider account {source} cooling")
+        elif retry_reason:
             rejected.append(f"{worker}: {retry_reason}")
         elif model_retry:
             rejected.append(f"{worker}: source/model {model} {model_retry}")
