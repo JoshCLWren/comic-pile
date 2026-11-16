@@ -212,6 +212,27 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
         assert "if: steps.api_budget.outputs.allow == 'true'" in section
 
 
+def test_targeted_dispatch_defers_without_fake_worker_failure_when_rest_quota_is_low() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    target = workflow.split("- name: Advance selected issue or pull request", 1)[1].split(
+        "- name: Report quota-deferred targeted dispatch", 1
+    )[0]
+    assert "if: inputs.target && steps.api_budget.outputs.allow == 'true'" in target
+    assert "dispatch-target" in target
+    assert "ALLOW:" not in target
+    assert 'echo "::error::Factory API quota is low' not in target
+
+    deferred = workflow.split(
+        "- name: Report quota-deferred targeted dispatch", 1
+    )[1].split("- name: Reconcile serialized migration finalization lane", 1)[0]
+    assert "if: inputs.target && steps.api_budget.outputs.allow != 'true'" in deferred
+    assert "was NOT executed" in deferred
+    assert "GITHUB_STEP_SUMMARY" in deferred
+    assert "without a claim, work attempt, or lease mutation" in deferred
+    assert "dispatch-target" not in deferred
+    assert "exit 1" not in deferred
+
+
 def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
@@ -254,7 +275,7 @@ def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> Non
     assert ".base.ref == 'main'" in wake
     assert "!github.event.pull_request.draft" in wake
     assert "gh workflow run fixed-model-factory-dispatch.yml" in wake
-    assert "--ref main -f mode=roster" in wake
+    assert '--ref main -f target="pr:$PR_NUMBER" -f action=advance' in wake
     assert "from factory_eligibility import is_manual_only" in wake
     assert "is manual-only; no dispatch" in wake
 

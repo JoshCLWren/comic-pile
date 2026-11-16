@@ -2,8 +2,8 @@
 //! The health probe never reads database configuration.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 use axum::{
-    extract::Request,
-    http::{Extensions, HeaderValue, StatusCode},
+    extract::{OriginalUri, Request},
+    http::{Extensions, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
     Json, Router,
@@ -56,13 +56,17 @@ async fn native_demo() -> Response {
 }
 
 /// Serve simple startup metrics without requiring database or auth state.
-async fn native_metrics() -> Response {
+async fn native_metrics(method: Method, OriginalUri(uri): OriginalUri) -> Response {
+    let path = uri.path().to_owned();
     let mut response = comicpile_roll_service::metrics::get_metrics()
         .await
         .into_response();
     response
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    if method == Method::GET {
+        eprintln!("native_roll route={} runtime=rust status=200", path);
+    }
     response
 }
 

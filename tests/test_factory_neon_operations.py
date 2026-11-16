@@ -59,11 +59,12 @@ def test_schema_contains_all_separate_operational_relations():
     for relation in (
         "factory_model_health", "factory_provider_budget",
         "factory_provider_reservation", "factory_pr_stage_retry",
-        "factory_check_projection", "factory_worker_metrics",
+        "factory_worker_metrics",
         "factory_runtime_event_keys", "factory_reconciliation_cursor",
     ):
         assert relation in ddl
     assert all("DROP TABLE" not in statement for statement in operations.SCHEMA)
+    assert "factory_check_projection" not in ddl
 
 
 def test_missing_model_is_suppressed_but_unrelated_provider_is_available():
@@ -197,6 +198,8 @@ def test_model_scoped_provider_route_never_cools_unrelated_routes():
 def test_exact_head_checks_are_advisory_not_merge_authorization():
     workflow = (ROOT / ".github/workflows/factory-check-projection.yml").read_text()
     assert "factory_state_operations.py ingest-check" in workflow
+    assert "gh workflow run fixed-model-factory-dispatch.yml" in workflow
+    assert "factory_check_projection" not in workflow
     assert "neon-api-key: ${{ secrets.NEON_API_KEY }}" in workflow
     assert "neon-api-key: \\${{" not in workflow
     assert "pull_request_target:" not in workflow

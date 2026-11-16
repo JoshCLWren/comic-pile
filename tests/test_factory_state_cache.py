@@ -245,45 +245,150 @@ def test_changed_snapshot_still_persists_new_content(monkeypatch, tmp_path):
     assert published[0][2] == [{"number": 4}]
 
 
-def test_prune_is_bounded_and_cannot_delete_leases_or_projections(monkeypatch):
+def test_registry_refresh_updates_only_its_owner_row_without_audit_spam(monkeypatch):
+    operations = []
+    def fake_run(statement, *args, one=False):
+        operations.append((statement, args))
+    monkeypatch.setattr(cache, "_run", fake_run)
+    cache._publish("registry", "owner-1", [{"id": 4}], 900)
+    cache._refresh_without_rewrite("registry", "owner-1", 900, 1)
+    assert len(operations) == 2
+    assert all("UPDATE public.factory_state_kv" in query for query, _ in operations)
+    assert all("WHERE cache_key=$1 AND refresh_owner=$2" in query for query, _ in operations)
+    assert all("factory_state_events" not in query for query, _ in operations)
+    assert operations[0][1] == ("registry", "owner-1", '[{"id": 4}]', 900)
+    assert operations[1][1] == ("registry", "owner-1", 900)
+
+
+def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypatch):
+    executions = []
+    def fake_run(statement, *args, one=False):
+        executions.append((statement, args, one))
+        return {"deleted": 17}
+    monkeypatch.setattr(cache, "_run", fake_run)
+    assert cache._prune_retired_events("JoshCLWren/comic-pile", 500) == 17
+    sql, args, one = executions[0]
+    assert one is True
+    assert args == (
+        "factory-github-get-v1:JoshCLWren/comic-pile:",
+        "factory-projection-v1:JoshCLWren/comic-pile:",
+        ["JoshCLWren/comic-pile:open-issues", "JoshCLWren/comic-pile:open-prs"],
+        "JoshCLWren/comic-pile", 500,
+    )
+    assert "event_type='cache_refresh'" in sql
+    assert "event_type='target_reconciled'" in sql
+    assert "created_at < now() - interval '30 days'" in sql
+    assert "detail->>'repo'=$4 OR detail->>'repository'=$4" in sql
+    assert "event_type IN ('cache_refresh'," in sql
+    # Lifecycle history is removable only after 30 days AND explicit repo
+    # provenance. Unscoped historical events are never guessed or deleted.
+    assert "event_type IN ('cache_refresh'," in sql
+    assert "'worker_assigned'" in sql
+    assert "'worker_completed'" in sql
+    assert "'worker_heartbeat'" in sql
+    assert "'worker_failed'" in sql
+    assert "detail->>'repo'=$4 OR detail->>'repository'=$4" in sql
+    assert "DELETE FROM public.factory_state_events" in sql
+    assert "factory_state_kv" not in sql
+    assert "factory_provider_reservation" not in sql
+    # No LIKE wildcards that could turn underscores in repository names into patterns.
+    assert "LIKE" not in sql
+    with pytest.raises(ValueError, match="batch"):
+        cache._prune_retired_events("JoshCLWren/comic-pile", 1001)
+    with pytest.raises(ValueError, match="scope"):
+        cache._prune_retired_events("other-repo", 100)
+
+
+def test_worker_event_writers_tag_all_future_lifecycle_events_with_repo():
+    ledger = (Path(__file__).resolve().parents[1] /
+              ".github/scripts/factory_state_ledger.py").read_text()
+    assert "'source', $6::text, 'repo', $7::text" in ledger
+    assert "'targets',$5::jsonb,'repo',$6::text" in ledger
+    assert 'json.dumps({**entry, "repo": repo})' in ledger
+    # Repository scoping must be applied by the trusted collector, not
+    # accepted from worker-supplied event payloads.
+    assert 'json.dumps(entry)' not in ledger
+
+
+def test_retired_check_projection_cleanup_is_scoped_and_bounded(monkeypatch):
+    calls = []
+    def fake_run(sql, *args, one=False):
+        calls.append((sql, args, one))
+        return {"deleted": 250}
+    monkeypatch.setattr(cache, "_run", fake_run)
+    assert cache._prune_retired_check_projection("JoshCLWren/comic-pile") == 250
+    sql, args, one = calls[0]
+    assert args == ("JoshCLWren/comic-pile", 250)
+    assert one is True
+    assert "WHERE repo=$1" in sql
+    assert "checks.repo=$1" in sql
+    assert "LIMIT $2" in sql
+    assert "DELETE FROM public.factory_check_projection" in sql
+    for protected in ("factory_pr_stage_retry", "factory_provider_reservation",
+                      "factory_state_events", "factory_state_kv"):
+        assert protected not in sql
+    with pytest.raises(ValueError, match="batch"):
+        cache._prune_retired_check_projection("JoshCLWren/comic-pile", 1001)
+    with pytest.raises(ValueError, match="scope"):
+        cache._prune_retired_check_projection("another-repo", 250)
+
+
+def test_prune_is_bounded_to_retired_discovery_without_coordination(monkeypatch):
     executed = []
     def fake_run(statement, *args, one=False):
         executed.append((statement, args, one))
         return {"deleted": 4}
     monkeypatch.setattr(cache, "_run", fake_run)
-    assert cache._prune_expired_github_cache(200) == 4
+    assert cache._prune_obsolete_discovery("JoshCLWren/comic-pile", 200) == 4
     query, args, one = executed[0]
-    assert args == (200,) and one is True
+    assert args == ("factory-github-get-v1:JoshCLWren/comic-pile:",
+                    "factory-projection-v1:JoshCLWren/comic-pile:",
+                    ["JoshCLWren/comic-pile:open-issues", "JoshCLWren/comic-pile:open-prs"], 200)
+    assert one is True
     assert "DELETE FROM public.factory_state_kv" in query
-    assert "factory-github-get-v1:%" in query
-    assert "expires_at < now() - interval '30 minutes'" in query
+    assert "left(cache_key, length($1))=$1" in query
+    assert "left(cache_key, length($2))=$2" in query
+    assert "LIKE" not in query
+    assert "LIMIT $4" in query
     assert "refresh_until IS NULL OR" in query
     with pytest.raises(ValueError, match="batch"):
-        cache._prune_expired_github_cache(1001)
+        cache._prune_obsolete_discovery("JoshCLWren/comic-pile", 1001)
 
 
 def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
     monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
     calls = []
-    def prune():
+    def prune(_repo):
         calls.append(True)
         return 200 if len(calls) < 3 else 12
-    monkeypatch.setattr(cache, "_prune_expired_github_cache", prune)
-    assert cache.main(["prune-expired"]) == 0
+    monkeypatch.setattr(cache, "_prune_obsolete_discovery", prune)
+    event_calls = []
+    def prune_events(_repo):
+        event_calls.append(True)
+        return 1000 if len(event_calls) < 3 else 7
+    monkeypatch.setattr(cache, "_prune_retired_events", prune_events)
+    projection_calls = []
+    def prune_checks(_repo):
+        projection_calls.append(True)
+        return 250 if len(projection_calls) < 4 else 7
+    monkeypatch.setattr(cache, "_prune_retired_check_projection", prune_checks)
+    assert cache.main(["prune-obsolete"]) == 0
     assert len(calls) == 3
+    assert len(event_calls) == 3
+    assert len(projection_calls) == 4
 
 
 def test_regular_status_job_prunes_only_in_trusted_controller():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
     assert "cron: '*/15 * * * *'" in workflow
-    assert "Prune expired generic GitHub discovery snapshots" in workflow
-    assert "factory_state_cache.py prune-expired" in workflow
-    assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-expired")
-    assert workflow.index("factory_state_cache.py prune-expired") < workflow.index("Generate factory dashboard")
+    assert "Prune retired discovery and audit events" in workflow
+    assert "factory_state_cache.py prune-obsolete" in workflow
+    assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-obsolete")
+    assert workflow.index("factory_state_cache.py prune-obsolete") < workflow.index("Generate factory dashboard")
     # Cleanup no longer depends on a large scheduled PR-history recovery sweep.
     reconciliation = (root / ".github/workflows/factory-issue-pr-state-reconciler.yml").read_text()
-    assert "factory_state_cache.py prune-expired" not in reconciliation
+    assert "factory_state_cache.py prune-obsolete" not in reconciliation
 
 
 def test_compacted_registry_retains_essential_evidence_without_old_history():
@@ -343,47 +448,3 @@ def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
     merged = cache.incremental_comments(slim, lambda _: [edited])
     again = cache.compact_registry_comments(merged, trusted=lambda _: True, now=now)
     assert {item["id"] for item in again} == {1, 1001}
-
-
-def test_expired_generic_cache_reads_only_prior_digest(monkeypatch):
-    from datetime import UTC, datetime
-
-    observed = []
-    def fake_run(sql, key, *, one):
-        observed.append((sql, key, one))
-        return {"payload": [{"stdout_sha256": "same-hash"}],
-                "expires_at": datetime(2026, 1, 1, tzinfo=UTC)}
-
-    monkeypatch.setattr(cache, "_run", fake_run)
-    payload, fresh = cache._read("factory-github-get-v1:JoshCLWren/comic-pile:sha")
-    assert not fresh
-    assert payload == [{"stdout_sha256": "same-hash"}]
-    assert "CASE WHEN expires_at > now() THEN payload" in observed[0][0]
-    assert "jsonb_build_object" in observed[0][0]
-    assert observed[0][2] is True
-
-
-def test_expired_identical_github_get_extends_ttl_without_payload_rewrite(monkeypatch, tmp_path):
-    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
-    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "digest-123"}], False))
-    monkeypatch.setattr(cache, "_claim", lambda *_: True)
-    renewed = []
-    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *args: renewed.append(args))
-    monkeypatch.setattr(cache, "_publish", lambda *_: pytest.fail("unchanged payload must not be rewritten"))
-    key = "factory-github-get-v1:JoshCLWren/comic-pile:hash"
-    result = cache.cached_json(key, lambda _: [{"stdout_zlib_b64": "compressed", "stdout_sha256": "digest-123"}], ttl_seconds=1200)
-    assert result[0]["stdout_sha256"] == "digest-123"
-    assert len(renewed) == 1
-    assert renewed[0][0] == key
-
-
-def test_changed_github_get_replaces_payload(monkeypatch, tmp_path):
-    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
-    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "old"}], False))
-    monkeypatch.setattr(cache, "_claim", lambda *_: True)
-    published = []
-    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *_: pytest.fail("changed response cannot extend stale data"))
-    monkeypatch.setattr(cache, "_publish", lambda *args: published.append(args))
-    new = [{"stdout_zlib_b64": "new", "stdout_sha256": "new"}]
-    assert cache.cached_json("factory-github-get-v1:r:h", lambda _: new) == new
-    assert published[0][2] == new

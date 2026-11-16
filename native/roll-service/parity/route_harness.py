@@ -250,8 +250,8 @@ def cargo_example_path(name: str) -> Path:
     Returns:
         Absolute path to the debug example executable.
     """
-    build_directory = Path(__file__).resolve().parents[1]
+    workspace_root = Path(__file__).resolve().parents[3]
     target = Path(os.environ.get("CARGO_TARGET_DIR", "target"))
     if not target.is_absolute():
-        target = build_directory / target
+        target = workspace_root / target
     return target / "debug" / "examples" / name
