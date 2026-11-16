@@ -426,36 +426,68 @@ def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict
     return refined
 
 def refine_trusted_failover_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
-    """Attach successful trusted per-candidate failure recordings to the Neon write.
+    """Attest exact failed pairs, account scope and final provider transitions.
 
-    An agent's exit is not evidence. The wrapper emits this entry only after
-    its GitHub bot successfully persisted the exact source/model failure.
+    Only the completed trusted Actions job log and verified worker marker
+    qualify for durable health. A prior candidate can never classify the
+    terminal successful model or overwrite its delivery state.
     """
+    from factory_provider_candidates import ADAPTERS
+
     clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+    worker = str(outcome.get("worker") or "")
     pattern = re.compile(
         r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z "
         r"\[factory:(\d+)\]\[source:([^\]\n]+)\]\[model:[^\]\n]+\] "
         r"FACTORY_TRUSTED_FAILOVER: source=(\S+) model=([\w./:-]{1,180}) "
-        r"outcome=([a-z_]+)\s*$"
+        r"outcome=([a-z_]+)(?: scope=(account|model))?\s*$"
     )
-    source = str(outcome.get("source") or "")
-    worker = str(outcome.get("worker") or "")
     accepted = {
         "provider_failure", "provider_throttle", "provider_quota",
         "model_unavailable", "model_retired_410", "model_policy_violation",
     }
     failures = list(outcome.get("model_failures") or [])
-    seen = {item if isinstance(item, str) else item.get("model")
-            for item in failures}
+    seen = {
+        (str(item.get("source") or outcome.get("source") or ""), item.get("model"))
+        for item in failures if isinstance(item, dict)
+    }
     for match in pattern.finditer(clean):
-        log_worker, log_source, recorded_source, model, classification = match.groups()
-        if log_worker != worker or log_source != source or recorded_source != source:
+        log_worker, log_source, source, model, classification, scope = match.groups()
+        if (log_worker != worker or log_source != source
+                or source not in ADAPTERS or classification not in accepted
+                or (source, model) in seen):
             continue
-        if classification not in accepted or model in seen:
+        if scope == "account" and classification not in {"provider_quota", "provider_failure"}:
             continue
-        failures.append({"model": model, "outcome": classification})
-        seen.add(model)
-    return {**outcome, "model_failures": failures} if failures else outcome
+        failures.append({
+            "source": source, "model": model, "outcome": classification,
+            "scope": scope or "model",
+        })
+        seen.add((source, model))
+
+    # The model cannot choose an unregistered source merely by mentioning one
+    # in its text. The canonical runtime source transition must appear in the
+    # trusted, timestamped wrapper log before a final-source override.
+    transitions = re.findall(
+        r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z "
+        r"\[factory:(\d+)\]\[source:([^\]\n]+)\]\[model:[^\]\n]+\] "
+        r"FACTORY_FLEET_TRANSITION: source=([^\s]+) model=([^\s]+) ",
+        clean,
+    )
+    final_source = str(outcome.get("source") or "")
+    final_model = str(outcome.get("model") or "")
+    trusted_switch = any(
+        w == worker and log_source == source == final_source
+        and model == final_model and source in ADAPTERS
+        for w, log_source, source, model in transitions
+    )
+    result = dict(outcome)
+    if failures:
+        result["model_failures"] = failures
+    if trusted_switch:
+        result["trusted_source_switch"] = True
+    return result
+
 
 
 def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
