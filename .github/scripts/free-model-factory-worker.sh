@@ -374,8 +374,18 @@ select_controller_assignment() {
       log 'assigned PR head moved'; return 3
     fi
     BRANCH="$(jq -r '.head.ref' <<< "$target")"
-    ASSIGNED_PR_STAGE="$(jq -r '.stage' <<< "$assignment")"
-    if ! jq -e --arg stage "$ASSIGNED_PR_STAGE" '[.labels[].name] | index($stage) != null' <<< "$target" >/dev/null; then
+    # The controller exports stage_of(live labels), which is null for a PR
+    # the reconciler left stageless. Compare the same projection: a null
+    # stage must still be stageless, never a label literally named "null".
+    ASSIGNED_PR_STAGE="$(jq -r '.stage // empty' <<< "$assignment")"
+    if ! jq -e --arg stage "$ASSIGNED_PR_STAGE" '
+      [.labels[].name] as $labels
+      | if $stage == "" then
+          ($labels | map(select(IN("factory:building", "factory:review",
+            "factory:changes-requested", "factory:ci", "factory:ready",
+            "factory:blocked"))) | length) == 0
+        else ($labels | index($stage)) != null end
+    ' <<< "$target" >/dev/null; then
       log 'assigned PR stage changed'; return 3
     fi
     read_trusted_completion_decision "$NUMBER" "$WORKER"
