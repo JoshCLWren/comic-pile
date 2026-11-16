@@ -440,6 +440,11 @@ async fn catch_panic(request: Request, next: Next) -> Response {
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
+    use custom_cbl::{
+        apply_custom_cbl, create_custom_cbl, delete_overlap_decision, export_custom_cbl,
+        get_custom_cbl, get_overlap_decisions, list_custom_cbls, read_custom_cbl,
+        save_overlap_decision, search_custom_cbl_issues, update_custom_cbl,
+    };
     Router::new()
         .route(
             "/health",
@@ -589,6 +594,30 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
+        )
+        // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
+        .route("/api/v1/custom-cbls", get(list_custom_cbls))
+        .route("/api/v1/custom-cbls", post(create_custom_cbl))
+        .route("/api/v1/custom-cbls/issue-search", get(search_custom_cbl_issues))
+        .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
+        .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
+        .route("/api/v1/custom-cbls/{list_id}/export", get(export_custom_cbl))
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            post(apply_custom_cbl),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(get_overlap_decisions),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(save_overlap_decision),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
