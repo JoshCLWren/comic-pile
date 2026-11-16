@@ -155,7 +155,7 @@
     return '<div class="f-panel"><div class="f-head"><div><h2>Integrated providers</h2><p>Discovered from trusted slot and execution evidence, not Site configuration.</p></div>'+
       status(ps.length+" providers")+'</div>'+filters()+table(["Provider","Observed models","Slots","Run evidence","Health","Retry after"],
       ps.map(p=>row([e(p.provider),e(p.models),e(p.slots),e(p.attempts),status(p.outcome),
-        (backoff("provider",b=>b.source===p.provider)?e(cooldown(backoff("provider",b=>b.source===p.provider))):p.until?e(date(p.until*1000)):"Not exported")])));+'</div>'+
+        (backoff("provider",b=>b.source===p.provider)?e(cooldown(backoff("provider",b=>b.source===p.provider))):p.until?e(date(p.until*1000)):"Not exported")])))+'</div>'+
       '<div class="f-panel"><h2>Observed models</h2><p>Published catalog membership alone does not prove an invocation worked.</p>'+
       table(["Provider","Model","Health","Last outcome","Cooldown / provenance"],ms.map(m=>row([
         e(m.provider),inspect("model",m.provider+"/"+m.model,m.model),status(m.health||"unverified"),
