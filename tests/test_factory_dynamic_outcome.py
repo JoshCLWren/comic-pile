@@ -115,3 +115,32 @@ def test_monthly_api_key_limit_also_applies_to_legacy_locked_sessions():
 def test_unrelated_per_model_throttle_remains_transient():
     result = module.classify(session("generic-gateway", "Error: HTTP 429 Too Many Requests"))
     assert result["outcome_class"] == "provider_throttle"
+
+
+def test_terminal_candidate_uses_successful_cross_provider_identity() -> None:
+    worker = "10001"
+    first = "generated/model-a"
+    second = "generated/model-b"
+    log = (
+        f"Factory {worker} assigned dynamic provider slot: source=nvidia configured=true\n"
+        f"2026-11-16T19:00:00Z [factory:{worker}][source:nvidia][model:{first}] "
+        f"FACTORY_EXECUTION_CANDIDATE: source=nvidia model={first} runtime=nvidia/{first}\n"
+        "Error: Insufficient balance or no resource package. Please recharge.\n"
+        f"2026-11-16T19:01:00Z [factory:{worker}][source:requesty][model:{second}] "
+        f"FACTORY_EXECUTION_CANDIDATE: source=requesty model={second} runtime=requesty/{second}\n"
+        f"2026-11-16T19:01:01Z [factory:{worker}][source:requesty][model:{second}] "
+        "agent exit status 0 for issue #5000\n"
+        f"2026-11-16T19:01:02Z [factory:{worker}][source:requesty][model:{second}] "
+        "opened/updated PR #5001 for issue #5000\n"
+    )
+    result = module.classify(log)
+    assert result["source"] == "requesty"
+    assert result["model"] == second
+    assert result["outcome_class"] != "provider_quota"
+
+
+def test_zai_account_refusal_is_account_quota() -> None:
+    result = module.classify(
+        session("z-ai", "Error: Insufficient balance or no resource package. Please recharge.")
+    )
+    assert result["outcome_class"] == "provider_quota"
