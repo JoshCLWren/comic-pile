@@ -40,6 +40,9 @@ def marker_ids(changes: list[dict[str, object]]) -> list[dict[str, str]]:
     for item in changes:
         if not comment_is_trusted(item):
             continue
+        issue_url = str(item.get("issue_url") or "")
+        if issue_url != "https://api.github.com/repos/JoshCLWren/comic-pile/issues/1093":
+            continue
         body = str(item.get("body") or "")
         marker = MARKER.match(body)
         worker = WORKER.search(body)

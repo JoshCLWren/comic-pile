@@ -10,10 +10,12 @@ ingest = importlib.import_module("factory_registry_ingest")
 def test_untrusted_and_mismatched_markers_never_seed_ids():
     marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-43 -->"
     good = {"body": marker + "\nWorker: opencode-free-model-factory-43\n",
-            "id": 13, "author_association": "OWNER"}
+            "id": 13, "author_association": "OWNER",
+            "issue_url": "https://api.github.com/repos/JoshCLWren/comic-pile/issues/1093"}
     evil = {**good, "author_association": "NONE"}
     mismatch = {**good, "body": marker + "\nWorker: opencode-free-model-factory-44"}
-    assert ingest.marker_ids([good, evil, mismatch]) == [
+    wrong_issue = {**good, "issue_url": "https://api.github.com/repos/JoshCLWren/comic-pile/issues/6"}
+    assert ingest.marker_ids([good, evil, mismatch, wrong_issue]) == [
         {"worker": "43", "kind": "heartbeat", "id": "13"}
     ]
 
