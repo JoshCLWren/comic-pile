@@ -5,13 +5,14 @@
 //! same HTTP method and exact path:
 //!
 //! * `GET /api/v1/reading-plan-sync/status`
-//! * `POST /api/v1/reading-plan-sync/sync` (in progress; not yet routed to
-//!   native until parity is complete)
+//! * `POST /api/v1/reading-plan-sync/sync`
 //!
 //! Status is a direct read of persisted release-source state. The sync POST
-//! must mirror the user-triggered `sync_released_issues` behavior: evaluate
-//! only the authenticated user's enabled sources, adopt released ComicVine
-//! issues, and preserve Python wire/auth/ownership/SQL/transaction semantics.
+//! mirrors the user-triggered `sync_released_issues` behavior: evaluate only
+//! the authenticated user's enabled sources, adopt released ComicVine issues,
+//! and preserve Python wire/auth/ownership/SQL/transaction semantics.
+//! Full parity, authenticated production Rust-execution proof, and Python
+//! handler/mount cleanup remain tracked under #4851 acceptance gates.
 
 #![forbid(unsafe_code)]
 
