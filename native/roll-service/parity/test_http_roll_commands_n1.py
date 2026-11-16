@@ -29,8 +29,6 @@ from route_harness import (
     assert_budget_rejects_extra_and_n_plus_one,
     assert_declared_budget,
     assert_measured_budget_contract,
-    assert_measured_statement_breakdown,
-    assert_no_statement_growth,
     cargo_example_path,
     db_statement_breakdown,
     reset_statement_stats,
@@ -206,11 +204,15 @@ def _assert_route_budget(
     large: RouteMeasurement,
 ) -> None:
     """Enforce absolute, growth, and nested budgets for one route pair."""
-    assert_measured_statement_breakdown(method, path, small.statements)
-    assert_measured_statement_breakdown(method, path, large.statements)
-    assert_declared_budget(method, path, small.statements.top_level, large.statements.top_level)
-    assert_no_statement_growth(method, path, small.statements.top_level, large.statements.top_level)
-    assert small.statements.nested == large.statements.nested
+    assert_measured_budget_contract(method, path, small.statements, large.statements)
+    # The same budget test must reject a deliberately added extra query and an
+    # N+1 burst that only appears for the large fixture.
+    assert_budget_rejects_extra_and_n_plus_one(
+        method,
+        path,
+        small.statements,
+        large.statements,
+    )
 
 
 @pytest.mark.asyncio
@@ -424,6 +426,8 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
+        # The harness must observe a deliberately added extra query and a
+        # per-row burst, otherwise no budget guard could detect either one.
         await reset_statement_stats()
         before = await db_statement_breakdown(engine)
         assert before is not None
@@ -466,28 +470,18 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
             runtime_overhead=overhead,
             nested=nested,
         )
+        # The declared budget accepts the measured baseline ...
+        assert_measured_budget_contract(method, path, baseline, baseline)
+        # ... and rejects one extra query, an absolute-budget overflow, and an
+        # N+1 burst that only appears for the large fixture.
+        assert_budget_rejects_extra_and_n_plus_one(method, path, baseline, baseline)
         extra_query = StatementBreakdown(
             application=baseline.application + 1,
             transaction_control=baseline.transaction_control,
             runtime_overhead=baseline.runtime_overhead,
             nested=baseline.nested,
         )
-        n_plus_one = StatementBreakdown(
-            application=baseline.application + 4,
-            transaction_control=baseline.transaction_control,
-            runtime_overhead=baseline.runtime_overhead,
-            nested=baseline.nested,
-        )
-        with pytest.raises(AssertionError, match="application statement count changed"):
-            assert_measured_statement_breakdown(method, path, extra_query)
         with pytest.raises(AssertionError, match="declared maximum"):
             assert_declared_budget(method, path, extra_query.top_level)
-        with pytest.raises(AssertionError, match="grew with data size"):
-            assert_no_statement_growth(
-                method,
-                path,
-                baseline.top_level,
-                n_plus_one.top_level,
-            )
     finally:
         await engine.dispose()
