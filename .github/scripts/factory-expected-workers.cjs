@@ -15,7 +15,10 @@ function defaultRosterPath() {
   return null; // Retired: no checked-in TSV roster.
 }
 
+let cachedSlots = null;
+
 function runtimeSlots() {
+  if (cachedSlots !== null) return cachedSlots;
   const output = execFileSync(
     'python3', [path.join(__dirname, 'factory_worker_slots.py'), 'list'],
     { encoding: 'utf8', timeout: 15000, maxBuffer: 1024 * 1024 },
@@ -26,7 +29,8 @@ function runtimeSlots() {
   )) {
     throw new Error('Untrusted provider-slot output');
   }
-  return slots;
+  cachedSlots = slots;
+  return cachedSlots;
 }
 
 function readRosterWorkerIds(rosterPath = defaultRosterPath()) {
