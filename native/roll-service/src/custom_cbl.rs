@@ -24,7 +24,6 @@ use std::sync::Arc;
 use tokio_postgres::types::ToSql;
 
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
-const COMICVINE_PROVIDER: &str = "comicvine";
 
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CustomCBLEntryIntent {
@@ -360,7 +359,7 @@ fn response_from_row(
 }
 
 async fn graph_preflight(tx: &Transaction<'_>, user: &AuthenticatedUser) -> Result<(), ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
+    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = inputs
         .lists
         .iter()
@@ -668,15 +667,17 @@ async fn load_thread_volume_candidates(
         let title: String = row.get(1);
         if let Some(keys) = candidates.get(&thread_id) {
             if keys.len() == 1 {
-                result.push(OverlapVolumeCandidate {
-                    thread_id,
-                    thread_title: title,
-                    volume_id: keys.iter().next().unwrap().clone(),
-                });
+                if let Some(volume_id) = keys.iter().next() {
+                    result.push(OverlapVolumeCandidate {
+                        thread_id,
+                        thread_title: title,
+                        volume_id: volume_id.clone(),
+                    });
+                }
             }
         }
     }
-    result.sort_by(|a, b| a.thread_id.cmp(&b.thread_id));
+    result.sort_by_key(|candidate| candidate.thread_id);
     Ok(result)
 }
 
@@ -733,7 +734,7 @@ async fn validate_projection(
     user: &AuthenticatedUser,
     projected: &std::collections::HashMap<i32, Vec<(String, String)>>,
 ) -> Result<(), ApiError> {
-    let mut inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
+    let mut inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = inputs
         .lists
         .iter()
@@ -756,44 +757,6 @@ async fn validate_projection(
     ValidatedReadingInputs::new(inputs.clone(), &names)
         .map_err(|error| cycle_conflict(error, &inputs))?;
     Ok(())
-}
-
-async fn advance_overlap_decisions_token(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    list_id: i32,
-    updated_at: &str,
-) -> Result<Option<String>, ApiError> {
-    let row = tx
-        .query_opt(
-            "UPDATE custom_cbl_lists
-             SET overlap_decisions_updated_at = $3::timestamptz,
-                 updated_at = updated_at
-             WHERE id = $1 AND user_id = $2
-             RETURNING overlap_decisions_updated_at::text",
-            &[&list_id, &user_id, &updated_at],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(row.map(|r| r.get(0)))
-}
-
-async fn owned_list_for_update(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    list_id: i32,
-) -> Result<Option<(String,)>, ApiError> {
-    let row = tx
-        .query_opt(
-            "SELECT overlap_decisions_updated_at::text
-             FROM custom_cbl_lists
-             WHERE id = $1 AND user_id = $2
-             FOR SHARE",
-            &[&list_id, &user_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(row.map(|r| (r.get(0),)))
 }
 
 fn guard_version(current: &str, expected: Option<&str>) -> Result<(), ApiError> {
@@ -1271,7 +1234,7 @@ pub async fn update_custom_cbl(
         String::new(),
         entries.len() as i32,
     );
-    let mut json = serde_json::to_value(&response_from_row(
+    let mut json = serde_json::to_value(response_from_row(
         list_row,
         user.id(),
         entries,
@@ -1330,7 +1293,13 @@ pub async fn export_custom_cbl(
             format!("attachment; filename=\"custom-cbl-{}.cbl\"", list_id),
         )
         .body(axum::body::Body::from(xml))
-        .unwrap())
+        .map_err(|error| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&error),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Custom CBL export response failed".into())
+        })?)
 }
 
 /// `GET /api/v1/custom-cbls/{list_id}/reader`
@@ -1346,7 +1315,7 @@ pub async fn read_custom_cbl(
     let entries = load_entries_conn(&conn, list_id).await?;
     drop(conn);
 
-    let validated = option_inputs::load_option_inputs_contained(&state, user.clone()).await?;
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let evaluated = reading_eligibility::evaluate(&validated)?;
     let inputs = validated.inputs();
     let titles: BTreeMap<i32, String> = inputs
@@ -1478,12 +1447,30 @@ pub async fn read_custom_cbl(
 }
 
 /// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
+///
+/// The Axum router cannot express a parameter sharing a segment with the
+/// `:apply` literal, so it captures `{plan_action}` and this handler enforces
+/// the exact colon-action suffix before doing any work. Anything else keeps
+/// the Python semantics: no `:apply` suffix is a 404, a non-integer plan id is
+/// a 422.
 pub async fn apply_custom_cbl(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path((list_id, plan_id)): Path<(i32, i32)>,
+    Path((list_id, plan_action)): Path<(i32, String)>,
     Json(request): Json<CustomCBLApplyRequest>,
 ) -> Result<Json<CustomCBLApplyResponse>, ApiError> {
+    let plan_id: i32 = match plan_action.strip_suffix(":apply") {
+        Some(raw) => raw.parse::<i32>().map_err(|_| {
+            ApiError::Unprocessable(format!(
+                "Input should be a valid integer, unable to parse string as an integer: \"{raw}\""
+            ))
+        })?,
+        None => {
+            return Err(ApiError::NotFound(
+                "Reading Plan application endpoint must end with ':apply'".to_string(),
+            ))
+        }
+    };
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -1747,7 +1734,7 @@ pub async fn apply_custom_cbl(
     new_nodes.extend(merged_target);
 
     // Graph preflight with new nodes
-    let mut inputs = option_inputs::load_inputs_in_transaction(&tx, user.clone()).await?;
+    let mut inputs = option_inputs::load_inputs_in_transaction(&tx, user).await?;
     let list_names: BTreeMap<i32, String> = inputs
         .lists
         .iter()

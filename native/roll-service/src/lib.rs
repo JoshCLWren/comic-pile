@@ -609,8 +609,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(export_custom_cbl),
         )
         .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
+        // Axum (matchit) forbids a parameter sharing a segment with a literal,
+        // so the colon-action wire suffix is captured whole and parsed inside
+        // the handler; the public path stays exactly `{plan_id}:apply`.
         .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
             post(apply_custom_cbl),
         )
         .route(
