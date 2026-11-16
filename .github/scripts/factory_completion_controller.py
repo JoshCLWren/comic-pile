@@ -318,7 +318,7 @@ def worker_is_executable(
     now_epoch: int,
 ) -> bool:
     """Return whether runtime evidence permits dispatch to one worker."""
-    return worker_health_state(worker, health, now_epoch=now_epoch) in {"healthy", "degraded"}
+    return worker_health_state(worker, health, now_epoch=now_epoch) in {"healthy", "degraded", "unknown"}
 
 
 def worker_is_cooling(
@@ -380,34 +380,28 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def load_manifest_candidates(path: Path) -> list[dict[str, str]]:
-    """Read configured worker, provider, and model candidates from the manifest.
+    """Resolve current provider slots without source-controlled model pins.
 
-    Quota-paused workers (see factory-quota-pauses.json) stay rostered but are
-    not offered as candidates until their provider quota resets.
+    Synthetic fixture paths remain readable for migration-level unit tests;
+    production uses the registered provider integrations exclusively.
     """
-    scripts = str(Path(__file__).resolve().parent)
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    from factory_quota_pause import active_pauses
+    from factory_worker_slots import slots
 
-    paused = {str(worker) for worker in active_pauses()}
+    if path.name == "free-model-factories.tsv":
+        return [
+            {"worker": item.worker, "provider": item.source, "model": ""}
+            for item in slots()
+        ]
+
     candidates: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        fields = line.split("\t")
-        if len(fields) < 3 or not fields[0].strip().isdigit():
-            continue
-        if fields[0].strip() in paused:
-            continue
-        candidates.append(
-            {
+        fields = raw_line.split("\t")
+        if len(fields) >= 3 and fields[0].strip().isdecimal():
+            candidates.append({
                 "worker": fields[0].strip(),
                 "provider": fields[1].strip(),
                 "model": fields[2].strip(),
-            }
-        )
+            })
     return candidates
 
 
@@ -446,7 +440,7 @@ def capacity_report(
             "health": state,
         }
         slot_details.append(detail)
-        if state in {"healthy", "degraded"}:
+        if state in {"healthy", "degraded", "unknown"}:
             executable_slots.append(detail)
 
         status = health.get(worker)
@@ -474,7 +468,7 @@ def capacity_report(
     executable_provider_models = [
         detail
         for detail in provider_models
-        if detail["health"] in {"healthy", "degraded"}
+        if detail["health"] in {"healthy", "degraded", "unknown"}
     ]
     return {
         # Keep the established slot fields stable for allocation callers.
