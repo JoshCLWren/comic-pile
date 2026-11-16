@@ -379,10 +379,10 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
-        if attributed and provider_scoped_transient(source, classification):
+        for account_source, account_classification in sorted(account_failures.items()):
             # Reservation bookkeeping updates budget.updated_at independently,
             # so a provider failure streak must have its OWN durable timestamp.
-            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{source}"
+            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{account_source}"
             previous = await conn.fetchrow(
                 """SELECT payload FROM public.factory_state_kv
                    WHERE cache_key=$1 FOR UPDATE""", backoff_key)
@@ -396,10 +396,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 age = (observed - observed_prior).total_seconds()
             except (KeyError, TypeError, ValueError):
                 age = float("inf")
-            delay = exponential_provider_delay(
-                classification, prior.get("outcome"),
-                float(prior.get("delay_seconds") or 0), age)
-            until = _provider_cooldown(source, classification, observed, delay)
+            streak = int(prior.get("streak") or 0) + 1 if age < 12 * 3600 else 1
+            delay = fibonacci_worker_delay(streak)
+            until = _provider_cooldown(account_source, account_classification, observed, delay)
             if previous_run <= run_id:
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
@@ -423,10 +422,12 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      last_outcome=EXCLUDED.last_outcome,last_run_id=EXCLUDED.last_run_id,
                      updated_at=now()
                    WHERE factory_provider_budget.last_run_id<=EXCLUDED.last_run_id""",
-                repo, source, until, until if classification=="provider_quota" else None, classification,run_id)
+                repo, account_source, until, until if account_classification=="provider_quota" else None, account_classification,run_id)
         # Record every failed candidate independently even if another model
         # eventually completed the same leased task. No provider-wide breaker.
-        for failed_model, failed_outcome in model_failures:
+        for failed_source, failed_model, failed_outcome, scope in model_failures:
+            if scope == "account":
+                continue
             failed_status = (
                 "retired" if failed_outcome == "model_retired_410"
                 else "unavailable" if failed_outcome in MODEL_COOLDOWNS
@@ -436,7 +437,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 None if failed_status == "retired"
                 else observed + timedelta(seconds=MODEL_COOLDOWNS[failed_outcome])
                 if failed_outcome in MODEL_COOLDOWNS
-                else _provider_cooldown(source, failed_outcome, observed)
+                else _provider_cooldown(failed_source, failed_outcome, observed)
             )
             await conn.execute(
                 """INSERT INTO public.factory_model_health
@@ -449,12 +450,12 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND (factory_model_health.status!='retired'
                           OR EXCLUDED.status='retired')""",
-                repo, source, failed_model, failed_status, failed_outcome,
+                repo, failed_source, failed_model, failed_status, failed_outcome,
                 failed_until, run_id,
             )
             # Apply the same source/model Fibonacci persistence used by the
             # terminal candidate. A later successful candidate cannot erase it.
-            failed_key = f"factory-model-backoff-v1:{repo}:source:{source}:model:{failed_model}"
+            failed_key = f"factory-model-backoff-v1:{repo}:source:{failed_source}:model:{failed_model}"
             await conn.fetchval(
                 "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", failed_key,
             )
@@ -469,7 +470,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             prior_run = int(prior_state.get("run_id") or 0) if isinstance(prior_state, dict) else 0
             if prior_run <= run_id:
                 streak = (int(prior_state.get("streak") or 0) if previous
-                          else await _recent_streak(conn, run_id, source, failed_model)) + 1
+                          else await _recent_streak(conn, run_id, failed_source, failed_model)) + 1
                 suspended = streak >= WORKER_SUSPEND_AFTER
                 retry_at = (
                     None if suspended else
@@ -483,7 +484,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
                     failed_key, json.dumps([{
-                        "source": source, "model": failed_model,
+                        "source": failed_source, "model": failed_model,
                         "outcome": failed_outcome, "streak": streak,
                         "run_id": run_id, "suspended": suspended,
                         "next_retry_at": retry_at,
