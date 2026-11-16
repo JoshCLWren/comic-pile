@@ -594,7 +594,7 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
-        elif b and b["last_outcome"]=="provider_quota" and b["cooldown_until"] and b["cooldown_until"]>now:
+        elif b and b.get("last_outcome")=="provider_quota" and b["cooldown_until"] and b["cooldown_until"]>now:
             rejected.append(f"{worker}: provider {source} cooling")
         elif b and b["concurrency_limit"] is not None and counts.get(source,0)>=b["concurrency_limit"]:
             rejected.append(f"{worker}: provider {source} full")
