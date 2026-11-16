@@ -123,7 +123,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
@@ -132,7 +132,7 @@ record_agent_failure_outcome() {
       printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
     fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|free tier users do not have access to this model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"

@@ -308,6 +308,9 @@ def build_worker_rows(
             if work or heartbeat.get("outcome") == "running"
             else "idle",
             "attempt_outcome": str(attempt.get("attempt outcome") or ""),
+            "delivery_outcome": str(attempt.get("delivery_outcome") or ""),
+            "delivery_pr": str(attempt.get("delivery_pr") or ""),
+            "persisted_work": str(attempt.get("persisted_work") or ""),
             "attempt_detail": str(attempt.get("detail") or ""),
             "attempt_run": str(attempt.get("run") or ""),
             "updated": max(
@@ -476,6 +479,14 @@ def collect_snapshot() -> dict[str, Any]:
     merged_day = github_search_total(completion, f"is:pr is:merged merged:>={day}")
 
     view, _health = completion.durable_factory_state()
+    # One bounded read for worker/model/provider backoff and active reservations.
+    # Fail soft rather than publishing a false zero when telemetry is unavailable.
+    try:
+        from factory_state_operations import export_dashboard_retry
+        retry = export_dashboard_retry(REPO)
+    except Exception as exc:
+        retry = {"backoffs": [], "reservations": [], "pr_retries": [],
+                 "error": type(exc).__name__}
     attempts = view["attempts"]
     heartbeats = view["heartbeats"]
     heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
@@ -563,6 +574,8 @@ def collect_snapshot() -> dict[str, Any]:
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
         "opencode_free_roster": collect_opencode_free_roster(view),
+        "candidate_health": view.get("health") or {"models": [], "providers": []},
+        "retry": retry,
     }
 
 
@@ -863,7 +876,16 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 def main() -> int:
     snapshot = collect_snapshot()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(render_dashboard(snapshot), encoding="utf-8")
+    # Embed the existing trusted snapshot and UI in the same published HTML.
+    # No new per-refresh GitHub commits, static roster, or API credentials.
+    payload = json.dumps(snapshot, ensure_ascii=True, separators=(",", ":"))
+    payload = payload.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
+    css = load_module("factory_fleet_style", SCRIPTS / "factory_fleet_style.py").STYLESHEET
+    js = (SCRIPTS / "factory_fleet_console.cjs").read_text(encoding="utf-8")
+    page = render_dashboard(snapshot)
+    page = page.replace("</head>", f"<style>{css}</style></head>", 1)
+    page = page.replace("</body>", f'<script id="fleet-snapshot" type="application/json">{payload}</script><script>{js}</script></body>', 1)
+    OUTPUT.write_text(page, encoding="utf-8")
     print(json.dumps(snapshot, sort_keys=True))
     return 0
 

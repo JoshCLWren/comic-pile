@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".github/scripts"))
@@ -21,9 +22,9 @@ def test_pollinations_registry_and_secret_are_discovered():
     )
     assert not credential_status("pollinations", {})["configured"]
     assert credential_status("pollinations", {"POLLINATIONS_API_KEY": "synthetic"})["configured"]
-    config = compatible_config(
+    config = cast(dict[str, Any], compatible_config(
         "pollinations", "synthetic-publisher/model", {"POLLINATIONS_API_KEY": "test-token-value"}
-    )
+    ))
     providers = config["providers"]
     assert isinstance(providers, dict)
     pollinations = providers["pollinations"]

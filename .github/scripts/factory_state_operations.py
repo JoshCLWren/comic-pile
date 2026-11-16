@@ -38,8 +38,19 @@ HEAD_RE = re.compile(r"^[a-f0-9]{40}$")
 TRANSIENT = {"provider_failure": 900, "provider_throttle": 1800, "provider_quota": 1800}
 MODEL_COOLDOWNS = {"model_unavailable": 21600, "model_policy_violation": 21600,
                    "model_retired_410": 21600}
-# Independent OmniRoute routes do not share a provider-wide throttle.
+# One failing model does not make its provider unhealthy. Only confirmed
+# account-level quota is provider-wide; OmniRoute routes have independent quotas.
 MODEL_SCOPED_SOURCES = {"omniroute-free", "omniroute-opencode"}
+
+
+def model_scoped_transient(source: str, outcome: str) -> bool:
+    return outcome in {"provider_failure", "provider_throttle"} or (
+        outcome == "provider_quota" and source in MODEL_SCOPED_SOURCES
+    )
+
+
+def provider_scoped_transient(source: str, outcome: str) -> bool:
+    return outcome in TRANSIENT and not model_scoped_transient(source, outcome)
 
 
 def enabled() -> bool:
@@ -302,13 +313,13 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             status, until = "retired", None
         elif classification in MODEL_COOLDOWNS:
             status, until = "unavailable", observed + timedelta(seconds=MODEL_COOLDOWNS[classification])
-        elif classification in TRANSIENT and source in MODEL_SCOPED_SOURCES:
+        elif model_scoped_transient(source, classification):
             status, until = "cooling", _provider_cooldown(source, classification, observed)
         elif proven:
             status, until = "healthy", None
         else:
             status, until = "unknown", None
-        if attributed and (classification in MODEL_COOLDOWNS or (classification in TRANSIENT and source in MODEL_SCOPED_SOURCES) or proven):
+        if attributed and (classification in MODEL_COOLDOWNS or (model_scoped_transient(source, classification)) or proven):
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_verified_at,last_run_id)
@@ -321,7 +332,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
-        if attributed and classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
+        if attributed and provider_scoped_transient(source, classification):
             # Reservation bookkeeping updates budget.updated_at independently,
             # so a provider failure streak must have its OWN durable timestamp.
             backoff_key = f"factory-provider-backoff-v1:{repo}:source:{source}"
@@ -583,7 +594,7 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
-        elif b and b["cooldown_until"] and b["cooldown_until"]>now:
+        elif b and b.get("last_outcome")=="provider_quota" and b["cooldown_until"] and b["cooldown_until"]>now:
             rejected.append(f"{worker}: provider {source} cooling")
         elif b and b["concurrency_limit"] is not None and counts.get(source,0)>=b["concurrency_limit"]:
             rejected.append(f"{worker}: provider {source} full")
@@ -778,7 +789,7 @@ async def _sync_registry(conn: Any, repo: str, comments: list[dict[str,Any]]) ->
             status,until="retired",None
         elif item.outcome in MODEL_COOLDOWNS:
             status,until="unavailable",datetime.fromtimestamp(item.updated+MODEL_COOLDOWNS[item.outcome],timezone.utc)
-        elif item.outcome in TRANSIENT and source in MODEL_SCOPED_SOURCES:
+        elif model_scoped_transient(source, item.outcome):
             status,until="cooling",datetime.fromtimestamp(item.updated+TRANSIENT[item.outcome],timezone.utc)
         elif item.outcome in TRANSIENT:
             status,until="unknown",None
@@ -794,7 +805,7 @@ async def _sync_registry(conn: Any, repo: str, comments: list[dict[str,Any]]) ->
             repo,source,model,status,item.outcome,until,
             datetime.fromtimestamp(item.updated,timezone.utc) if status=="healthy" else None)
         inserted+=int(result is not None)
-        if item.outcome in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
+        if provider_scoped_transient(source, item.outcome):
             observed=datetime.fromtimestamp(item.updated,timezone.utc)
             until=_provider_cooldown(source,item.outcome,observed)
             if until and until>datetime.now(timezone.utc):
@@ -978,6 +989,82 @@ async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
             for row in providers
         ],
     }
+
+
+
+async def _export_dashboard_retry(conn: Any, repo: str) -> dict[str, Any]:
+    """Bounded, read-only factory retry and capacity evidence for public status.
+
+    Never export credentials, raw comments, private agent prompts, or lease
+    tokens. These observations do not grant dispatch or merge authority.
+    """
+    rows = await conn.fetch(
+        """SELECT cache_key,payload,expires_at,updated_at
+           FROM public.factory_state_kv
+           WHERE cache_key LIKE $1 OR cache_key LIKE $2 OR cache_key LIKE $3
+           ORDER BY updated_at DESC LIMIT 750""",
+        f"factory-worker-backoff-v1:{repo}:%",
+        f"factory-model-backoff-v1:{repo}:%",
+        f"factory-provider-backoff-v1:{repo}:%",
+    )
+    backoffs = []
+    for row in rows:
+        key = str(row["cache_key"])
+        kind = ("worker" if key.startswith("factory-worker-backoff-v1:")
+                else "model" if key.startswith("factory-model-backoff-v1:")
+                else "provider")
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        record = payload[0] if isinstance(payload, list) and payload else {}
+        if not isinstance(record, dict):
+            continue
+        backoffs.append({
+            "kind": kind,
+            "worker": key.rsplit(":", 1)[-1] if kind == "worker" else "",
+            "source": str(record.get("source") or
+                          (key.rsplit(":", 1)[-1] if kind == "provider" else "")),
+            "model": str(record.get("model") or ""),
+            "outcome": str(record.get("outcome") or ""),
+            "streak": int(record.get("streak") or 0),
+            "delay_seconds": int(record.get("delay_seconds") or 0),
+            "suspended": record.get("suspended") is True,
+            "next_retry_at": record.get("next_retry_at"),
+            "until": row["expires_at"].isoformat() if kind == "provider" else None,
+            "run_id": int(record.get("run_id") or 0),
+            "updated_at": row["updated_at"].isoformat(),
+        })
+    reservations = await conn.fetch(
+        """SELECT worker,source,expires_at FROM public.factory_provider_reservation
+           WHERE repo=$1 AND expires_at>now() ORDER BY expires_at LIMIT 300""",
+        repo,
+    )
+    retries = await conn.fetch(
+        """SELECT pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id
+           FROM public.factory_pr_stage_retry
+           WHERE repo=$1 AND retry_after>now()
+           ORDER BY retry_after LIMIT 150""",
+        repo,
+    )
+    return {
+        "backoffs": backoffs,
+        "reservations": [
+            {"worker": r["worker"], "source": r["source"],
+             "expires_at": r["expires_at"].isoformat()} for r in reservations
+        ],
+        "pr_retries": [
+            {"pr": r["pr_number"], "head": r["head_sha"], "stage": r["stage"],
+             "attempts": r["attempts"], "outcome": r["outcome"],
+             "retry_after": r["retry_after"].isoformat(), "run_id": r["last_run_id"]}
+            for r in retries
+        ],
+    }
+
+
+def export_dashboard_retry(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Factory retry evidence is not connected")
+    return _run(_export_dashboard_retry, repo)
 
 
 def export_candidate_health(repo: str) -> dict[str, Any]:

@@ -118,7 +118,7 @@ def test_provider_exponential_backoff_doubles_and_caps():
 def test_provider_cooldown_affects_its_account_not_every_source():
     future = datetime.now(UTC) + timedelta(minutes=20)
     db = FakeConnection(budgets=[{
-        "source": "nvidia", "cooldown_until": future,
+        "source": "nvidia", "cooldown_until": future, "last_outcome": "provider_quota",
         "concurrency_limit": None, "daily_limit": None,
         "usage_day": datetime.now(UTC).date(), "daily_used": 0,
     }])
@@ -130,6 +130,24 @@ def test_provider_cooldown_affects_its_account_not_every_source():
         kept, denied = run(operations._eligibility(db, REPO, ["41", "42", "43"]))
     assert kept == ["43"]
     assert len(denied) == 2
+
+
+
+def test_model_failure_budget_does_not_cool_other_models_of_provider():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    for outcome in ("provider_failure", "provider_throttle"):
+        db = FakeConnection(budgets=[{
+            "source": "nvidia", "cooldown_until": future,
+            "last_outcome": outcome,
+            "concurrency_limit": None, "daily_limit": None,
+            "usage_day": datetime.now(UTC).date(), "daily_used": 0,
+        }])
+        with patch.object(operations, "_roster", return_value={
+            "41": ("nvidia", "synthetic/failed"),
+            "42": ("nvidia", "synthetic/other"),
+        }):
+            kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
+        assert kept == ["41", "42"] and not rejected
 
 
 def test_provider_concurrency_limit_does_not_invent_unconfigured_caps():
@@ -319,6 +337,21 @@ def test_missing_credentials_are_not_inference_failures():
     assert "unconfigured" not in operations.WORKER_RETRY_CLASSES
     assert "unknown_failure" in operations.WORKER_RETRY_CLASSES
     assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
+
+
+def test_one_model_failure_does_not_cool_an_entire_provider():
+    """Catalog model failures leave independent models on the same provider usable."""
+    for source in ("vercel-ai-gateway", "ollama-cloud", "mistral", "pollinations"):
+        for outcome in ("provider_failure", "provider_throttle"):
+            assert operations.model_scoped_transient(source, outcome)
+            assert not operations.provider_scoped_transient(source, outcome)
+        assert operations.provider_scoped_transient(source, "provider_quota")
+        assert not operations.model_scoped_transient(source, "provider_quota")
+    for source in operations.MODEL_SCOPED_SOURCES:
+        assert operations.model_scoped_transient(source, "provider_quota")
+        assert not operations.provider_scoped_transient(source, "provider_quota")
+    for outcome in ("model_unavailable", "model_policy_violation", "unknown_failure"):
+        assert not operations.provider_scoped_transient("mistral", outcome)
 
 
 def test_all_actionable_model_failures_use_fibonacci_without_credential_penalty():

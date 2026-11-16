@@ -38,3 +38,18 @@ def test_stale_worker_is_visible_without_retry_authority():
     recovery = report["recovery_policy"]
     assert isinstance(recovery, str)
     assert "no per-worker stale retries" in recovery
+
+
+def test_failed_execution_keeps_verified_persisted_delivery_separate():
+    view = runtime.project_events([
+        {"event_type": "worker_failed", "created_at": "2026-11-16T15:00:00Z",
+         "detail": {"worker": "43", "run_id": "99", "outcome_class": "agent_timeout",
+                    "source": "dynamic-source", "model": "publisher/discovered",
+                    "persisted_work": True, "delivery_outcome": "persisted",
+                    "delivery_pr": "5254"}},
+    ])
+    attempt = view["attempts"]["43"]
+    assert attempt["attempt outcome"] == "agent_timeout"
+    assert attempt["persisted_work"] == "true"
+    assert attempt["delivery_outcome"] == "persisted"
+    assert attempt["delivery_pr"] == "5254"
