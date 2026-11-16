@@ -17,7 +17,6 @@ on:
       - '.github/scripts/factory_full_completion_controller.py'
       - '.github/scripts/factory_completion_controller.py'
       - '.github/workflows/factory-status-pages.yml'
-      - '.github/free-model-factories.tsv'
 
 permissions:
   contents: write

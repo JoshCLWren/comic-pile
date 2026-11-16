@@ -3651,16 +3651,24 @@ def test_review_restores_per_worker_provider_instead_of_a_shared_composite() -> 
     assert "reason='exact-head-semantic-review-only'" not in workflow
     assert "Register composite OpenRouter model for semantic review only" not in workflow
     assert "Factory $worker: routing leased semantic review via" not in workflow
-    assert 'row="$(awk -F' in workflow
-    assert 'echo "source=$source"' in workflow
-    assert 'echo "runtime_model=$runtime_model"' in workflow
+    # Each worker's provider comes from its generated slot (#5213).
+    lane = workflow.split("- name: Resolve executor slot policy", 1)[1].split("- name:", 1)[0]
+    assert "factory_worker_slots.py" in lane
+    assert 'source="$(jq -er \'.source\' <<< "$slot")"' in lane
+    assert 'echo "source=$source"' in lane
+    assert 'echo "runtime_model=$runtime_model"' in lane
 
 
 def test_review_uses_existing_model_preflight_and_provider_rotation() -> None:
     """Review uses the same catalog selection and real work invocation as coding."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    assert '[[ "$SOURCE" == opencode-free || "$SOURCE" == openrouter-free ]]' in workflow
     assert '[[ "${RUNTIME_MODEL:-}" != \'openrouter/free\' ]]' not in workflow
-    assert 'attempted+=("$model")' in workflow
-    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
+    # Review and coding share one dispatch-time catalog selection and the
+    # worker's in-lease fleet failover; no review-only model path exists.
+    selector = workflow.split("- name: Select execution candidate at dispatch time", 1)[1]
+    selector = selector.split("- name:", 1)[0]
+    assert "fleet_fallback()" in selector
+    assert 'echo "runtime_model=$runtime_model"' in selector
     assert "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model" in workflow
+    worker = (WORKFLOWS.parent / "scripts" / "free-model-factory-worker.sh").read_text()
+    assert "select_next_eligible_model" in worker

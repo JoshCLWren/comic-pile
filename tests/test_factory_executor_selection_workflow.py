@@ -14,30 +14,43 @@ def _dispatch_selector(workflow: str) -> str:
     ].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
 
+def _lane_resolution(workflow: str) -> str:
+    """Return the executor slot policy step body."""
+    return workflow.split("- name: Resolve executor slot policy", maxsplit=1)[1].split(
+        "- name:", maxsplit=1
+    )[0]
+
+
 def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
     """Native lanes remain executable; compatible providers use the registry."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = _dispatch_selector(workflow)
+    lane = _lane_resolution(workflow)
 
-    assert "factory_provider_registry.py resolve" in workflow
-    assert "opencode-free|openrouter-free)" in workflow
+    assert "factory_provider_registry.py credentials --source" in lane
+    assert "opencode-free|openrouter-free|kilo-auto)" in lane
     assert "factory_live_opencode.py" in selector
-    assert "kilo-auto)" in workflow
-    assert "omniroute-disabled-incident" in workflow
+    assert "kilo-auto)" in selector
+    assert "factory_runtime_model_select.py" in selector
+    assert "factory_published_model_catalog.py" in selector
+    assert "omniroute-disabled-incident" in (
+        ROOT / ".github/scripts/free-model-factory-worker.sh"
+    ).read_text(encoding="utf-8")
     assert "FACTORY_OMNIROUTE_ENABLED" in workflow
-    assert "factory_provider_candidates.py" in selector
-    assert "factory_candidate_health.py" in selector
     assert "auto/coding:free" not in selector
     assert "auto/best-free" not in workflow
     assert "GitHub execution is OmniRoute-only" not in workflow
 
 
 def test_omniroute_catalog_discovery_requires_explicit_enable() -> None:
-    """OmniRoute catalog fetch stays gated off during the incident."""
+    """OmniRoute is unconfigured (never selected) unless explicitly enabled."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    selector = _dispatch_selector(workflow)
+    lane = _lane_resolution(workflow)
+    omniroute = lane.split("omniroute-free)", 1)[1].split(";;", 1)[0]
 
-    assert 'FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$' in selector
+    assert 'FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$' in omniroute
+    assert "configured=false" in omniroute
+    assert "if: steps.lane.outputs.configured == 'true'" in _dispatch_selector(workflow)
     configure = workflow.split("- name: Configure selected OmniRoute capacity", maxsplit=1)[1][:240]
     assert "vars.FACTORY_OMNIROUTE_ENABLED == 'on'" in configure
 
@@ -50,7 +63,8 @@ def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     assert "Configure OpenAI-compatible factory provider" in workflow
     assert "factory_provider_registry.py config" in workflow
     assert "modelID" in registry
-    assert "Require Vercel model to remain zero-price" in workflow
+    # Price is not an eligibility rule; real work establishes callability.
+    assert "zero-price" not in workflow
     for key in ("Z_AI_API_KEY", "OLLAMA_API_KEY", "MISTRAL_API_KEY", "ORCAROUTER_API_KEY", "REQUESTY_API_KEY"):
         assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
 
@@ -69,18 +83,18 @@ def test_new_free_api_sources_use_real_provider_models_and_credentials() -> None
         assert f'"{source}": ProviderSpec(' in registry
         assert f'"{secret}"' in registry
         assert f"{secret}: ${{{{ secrets.{secret} }}}}" in workflow
-    assert "Require Vercel model to remain zero-price" in workflow
+        assert f'{source})' not in _lane_resolution(workflow)
 
 
 def test_model_requests_are_reserved_for_the_real_work_session() -> None:
     """No redundant model inference is spent on probes or tool-canary prompts."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     prework = workflow.split("- name: Run continuous fixed-model factory session", 1)[0]
-    assert "Wait for exact model in OpenCode catalog" in prework
-    assert "Require Vercel model to remain zero-price" in prework
+    assert "real work verifies callability" in prework
     assert "opencode run" not in prework
     assert "KILO_AUTO_FREE_OK" not in prework
     assert "/chat/completions" not in prework
+    assert "wait-opencode-model.sh" not in prework
 
 
 def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
@@ -89,9 +103,6 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
 
     selected_source = "${{ steps.executor.outputs.source || steps.lane.outputs.source }}"
     selected_model = "${{ steps.executor.outputs.model || steps.lane.outputs.model }}"
-    selected_runtime = (
-        "${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
-    )
     selected_branch = (
         "${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}"
     )
@@ -106,18 +117,19 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
         "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
         in workflow
     )
-    assert f"RUNTIME_MODEL: {selected_runtime}" in workflow
     assert f"FACTORY_BRANCH_SUFFIX: {selected_branch}" in workflow
 
 
 def test_discovery_failures_publish_normalized_outcomes() -> None:
-    """Catalog/provider discovery failures write normalized outcome markers."""
+    """Discovery failures fall back across the fleet, else write an outcome."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = _dispatch_selector(workflow)
 
     assert "factory-discovery-outcome" in selector
     assert "control_plane_failure" in selector
-    assert "provider_unavailable" in selector or "model_unavailable" in selector
+    fallback = selector.split("fleet_fallback() {", 1)[1].split("\n          }\n", 1)[0]
+    assert "provider_failure" in fallback
+    assert "no eligible fleet candidate" in fallback
 
 
 def test_worker_refuses_omniroute_source_during_incident() -> None:
@@ -135,7 +147,7 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     """Dynamic free models use a trusted Neon snapshot and a live-cost catalog."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = _dispatch_selector(workflow)
-    live = selector.split("# Models are selected at execution", 1)[1].split("openrouter-free)", 1)[0]
+    live = selector.split("opencode-free)", 1)[1].split("openrouter-free|vercel-ai-gateway)", 1)[0]
     assert "/issues/1093/comments?per_page=100" not in live
     assert '--exclusions-file "$exclusions_file"' in live
     assert 'printf \'[]\\n\' > "$comments_file"' in live

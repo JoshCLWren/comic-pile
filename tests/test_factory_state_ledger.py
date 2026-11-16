@@ -178,7 +178,11 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert "acquire_lease(REPO, worker, numbers, FIXED_LEASE_TTL_SECONDS)" in controller
     assert "release_lease(REPO, worker, claim_token, 'claim-rollback')" in controller
-    assert "record_heartbeat_comments(REPO, changes)" in collector
+    # Registry heartbeat scraping was replaced by durable runtime projections
+    # (#5238); the completion collector no longer writes the ledger itself.
+    assert "record_heartbeat_comments" not in collector
+    ingest = (root / ".github/scripts/factory_registry_ingest.py").read_text()
+    assert "from factory_state_ledger import record_heartbeat_comments" in ingest
     assert "Persist classified worker completion in Neon" in observer
     trusted_cleanup = yaml.safe_load(untrusted)["jobs"]["release_pre_session_lease"]
     model_job = yaml.safe_load(untrusted)["jobs"]["factory"]
@@ -327,7 +331,7 @@ def test_entry_passes_completed_job_log_into_trusted_ledger():
     root = Path(__file__).resolve().parents[1]
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert '--log "$RUNNER_TEMP/factory-entry.log"' in entry
-    assert entry.index("classify-fixed-model-run.py") < entry.index("factory_state_ledger.py runtime-outcome")
+    assert entry.index("factory_dynamic_outcome.py") < entry.index("factory_state_ledger.py runtime-outcome")
 
 
 
