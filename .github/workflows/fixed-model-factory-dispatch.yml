@@ -541,7 +541,6 @@ jobs:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
         run: |
           set -Eeuo pipefail
-          manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
           # Only retry-history rows are shared. Each assignment still refreshes
           # live claims/heads and changed comments before selecting its lease.
@@ -591,71 +590,30 @@ jobs:
           # controller deployments. Lease expiry/liveness reconciliation recovers
           # interruptions; a new main SHA is not a worker failure.
 
+          # Worker IDs are derived from provider integration metadata, never
+          # checked-in model pins. Catalog lookup happens inside the runner.
+          slots='.github/scripts/factory_worker_slots.py'
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
-            awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
+            python3 "$slots" resolve --worker "$DISPATCH_WORKER" >/dev/null
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
-            # Scheduled delivery is roughly hourly regardless of the requested
-            # cron cadence. Offer a source-diverse batch and let centralized
-            # assignment lease only work that has real capacity. Cap defaults
-            # to the multi-provider free-entry budget (12) so nvidia-front
-            # roster order cannot starve opencode/openrouter/kilo for an hour.
             max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
             [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
-              echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
+              echo 'MAX_WORKERS_PER_TICK must be positive' >&2
               exit 1
             }
-            roster="$(awk -F '\t' '
-              $0 !~ /^#/ && NF >= 4 {print $1}
-            ' "$manifest")"
-            total="$(wc -l <<<"$roster")"
-            (( total > 0 )) || {
-              echo "Factory manifest contains no scheduled workers" >&2
-              exit 1
-            }
-            offer_count="$max_per_tick"
-            (( offer_count <= total )) || offer_count="$total"
-            offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"
-            # Seed one worker per source (rotated), then fill from the rotating
-            # roster so every tick can prove nvidia/opencode/openrouter/kilo.
-            source_seed="$(awk -F '\t' -v tick="$GITHUB_RUN_NUMBER" '
-              $0 !~ /^#/ && NF >= 3 {
-                source=$2
-                workers[source]=workers[source] " " $1
-                if (!(source in seen_source)) {
-                  seen_source[source]=1
-                  sources[++source_count]=source
-                }
-                counts[source]++
-              }
-              END {
-                for (i = 1; i <= source_count; i++) {
-                  source=sources[i]
-                  n=split(substr(workers[source], 2), ids, " ")
-                  pick=ids[((tick - 1) % n) + 1]
-                  print pick
-                }
-              }
-            ' "$manifest")"
-            fill="$(printf '%s\n%s\n' "$roster" "$roster" \
-              | tail -n +"$((offset + 1))" | head -n "$total")"
-            workers="$(printf '%s\n%s\n' "$source_seed" "$fill" \
-              | awk 'NF && !seen[$0]++ {print}' \
-              | jq -Rsc 'split("\n") | map(select(length > 0))' \
+            # The source-diverse offer is generated, not frozen in a TSV.
+            # Credential, quota and health checks run before the dispatch cap.
+            workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
               | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
-              | python3 .github/scripts/factory_quota_pause.py filter \
-              | python3 .github/scripts/factory_source_budget.py filter \
               | python3 .github/scripts/factory_state_operations.py filter \
               | python3 .github/scripts/factory_state_operations.py rank \
-              | jq -c --argjson cap "$offer_count" '.[:$cap]')"
-            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total}, source-diverse seed)"
+              | jq -c --argjson cap "$max_per_tick" '.[:$cap]')"
+            echo "Source-diverse dispatch: $(jq -r length <<< "$workers") eligible workers"
           else
-            # A control-plane change should smoke one current lane per provider.
-            # Resolve these from the manifest so retired workers cannot remain
-            # embedded in dispatcher behavior.
-            workers="$(awk -F '\t' '
-              $0 !~ /^#/ && NF >= 3 && !seen[$2]++ {print $1}
-            ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            source_count="$(python3 "$slots" sources | jq -r length)"
+            workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
+              | jq -c --argjson cap "$source_count" '.[:$cap]')"
           fi
 
           if [[ "$workers" == '[]' ]]; then
@@ -688,7 +646,6 @@ jobs:
           # or capacity slots until their provider quota resets. Scheduled
           # batches are already filtered before the offer cap so paused lanes
           # never displace eligible ones; this pass covers the smoke branch.
-          workers="$(python3 .github/scripts/factory_quota_pause.py filter <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
             echo 'Every resolved worker is quota-paused; nothing to dispatch'
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
@@ -703,7 +660,6 @@ jobs:
           # daily request limits; drop their workers once today's cap is used.
           # Scheduled batches were already budget-filtered before the offer
           # cap; this pass covers the smoke branch and races with refills.
-          workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
           workers="$(python3 .github/scripts/factory_state_operations.py filter <<< "$workers")"
           workers="$(python3 .github/scripts/factory_state_operations.py rank <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
