@@ -146,11 +146,11 @@ mod tests {
     }
 
     #[test]
-    fn dump_generated_openapi_to_tmp() {
+    fn checked_in_contract_is_current() {
+        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
         let generated = same_path_openapi()
             .to_pretty_json()
             .expect("serializable contract");
-        std::fs::write("/tmp/generated_same_path_openapi.json", generated.trim_end())
-            .expect("write tmp openapi");
+        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
