@@ -476,6 +476,14 @@ def collect_snapshot() -> dict[str, Any]:
     merged_day = github_search_total(completion, f"is:pr is:merged merged:>={day}")
 
     view, _health = completion.durable_factory_state()
+    # One bounded read for worker/model/provider backoff and active reservations.
+    # Fail soft rather than publishing a false zero when telemetry is unavailable.
+    try:
+        from factory_state_operations import export_dashboard_retry
+        retry = export_dashboard_retry(REPO)
+    except Exception as exc:
+        retry = {"backoffs": [], "reservations": [], "pr_retries": [],
+                 "error": type(exc).__name__}
     attempts = view["attempts"]
     heartbeats = view["heartbeats"]
     heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
@@ -564,6 +572,7 @@ def collect_snapshot() -> dict[str, Any]:
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
         "opencode_free_roster": collect_opencode_free_roster(view),
         "candidate_health": view.get("health") or {"models": [], "providers": []},
+        "retry": retry,
     }
 
 
