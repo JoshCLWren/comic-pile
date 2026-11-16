@@ -67,6 +67,8 @@ def validate() -> None:
     assert "factory_published_model_catalog.py" in runner
     assert "factory_live_opencode.py" in runner
     assert "factory_kilo_catalog.py" in runner
+    assert runner.count('factory_worker_slots.py resolve --worker "$FACTORY_WORKER"') == 2
+    assert "[0-9]{0,2}" not in runner
     assert "Require Vercel model to remain zero-price" not in runner
     assert "selected-from-live-runtime-catalog" in runner
     assert "group: fixed-model-factory-${{ inputs.worker }}" in runner

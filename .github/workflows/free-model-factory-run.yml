@@ -835,7 +835,7 @@ jobs:
           FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
-          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
+          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]*$ ]] || {
             echo 'Invalid worker ID; refusing lease recovery' >&2
             exit 1
           }
@@ -844,6 +844,7 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          python3 .github/scripts/factory_worker_slots.py resolve --worker "$FACTORY_WORKER" >/dev/null
           claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
             --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
@@ -878,7 +879,7 @@ jobs:
           FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
-          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
+          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]*$ ]] || {
             echo 'Invalid worker ID; refusing lease recovery' >&2
             exit 1
           }
@@ -886,6 +887,7 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          python3 .github/scripts/factory_worker_slots.py resolve --worker "$FACTORY_WORKER" >/dev/null
           claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
             --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
