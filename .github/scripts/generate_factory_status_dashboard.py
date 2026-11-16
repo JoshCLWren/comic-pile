@@ -308,6 +308,9 @@ def build_worker_rows(
             if work or heartbeat.get("outcome") == "running"
             else "idle",
             "attempt_outcome": str(attempt.get("attempt outcome") or ""),
+            "delivery_outcome": str(attempt.get("delivery_outcome") or ""),
+            "delivery_pr": str(attempt.get("delivery_pr") or ""),
+            "persisted_work": str(attempt.get("persisted_work") or ""),
             "attempt_detail": str(attempt.get("detail") or ""),
             "attempt_run": str(attempt.get("run") or ""),
             "updated": max(
