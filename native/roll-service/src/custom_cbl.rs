@@ -128,11 +128,9 @@ pub struct CustomCBLApplyResponse {
     pub id: i32,
     pub user_id: i32,
     pub name: String,
-    pub description: Option<String>,
     pub ordering_mode: String,
-    pub lanes_json: Vec<serde_json::Value>,
-    pub nodes_json: Vec<serde_json::Value>,
-    pub compiled_rules_json: Option<serde_json::Value>,
+    pub lanes: Vec<serde_json::Value>,
+    pub nodes: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
     pub added_issue_ids: Vec<i32>,
@@ -1483,28 +1481,39 @@ pub async fn apply_custom_cbl(
     // Parse plan data
     let lanes_json: serde_json::Value = plan_row.get(3);
     let nodes_json: serde_json::Value = plan_row.get(4);
-    let compiled_rules_json: Option<serde_json::Value> = plan_row.get(5);
-    let ordering_mode: String = plan_row.get(6);
-    let created_at: String = plan_row.get(7);
-    let updated_at: String = plan_row.get(8);
+    let ordering_mode: String = plan_row.get(5);
+    let created_at: chrono::DateTime<chrono::Utc> = plan_row.get(6);
+    let updated_at: chrono::DateTime<chrono::Utc> = plan_row.get(7);
 
-    // Validate optimistic concurrency
+    // Validate optimistic concurrency. Compare parsed instants, not raw
+    // strings, so a token written by Python (`+00:00`) matches the stored
+    // instant regardless of text formatting.
     if let Some(expected) = request.expected_updated_at.as_deref() {
-        if expected != updated_at {
-            return Err(ApiError::with_status(
-                StatusCode::CONFLICT,
-                json!({
-                    "code": "plan_version_conflict",
-                    "message": "Reading Plan was modified since it was read",
-                    "updated_at": updated_at
-                })
-                .to_string(),
-            ));
+        let parsed = chrono::DateTime::parse_from_rfc3339(expected)
+            .map(|value| value.with_timezone(&chrono::Utc));
+        match parsed {
+            Ok(expected_at) if expected_at == updated_at => {}
+            Ok(_) => {
+                return Err(ApiError::with_status(
+                    StatusCode::CONFLICT,
+                    json!({
+                        "code": "plan_version_conflict",
+                        "expected_updated_at": updated_at.to_rfc3339()
+                    })
+                    .to_string(),
+                ));
+            }
+            Err(_) => {
+                return Err(ApiError::Unprocessable(format!(
+                    "Input should be a valid datetime, unable to parse string as a datetime: \"{expected}\""
+                )));
+            }
         }
     }
 
-    // Determine target lane
-    let lanes: Vec<serde_json::Value> =
+    // Determine target lane; an empty plan gets the same default lane the
+    // Python writer creates (ContinuityPlanLane(id="custom-cbl", ...)).
+    let mut lanes: Vec<serde_json::Value> =
         serde_json::from_value(lanes_json.clone()).unwrap_or_default();
     let target_lane_id = if let Some(lane_id) = request.lane_id {
         lane_id
@@ -1516,6 +1525,7 @@ pub async fn apply_custom_cbl(
             .unwrap_or("custom-cbl")
             .to_string()
     } else {
+        lanes.push(json!({"id": "custom-cbl", "name": "Custom CBL", "order": 0}));
         "custom-cbl".to_string()
     };
 
@@ -1749,49 +1759,45 @@ pub async fn apply_custom_cbl(
     ValidatedReadingInputs::new(inputs.clone(), &list_names)
         .map_err(|error| cycle_conflict(error, &inputs))?;
 
-    // Update plan
+    // Update plan. Note: this port does NOT yet recompile ContinuityRule rows
+    // or canonical plan-owned dependency edges the way the Python writer does
+    // (`replace_compiled_rules`), and it reads editor nodes from `nodes_json`
+    // rather than the membership-authoritative `reading_plan_issues` overlay.
+    // Until that compiler is ported, a strict_sequential apply updates the
+    // plan document without rebuilding blocking dependencies.
     let new_lanes_json = serde_json::to_value(&lanes)
         .map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
     let new_nodes_json = serde_json::to_value(&new_nodes)
         .map_err(|_| ApiError::Internal("nodes serialization failed".into()))?;
 
-    // Recompile rules (simplified - in production would call proper rule compiler)
-    let new_compiled_rules_json = compiled_rules_json; // Keep existing for now
+    let updated_row = tx
+        .query_one(
+            "UPDATE continuity_plans
+             SET lanes_json = $3, nodes_json = $4, updated_at = NOW()
+             WHERE id = $1 AND user_id = $2
+             RETURNING updated_at",
+            &[&plan_id, &user.id(), &new_lanes_json, &new_nodes_json],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let new_updated_at: chrono::DateTime<chrono::Utc> = updated_row.get(0);
 
-    tx.execute(
-        "UPDATE continuity_plans
-         SET lanes_json = $3, nodes_json = $4, compiled_rules_json = $5, updated_at = NOW()
-         WHERE id = $1 AND user_id = $2",
-        &[
-            &plan_id,
-            &user.id(),
-            &new_lanes_json,
-            &new_nodes_json,
-            &new_compiled_rules_json,
-        ],
-    )
-    .await
-    .map_err(db::query_error)?;
+    if ordering_mode == "strict_sequential" {
+        crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    }
 
     tx.commit().await.map_err(db::query_error)?;
 
-    // Refresh blocked status if needed
-    if ordering_mode == "strict_sequential" {
-        // In production, call refresh_user_blocked_status
-    }
-
-    // Return updated plan
+    // Return the updated plan with the persisted token
     Ok(Json(CustomCBLApplyResponse {
         id: plan_id,
         user_id: user.id(),
         name: plan_row.get(2),
-        description: plan_row.get(9), // This might not exist, handle gracefully
         ordering_mode,
-        lanes_json: serde_json::from_value(new_lanes_json).unwrap_or_default(),
-        nodes_json: serde_json::from_value(new_nodes_json).unwrap_or_default(),
-        compiled_rules_json: new_compiled_rules_json,
-        created_at,
-        updated_at: chrono::Utc::now().to_rfc3339(), // Would need to re-query for actual
+        lanes: serde_json::from_value(new_lanes_json).unwrap_or_default(),
+        nodes: serde_json::from_value(new_nodes_json).unwrap_or_default(),
+        created_at: created_at.to_rfc3339(),
+        updated_at: new_updated_at.to_rfc3339(),
         added_issue_ids,
         skipped_existing_issue_ids,
     }))
