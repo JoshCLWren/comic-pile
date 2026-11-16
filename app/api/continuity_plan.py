@@ -20,10 +20,14 @@ from app.schemas.reading_plan_membership import (
 )
 from app.schemas.tags import TagTargetType
 from app.services.continuity import _refresh_blocked_state
+from app.services.continuity_plan_recovery_service import (
+    get_continuity_plan_recovery,
+    relink_continuity_plan,
+)
+from app.services.continuity_plan_reader_service import get_continuity_plan_reader
 from app.services.continuity_plan_writer import (
     guard_plan_update,
     list_continuity_plan_items,
-    payload_issue_ids,
     plan_rule_marker,
     preserve_checkpoint_targets,
     preserve_server_lane_metadata,
@@ -45,6 +49,12 @@ from app.services.reading_plan_list_link import (
     guard_legacy_plan_edit,
 )
 from app.services.tag_service import purge_target_assignments
+from app.schemas.continuity_plan_reader import (
+    ContinuityPlanReaderResponse,
+    ContinuityPlanRecoveryPreview,
+    ContinuityPlanRelinkRequest,
+    ContinuityPlanRelinkResult,
+)
 
 router = APIRouter(tags=["continuity-plans"])
 
@@ -271,6 +281,94 @@ async def update_continuity_plan(
     await _refresh_blocked_state(current_user.id, db)
     return await editor_plan_response(db, plan)
 
+
+@router.get(
+    "/continuity-plans/{plan_id}/reader",
+    response_model=ContinuityPlanReaderResponse,
+)
+async def get_continuity_plan_reader(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContinuityPlanReaderResponse:
+    """Return Option E plan projected from its authoritative Reading List.
+
+    Args:
+        plan_id: Continuity plan ID; must be owned by the authenticated user.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        Option E plan projected from its authoritative Reading List.
+
+    Raises:
+        HTTPException: 404 if the plan is not found or not owned by the user.
+        HTTPException: 409 if the plan has no linked authoritative Reading List.
+    """
+    return await get_continuity_plan_reader(
+        db, user_id=current_user.id, plan_id=plan_id
+    )
+
+
+@router.get(
+    "/continuity-plans/{plan_id}/recovery",
+    response_model=ContinuityPlanRecoveryPreview,
+)
+async def get_continuity_plan_recovery(
+    plan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContinuityPlanRecoveryPreview:
+    """Return owner-scoped recovery preview for one continuity plan.
+
+    Args:
+        plan_id: Continuity plan ID; must be owned by the authenticated user.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        Owner-scoped recovery preview for the continuity plan.
+
+    Raises:
+        HTTPException: 404 if the plan is not found or not owned by the user.
+    """
+    return await get_continuity_plan_recovery(
+        db, user_id=current_user.id, plan_id=plan_id
+    )
+
+
+@router.post(
+    "/continuity-plans/{plan_id}/recovery",
+    response_model=ContinuityPlanRelinkResult,
+)
+async def relink_continuity_plan(
+    plan_id: int,
+    payload: ContinuityPlanRelinkRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ContinuityPlanRelinkResult:
+    """Relink a continuity plan to a Reading List with optimistic concurrency.
+
+    Args:
+        plan_id: Continuity plan ID; must be owned by the authenticated user.
+        payload: Relink request with optimistic concurrency tokens.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        Result of the relink operation.
+
+    Raises:
+        HTTPException: 400 if confirmation is not provided.
+        HTTPException: 404 if the plan or list is not found.
+        HTTPException: 409 if the optimistic concurrency check fails.
+    """
+    return await relink_continuity_plan(
+        db,
+        user_id=current_user.id,
+        plan_id=plan_id,
+        payload=payload,
+    )
 
 @router.delete("/continuity-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_continuity_plan(
