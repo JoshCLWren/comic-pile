@@ -1,8 +1,8 @@
-"""Shared Neon snapshot cache for trusted GitHub Actions controller reads.
+"""Bounded registry evidence cache and scoped factory history cleanup.
 
-GitHub remains authoritative for claims, reviews, checks, and merges. This
-cache only replaces repeated discovery listings. It never grants ownership.
-The database is isolated in the factory_state database with a scoped role.
+GitHub remains authoritative for claims, reviews, checks, and merges.
+The remaining snapshot is registry evidence, not a queue or merge authority.
+The database is isolated in factory_state with a scoped role.
 """
 from __future__ import annotations
 
@@ -93,43 +93,25 @@ def _claim(key: str, owner: str) -> bool:
 
 def _publish(key: str, owner: str, data: list[dict[str, Any]], ttl_seconds: int) -> None:
     # A lock that expired or changed owner may not publish an older snapshot.
+    # Updating an evidence cache does not need a second append-only event write.
     _run(
-        """
-        WITH refreshed AS (
-            UPDATE public.factory_state_kv
-               SET payload=$3::jsonb, fetched_at=now(),
-                   expires_at=now() + $4::int * interval '1 second',
-                   refresh_owner=NULL, refresh_until=NULL, updated_at=now()
-             WHERE cache_key=$1 AND refresh_owner=$2
-             RETURNING cache_key
-        )
-        INSERT INTO public.factory_state_events (source, event_type, detail)
-        SELECT 'github-actions', 'cache_refresh',
-               jsonb_build_object('key', cache_key, 'records', $5::int)
-          FROM refreshed
-        """,
-        key, owner, json.dumps(data), ttl_seconds, len(data),
+        """UPDATE public.factory_state_kv
+              SET payload=$3::jsonb, fetched_at=now(),
+                  expires_at=now() + $4::int * interval '1 second',
+                  refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+            WHERE cache_key=$1 AND refresh_owner=$2""",
+        key, owner, json.dumps(data), ttl_seconds,
     )
 
 
-
 def _refresh_without_rewrite(key: str, owner: str, ttl_seconds: int, records: int) -> None:
-    """Extend freshness without retransmitting or rewriting an unchanged TOAST value."""
+    """Extend freshness without retransmitting or rewriting unchanged TOAST."""
     _run(
-        """
-        WITH refreshed AS (
-            UPDATE public.factory_state_kv
-               SET fetched_at=now(), expires_at=now() + $3::int * interval '1 second',
-                   refresh_owner=NULL, refresh_until=NULL, updated_at=now()
-             WHERE cache_key=$1 AND refresh_owner=$2
-             RETURNING cache_key
-        )
-        INSERT INTO public.factory_state_events (source, event_type, detail)
-        SELECT 'github-actions', 'cache_refresh',
-               jsonb_build_object('key', cache_key, 'records', $4::int, 'unchanged', true)
-          FROM refreshed
-        """,
-        key, owner, ttl_seconds, records,
+        """UPDATE public.factory_state_kv
+              SET fetched_at=now(), expires_at=now() + $3::int * interval '1 second',
+                  refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+            WHERE cache_key=$1 AND refresh_owner=$2""",
+        key, owner, ttl_seconds,
     )
 
 
@@ -149,6 +131,41 @@ def _prune_obsolete_discovery(repo: str, batch_size: int = 200) -> int:
            ) SELECT count(*) AS deleted FROM removed""",
         f'factory-github-get-v1:{repo}:%', f'factory-projection-v1:{repo}:%',
         [f'{repo}:open-issues', f'{repo}:open-prs'], batch_size, one=True,
+    )
+    return int(row['deleted'])
+
+
+def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
+    """Prune retired repository-owned event noise, never unscoped histories.
+
+    Older worker events may lack a repository identifier, so age alone cannot
+    authorize their deletion. Only explicitly scoped historical observation
+    events can expire; worker lifecycle and coordination histories stay intact.
+    """
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
+        raise ValueError('invalid cleanup scope or batch size')
+    github_prefix = f'factory-github-get-v1:{repo}:'
+    projection_prefix = f'factory-projection-v1:{repo}:'
+    retired_lists = [f'{repo}:open-issues', f'{repo}:open-prs']
+    row = _run(
+        """WITH retired AS (
+             SELECT id FROM public.factory_state_events
+              WHERE (event_type='cache_refresh'
+                     AND (left(detail->>'key', length($1))=$1
+                          OR left(detail->>'key', length($2))=$2
+                          OR detail->>'key'=ANY($3::text[])))
+                 OR (event_type='target_reconciled'
+                     AND left(detail->>'target', length($2))=$2)
+                 OR (created_at < now() - interval '30 days'
+                     AND (detail->>'repo'=$4 OR detail->>'repository'=$4)
+                     AND event_type IN ('cache_refresh',
+                                        'target_reconciled', 'target_changed'))
+              ORDER BY id LIMIT $5
+           ), removed AS (
+             DELETE FROM public.factory_state_events AS events USING retired
+              WHERE events.id=retired.id RETURNING events.id
+           ) SELECT count(*) AS deleted FROM removed""",
+        github_prefix, projection_prefix, retired_lists, repo, batch_size, one=True,
     )
     return int(row['deleted'])
 
@@ -381,13 +398,20 @@ def main(argv: list[str]) -> int:
         return 2
     if not os.environ.get("FACTORY_STATE_DSN_FILE"):
         raise RuntimeError("cache cleanup requires trusted Neon credentials")
-    deleted = 0
+    repo = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
+    retired_kv = 0
+    retired_events = 0
     for _ in range(5):
-        count = _prune_obsolete_discovery(os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile"))
-        deleted += count
+        count = _prune_obsolete_discovery(repo)
+        retired_kv += count
         if count < 200:
             break
-    print(f"[factory-state] pruned {deleted} retired discovery rows")
+    for _ in range(5):
+        count = _prune_retired_events(repo)
+        retired_events += count
+        if count < 1000:
+            break
+    print(f"[factory-state] pruned {retired_kv} discovery rows and {retired_events} obsolete events")
     return 0
 
 

@@ -245,6 +245,48 @@ def test_changed_snapshot_still_persists_new_content(monkeypatch, tmp_path):
     assert published[0][2] == [{"number": 4}]
 
 
+def test_registry_refresh_updates_only_its_owner_row_without_audit_spam(monkeypatch):
+    operations = []
+    def fake_run(statement, *args, one=False):
+        operations.append((statement, args))
+    monkeypatch.setattr(cache, "_run", fake_run)
+    cache._publish("registry", "owner-1", [{"id": 4}], 900)
+    cache._refresh_without_rewrite("registry", "owner-1", 900, 1)
+    assert len(operations) == 2
+    assert all("UPDATE public.factory_state_kv" in query for query, _ in operations)
+    assert all("WHERE cache_key=$1 AND refresh_owner=$2" in query for query, _ in operations)
+    assert all("factory_state_events" not in query for query, _ in operations)
+    assert operations[0][1] == ("registry", "owner-1", '[{"id": 4}]', 900)
+    assert operations[1][1] == ("registry", "owner-1", 900)
+
+
+def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypatch):
+    executions = []
+    def fake_run(statement, *args, one=False):
+        executions.append((statement, args, one))
+        return {"deleted": 17}
+    monkeypatch.setattr(cache, "_run", fake_run)
+    assert cache._prune_retired_events("JoshCLWren/comic-pile", 500) == 17
+    sql, args, one = executions[0]
+    assert one is True
+    assert args == (
+        ["factory-github-get-v1:JoshCLWren/comic-pile:%",
+         "factory-projection-v1:JoshCLWren/comic-pile:%",
+         "JoshCLWren/comic-pile:%"],
+        "factory-projection-v1:JoshCLWren/comic-pile:%", 500,
+    )
+    assert "event_type='cache_refresh'" in sql
+    assert "event_type='target_reconciled'" in sql
+    assert "created_at < now() - interval '30 days'" in sql
+    assert "DELETE FROM public.factory_state_events" in sql
+    assert "factory_state_kv" not in sql
+    assert "factory_provider_reservation" not in sql
+    with pytest.raises(ValueError, match="batch"):
+        cache._prune_retired_events("JoshCLWren/comic-pile", 1001)
+    with pytest.raises(ValueError, match="scope"):
+        cache._prune_retired_events("other-repo", 100)
+
+
 def test_prune_is_bounded_to_retired_discovery_without_coordination(monkeypatch):
     executed = []
     def fake_run(statement, *args, one=False):
@@ -272,15 +314,21 @@ def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
         calls.append(True)
         return 200 if len(calls) < 3 else 12
     monkeypatch.setattr(cache, "_prune_obsolete_discovery", prune)
+    event_calls = []
+    def prune_events(_repo):
+        event_calls.append(True)
+        return 1000 if len(event_calls) < 3 else 7
+    monkeypatch.setattr(cache, "_prune_retired_events", prune_events)
     assert cache.main(["prune-obsolete"]) == 0
     assert len(calls) == 3
+    assert len(event_calls) == 3
 
 
 def test_regular_status_job_prunes_only_in_trusted_controller():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
     assert "cron: '*/15 * * * *'" in workflow
-    assert "Remove retired GitHub discovery snapshots" in workflow
+    assert "Prune retired discovery and audit events" in workflow
     assert "factory_state_cache.py prune-obsolete" in workflow
     assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-obsolete")
     assert workflow.index("factory_state_cache.py prune-obsolete") < workflow.index("Generate factory dashboard")
