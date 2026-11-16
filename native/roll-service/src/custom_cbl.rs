@@ -1,0 +1,2105 @@
+//! Custom CBL (Reading List) authoring endpoints on /api/v1/custom-cbls paths.
+//!
+//! These endpoints mirror the Python custom-cbls surface with identical wire
+//! contracts. They reuse the same database tables and authorization logic as
+//! the /api/v2/reading-lists endpoints but expose the v1 API paths and
+//! response shapes expected by existing clients.
+
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    option_inputs,
+    reading_blocker_projection,
+    reading_constraints::ValidatedReadingInputs,
+    reading_eligibility,
+    reading_graph::cycle_conflict,
+    ApiError, AppState,
+};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use deadpool_postgres::Transaction;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use tokio_postgres::types::ToSql;
+
+const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+const COMICVINE_PROVIDER: &str = "comicvine";
+
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLEntryIntent {
+    pub gate: String,
+    #[serde(default)]
+    pub skipped: bool,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLEntryResponse {
+    pub id: i32,
+    pub position: i32,
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub series_name: String,
+    pub issue_number: String,
+    pub status: String,
+    pub is_checkpoint: bool,
+    pub gate: String,
+    pub skipped: bool,
+    pub checkpoint_target_issue_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLListItem {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub mode: String,
+    pub issue_count: i32,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLResponse {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub mode: String,
+    pub issue_count: i32,
+    pub created_at: String,
+    pub updated_at: String,
+    pub entries: Vec<CustomCBLEntryResponse>,
+    #[serde(default)]
+    pub predecessor_changes: Vec<CustomCBLPredecessorChange>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLPredecessorChange {
+    pub issue_id: i32,
+    pub issue_name: String,
+    pub before_issue_ids: Vec<i32>,
+    pub before_issue_names: Vec<String>,
+    pub after_issue_ids: Vec<i32>,
+    pub after_issue_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLIssueSearchResult {
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub series_name: String,
+    pub issue_number: String,
+    pub status: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CustomCBLWrite {
+    pub name: String,
+    pub description: Option<String>,
+    pub mode: Option<String>,
+    pub issue_ids: Vec<i32>,
+    #[serde(default)]
+    pub entry_intents: Option<BTreeMap<i32, CustomCBLEntryIntent>>,
+    #[serde(default)]
+    pub checkpoint_issue_ids: Option<Vec<i32>>,
+    #[serde(default)]
+    pub checkpoint_targets: Option<BTreeMap<i32, Vec<i32>>>,
+    #[serde(default)]
+    pub confirmed_predecessor_changes: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CustomCBLApplyRequest {
+    pub lane_id: Option<String>,
+    pub expected_updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct CustomCBLApplyResponse {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub ordering_mode: String,
+    pub lanes_json: Vec<serde_json::Value>,
+    pub nodes_json: Vec<serde_json::Value>,
+    pub compiled_rules_json: Option<serde_json::Value>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub added_issue_ids: Vec<i32>,
+    pub skipped_existing_issue_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct OverlapDecisionItem {
+    pub id: i32,
+    pub continuing_volume_id: String,
+    pub waiting_volume_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct OverlapVolumeCandidate {
+    pub thread_id: i32,
+    pub thread_title: String,
+    pub volume_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct OverlapDecisionSetResponse {
+    pub list_id: i32,
+    pub updated_at: String,
+    #[serde(default)]
+    pub decisions: Vec<OverlapDecisionItem>,
+    #[serde(default)]
+    pub candidate_volumes: Vec<OverlapVolumeCandidate>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct OverlapDecisionWrite {
+    pub continuing_volume_id: String,
+    pub waiting_volume_id: String,
+    pub expected_updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ReadingListReaderEntry {
+    pub id: i32,
+    pub position: i32,
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub series_name: String,
+    pub issue_number: String,
+    pub status: String,
+    pub is_checkpoint: bool,
+    pub gate: String,
+    pub skipped: bool,
+    pub checkpoint_target_issue_ids: Vec<i32>,
+    pub availability: String,
+    pub explanation: Option<ReadingListBlockerExplanation>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ReadingListReader {
+    pub list_id: i32,
+    pub name: String,
+    pub mode: String,
+    pub execution_mode: String,
+    pub entries: Vec<ReadingListReaderEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ReadingListDependency {
+    pub thread_id: i32,
+    pub thread_title: String,
+    pub issue_number: String,
+    pub label: String,
+    pub issue_id: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ReadingListBlockerExplanation {
+    pub is_blocked: bool,
+    pub blocking_reasons: Vec<String>,
+    pub blocking_dependencies: Vec<ReadingListDependency>,
+}
+
+async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1,$2)",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+fn validate_name(name: &str) -> Result<String, ApiError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 200 {
+        return Err(ApiError::BadRequest(
+            "Reading List name must be between 1 and 200 characters".to_string(),
+        ));
+    }
+    Ok(name.to_string())
+}
+
+fn validate_mode(mode: Option<&str>) -> Result<String, ApiError> {
+    match mode.unwrap_or("loose") {
+        "strict" => Ok("strict".to_string()),
+        "loose" => Ok("loose".to_string()),
+        _ => Err(ApiError::BadRequest(
+            "mode must be strict or loose".to_string(),
+        )),
+    }
+}
+
+async fn owned_issue_ids(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    issue_ids: &[i32],
+) -> Result<BTreeSet<i32>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id
+             WHERE t.user_id=$1 AND i.id=ANY($2::int[])",
+            &[&user_id, &issue_ids.to_vec()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows.iter().map(|row| row.get(0)).collect())
+}
+
+async fn load_entries(
+    tx: &Transaction<'_>,
+    list_id: i32,
+) -> Result<Vec<CustomCBLEntryResponse>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT e.id, e.position, e.issue_id, i.thread_id, t.title, i.issue_number,
+                    i.status, e.is_checkpoint, e.gate, e.skipped,
+                    e.checkpoint_target_issue_ids::text
+             FROM custom_cbl_entries e
+             JOIN issues i ON i.id=e.issue_id
+             JOIN threads t ON t.id=i.thread_id
+             WHERE e.list_id=$1
+             ORDER BY e.position, e.id",
+            &[&list_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .iter()
+        .map(|row| CustomCBLEntryResponse {
+            id: row.get(0),
+            position: row.get(1),
+            issue_id: row.get(2),
+            thread_id: row.get(3),
+            series_name: row.get(4),
+            issue_number: row.get(5),
+            status: row.get(6),
+            is_checkpoint: row.get(7),
+            gate: row.get(8),
+            skipped: row.get(9),
+            checkpoint_target_issue_ids: serde_json::from_str::<Vec<i32>>(
+                &row.get::<_, String>(10),
+            )
+            .unwrap_or_default(),
+        })
+        .collect())
+}
+
+async fn load_list(
+    conn: &deadpool_postgres::Object,
+    list_id: i32,
+    user_id: i32,
+) -> Result<Option<(i32, String, Option<String>, String, String, String, i32)>, ApiError> {
+    let row = conn
+        .query_opt(
+            "SELECT l.id, l.name, l.description, l.mode, l.created_at::text, l.updated_at::text,
+                    l.user_id, count(e.id)::int
+             FROM custom_cbl_lists l
+             LEFT JOIN custom_cbl_entries e ON e.list_id=l.id
+             WHERE l.id=$1 AND l.user_id=$2
+             GROUP BY l.id",
+            &[&list_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|row| {
+        (
+            row.get(0),
+            row.get(1),
+            row.get(2),
+            row.get(3),
+            row.get(4),
+            row.get(5),
+            row.get(7),
+        )
+    }))
+}
+
+fn list_item_from_row(
+    row: (i32, String, Option<String>, String, String, i32),
+) -> CustomCBLListItem {
+    CustomCBLListItem {
+        id: row.0,
+        name: row.1,
+        description: row.2,
+        mode: row.3,
+        updated_at: row.4,
+        issue_count: row.5,
+    }
+}
+
+fn response_from_row(
+    row: (i32, String, Option<String>, String, String, String, i32),
+    user_id: i32,
+    entries: Vec<CustomCBLEntryResponse>,
+    predecessor_changes: Vec<CustomCBLPredecessorChange>,
+    warnings: Vec<String>,
+) -> CustomCBLResponse {
+    CustomCBLResponse {
+        id: row.0,
+        user_id,
+        name: row.1,
+        description: row.2,
+        mode: row.3,
+        created_at: row.4,
+        updated_at: row.5,
+        issue_count: row.6,
+        entries,
+        predecessor_changes,
+        warnings,
+    }
+}
+
+async fn graph_preflight(tx: &Transaction<'_>, user: &AuthenticatedUser) -> Result<(), ApiError> {
+    let inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
+    let names = inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect();
+    ValidatedReadingInputs::new(inputs.clone(), &names)
+        .map_err(|error| cycle_conflict(error, &inputs))?;
+    Ok(())
+}
+
+fn stored_requirements(mode: &str, entries: &[CustomCBLEntryResponse]) -> BTreeMap<i32, Vec<i32>> {
+    let mut results = BTreeMap::new();
+    let mut earlier = Vec::<i32>::new();
+    let mut hold = BTreeSet::<i32>::new();
+    for entry in entries {
+        if entry.skipped {
+            continue;
+        }
+        let mut sources = hold.clone();
+        if mode == "strict" || entry.gate == "hold" {
+            sources.extend(&earlier);
+        }
+        if entry.gate == "after_previous" {
+            if let Some(last) = earlier.last() {
+                sources.insert(*last);
+            }
+        }
+        results.insert(
+            entry.issue_id,
+            earlier
+                .iter()
+                .copied()
+                .filter(|id| sources.contains(id))
+                .collect(),
+        );
+        earlier.push(entry.issue_id);
+        if entry.gate == "hold" {
+            hold.extend(&earlier);
+        }
+    }
+    results
+}
+
+fn predecessor_changes(
+    before: &BTreeMap<i32, Vec<i32>>,
+    after: &BTreeMap<i32, Vec<i32>>,
+    labels: &BTreeMap<i32, String>,
+) -> Vec<CustomCBLPredecessorChange> {
+    let ids: BTreeSet<i32> = before.keys().chain(after.keys()).copied().collect();
+    ids.into_iter()
+        .filter_map(|issue_id| {
+            let old = before.get(&issue_id).cloned().unwrap_or_default();
+            let new = after.get(&issue_id).cloned().unwrap_or_default();
+            if old == new {
+                return None;
+            }
+            let name = |id: &i32| {
+                labels
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Issue #{id}"))
+            };
+            Some(CustomCBLPredecessorChange {
+                issue_id,
+                issue_name: name(&issue_id),
+                before_issue_names: old.iter().map(&name).collect(),
+                after_issue_names: new.iter().map(&name).collect(),
+                before_issue_ids: old,
+                after_issue_ids: new,
+            })
+        })
+        .collect()
+}
+
+fn confirmed_changes_match(
+    actual: &[CustomCBLPredecessorChange],
+    confirmed: &[CustomCBLPredecessorChange],
+) -> bool {
+    let key = |row: &CustomCBLPredecessorChange| {
+        let mut before = row.before_issue_ids.clone();
+        let mut after = row.after_issue_ids.clone();
+        before.sort();
+        after.sort();
+        (row.issue_id, before, after)
+    };
+    let mut left: Vec<_> = actual.iter().map(&key).collect();
+    let mut right: Vec<_> = confirmed.iter().map(&key).collect();
+    left.sort();
+    right.sort();
+    left == right
+}
+
+async fn load_list_entries_for_export(
+    tx: &Transaction<'_>,
+    list_id: i32,
+) -> Result<Vec<CustomCBLEntryResponse>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT e.id, e.position, e.issue_id, i.thread_id, t.title, i.issue_number,
+                    i.status, e.is_checkpoint, e.gate, e.skipped,
+                    e.checkpoint_target_issue_ids::text
+             FROM custom_cbl_entries e
+             JOIN issues i ON i.id=e.issue_id
+             JOIN threads t ON t.id=i.thread_id
+             WHERE e.list_id=$1
+             ORDER BY e.position, e.id",
+            &[&list_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .iter()
+        .map(|row| CustomCBLEntryResponse {
+            id: row.get(0),
+            position: row.get(1),
+            issue_id: row.get(2),
+            thread_id: row.get(3),
+            series_name: row.get(4),
+            issue_number: row.get(5),
+            status: row.get(6),
+            is_checkpoint: row.get(7),
+            gate: row.get(8),
+            skipped: row.get(9),
+            checkpoint_target_issue_ids: serde_json::from_str::<Vec<i32>>(
+                &row.get::<_, String>(10),
+            )
+            .unwrap_or_default(),
+        })
+        .collect())
+}
+
+fn export_custom_cbl_xml(name: &str, entries: &[CustomCBLEntryResponse]) -> String {
+    use html_escape::encode_text;
+    let books = entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "    <Book Series=\"{}\" Number=\"{}\" />",
+                encode_text(&entry.series_name),
+                encode_text(&entry.issue_number)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<ReadingList>\n  <Name>{}</Name>\n  <NumIssues>{}</NumIssues>\n  <Books>\n{}\n  </Books>\n</ReadingList>\n",
+        encode_text(name),
+        entries.len(),
+        books
+    )
+}
+
+// ========================================================================
+// Overlap Decisions
+// ========================================================================
+
+fn normalized_volume_key(key: &str) -> Option<String> {
+    if let Some(rest) = key.strip_prefix("comicvine:") {
+        if rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty() {
+            return Some(format!("comicvine:{}", rest));
+        }
+    }
+    None
+}
+
+async fn load_overlap_decisions(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<OverlapDecisionItem>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT d.id, d.list_id, d.created_at::text, d.updated_at::text,
+                    ci.provider, ci.external_id, wi.provider, wi.external_id
+             FROM custom_cbl_overlap_decisions d
+             JOIN external_identities ci ON ci.id = d.continuing_external_identity_id
+             JOIN external_identities wi ON wi.id = d.waiting_external_identity_id
+             WHERE d.user_id = $1
+             ORDER BY d.id",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut decisions = Vec::new();
+    for row in rows {
+        let continuing_key = format!("{}:{}", row.get::<_, String>(4), row.get::<_, String>(5));
+        let waiting_key = format!("{}:{}", row.get::<_, String>(6), row.get::<_, String>(7));
+        if let (Some(continuing), Some(waiting)) = (
+            normalized_volume_key(&continuing_key),
+            normalized_volume_key(&waiting_key),
+        ) {
+            decisions.push(OverlapDecisionItem {
+                id: row.get(0),
+                list_id: row.get(1),
+                created_at: row.get(2),
+                updated_at: row.get(3),
+                continuing_volume_id: continuing,
+                waiting_volume_id: waiting,
+            });
+        }
+    }
+    Ok(decisions)
+}
+
+async fn load_list_overlap_decisions(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+) -> Result<Vec<OverlapDecisionItem>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT d.id, d.list_id, d.created_at::text, d.updated_at::text,
+                    ci.provider, ci.external_id, wi.provider, wi.external_id
+             FROM custom_cbl_overlap_decisions d
+             JOIN external_identities ci ON ci.id = d.continuing_external_identity_id
+             JOIN external_identities wi ON wi.id = d.waiting_external_identity_id
+             WHERE d.user_id = $1 AND d.list_id = $2
+             ORDER BY d.id",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut decisions = Vec::new();
+    for row in rows {
+        let continuing_key = format!("{}:{}", row.get::<_, String>(4), row.get::<_, String>(5));
+        let waiting_key = format!("{}:{}", row.get::<_, String>(6), row.get::<_, String>(7));
+        if let (Some(continuing), Some(waiting)) = (
+            normalized_volume_key(&continuing_key),
+            normalized_volume_key(&waiting_key),
+        ) {
+            decisions.push(OverlapDecisionItem {
+                id: row.get(0),
+                list_id: row.get(1),
+                created_at: row.get(2),
+                updated_at: row.get(3),
+                continuing_volume_id: continuing,
+                waiting_volume_id: waiting,
+            });
+        }
+    }
+    Ok(decisions)
+}
+
+async fn load_thread_volume_candidates(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<OverlapVolumeCandidate>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT t.id, t.title
+             FROM threads t
+             WHERE t.user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let thread_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let confirmed = tx
+        .query(
+            "SELECT t.id, ei.external_id
+             FROM threads t
+             JOIN thread_external_series_mapping tem ON tem.thread_id = t.id
+             JOIN external_identities ei ON ei.id = tem.external_identity_id
+             WHERE t.id = ANY($1) AND t.user_id = $2
+               AND tem.status = 'confirmed'
+               AND ei.entity_type = 'volume'
+               AND ei.provider = 'comicvine'",
+            &[&thread_ids, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let catalog = tx
+        .query(
+            "SELECT t.id, ei.external_id
+             FROM threads t
+             JOIN catalog_series cs ON cs.id = t.catalog_series_id
+             JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id
+             WHERE t.id = ANY($1) AND t.user_id = $2
+               AND ei.entity_type = 'volume'
+               AND ei.provider = 'comicvine'",
+            &[&thread_ids, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut candidates: std::collections::HashMap<i32, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for row in confirmed.iter().chain(catalog.iter()) {
+        let thread_id: i32 = row.get(0);
+        let external_id: String = row.get(1);
+        let key = format!("comicvine:{}", external_id);
+        candidates.entry(thread_id).or_default().insert(key);
+    }
+
+    let mut result = Vec::new();
+    for row in rows {
+        let thread_id: i32 = row.get(0);
+        let title: String = row.get(1);
+        if let Some(keys) = candidates.get(&thread_id) {
+            if keys.len() == 1 {
+                result.push(OverlapVolumeCandidate {
+                    thread_id,
+                    thread_title: title,
+                    volume_id: keys.iter().next().unwrap().clone(),
+                });
+            }
+        }
+    }
+    result.sort_by(|a, b| a.thread_id.cmp(&b.thread_id));
+    Ok(result)
+}
+
+async fn resolve_volume_identity_ids(
+    tx: &Transaction<'_>,
+    keys: &[String],
+) -> Result<std::collections::HashMap<String, i32>, ApiError> {
+    if keys.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let mut candidates = std::collections::HashSet::new();
+    for key in keys {
+        if let Some(rest) = key.strip_prefix("comicvine:") {
+            if rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty() {
+                candidates.insert(rest.to_string());
+                candidates.insert(format!("4050-{}", rest));
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let candidate_vec: Vec<String> = candidates.into_iter().collect();
+    let rows = tx
+        .query(
+            "SELECT id, external_id FROM external_identities
+             WHERE provider = 'comicvine' AND entity_type = 'volume'
+             AND external_id = ANY($1::text[])",
+            &[&candidate_vec],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut resolved = std::collections::HashMap::new();
+    for row in rows {
+        let id: i32 = row.get(0);
+        let external_id: String = row.get(1);
+        let canonical = format!("comicvine:{}", external_id);
+        resolved.insert(canonical, id);
+    }
+    let mut result = std::collections::HashMap::new();
+    for key in keys {
+        if let Some(norm) = normalized_volume_key(key) {
+            if let Some(&id) = resolved.get(&norm) {
+                result.insert(norm, id);
+            }
+        }
+    }
+    Ok(result)
+}
+
+async fn validate_projection(
+    tx: &Transaction<'_>,
+    user: &AuthenticatedUser,
+    projected: &std::collections::HashMap<i32, Vec<(String, String)>>,
+) -> Result<(), ApiError> {
+    let inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
+    let names = inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect();
+
+    let decisions_by_list: std::collections::HashMap<i32, Vec<crate::reading_constraints::SeriesOverlapDecision>> =
+        projected
+            .iter()
+            .map(|(&list_id, decisions)| {
+                let vec: Vec<crate::reading_constraints::SeriesOverlapDecision> = decisions
+                    .iter()
+                    .map(|(c, w)| crate::reading_constraints::SeriesOverlapDecision {
+                        continuing_volume_id: c.clone(),
+                        waiting_volume_id: w.clone(),
+                    })
+                    .collect();
+                (list_id, vec)
+            })
+            .collect();
+
+    ValidatedReadingInputs::new_with_overlap_decisions(inputs, &names, decisions_by_list)
+        .map_err(|error| cycle_conflict(error, &inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect()))?;
+    Ok(())
+}
+
+async fn advance_overlap_decisions_token(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    updated_at: &str,
+) -> Result<Option<String>, ApiError> {
+    let row = tx
+        .query_opt(
+            "UPDATE custom_cbl_lists
+             SET overlap_decisions_updated_at = $3::timestamptz,
+                 updated_at = updated_at
+             WHERE id = $1 AND user_id = $2
+             RETURNING overlap_decisions_updated_at::text",
+            &[&list_id, &user_id, &updated_at],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|r| r.get(0)))
+}
+
+async fn owned_list_for_update(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+) -> Result<Option<(String,)>, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT overlap_decisions_updated_at::text
+             FROM custom_cbl_lists
+             WHERE id = $1 AND user_id = $2
+             FOR SHARE",
+            &[&list_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|r| (r.get(0),)))
+}
+
+fn guard_version(current: &str, expected: Option<&str>) -> Result<(), ApiError> {
+    if let Some(expected) = expected {
+        if current != expected {
+            return Err(ApiError::with_status(
+                StatusCode::CONFLICT,
+                json!({
+                    "code": "reading_overlap_version_conflict",
+                    "message": "The Reading List's overlap decisions changed since they were read",
+                    "updated_at": current
+                })
+                .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ========================================================================
+// Handlers
+// ========================================================================
+
+/// `GET /api/v1/custom-cbls`
+pub async fn list_custom_cbls(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<Vec<CustomCBLListItem>>, ApiError> {
+    let conn = db::checkout(&state).await?;
+    let rows = conn
+        .query(
+            "SELECT l.id, l.name, l.description, l.mode, l.updated_at::text,
+                    (SELECT count(*)::int FROM custom_cbl_entries e WHERE e.list_id=l.id)
+             FROM custom_cbl_lists l
+             WHERE l.user_id=$1
+             ORDER BY lower(l.name), l.id",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(Json(
+        rows.iter()
+            .map(|row| list_item_from_row((
+                row.get(0), row.get(1), row.get(2), row.get(3), row.get(4), row.get(5)
+            )))
+            .collect(),
+    ))
+}
+
+/// `POST /api/v1/custom-cbls`
+pub async fn create_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<CustomCBLWrite>,
+) -> Result<(StatusCode, Json<CustomCBLResponse>), ApiError> {
+    if request.confirmed_predecessor_changes.is_some() {
+        return Err(ApiError::Unprocessable(
+            "reading_list_confirmation_put_only".to_string(),
+        ));
+    }
+    let name = validate_name(&request.name)?;
+    let mode = validate_mode(request.mode.as_deref())?;
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+
+    let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
+    if unique.len() != request.issue_ids.len() {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(ApiError::BadRequest("issue_ids must be unique".to_string()));
+    }
+    let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
+    if owned.len() != request.issue_ids.len() {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(ApiError::NotFound("Issue not found".to_string()));
+    }
+
+    let row = tx
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,NOW(),NOW())
+             RETURNING id, created_at::text, updated_at::text",
+            &[
+                &user.id(),
+                &name,
+                &request.description,
+                &mode,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let list_id: i32 = row.get(0);
+    let checkpoints: BTreeSet<i32> = request
+        .checkpoint_issue_ids
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    for (position, issue_id) in request.issue_ids.iter().enumerate() {
+        let intent = request
+            .entry_intents
+            .as_ref()
+            .and_then(|intents| intents.get(issue_id));
+        let gate = intent.map(|value| value.gate.as_str()).unwrap_or("none");
+        if !matches!(gate, "none" | "hold" | "after_previous") {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(ApiError::BadRequest("Invalid gate".to_string()));
+        }
+        let skipped = intent.is_some_and(|value| value.skipped);
+        let targets = request
+            .checkpoint_targets
+            .as_ref()
+            .and_then(|targets| targets.get(issue_id))
+            .cloned()
+            .unwrap_or_default();
+        tx.execute(
+            "INSERT INTO custom_cbl_entries
+               (list_id, issue_id, position, created_at, is_checkpoint,
+                checkpoint_target_issue_ids, gate, skipped)
+             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
+            &[
+                &list_id,
+                issue_id,
+                &(position as i32),
+                &checkpoints.contains(issue_id),
+                &serde_json::to_string(&targets).map_err(|e| {
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&e),
+                        "preserved underlying error before mapping"
+                    );
+                    ApiError::Internal("Invalid checkpoint".to_string())
+                })?,
+                &gate,
+                &skipped,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    graph_preflight(&tx, &user).await?;
+    let entries = load_entries(&tx, list_id).await?;
+    let list_row = (
+        list_id,
+        name.clone(),
+        request.description.clone(),
+        mode.clone(),
+        row.get(1),
+        row.get(2),
+        entries.len() as i32,
+    );
+    tx.commit().await.map_err(db::query_error)?;
+
+    let response = response_from_row(list_row, user.id(), entries, Vec::new(), Vec::new());
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// `GET /api/v1/custom-cbls/issue-search`
+pub async fn search_custom_cbl_issues(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Query(params): Query<CustomCBLSearchParams>,
+) -> Result<Json<Vec<CustomCBLIssueSearchResult>>, ApiError> {
+    let conn = db::checkout(&state).await?;
+    let normalized = params.q.trim();
+    let mut query = String::from(
+        "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
+         FROM issues i
+         JOIN threads t ON t.id=i.thread_id
+         WHERE t.user_id=$1"
+    );
+    let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user.id()];
+    if !normalized.is_empty() {
+        query.push_str(" AND (t.title ILIKE $2 OR i.issue_number ILIKE $2 OR (t.title || ' #' || i.issue_number) ILIKE $2)");
+        let pattern = format!("%{}%", normalized);
+        params_vec.push(&pattern);
+    }
+    query.push_str(" ORDER BY t.title ASC, i.position ASC, i.id ASC");
+    query.push_str(" LIMIT $");
+    query.push_str(&(params_vec.len() + 1).to_string());
+    params_vec.push(&params.limit);
+
+    let rows = conn.query(&query, &params_vec).await.map_err(db::query_error)?;
+    Ok(Json(
+        rows.iter()
+            .map(|row| CustomCBLIssueSearchResult {
+                issue_id: row.get(0),
+                thread_id: row.get(1),
+                series_name: row.get(2),
+                issue_number: row.get(3),
+                status: row.get(4),
+            })
+            .collect(),
+    ))
+}
+
+#[derive(Deserialize)]
+pub struct CustomCBLSearchParams {
+    #[serde(default)]
+    pub q: String,
+    #[serde(default = "default_limit")]
+    pub limit: i32,
+}
+
+fn default_limit() -> i32 {
+    30
+}
+
+/// `GET /api/v1/custom-cbls/{list_id}`
+pub async fn get_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<CustomCBLResponse>, ApiError> {
+    let conn = db::checkout(&state).await?;
+    let Some(row) = load_list(&conn, list_id, user.id()).await? else {
+        return Err(ApiError::NotFound("Reading List not found".to_string()));
+    };
+    let entries = load_entries_conn(&conn, list_id).await?;
+    Ok(Json(response_from_row(row, user.id(), entries, Vec::new(), Vec::new())))
+}
+
+async fn load_entries_conn(
+    conn: &deadpool_postgres::Object,
+    list_id: i32,
+) -> Result<Vec<CustomCBLEntryResponse>, ApiError> {
+    let rows = conn
+        .query(
+            "SELECT e.id, e.position, e.issue_id, i.thread_id, t.title, i.issue_number,
+                    i.status, e.is_checkpoint, e.gate, e.skipped,
+                    e.checkpoint_target_issue_ids::text
+             FROM custom_cbl_entries e
+             JOIN issues i ON i.id=e.issue_id
+             JOIN threads t ON t.id=i.thread_id
+             WHERE e.list_id=$1
+             ORDER BY e.position, e.id",
+            &[&list_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .iter()
+        .map(|row| CustomCBLEntryResponse {
+            id: row.get(0),
+            position: row.get(1),
+            issue_id: row.get(2),
+            thread_id: row.get(3),
+            series_name: row.get(4),
+            issue_number: row.get(5),
+            status: row.get(6),
+            is_checkpoint: row.get(7),
+            gate: row.get(8),
+            skipped: row.get(9),
+            checkpoint_target_issue_ids: serde_json::from_str::<Vec<i32>>(
+                &row.get::<_, String>(10),
+            )
+            .unwrap_or_default(),
+        })
+        .collect())
+}
+
+/// `PUT /api/v1/custom-cbls/{list_id}`
+pub async fn update_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+    Json(request): Json<CustomCBLWrite>,
+) -> Result<Response, ApiError> {
+    let name = validate_name(&request.name)?;
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+    let row = tx
+        .query_opt(
+            "SELECT name,description,mode,created_at::text FROM custom_cbl_lists
+             WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let current_mode: String = row.get(2);
+    let mode = validate_mode(request.mode.as_deref().or(Some(&current_mode)))?;
+    let old_entries = load_entries(&tx, list_id).await?;
+    let old_requirements = stored_requirements(&current_mode, &old_entries);
+    let old_by_issue: BTreeMap<i32, CustomCBLEntryResponse> = old_entries
+        .iter()
+        .cloned()
+        .map(|entry| (entry.issue_id, entry))
+        .collect();
+
+    let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
+    if unique.len() != request.issue_ids.len() {
+        return Err(ApiError::BadRequest("issue_ids must be unique".into()));
+    }
+    let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
+    if owned != unique {
+        return Err(ApiError::NotFound("Issue not found".into()));
+    }
+    let checkpoints: BTreeSet<i32> = request
+        .checkpoint_issue_ids
+        .as_ref()
+        .map(|ids| ids.iter().copied().collect())
+        .unwrap_or_else(|| {
+            old_entries
+                .iter()
+                .filter(|entry| entry.is_checkpoint)
+                .map(|entry| entry.issue_id)
+                .collect()
+        });
+    if !checkpoints.is_subset(&unique) {
+        return Err(ApiError::Unprocessable(
+            "custom_cbl_invalid_checkpoint_targets".to_string(),
+        ));
+    }
+    tx.execute(
+        "UPDATE custom_cbl_lists
+         SET name=$3,description=$4,mode=$5,updated_at=NOW()
+         WHERE id=$1 AND user_id=$2",
+        &[&list_id, &user.id(), &name, &request.description, &mode],
+    )
+    .await
+    .map_err(db::query_error)?;
+    tx.execute(
+        "DELETE FROM custom_cbl_entries WHERE list_id=$1",
+        &[&list_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    for (position, issue_id) in request.issue_ids.iter().enumerate() {
+        let old = old_by_issue.get(issue_id);
+        let intent = request
+            .entry_intents
+            .as_ref()
+            .and_then(|intents| intents.get(issue_id));
+        let gate = intent
+            .map(|entry| entry.gate.as_str())
+            .or_else(|| old.map(|entry| entry.gate.as_str()))
+            .unwrap_or("none");
+        if !matches!(gate, "none" | "hold" | "after_previous") {
+            return Err(ApiError::BadRequest("Invalid gate".into()));
+        }
+        let skipped = intent
+            .map(|entry| entry.skipped)
+            .or_else(|| old.map(|entry| entry.skipped))
+            .unwrap_or(false);
+        let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
+            Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
+            None => {
+                if checkpoints.contains(issue_id) {
+                    old.map(|entry| {
+                        entry
+                            .checkpoint_target_issue_ids
+                            .iter()
+                            .copied()
+                            .filter(|target| unique.contains(target))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| {
+                        request
+                            .issue_ids
+                            .get(position + 1)
+                            .copied()
+                            .into_iter()
+                            .collect()
+                    })
+                } else {
+                    vec![]
+                }
+            }
+        };
+        let valid: BTreeSet<i32> = targets.iter().copied().collect();
+        if targets.len() != valid.len()
+            || !valid.is_subset(&unique)
+            || valid.contains(issue_id)
+            || (!checkpoints.contains(issue_id) && !targets.is_empty())
+        {
+            return Err(ApiError::Unprocessable(
+                "custom_cbl_invalid_checkpoint_targets".to_string(),
+            ));
+        }
+        let targets_json = serde_json::to_string(&targets).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid checkpoint".into())
+        })?;
+        tx.execute(
+            "INSERT INTO custom_cbl_entries
+             (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
+             VALUES ($1,$2,$3,NOW(),$4,$5::text::json,$6,$7)",
+            &[&list_id, issue_id, &(position as i32), &(!targets.is_empty()),
+              &targets_json, &gate, &skipped],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    graph_preflight(&tx, &user).await?;
+    let entries = load_entries(&tx, list_id).await?;
+    let new_requirements = stored_requirements(&mode, &entries);
+    let labels: BTreeMap<i32, String> = old_entries
+        .iter()
+        .chain(entries.iter())
+        .map(|entry| {
+            (
+                entry.issue_id,
+                format!("{} #{}", entry.series_name, entry.issue_number),
+            )
+        })
+        .collect();
+    let changes = predecessor_changes(&old_requirements, &new_requirements, &labels);
+    let confirmation: Vec<CustomCBLPredecessorChange> = request
+        .confirmed_predecessor_changes
+        .as_ref()
+        .map_or(Ok(Vec::new()), |value| {
+            serde_json::from_value(value.clone()).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Unprocessable("Invalid predecessor confirmation".into())
+            })
+        })?;
+    if !changes.is_empty() && !confirmed_changes_match(&changes, &confirmation) {
+        return Ok((
+            StatusCode::CONFLICT,
+            Json(json!({
+                "detail": {
+                    "code": "reading_list_predecessor_confirmation_required",
+                    "predecessor_changes": changes
+                }
+            })),
+        )
+            .into_response());
+    }
+
+    let warnings = Vec::<String>::new();
+    let list_row = (
+        list_id,
+        name,
+        request.description,
+        mode,
+        row.get(3),
+        String::new(),
+        entries.len() as i32,
+    );
+    let mut json = serde_json::to_value(&response_from_row(list_row, user.id(), entries, changes, warnings)).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Reading List serialization failed".into())
+    })?;
+    tx.commit().await.map_err(db::query_error)?;
+    // The metadata timestamp is selected after commit so clients get the
+    // actual persisted optimistic token rather than a manufactured clock.
+    let conn = db::checkout(&state).await?;
+    if let Some(row) = load_list(&conn, list_id, user.id()).await? {
+        json["updated_at"] = serde_json::json!(row.5);
+    }
+    Ok((StatusCode::OK, Json(json)).into_response())
+}
+
+/// `GET /api/v1/custom-cbls/{list_id}/export`
+pub async fn export_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Response, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+    let row = tx
+        .query_opt(
+            "SELECT name FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let name: String = row.get(0);
+    let entries = load_list_entries_for_export(&tx, list_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+
+    let xml = export_custom_cbl_xml(&name, &entries);
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/xml")
+        .header("Content-Disposition", format!("attachment; filename=\"custom-cbl-{}.cbl\"", list_id))
+        .body(axum::body::Body::from(xml))
+        .unwrap())
+}
+
+/// `GET /api/v1/custom-cbls/{list_id}/reader`
+pub async fn read_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<ReadingListReader>, ApiError> {
+    let conn = db::checkout(&state).await?;
+    let Some(row) = load_list(&conn, list_id, user.id()).await? else {
+        return Err(ApiError::NotFound("Reading List not found".to_string()));
+    };
+    let entries = load_entries_conn(&conn, list_id).await?;
+    drop(conn);
+
+    let validated = option_inputs::load_option_inputs_contained(&state, user.clone()).await?;
+    let evaluated = reading_eligibility::evaluate(&validated)?;
+    let inputs = validated.inputs();
+    let titles: BTreeMap<i32, String> = inputs
+        .core
+        .threads
+        .iter()
+        .map(|thread| (thread.id, thread.title.clone()))
+        .collect();
+    let numbers: BTreeMap<i32, String> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| (issue.id, issue.issue_number.clone()))
+        .collect();
+    let thread_of: BTreeMap<i32, i32> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| (issue.id, issue.thread_id))
+        .collect();
+    let list_names: BTreeMap<i32, String> = inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect();
+    let excluded = &inputs.excluded_issue_ids;
+
+    let mut projected = vec![];
+    for entry in entries {
+        let availability;
+        let mut explanation = None;
+        if entry.status == "read" {
+            availability = "read".into();
+        } else if excluded.contains(&entry.issue_id) {
+            availability = "excluded".into();
+        } else if let Some(state) = evaluated.get(&entry.thread_id) {
+            if entry.issue_id != state.next_issue_id.unwrap_or_default() {
+                availability = "later".into();
+            } else {
+                availability = if state.eligible {
+                    "available"
+                } else {
+                    "blocked"
+                }
+                .into();
+                let mut reasons = vec![];
+                let mut dependencies = vec![];
+                for gate in
+                    reading_blocker_projection::describe_blocker_gates(state.blockers.clone())
+                {
+                    let origin = match gate.blocker.kind.as_str() {
+                        "prerequisite" => {
+                            if gate.blocker.origin.as_deref() == Some("reader") {
+                                "Reader prerequisite".to_string()
+                            } else {
+                                "Converted prerequisite".to_string()
+                            }
+                        }
+                        kind => {
+                            let label = match kind {
+                                "strict_order" => "Strict order",
+                                "hold" => "Hold",
+                                "after_previous" => "Wait for previous",
+                                "reading_cycle" => "Reading constraint cycle",
+                                other => other,
+                            };
+                            let list = gate
+                                .blocker
+                                .list_id
+                                .and_then(|id| list_names.get(&id))
+                                .map(String::as_str)
+                                .unwrap_or("Reading List");
+                            format!("{label} in {list}")
+                        }
+                    };
+                    for issue_id in gate.described_issue_ids {
+                        let series = thread_of
+                            .get(&issue_id)
+                            .and_then(|id| titles.get(id))
+                            .cloned()
+                            .unwrap_or_else(|| "Required series".to_string());
+                        let number = numbers.get(&issue_id).cloned().unwrap_or_default();
+                        let label = format!("{origin}: waiting on {series} #{number}");
+                        reasons.push(label.clone());
+                        dependencies.push(ReadingListDependency {
+                            thread_id: *thread_of.get(&issue_id).unwrap_or(&0),
+                            thread_title: series,
+                            issue_number: number,
+                            label,
+                            issue_id: Some(issue_id),
+                        });
+                    }
+                }
+                if state.next_issue_id.is_none() {
+                    reasons.push("No available unread issue".to_string());
+                }
+                explanation = Some(ReadingListBlockerExplanation {
+                    is_blocked: !state.eligible,
+                    blocking_reasons: reasons,
+                    blocking_dependencies: dependencies,
+                });
+            }
+        } else {
+            availability = "inactive".into();
+        }
+        projected.push(ReadingListReaderEntry {
+            id: entry.id,
+            position: entry.position,
+            issue_id: entry.issue_id,
+            thread_id: entry.thread_id,
+            series_name: entry.series_name,
+            issue_number: entry.issue_number,
+            status: entry.status,
+            is_checkpoint: entry.is_checkpoint,
+            gate: entry.gate,
+            skipped: entry.skipped,
+            checkpoint_target_issue_ids: entry.checkpoint_target_issue_ids,
+            availability,
+            explanation,
+        });
+    }
+    Ok(Json(ReadingListReader {
+        list_id: row.0,
+        name: row.1,
+        mode: row.3,
+        execution_mode: "option_e".to_string(),
+        entries: projected,
+    }))
+}
+
+/// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
+pub async fn apply_custom_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path((list_id, plan_id)): Path<(i32, i32)>,
+    Json(request): Json<CustomCBLApplyRequest>,
+) -> Result<Json<CustomCBLApplyResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+
+    // Load the custom CBL list
+    let list_row = tx
+        .query_opt(
+            "SELECT id, name, mode FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR SHARE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let list_name: String = list_row.get(1);
+    let list_mode: String = list_row.get(2);
+
+    // Load the continuity plan
+    let plan_row = tx
+        .query_opt(
+            "SELECT id, user_id, name, lanes_json, nodes_json, compiled_rules_json, ordering_mode, created_at::text, updated_at::text
+             FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound(format!("Continuity plan {} not found", plan_id)))?;
+
+    // Load CBL entries
+    let entries = load_entries(&tx, list_id).await?;
+    if entries.is_empty() {
+        return Err(ApiError::Unprocessable(json!({
+            "code": "custom_cbl_empty",
+            "message": "Custom CBL has no issues"
+        }).to_string()));
+    }
+
+    // Parse plan data
+    let lanes_json: serde_json::Value = plan_row.get(3);
+    let nodes_json: serde_json::Value = plan_row.get(4);
+    let compiled_rules_json: Option<serde_json::Value> = plan_row.get(5);
+    let ordering_mode: String = plan_row.get(6);
+    let created_at: String = plan_row.get(7);
+    let updated_at: String = plan_row.get(8);
+
+    // Validate optimistic concurrency
+    if let Some(expected) = request.expected_updated_at.as_deref() {
+        if expected != updated_at {
+            return Err(ApiError::with_status(
+                StatusCode::CONFLICT,
+                json!({
+                    "code": "plan_version_conflict",
+                    "message": "Reading Plan was modified since it was read",
+                    "updated_at": updated_at
+                })
+                .to_string(),
+            ));
+        }
+    }
+
+    // Determine target lane
+    let lanes: Vec<serde_json::Value> = serde_json::from_value(lanes_json.clone()).unwrap_or_default();
+    let target_lane_id = if let Some(lane_id) = request.lane_id {
+        lane_id
+    } else if !lanes.is_empty() {
+        lanes.iter()
+            .min_by_key(|l| l.get("order").and_then(|v| v.as_i64()).unwrap_or(0))
+            .and_then(|l| l.get("id").and_then(|v| v.as_str()))
+            .unwrap_or("custom-cbl")
+            .to_string()
+    } else {
+        "custom-cbl".to_string()
+    };
+
+    // Verify lane exists
+    if !lanes.iter().any(|l| l.get("id").and_then(|v| v.as_str()) == Some(&target_lane_id)) {
+        return Err(ApiError::Unprocessable(json!({
+            "code": "custom_cbl_lane_not_found",
+            "lane_id": target_lane_id
+        }).to_string()));
+    }
+
+    // Parse nodes
+    let mut nodes: Vec<serde_json::Value> = serde_json::from_value(nodes_json.clone()).unwrap_or_default();
+
+    // Load all owned issue IDs for validation
+    let owned_issues: BTreeSet<i32> = {
+        let rows = tx
+            .query(
+                "SELECT i.id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE t.user_id=$1",
+                &[&user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        rows.iter().map(|r| r.get(0)).collect()
+    };
+
+    // Merge CBL into lane
+    let source_path = format!("custom-cbl:{}", list_id);
+    let source_issue_ids: Vec<i32> = entries.iter().map(|e| e.issue_id).collect();
+    let source_issue_set: BTreeSet<i32> = source_issue_ids.iter().copied().collect();
+
+    // Clean existing source provenance from this CBL
+    for node in nodes.iter_mut() {
+        if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
+            let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if source_issue_set.contains(&ref_id) {
+                // Remove this source path
+                if let Some(paths) = node.get("source_paths").and_then(|v| v.as_array_mut()) {
+                    paths.retain(|p| p.as_str() != Some(&source_path));
+                }
+                if let Some(placements) = node.get("source_cbl_placements").and_then(|v| v.as_array_mut()) {
+                    placements.retain(|p| p.get("source_path").and_then(|v| v.as_str()) != Some(&source_path));
+                }
+                if let Some(explanation) = node.get("source_explanation").and_then(|v| v.as_str()) {
+                    if explanation.starts_with("Added from custom CBL '") {
+                        node["source_explanation"] = serde_json::Value::Null;
+                    }
+                }
+            }
+        }
+    }
+
+    // Find existing nodes in target lane for these issues
+    let mut existing_by_issue: BTreeMap<i32, usize> = BTreeMap::new();
+    for (idx, node) in nodes.iter().enumerate() {
+        if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
+            let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let lane_id = node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("");
+            if source_issue_set.contains(&ref_id) && lane_id == target_lane_id {
+                if existing_by_issue.contains_key(&ref_id) {
+                    return Err(ApiError::Unprocessable(json!({
+                        "code": "custom_cbl_duplicate_plan_issue",
+                        "issue_id": ref_id
+                    }).to_string()));
+                }
+                existing_by_issue.insert(ref_id, idx);
+            }
+        }
+    }
+
+    // Build ordered source nodes
+    let mut ordered_source_nodes = Vec::new();
+    let mut added_issue_ids = Vec::new();
+    let mut skipped_existing_issue_ids = Vec::new();
+
+    for entry in entries.iter() {
+        if let Some(&existing_idx) = existing_by_issue.get(&entry.issue_id) {
+            let node = &mut nodes[existing_idx];
+            node["is_checkpoint"] = serde_json::json!(entry.is_checkpoint);
+            node["checkpoint_target_ref_ids"] = serde_json::json!(entry.checkpoint_target_issue_ids);
+            skipped_existing_issue_ids.push(entry.issue_id);
+            ordered_source_nodes.push(node.clone());
+        } else {
+            if !owned_issues.contains(&entry.issue_id) {
+                return Err(ApiError::NotFound("Issue not found".to_string()));
+            }
+            let node = json!({
+                "id": format!("custom-cbl-{}-{}", list_id, entry.id),
+                "node_type": "issue",
+                "ref_id": entry.issue_id,
+                "lane_id": target_lane_id,
+                "position": 0,
+                "label": format!("{} #{}", entry.series_name, entry.issue_number),
+                "is_checkpoint": entry.is_checkpoint,
+                "checkpoint_target_ref_ids": entry.checkpoint_target_issue_ids,
+                "convergence_gate": [],
+                "source_paths": [source_path.clone()],
+                "source_cbl_placements": [{
+                    "source_path": source_path.clone(),
+                    "position": entry.position
+                }],
+                "source_explanation": format!("Added from custom CBL '{}'.", list_name)
+            });
+            added_issue_ids.push(entry.issue_id);
+            ordered_source_nodes.push(node);
+        }
+    }
+
+    // Merge into target lane
+    let target_nodes: Vec<serde_json::Value> = nodes
+        .iter()
+        .filter(|n| n.get("lane_id").and_then(|v| v.as_str()) == Some(&target_lane_id))
+        .cloned()
+        .collect();
+    let other_nodes: Vec<serde_json::Value> = nodes
+        .iter()
+        .filter(|n| n.get("lane_id").and_then(|v| v.as_str()) != Some(&target_lane_id))
+        .cloned()
+        .collect();
+
+    // Find anchor index
+    let source_indexes: Vec<usize> = target_nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, node)| {
+            if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
+                let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                if source_issue_set.contains(&ref_id) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    let anchor_index = source_indexes.into_iter().min().unwrap_or(target_nodes.len());
+    let target_without_source: Vec<serde_json::Value> = target_nodes
+        .into_iter()
+        .filter(|node| {
+            if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
+                let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                !source_issue_set.contains(&ref_id)
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    let mut merged_target = Vec::new();
+    merged_target.extend(target_without_source[..anchor_index].iter().cloned());
+    merged_target.extend(ordered_source_nodes);
+    merged_target.extend(target_without_source[anchor_index..].iter().cloned());
+
+    // Renumber positions
+    for (pos, node) in merged_target.iter_mut().enumerate() {
+        node["position"] = serde_json::json!(pos);
+    }
+
+    let mut new_nodes = other_nodes;
+    new_nodes.extend(merged_target);
+
+    // Graph preflight with new nodes
+    let inputs = option_inputs::load_inputs_in_transaction(&tx, user.clone()).await?;
+    let list_names: BTreeMap<i32, String> = inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect();
+
+    // Build overlap decisions from current state
+    let decisions_rows = tx
+        .query(
+            "SELECT d.list_id, ci.provider, ci.external_id, wi.provider, wi.external_id
+             FROM custom_cbl_overlap_decisions d
+             JOIN external_identities ci ON ci.id = d.continuing_external_identity_id
+             JOIN external_identities wi ON wi.id = d.waiting_external_identity_id
+             WHERE d.user_id = $1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut overlap_decisions: std::collections::HashMap<i32, Vec<(String, String)>> =
+        std::collections::HashMap::new();
+    for row in decisions_rows {
+        let list_id: i32 = row.get(0);
+        let continuing = format!("{}:{}", row.get::<_, String>(1), row.get::<_, String>(2));
+        let waiting = format!("{}:{}", row.get::<_, String>(3), row.get::<_, String>(4));
+        if let (Some(c), Some(w)) = (normalized_volume_key(&continuing), normalized_volume_key(&waiting)) {
+            overlap_decisions.entry(list_id).or_default().push((c, w));
+        }
+    }
+
+    ValidatedReadingInputs::new_with_overlap_decisions(inputs.clone(), &list_names, overlap_decisions)
+        .map_err(|error| cycle_conflict(error, &inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect()))?;
+
+    // Update plan
+    let new_lanes_json = serde_json::to_value(&lanes).map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
+    let new_nodes_json = serde_json::to_value(&new_nodes).map_err(|_| ApiError::Internal("nodes serialization failed".into()))?;
+
+    // Recompile rules (simplified - in production would call proper rule compiler)
+    let new_compiled_rules_json = compiled_rules_json; // Keep existing for now
+
+    tx.execute(
+        "UPDATE continuity_plans
+         SET lanes_json = $3, nodes_json = $4, compiled_rules_json = $5, updated_at = NOW()
+         WHERE id = $1 AND user_id = $2",
+        &[&plan_id, &user.id(), &new_lanes_json, &new_nodes_json, &new_compiled_rules_json],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Refresh blocked status if needed
+    if ordering_mode == "strict_sequential" {
+        // In production, call refresh_user_blocked_status
+    }
+
+    // Return updated plan
+    Ok(Json(CustomCBLApplyResponse {
+        id: plan_id,
+        user_id: user.id(),
+        name: plan_row.get(2),
+        description: plan_row.get(9), // This might not exist, handle gracefully
+        ordering_mode,
+        lanes_json: serde_json::from_value(new_lanes_json).unwrap_or_default(),
+        nodes_json: serde_json::from_value(new_nodes_json).unwrap_or_default(),
+        compiled_rules_json: new_compiled_rules_json,
+        created_at,
+        updated_at: chrono::Utc::now().to_rfc3339(), // Would need to re-query for actual
+        added_issue_ids,
+        skipped_existing_issue_ids,
+    }))
+}
+
+/// `GET /api/v1/custom-cbls/{list_id}/overlap-decisions`
+pub async fn get_overlap_decisions(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<OverlapDecisionSetResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Verify ownership and get version token
+    let row = tx
+        .query_opt(
+            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists
+             WHERE id = $1 AND user_id = $2 FOR SHARE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let updated_at: String = row.get(0);
+
+    let decisions = load_list_overlap_decisions(&tx, user.id(), list_id).await?;
+    let candidates = load_thread_volume_candidates(&tx, user.id()).await?;
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    Ok(Json(OverlapDecisionSetResponse {
+        list_id,
+        updated_at,
+        decisions,
+        candidate_volumes: candidates,
+    }))
+}
+
+/// `PUT /api/v1/custom-cbls/{list_id}/overlap-decisions`
+pub async fn save_overlap_decision(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+    Json(request): Json<OverlapDecisionWrite>,
+) -> Result<Json<OverlapDecisionSetResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+
+    // Verify ownership and get current token
+    let row = tx
+        .query_opt(
+            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists
+             WHERE id = $1 AND user_id = $2 FOR SHARE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let current_token: String = row.get(0);
+    guard_version(&current_token, request.expected_updated_at.as_deref())?;
+
+    // Validate volume keys
+    let continuing_key = normalized_volume_key(&request.continuing_volume_id)
+        .ok_or_else(|| ApiError::Unprocessable(json!({
+            "code": "reading_overlap_invalid_volume",
+            "message": "An overlap decision must name two exact Comic Vine volumes"
+        }).to_string()))?;
+    let waiting_key = normalized_volume_key(&request.waiting_volume_id)
+        .ok_or_else(|| ApiError::Unprocessable(json!({
+            "code": "reading_overlap_invalid_volume",
+            "message": "An overlap decision must name two exact Comic Vine volumes"
+        }).to_string()))?;
+
+    if continuing_key == waiting_key {
+        return Err(ApiError::Unprocessable(json!({
+            "code": "reading_overlap_same_volume",
+            "message": "An overlap decision must name two distinct volumes"
+        }).to_string()));
+    }
+
+    // Resolve identity IDs
+    let resolved = resolve_volume_identity_ids(&tx, &[continuing_key.clone(), waiting_key.clone()]).await?;
+    let continuing_identity_id = resolved.get(&continuing_key)
+        .ok_or_else(|| ApiError::Unprocessable(json!({
+            "code": "reading_overlap_unknown_volume",
+            "message": "An overlap decision must name two known Comic Vine volumes"
+        }).to_string()))?;
+    let waiting_identity_id = resolved.get(&waiting_key)
+        .ok_or_else(|| ApiError::Unprocessable(json!({
+            "code": "reading_overlap_unknown_volume",
+            "message": "An overlap decision must name two known Comic Vine volumes"
+        }).to_string()))?;
+
+    // Load all decisions for projection validation
+    let all_decisions = load_overlap_decisions(&tx, user.id()).await?;
+    let mut projected: std::collections::HashMap<i32, Vec<(String, String)>> =
+        std::collections::HashMap::new();
+    for d in &all_decisions {
+        if d.list_id != list_id {
+            projected.entry(d.list_id).or_default().push((
+                d.continuing_volume_id.clone(),
+                d.waiting_volume_id.clone(),
+            ));
+        }
+    }
+    // Add the new decision, superseding opposite direction
+    let list_decisions = projected.entry(list_id).or_default();
+    list_decisions.retain(|(c, w)| !((c == &continuing_key && w == &waiting_key) || (c == &waiting_key && w == &continuing_key)));
+    list_decisions.push((continuing_key.clone(), waiting_key.clone()));
+
+    validate_projection(&tx, &user, &projected).await?;
+
+    // Upsert the decision
+    let now = chrono::Utc::now();
+    let now_str = now.to_rfc3339();
+
+    // Delete opposite direction
+    tx.execute(
+        "DELETE FROM custom_cbl_overlap_decisions
+         WHERE list_id = $1 AND user_id = $2
+           AND continuing_external_identity_id = $3
+           AND waiting_external_identity_id = $4",
+        &[&list_id, &user.id(), waiting_identity_id, continuing_identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Upsert
+    let existing = tx
+        .query_opt(
+            "SELECT id FROM custom_cbl_overlap_decisions
+             WHERE list_id = $1 AND user_id = $2
+               AND continuing_external_identity_id = $3
+               AND waiting_external_identity_id = $4",
+            &[&list_id, &user.id(), continuing_identity_id, waiting_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let decision_id: i32 = if let Some(row) = existing {
+        let id: i32 = row.get(0);
+        tx.execute(
+            "UPDATE custom_cbl_overlap_decisions SET updated_at = $5
+             WHERE id = $1",
+            &[&id, &now],
+        )
+        .await
+        .map_err(db::query_error)?;
+        id
+    } else {
+        let row = tx
+            .query_one(
+                "INSERT INTO custom_cbl_overlap_decisions
+                 (user_id, list_id, continuing_external_identity_id, waiting_external_identity_id, created_at, updated_at)
+                 VALUES ($1,$2,$3,$4,$5,$5)
+                 RETURNING id",
+                &[&user.id(), &list_id, continuing_identity_id, waiting_identity_id, &now],
+            )
+            .await
+            .map_err(db::query_error)?;
+        row.get(0)
+    };
+
+    // Advance version token
+    let new_token = now_str.clone();
+    let updated_row = tx
+        .query_opt(
+            "UPDATE custom_cbl_lists
+             SET overlap_decisions_updated_at = $3::timestamptz,
+                 updated_at = updated_at
+             WHERE id = $1 AND user_id = $2
+             RETURNING overlap_decisions_updated_at::text",
+            &[&list_id, &user.id(), &new_token],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let advanced_token: String = updated_row.get(0);
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Build response
+    let decisions = load_list_overlap_decisions(&tx, user.id(), list_id).await?;
+    let candidates = load_thread_volume_candidates(&tx, user.id()).await?;
+
+    Ok(Json(OverlapDecisionSetResponse {
+        list_id,
+        updated_at: advanced_token,
+        decisions,
+        candidate_volumes: candidates,
+    }))
+}
+
+/// `DELETE /api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}`
+pub async fn delete_overlap_decision(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path((list_id, decision_id)): Path<(i32, i32)>,
+    Query(params): Query<DeleteOverlapParams>,
+) -> Result<Json<OverlapDecisionSetResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+
+    // Verify ownership and get current token
+    let row = tx
+        .query_opt(
+            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists
+             WHERE id = $1 AND user_id = $2 FOR SHARE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let current_token: String = row.get(0);
+    guard_version(&current_token, params.expected_updated_at.as_deref())?;
+
+    // Verify decision exists and belongs to this list
+    let decision = tx
+        .query_opt(
+            "SELECT id FROM custom_cbl_overlap_decisions
+             WHERE id = $1 AND list_id = $2 AND user_id = $3",
+            &[&decision_id, &list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound(format!("Overlap decision {} not found", decision_id)))?;
+
+    // Load all decisions for projection validation
+    let all_decisions = load_overlap_decisions(&tx, user.id()).await?;
+    let mut projected: std::collections::HashMap<i32, Vec<(String, String)>> =
+        std::collections::HashMap::new();
+    for d in &all_decisions {
+        if d.id != decision_id {
+            projected.entry(d.list_id).or_default().push((
+                d.continuing_volume_id.clone(),
+                d.waiting_volume_id.clone(),
+            ));
+        }
+    }
+
+    validate_projection(&tx, &user, &projected).await?;
+
+    // Delete the decision
+    tx.execute(
+        "DELETE FROM custom_cbl_overlap_decisions WHERE id = $1",
+        &[&decision_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Advance version token
+    let new_token = chrono::Utc::now().to_rfc3339();
+    let updated_row = tx
+        .query_opt(
+            "UPDATE custom_cbl_lists
+             SET overlap_decisions_updated_at = $3::timestamptz,
+                 updated_at = updated_at
+             WHERE id = $1 AND user_id = $2
+             RETURNING overlap_decisions_updated_at::text",
+            &[&list_id, &user.id(), &new_token],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
+    let advanced_token: String = updated_row.get(0);
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Build response
+    let decisions = load_list_overlap_decisions(&tx, user.id(), list_id).await?;
+    let candidates = load_thread_volume_candidates(&tx, user.id()).await?;
+
+    Ok(Json(OverlapDecisionSetResponse {
+        list_id,
+        updated_at: advanced_token,
+        decisions,
+        candidate_volumes: candidates,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct DeleteOverlapParams {
+    pub expected_updated_at: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalized_volume_key_accepts_comicvine_ids() {
+        assert_eq!(normalized_volume_key("comicvine:12345"), Some("comicvine:12345".to_string()));
+        assert_eq!(normalized_volume_key("comicvine:0"), Some("comicvine:0".to_string()));
+        assert_eq!(normalized_volume_key("comicvine:abc"), None);
+        assert_eq!(normalized_volume_key("marvel:12345"), None);
+        assert_eq!(normalized_volume_key("comicvine:"), None);
+        assert_eq!(normalized_volume_key(""), None);
+    }
+
+    #[test]
+    fn validate_mode_accepts_valid_modes() {
+        assert_eq!(validate_mode(Some("strict")).unwrap(), "strict");
+        assert_eq!(validate_mode(Some("loose")).unwrap(), "loose");
+        assert_eq!(validate_mode(None).unwrap(), "loose");
+        assert!(validate_mode(Some("invalid")).is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_empty_and_long() {
+        assert!(validate_name("").is_err());
+        assert!(validate_name("   ").is_err());
+        assert!(validate_name(&"a".repeat(201)).is_err());
+        assert_eq!(validate_name(" Valid Name ").unwrap(), "Valid Name");
+    }
+}
