@@ -183,15 +183,12 @@ def roster_with_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin worker execution capabilities so fork routing is deterministic."""
     from types import SimpleNamespace
 
-    from factory_worker_slots import resolve as _resolve
-
     def synthetic_slot(worker: str):
         source = {"46": "kilo-auto", "11": "opencode-free"}.get(worker)
         if source is None:
             raise ValueError("unknown synthetic slot")
         return SimpleNamespace(source=source)
 
-    del _resolve
     slots = __import__("factory_worker_slots")
     monkeypatch.setattr(slots, "resolve", synthetic_slot)
 
