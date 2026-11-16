@@ -359,7 +359,7 @@ fn response_from_row(
 }
 
 async fn graph_preflight(tx: &Transaction<'_>, user: &AuthenticatedUser) -> Result<(), ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let inputs = option_inputs::load_inputs_in_transaction(tx, *user).await?;
     let names = inputs
         .lists
         .iter()
@@ -734,7 +734,7 @@ async fn validate_projection(
     user: &AuthenticatedUser,
     projected: &std::collections::HashMap<i32, Vec<(String, String)>>,
 ) -> Result<(), ApiError> {
-    let mut inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let mut inputs = option_inputs::load_inputs_in_transaction(tx, *user).await?;
     let names = inputs
         .lists
         .iter()
@@ -1285,7 +1285,7 @@ pub async fn export_custom_cbl(
     tx.commit().await.map_err(db::query_error)?;
 
     let xml = export_custom_cbl_xml(&name, &entries);
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/xml")
         .header(
@@ -1299,7 +1299,7 @@ pub async fn export_custom_cbl(
                 "preserved underlying error before mapping"
             );
             ApiError::Internal("Custom CBL export response failed".into())
-        })?)
+        })
 }
 
 /// `GET /api/v1/custom-cbls/{list_id}/reader`
