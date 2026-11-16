@@ -1622,8 +1622,10 @@ pub async fn create_release_source(
 
     // Extract provider title from metadata
     let provider_title = metadata_json
-        .and_then(|m| m.get("name").or_else(|| m.get("title")))
-        .and_then(|v| v.as_str())
+        .and_then(|m| {
+            m.get("name").and_then(|v| v.as_str())
+                .or_else(|| m.get("title").and_then(|v| v.as_str()))
+        })
         .map(|s| s.to_string());
 
     let response = ReleaseSourceResponse {
@@ -1705,8 +1707,10 @@ pub async fn list_release_sources(
         .map(|row| {
             let metadata_json: Option<serde_json::Value> = row.get(11);
             let provider_title = metadata_json
-                .and_then(|m| m.get("name").or_else(|| m.get("title")))
-                .and_then(|v| v.as_str())
+                .and_then(|m| {
+                    m.get("name").and_then(|v| v.as_str())
+                        .or_else(|| m.get("title").and_then(|v| v.as_str()))
+                })
                 .map(|s| s.to_string());
 
             ReleaseSourceResponse {
@@ -1853,8 +1857,10 @@ pub async fn get_release_source(
 
     let metadata_json: Option<serde_json::Value> = row.get(11);
     let provider_title = metadata_json
-        .and_then(|m| m.get("name").or_else(|| m.get("title")))
-        .and_then(|v| v.as_str())
+        .and_then(|m| {
+            m.get("name").and_then(|v| v.as_str())
+                .or_else(|| m.get("title").and_then(|v| v.as_str()))
+        })
         .map(|s| s.to_string());
 
     let response = ReleaseSourceResponse {
@@ -1983,8 +1989,10 @@ pub async fn update_release_source(
 
     let metadata_json: Option<serde_json::Value> = updated_row.get(11);
     let provider_title = metadata_json
-        .and_then(|m| m.get("name").or_else(|| m.get("title")))
-        .and_then(|v| v.as_str())
+        .and_then(|m| {
+            m.get("name").and_then(|v| v.as_str())
+                .or_else(|| m.get("title").and_then(|v| v.as_str()))
+        })
         .map(|s| s.to_string());
 
     let response = ReleaseSourceResponse {
@@ -2061,14 +2069,9 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
     
     if let Some(m) = metadata_json {
         // Extract title - check both "name" and "title" keys
-        let title_str: Option<String> = m.get("name")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                m.get("title")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
+        let title_from_name = m.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let title_from_title = m.get("title").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let title_str = title_from_name.or(title_from_title);
         if let Some(s) = title_str {
             if !s.trim().is_empty() {
                 display.insert("title".to_string(), serde_json::Value::String(s.trim().to_string()));
@@ -2104,22 +2107,11 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
         }
         
         // Extract issue_count - check both "count_of_issues" and "issue_count" keys
-        let issue_count = m.get("count_of_issues")
-            .and_then(|v| v.as_i64())
-            .or_else(|| {
-                m.get("count_of_issues")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| s.trim().parse::<i64>().ok())
-            })
-            .or_else(|| {
-                m.get("issue_count")
-                    .and_then(|v| v.as_i64())
-            })
-            .or_else(|| {
-                m.get("issue_count")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| s.trim().parse::<i64>().ok())
-            });
+        let count_of_issues_i64 = m.get("count_of_issues").and_then(|v| v.as_i64());
+        let count_of_issues_str = m.get("count_of_issues").and_then(|v| v.as_str()).and_then(|s| s.trim().parse::<i64>().ok());
+        let issue_count_i64 = m.get("issue_count").and_then(|v| v.as_i64());
+        let issue_count_str = m.get("issue_count").and_then(|v| v.as_str()).and_then(|s| s.trim().parse::<i64>().ok());
+        let issue_count = count_of_issues_i64.or(count_of_issues_str).or(issue_count_i64).or(issue_count_str);
         if let Some(c) = issue_count {
             display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
         }
