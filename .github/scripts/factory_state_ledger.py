@@ -76,10 +76,10 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
                    VALUES ('github-actions', 'worker_assigned', 'worker', $1,
                      jsonb_build_object('claim_id', $2::text, 'worker', $3::text,
                                         'targets', $4::jsonb, 'run_id', $5::text,
-                                        'source', $6::text))""",
+                                        'source', $6::text, 'repo', $7::text))""",
                 int(worker), token, worker, json.dumps(sorted(set(numbers))),
                 os.environ.get("GITHUB_RUN_ID", ""),
-                _roster()[worker][0],
+                _roster()[worker][0], repo,
             )
         return token
     finally:
@@ -135,8 +135,8 @@ async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
                    (source, event_type, subject_type, subject_number, detail)
                    VALUES ('github-actions', 'worker_released', 'worker', $1,
                      jsonb_build_object('claim_id',$2::text,'worker',$3::text,
-                                        'reason',$4::text,'targets',$5::jsonb))""",
-                int(worker), token, worker, reason, json.dumps(numbers),
+                                        'reason',$4::text,'targets',$5::jsonb,'repo',$6::text))""",
+                int(worker), token, worker, reason, json.dumps(numbers), repo,
             )
         return True
     finally:
@@ -194,7 +194,7 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                     """INSERT INTO public.factory_state_events
                        (source,event_type,subject_type,subject_number,detail)
                        VALUES ('github-actions',$1,'worker',$2,$3::jsonb)""",
-                    entry["event_type"], int(entry["worker"]), json.dumps(entry),
+                    entry["event_type"], int(entry["worker"]), json.dumps({**entry, "repo": repo}),
                 )
                 inserted += 1
                 # 'running' is an initial status marker, not a periodic
