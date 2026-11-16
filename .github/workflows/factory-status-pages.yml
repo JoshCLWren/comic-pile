@@ -8,8 +8,8 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/generate_factory_status_dashboard.py'
-      - '.github/scripts/factory_fleet_console.js'
-      - '.github/scripts/factory_fleet_console.css'
+      - '.github/scripts/factory_fleet_console.cjs'
+      - '.github/scripts/factory_fleet_style.py'
       - '.github/scripts/factory_state_cache.py'
       - '.github/scripts/factory_delivery_funnel.py'
       - '.github/scripts/probe_opencode_free_roster.py'
