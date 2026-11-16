@@ -846,13 +846,37 @@ async fn extend_adopted_issue_to_following_plans(
             if node.get("node_type").and_then(Value::as_str) == Some("issue")
                 && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
             {
-                let occ = node.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-                let lane = node.get("lane_id").and_then(Value::as_str).unwrap_or("unread-tail").to_string();
-                let pos = node.get("position").and_then(Value::as_i64).unwrap_or(max_pos + 1) as i32;
-                existing_node = Some((if occ.is_empty() { format!("release-{issue_id}") } else { occ }, lane, pos));
+                let occ = node
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let lane = node
+                    .get("lane_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unread-tail")
+                    .to_string();
+                let pos = node
+                    .get("position")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(max_pos + 1) as i32;
+                existing_node = Some((
+                    if occ.is_empty() {
+                        format!("release-{issue_id}")
+                    } else {
+                        occ
+                    },
+                    lane,
+                    pos,
+                ));
             }
         }
-        let (occurrence_id, lane_id, display_position, changed_json) = if let Some((occ, lane, pos)) = existing_node {
+        let (occurrence_id, lane_id, display_position, changed_json) = if let Some((
+            occ,
+            lane,
+            pos,
+        )) = existing_node
+        {
             (occ, lane, pos, false)
         } else {
             let new_pos = (max_pos + 1) as i32;
@@ -871,7 +895,12 @@ async fn extend_adopted_issue_to_following_plans(
             )
             .await
             .map_err(db::query_error)?;
-            (format!("release-{issue_id}"), "unread-tail".to_string(), new_pos, true)
+            (
+                format!("release-{issue_id}"),
+                "unread-tail".to_string(),
+                new_pos,
+                true,
+            )
         };
         let _ = changed_json;
         tx.execute(
