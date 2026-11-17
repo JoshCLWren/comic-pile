@@ -394,6 +394,98 @@
         ]
       }
     },
+    "/api/sessions/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned list.",
+        "operationId": "list_sessions_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated session history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/current/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned current session.",
+        "operationId": "get_current_session_documentation",
+        "responses": {
+          "200": {
+            "description": "Current active session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCurrentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -420,6 +512,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/details": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned details.",
+        "operationId": "get_session_details_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/restore-session-start": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned restore.",
+        "operationId": "restore_session_start_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRestoreResponse"
                 }
               }
             }
@@ -519,6 +705,113 @@
           },
           "404": {
             "description": "Thread not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/undo/{session_id}/snapshots": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the unversioned undo snapshots.",
+        "operationId": "list_undo_snapshots_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session restore snapshots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/undo/{session_id}/undo/{snapshot_id}": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the unversioned undo apply.",
+        "operationId": "undo_to_snapshot_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "description": "Snapshot to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -2478,6 +2771,98 @@
         ]
       }
     },
+    "/api/v1/sessions/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned list.",
+        "operationId": "list_sessions_v1_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated session history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/current/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned current session.",
+        "operationId": "get_current_session_v1_documentation",
+        "responses": {
+          "200": {
+            "description": "Current active session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCurrentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -2504,6 +2889,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/details": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned details.",
+        "operationId": "get_session_details_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/restore-session-start": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned restore.",
+        "operationId": "restore_session_start_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRestoreResponse"
                 }
               }
             }
@@ -3446,6 +3925,113 @@
           },
           "422": {
             "description": "Invalid status or page size"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/snapshots": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the versioned undo snapshots.",
+        "operationId": "list_undo_snapshots_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session restore snapshots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the versioned undo apply.",
+        "operationId": "undo_to_snapshot_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "description": "Snapshot to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -9000,7 +9586,7 @@
       },
       "SessionActiveThread": {
         "type": "object",
-        "description": "Active (pending or freshly rolled) thread projection for one session.",
+        "description": "Active thread projection.",
         "required": [
           "id",
           "title",
@@ -9098,7 +9684,7 @@
       },
       "SessionBandwidthState": {
         "type": "object",
-        "description": "Canonical bandwidth state; invalid stored values normalize to `null`.",
+        "description": "Canonical bandwidth state.",
         "properties": {
           "active_bandwidth": {
             "type": [
@@ -9130,6 +9716,166 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "SessionCurrentResponse": {
+        "type": "object",
+        "description": "Full session response (current-session endpoint).",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -9294,9 +10040,183 @@
           }
         }
       },
+      "SessionDetailsResponse": {
+        "type": "object",
+        "description": "Full session details response with events and narrative summary.",
+        "required": [
+          "session_id",
+          "started_at",
+          "start_die",
+          "ladder_path",
+          "narrative_summary",
+          "current_die",
+          "events"
+        ],
+        "properties": {
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionEventDetail"
+            }
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "narrative_summary": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionEventDetail": {
+        "type": "object",
+        "description": "Event detail for session details response.",
+        "required": [
+          "id",
+          "type_",
+          "timestamp",
+          "thread_deleted"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "queue_move": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "selection_method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_deleted": {
+            "type": "boolean"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type_": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionHistoryListResponse": {
+        "type": "object",
+        "description": "Paginated session history list response.",
+        "required": [
+          "sessions"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionListItemResponse"
+            }
+          }
+        }
+      },
       "SessionIntentState": {
         "type": "object",
-        "description": "Canonical intent state; invalid stored values normalize to `null`.",
+        "description": "Canonical intent state.",
         "properties": {
           "active_intent": {
             "type": [
@@ -9328,6 +10248,285 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "SessionListItemResponse": {
+        "type": "object",
+        "description": "List-item session response (history list endpoint).",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SessionListParams": {
+        "type": "object",
+        "description": "Query parameters for session history pagination.",
+        "properties": {
+          "page_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1
+          },
+          "page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionRestoreResponse": {
+        "type": "object",
+        "description": "Full session response matching Python SessionResponse.",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -9386,7 +10585,7 @@
       },
       "SessionTag": {
         "type": "object",
-        "description": "One direct visible tag on the active thread.",
+        "description": "Direct visible tag.",
         "required": [
           "id",
           "name",
@@ -9430,7 +10629,7 @@
       },
       "SessionThreadSummary": {
         "type": "object",
-        "description": "Compact thread summary used for the (empty on this endpoint) snoozed and\nskipped lists, kept typed so the contract stays explicit.",
+        "description": "Compact thread summary.",
         "required": [
           "id",
           "title"
@@ -10439,6 +11638,221 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "UndoApplyResponse": {
+        "type": "object",
+        "description": "Full session response matching Python SessionResponse.",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotItem": {
+        "type": "object",
+        "description": "Snapshot item in the list response.",
+        "required": [
+          "id",
+          "session_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotsResponse": {
+        "type": "object",
+        "description": "Undo snapshots list response.",
+        "required": [
+          "session_id",
+          "snapshots"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UndoSnapshotItem"
+            }
           }
         }
       },
