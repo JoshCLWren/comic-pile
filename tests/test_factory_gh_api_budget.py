@@ -226,3 +226,52 @@ def test_ownership_reads_and_expired_entries_stay_live(tmp_path: Path) -> None:
     checks = ("pr", "checks", "5", "--repo", "o/r", "--required", "--json", "state")
     _shim(tmp_path, *checks, ttl="0")
     assert _shim(tmp_path, *checks, ttl="0") == "live:4"
+
+
+def _dispatch_batch(tmp_path: Path, assignments: list[str]) -> tuple[int, str]:
+    """Run the real roster dispatch step with stubbed controller and gh."""
+    script = _step("fixed-model-factory-dispatch.yml", "Resolve and dispatch fixed workers")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "assign.log"
+    queue = tmp_path / "queue"
+    queue.write_text("\n".join(assignments) + "\n")
+    (bindir / "python3").write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in\n'
+        '  *factory_worker_slots.py\\ offer*) echo \'["1","2","3","4","5","6","7","8"]\' ;;\n'
+        '  *"assign --worker"*) echo "$*" >> ' + str(log) + "\n"
+        '    head -1 ' + str(queue) + '; sed -i 1d ' + str(queue) + ' ;;\n'
+        '  *" capacity"*) echo \'{"remaining": 12}\' ;;\n'
+        '  *" reconcile"*|*" release"*) ;;\n'
+        '  *" filter"*|*" rank"*) cat ;;\n'
+        "  *) exit 1 ;;\n"
+        "esac\n"
+    )
+    (bindir / "gh").write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in *rate_limit*) echo 5000 ;; *) ;; esac\n'
+    )
+    for tool in ("python3", "gh"):
+        (bindir / tool).chmod(0o755)
+    output = tmp_path / "out"
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "EVENT_NAME": "workflow_dispatch",
+           "DISPATCH_MODE": "roster", "GITHUB_OUTPUT": str(output), "RUNNER_TEMP": str(tmp_path)}
+    env.pop("OPENROUTER_JEV_API_KEY", None)
+    result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    calls = len(log.read_text().splitlines()) if log.exists() else 0
+    return calls, result.stdout
+
+
+def test_idle_roster_tick_stops_after_three_empty_assignments(tmp_path: Path) -> None:
+    calls, out = _dispatch_batch(tmp_path, ['{"kind":"none"}'] * 8)
+    assert calls == 3
+    assert "3 consecutive workers found no executable work" in out
+
+
+def test_an_assignment_resets_the_idle_streak(tmp_path: Path) -> None:
+    none = '{"kind":"none"}'
+    work = '{"kind":"issue","number":1}'
+    calls, _ = _dispatch_batch(tmp_path, [none, none, work, none, none, none, none, none])
+    assert calls == 6
