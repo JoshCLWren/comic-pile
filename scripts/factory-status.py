@@ -99,8 +99,25 @@ def factory_pr(pr: dict[str, Any]) -> bool:
 
 
 def model_produced_pr(pr: dict[str, Any]) -> bool:
-    """Attribution marker is not proof of merged deployment."""
-    return factory_pr(pr) and "Produced by fixed-model Factory" in str(pr.get("body") or "")
+    """Accept both fixed-model attribution and trusted-looking handoff metadata.
+
+    PR descriptions may be rewritten during review. A marker is supporting
+    metadata, not proof that the model authored the final reviewed changes.
+    """
+    if not factory_pr(pr):
+        return False
+    body = str(pr.get("body") or "")
+    return "Produced by fixed-model Factory" in body or (
+        "<!-- factory-checkpoint-handoff:v1 " in body
+        and "Worker: opencode-free-model-factory-" in body
+        and "Model: " in body
+    )
+
+
+def bot_authored_factory_pr(pr: dict[str, Any]) -> bool:
+    """Bot ownership is a separate, broader category than model attribution."""
+    user = pr.get("user")
+    return factory_pr(pr) and isinstance(user, dict) and user.get("login") == "github-actions[bot]"
 
 
 def workflow_runs(
@@ -147,15 +164,22 @@ def collect(
     merged = [pr for pr in prs if factory_pr(pr) and recent(pr, cutoff, "merged_at")]
     created_by_model = [pr for pr in opened if model_produced_pr(pr)]
     merged_from_model = [pr for pr in merged if model_produced_pr(pr)]
+    bot_opened = [pr for pr in opened if bot_authored_factory_pr(pr)]
+    bot_merged = [pr for pr in merged if bot_authored_factory_pr(pr)]
+    # When the newest 40 dispatch runs all fall inside the window, the
+    # reported count is a lower bound, not the total dispatch rate.
+    dispatch_capped = len(dispatch) == 40 and bool(launched_dispatches) and recent(dispatch[-1], cutoff)
     main_ci = next((r for r in ci if r.get("head_branch") == "main"), None)
     last_dispatch = next(iter(dispatch), None)
     freshness, elapsed = snapshot_status(snapshot, now)
 
     # A successful Actions job proves execution, not persisted or deployed code.
     if merged_from_model:
-        verdict = "FACTORY PR MERGED (production not verified)"
+        verdict = "FACTORY-ATTRIBUTED PR MERGED (production not verified)"
+    elif bot_merged:
+        verdict = "FACTORY BOT PR MERGED; MODEL ATTRIBUTION UNVERIFIED"
     elif created_by_model:
-        verdict = "CODE PR CREATED (merge/deploy unverified)"
+        verdict = "FACTORY-ATTRIBUTED PR OPENED (merge/deploy unverified)"
     elif active_entries:
         verdict = "WORKERS RUNNING; DELIVERY NOT PROVEN"
     elif queued_entries:
@@ -171,7 +195,9 @@ def collect(
         "queued_entries": queued_entries, "ended_entries": ended_entries,
         "dispatches": launched_dispatches, "last_dispatch": last_dispatch,
         "opened": opened, "merged": merged, "model_opened": created_by_model,
-        "model_merged": merged_from_model, "main_ci": main_ci,
+        "model_merged": merged_from_model,
+        "bot_opened": bot_opened, "bot_merged": bot_merged,
+        "dispatch_capped": dispatch_capped, "main_ci": main_ci,
         "snapshot_freshness": freshness, "snapshot_age": elapsed,
         "snapshot_error": snapshot_error, "pr_window_limited": len(prs) == 100,
     }
@@ -194,17 +220,22 @@ def render(data: dict[str, Any]) -> str:
         "",
         f"Workers: {len(data['active_entries'])} running, {len(data['queued_entries'])} queued; "
         f"{successes} successful / {failures} failed recent entry runs",
-        f"Dispatcher: {len(data['dispatches'])} run(s) started; last "
+        f"Dispatcher: {'at least ' if data['dispatch_capped'] else ''}{len(data['dispatches'])} "
+        f"run(s) started; last "
         f"{(data['last_dispatch'] or {}).get('conclusion') or (data['last_dispatch'] or {}).get('status') or 'unknown'}",
         f"Factory PRs: {len(data['opened'])} opened, {len(data['merged'])} merged "
         "(last 100 updated PRs; local and remote contributors included)",
-        f"Model-origin PRs: {len(data['model_opened'])} created, {len(data['model_merged'])} merged "
+        f"Checkpoint-attributed PRs: {len(data['model_opened'])} created, {len(data['model_merged'])} merged "
         "(metadata evidence, not independent code/deploy validation)",
+        f"Bot-authored factory PRs: {len(data['bot_opened'])} created, {len(data['bot_merged'])} merged "
+        "(may include human-authored fixes)",
         f"Main CI: {(data['main_ci'] or {}).get('conclusion') or (data['main_ci'] or {}).get('status') or 'unknown'}",
         f"Dashboard: {data['snapshot_freshness']} ({data['snapshot_age']})",
     ]
     if data["pr_window_limited"]:
         lines.append("NOTE: PR list capped at 100, counts may understate activity.")
+    if data["dispatch_capped"]:
+        lines.append("NOTE: Dispatcher list capped at 40; actual dispatch count may be higher.")
     if data["snapshot_error"]:
         lines.append("NOTE: Dashboard snapshot unavailable; live GitHub data remains available.")
     lines.extend(["", "Evidence:"])
@@ -214,6 +245,8 @@ def render(data: dict[str, Any]) -> str:
         lines.append(f"  CODE PR  #{pr.get('number')}  {pr_link(pr)}")
     for pr in data["model_merged"][:3]:
         lines.append(f"  MERGED   #{pr.get('number')}  {pr_link(pr)}")
+    for pr in [p for p in data["bot_merged"] if p not in data["model_merged"]][:3]:
+        lines.append(f"  BOT PR   #{pr.get('number')}  {pr_link(pr)}")
     if data["last_dispatch"]:
         lines.append(f"  DISPATCH {workflow_link(data['last_dispatch'])}")
     if data["main_ci"]:
