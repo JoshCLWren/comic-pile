@@ -449,7 +449,7 @@ def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
     assert "model_key, run_id" in source
     assert "factory-model-backoff-v1:" in source
     # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
-    assert "await _recent_streak(conn, run_id, source, model)" in source
+    assert "await _recent_streak(conn, run_id, source, model, repo=repo)" in source
     assert "classification in WORKER_RETRY_CLASSES" in source
 
 class RuntimeConn:
