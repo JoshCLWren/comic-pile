@@ -205,7 +205,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/taste/discoveries"
-        and item.get("burndown_status") == "live transitional Python with callers"
+        and item.get("burndown_status") == "native Rust"
         for item in v1_ops
     )
     assert not any(
@@ -361,6 +361,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
     assert [fragment.name for fragment in fragments] == [
+        "activity",
         "bug-reports",
         "catalog",
         "comicvine",
@@ -370,6 +371,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "custom-cbl",
         "demo",
         "dependencies",
+        "issue-identity-cbl-catalog",
         "issues",
         "metrics",
         "preferences",
@@ -458,18 +460,20 @@ def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
 def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     """The sessions and undo fragments cut the cutover operations over to Rust.
 
-    GET /api/sessions/current/ and GET /api/v1/sessions/current/ stay on the
-    Python handler in this slice: the legacy read creates the session on
-    demand while the native read is a read-only projection that answers 404,
-    so cutting those two twins over here would strand the queue page's
-    cold-open path. GET /api/v1/sessions/correction-examples stays on Python
-    because no browser caller exists.
+    The current-session twins are cut over too: the native handler implements
+    the same get-or-create semantics, and frontend/src/services/api-sessions.ts
+    calls GET /api/v1/sessions/current/. Unversioned paths have no TypeScript
+    client or FastAPI registry operation; they stay in the fragment only for
+    the Vercel rewrite. GET /api/v1/sessions/correction-examples stays on
+    Python because no browser caller exists.
     """
     sessions = _fragment_named("sessions")
     undo = _fragment_named("undo")
     native_ops = {
         ("GET", "/api/sessions/"),
         ("GET", "/api/v1/sessions/"),
+        ("GET", "/api/sessions/current/"),
+        ("GET", "/api/v1/sessions/current/"),
         ("GET", "/api/sessions/{session_id}/details"),
         ("GET", "/api/v1/sessions/{session_id}/details"),
         ("POST", "/api/sessions/{session_id}/restore-session-start"),
@@ -480,8 +484,6 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
         ("POST", "/api/v1/undo/{session_id}/undo/{snapshot_id}"),
     }
     python_ops = {
-        ("GET", "/api/sessions/current/"),
-        ("GET", "/api/v1/sessions/current/"),
         ("GET", "/api/v1/sessions/correction-examples"),
     }
     declared = {
@@ -493,10 +495,15 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     for key in native_ops:
         operation = declared[key]
         assert operation["dest"] == "/api/native_roll.rs", key
-        # The Python handlers stay mounted until authenticated production
-        # proof permits their deletion, so the cutover operations remain on
-        # the Python inventory surface as shadowed-by-Rust entries.
-        assert operation.get("exclude_from_inventory") is not True, key
+        # The v1 Python handlers stay mounted until their cleanup slice, so
+        # those cutover operations remain on the Python inventory surface as
+        # shadowed-by-Rust entries. Unversioned paths have no FastAPI registry
+        # operation or TypeScript caller and stay in the fragment for the
+        # Vercel rewrite only.
+        if key[1].startswith("/api/v1/"):
+            assert operation.get("exclude_from_inventory") is not True, key
+        else:
+            assert operation.get("exclude_from_inventory") is True, key
         assert operation["owning_issue"] == 4839, key
     for key in python_ops:
         operation = declared[key]
