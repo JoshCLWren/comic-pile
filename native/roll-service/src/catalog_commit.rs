@@ -2496,4 +2496,73 @@ mod tests {
         let expected_parts = "mode=confirmed_origin\nprovider=comicvine\nseries=123\norigin=1\nscope=exact:1:1\nbasis=exact_match_found\nissue:1|1|safe_exact_match||comicvine|99|5|False";
         assert_eq!(d, sha256_hex(expected_parts));
     }
+
+    /// The commit path revalidates the Python-signed preview token, so the
+    /// digest it recomputes must equal Python's `_plan_state_digest` for the
+    /// same plan — including provider-inventory rows, whose `row_id` carries
+    /// the `roster:` prefix while Python binds the digest to `issue:{pid}`.
+    /// Expected values were produced by the production Python implementation
+    /// (stdlib only) for a 33-issue unconfirmed New Teen Titans (1980) thread
+    /// whose volume also holds the unmatched issues 34 and 35.
+    #[test]
+    fn plan_digest_matches_python_with_inventory_rows() {
+        let mut rows = Vec::new();
+        for i in 1..=33_i32 {
+            rows.push(serde_json::json!({
+                "row_id": format!("issue:{}", 1000 + i),
+                "issue_id": 1000 + i,
+                "issue_number": i.to_string(),
+                "classification": "safe_exact_match",
+                "current_mapping_status": null,
+                "provider": "comicvine",
+                "external_id": (5000 + i).to_string(),
+                "thread_id": 77,
+                "metadata_refresh_required": false,
+            }));
+        }
+        for (pid, number) in [(6001_i32, "34"), (6002_i32, "35")] {
+            rows.push(serde_json::json!({
+                "row_id": format!("roster:{pid}"),
+                "issue_id": pid,
+                "issue_number": number,
+                "classification": "unresolved",
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "thread_id": null,
+                "metadata_refresh_required": false,
+            }));
+        }
+        let d = plan_state_digest(
+            "comicvine",
+            "4321",
+            1010,
+            Some("exact:1010:1"),
+            "queue_thread_bootstrap_exact_match",
+            &rows,
+            "queue_thread_bootstrap",
+        );
+        assert_eq!(d, "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3");
+    }
+
+    /// A token minted by the production Python `_generate_preview_token`
+    /// (serialization via `json.dumps(payload, sort_keys=True)`, HMAC-SHA256
+    /// over that exact text) must verify against the Rust commit path.
+    #[test]
+    fn python_preview_token_verifies_in_rust() {
+        let token = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "b889befb2648dca8e9fdaef1119701328a8533fa73ce0a7851955859cb8637ca"}"#;
+        let payload =
+            verify_preview_token("test-preview-secret", token, 1).expect("python-minted token");
+        assert_eq!(payload["scope_key"], "exact:1010:1");
+        assert_eq!(payload["scope_mode"], "queue_thread_bootstrap");
+        assert_eq!(
+            payload["classification_digest"],
+            "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3"
+        );
+        // Tampering invalidates the signature.
+        let tampered = token.replace("exact:1010:1", "exact:1010:2");
+        assert!(verify_preview_token("test-preview-secret", &tampered, 1).is_err());
+        // A different user cannot replay the preview.
+        assert!(verify_preview_token("test-preview-secret", token, 2).is_err());
+    }
 }
