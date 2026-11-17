@@ -239,7 +239,11 @@ async fn fetch_session_state(
 > {
     let row = tx
         .query_opt(
-            "SELECT pending_thread_id, snoozed_thread_ids, skipped_thread_ids, timezone
+            // `snoozed_thread_ids`/`skipped_thread_ids` are SQLAlchemy `json`
+            // columns, so they are read as text and decoded by
+            // `reading_session::decode_thread_ids` (#4850).
+            "SELECT pending_thread_id, snoozed_thread_ids::text,
+                    skipped_thread_ids::text, timezone
              FROM sessions
              WHERE id = $1 AND user_id = $2
              FOR UPDATE",
@@ -250,10 +254,12 @@ async fn fetch_session_state(
         .ok_or(ApiError::Conflict(
             "Reading session changed; try again".to_string(),
         ))?;
+    let snoozed: Option<String> = row.try_get(1).map_err(db::query_error)?;
+    let skipped: Option<String> = row.try_get(2).map_err(db::query_error)?;
     Ok((
         row.try_get(0).map_err(db::query_error)?,
-        row.try_get(1).map_err(db::query_error)?,
-        row.try_get(2).map_err(db::query_error)?,
+        reading_session::decode_thread_ids(snoozed)?,
+        reading_session::decode_thread_ids(skipped)?,
         row.try_get(3).map_err(db::query_error)?,
     ))
 }
@@ -783,6 +789,9 @@ mod tests {
         let _admin = crate::test_support::required_test_admin_url();
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Pending', 'Comic', 1, 'active', 1);
                  INSERT INTO sessions
                      (id, user_id, started_at, start_die, pending_thread_id,
                       snoozed_thread_ids, skipped_thread_ids, timezone)

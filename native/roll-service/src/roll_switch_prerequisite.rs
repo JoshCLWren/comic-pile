@@ -149,7 +149,10 @@ async fn fetch_pending(
 ) -> Result<(Option<i32>, Option<Vec<i32>>), ApiError> {
     let row = tx
         .query_one(
-            "SELECT pending_thread_id, snoozed_thread_ids
+            // `snoozed_thread_ids` is a SQLAlchemy `json` column, so it is read
+            // as text and decoded by `reading_session::decode_thread_ids`
+            // (#4850); a direct `Vec<i32>` read is a client-side type mismatch.
+            "SELECT pending_thread_id, snoozed_thread_ids::text
              FROM sessions
              WHERE id = $1 AND user_id = $2
              FOR UPDATE",
@@ -157,9 +160,10 @@ async fn fetch_pending(
         )
         .await
         .map_err(db::query_error)?;
+    let snoozed: Option<String> = row.try_get(1).map_err(db::query_error)?;
     Ok((
         row.try_get(0).map_err(db::query_error)?,
-        row.try_get(1).map_err(db::query_error)?,
+        reading_session::decode_thread_ids(snoozed)?,
     ))
 }
 
@@ -506,6 +510,9 @@ mod tests {
         let _admin = crate::test_support::required_test_admin_url();
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Pending', 'Comic', 1, 'active', 1);
                  INSERT INTO sessions
                      (id, user_id, started_at, start_die, pending_thread_id,
                       snoozed_thread_ids)
