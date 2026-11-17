@@ -13,11 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::instrument;
 
-use crate::{
-    auth::AuthenticatedUser,
-    db::checkout,
-    ApiError, AppState,
-};
+use crate::{auth::AuthenticatedUser, db::checkout, ApiError, AppState};
 
 /// Shared CBL source list discovery item
 #[derive(Debug, Serialize, Deserialize)]
@@ -447,7 +443,9 @@ pub struct DiscoverCblSourcesParams {
     pub limit: i32,
 }
 
-fn default_limit_25() -> i32 { 25 }
+fn default_limit_25() -> i32 {
+    25
+}
 
 #[derive(Debug, Deserialize)]
 pub struct GetCblSourceListParams {
@@ -457,7 +455,9 @@ pub struct GetCblSourceListParams {
     pub limit: i32,
 }
 
-fn default_limit_1000() -> i32 { 1000 }
+fn default_limit_1000() -> i32 {
+    1000
+}
 
 #[derive(Debug, Deserialize)]
 pub struct BrowseCblCatalogParams {
@@ -471,8 +471,12 @@ pub struct BrowseCblCatalogParams {
     pub page_size: i32,
 }
 
-fn default_page_1() -> i32 { 1 }
-fn default_page_size_50() -> i32 { 50 }
+fn default_page_1() -> i32 {
+    1
+}
+fn default_page_size_50() -> i32 {
+    50
+}
 
 #[derive(Debug, Deserialize)]
 pub struct CblOccurrenceParams {
@@ -482,7 +486,9 @@ pub struct CblOccurrenceParams {
     pub limit: i32,
 }
 
-fn default_limit_50() -> i32 { 50 }
+fn default_limit_50() -> i32 {
+    50
+}
 
 #[derive(Debug, Deserialize)]
 pub struct CompareCblSourcesParams {
@@ -505,7 +511,7 @@ pub async fn compare_cbl_sources(
     Json(payload): Json<CompareCblSourcesRequest>,
 ) -> Result<Json<CblSourceComparisonResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // This is a placeholder - full implementation requires the comparison logic
     // from cbl_comicvine_lookup_service.py
     let response = CblSourceComparisonResponse {
@@ -514,7 +520,7 @@ pub async fn compare_cbl_sources(
         candidates_total: 0,
         candidates: vec![],
     };
-    
+
     Ok(Json(response))
 }
 
@@ -531,7 +537,7 @@ pub async fn discover_cbl_source_lists(
     Query(params): Query<DiscoverCblSourcesParams>,
 ) -> Result<Json<Vec<CblSourceListDiscoveryItem>>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - needs full implementation from cbl_source_service.py
     let mut query = String::from(
         r#"
@@ -546,42 +552,48 @@ pub async fn discover_cbl_source_lists(
         FROM cbl_source_lists csl
         JOIN cbl_sources cs ON csl.source_id = cs.id
         WHERE csl.active = true
-        "#
+        "#,
     );
-    
+
     let mut param_count = 0;
     let mut params_vec: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![];
     let pattern_storage: String;
-    
+
     if let Some(ref q) = params.q {
         if !q.is_empty() {
             param_count += 1;
-            query.push_str(&format!(" AND (csl.name ILIKE ${} OR csl.source_path ILIKE ${})", param_count, param_count));
+            query.push_str(&format!(
+                " AND (csl.name ILIKE ${} OR csl.source_path ILIKE ${})",
+                param_count, param_count
+            ));
             pattern_storage = format!("%{}%", q);
             params_vec.push(&pattern_storage);
         }
     }
-    
+
     query.push_str(" ORDER BY csl.name LIMIT $");
     param_count += 1;
     query.push_str(&param_count.to_string());
     params_vec.push(&params.limit);
-    
+
     let rows = pool.query(&query, &params_vec).await.map_err(|e| {
         tracing::error!("discover_cbl_source_lists query failed: {}", e);
         ApiError::Internal("CBL source discovery failed".to_string())
     })?;
-    
-    let items = rows.into_iter().map(|row| CblSourceListDiscoveryItem {
-        id: row.get(0),
-        name: row.get(1),
-        source_path: row.get(2),
-        source_repository: row.get(3),
-        declared_issue_count: row.get(4),
-        content_hash: row.get(5),
-        revision_sha: row.get(6),
-    }).collect();
-    
+
+    let items = rows
+        .into_iter()
+        .map(|row| CblSourceListDiscoveryItem {
+            id: row.get(0),
+            name: row.get(1),
+            source_path: row.get(2),
+            source_repository: row.get(3),
+            declared_issue_count: row.get(4),
+            content_hash: row.get(5),
+            revision_sha: row.get(6),
+        })
+        .collect();
+
     Ok(Json(items))
 }
 
@@ -594,24 +606,27 @@ pub async fn get_cbl_source_list(
     Query(params): Query<GetCblSourceListParams>,
 ) -> Result<Json<CblSourceListDetail>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Load source list
-    let list_row = pool.query_opt(
-        r#"
+    let list_row = pool
+        .query_opt(
+            r#"
         SELECT csl.id, csl.name, csl.source_path, csl.source_repository, csl.declared_issue_count,
                csl.content_hash, csl.revision_sha, cs.repository, cs.source_path as source_path_ref
         FROM cbl_source_lists csl
         JOIN cbl_sources cs ON csl.source_id = cs.id
         WHERE csl.id = $1 AND csl.active = true
         "#,
-        &[&list_id],
-    ).await.map_err(|e| {
-        tracing::error!("get_cbl_source_list query failed: {}", e);
-        ApiError::Internal("CBL source list load failed".to_string())
-    })?;
-    
+            &[&list_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("get_cbl_source_list query failed: {}", e);
+            ApiError::Internal("CBL source list load failed".to_string())
+        })?;
+
     let list_row = list_row.ok_or(ApiError::NotFound("CBL source list not found".to_string()))?;
-    
+
     let id: i32 = list_row.get(0);
     let name: String = list_row.get(1);
     let source_path: String = list_row.get(2);
@@ -621,10 +636,11 @@ pub async fn get_cbl_source_list(
     let revision_sha: String = list_row.get(6);
     let repository: String = list_row.get(7);
     let source_ref: String = list_row.get(8);
-    
+
     // Load entries with ComicVine IDs
-    let entries_rows = pool.query(
-        r#"
+    let entries_rows = pool
+        .query(
+            r#"
         SELECT 
             cse.position,
             cse.series_name,
@@ -640,31 +656,40 @@ pub async fn get_cbl_source_list(
         ORDER BY cse.position, cse.id
         LIMIT $2 OFFSET $3
         "#,
-        &[&list_id, &params.limit, &params.offset],
-    ).await.map_err(|e| {
-        tracing::error!("get_cbl_source_list entries query failed: {}", e);
-        ApiError::Internal("CBL source entries load failed".to_string())
-    })?;
-    
-    let entries = entries_rows.into_iter().map(|row| CblSourceEntryDetail {
-        position: row.get(0),
-        series_name: row.get(1),
-        issue_number: row.get(2),
-        volume_year: row.get(3),
-        publication_year: row.get(4),
-        comicvine_issue_id: row.get(5),
-        comicvine_volume_id: row.get(6),
-    }).collect();
-    
+            &[&list_id, &params.limit, &params.offset],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("get_cbl_source_list entries query failed: {}", e);
+            ApiError::Internal("CBL source entries load failed".to_string())
+        })?;
+
+    let entries = entries_rows
+        .into_iter()
+        .map(|row| CblSourceEntryDetail {
+            position: row.get(0),
+            series_name: row.get(1),
+            issue_number: row.get(2),
+            volume_year: row.get(3),
+            publication_year: row.get(4),
+            comicvine_issue_id: row.get(5),
+            comicvine_volume_id: row.get(6),
+        })
+        .collect();
+
     // Get total count
-    let total_count: i64 = pool.query_one(
-        "SELECT COUNT(*) FROM cbl_source_entries WHERE list_id = $1",
-        &[&list_id],
-    ).await.map_err(|e| {
-        tracing::error!("get_cbl_source_list count query failed: {}", e);
-        ApiError::Internal("CBL source entries count failed".to_string())
-    })?.get(0);
-    
+    let total_count: i64 = pool
+        .query_one(
+            "SELECT COUNT(*) FROM cbl_source_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("get_cbl_source_list count query failed: {}", e);
+            ApiError::Internal("CBL source entries count failed".to_string())
+        })?
+        .get(0);
+
     let response = CblSourceListDetail {
         id,
         name,
@@ -679,7 +704,7 @@ pub async fn get_cbl_source_list(
         entries_limit: params.limit,
         entries,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -691,22 +716,25 @@ pub async fn list_cbl_source_folders(
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblFolderListingResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Validate folder path
     let folder = params.folder.trim();
     if folder.contains('\\') || folder.contains("..") || folder.contains("//") {
         return Err(ApiError::BadRequest("Invalid folder path".to_string()));
     }
-    
+
     // Placeholder - needs full implementation from cbl_catalog.py
     let response = CblFolderListingResponse {
         folder: folder.to_string(),
-        breadcrumbs: vec![CblBreadcrumb { name: "All CBLs".to_string(), path: "".to_string() }],
+        breadcrumbs: vec![CblBreadcrumb {
+            name: "All CBLs".to_string(),
+            path: "".to_string(),
+        }],
         folders: vec![],
         direct_list_count: 0,
         total_list_count: 0,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -718,13 +746,20 @@ pub async fn browse_cbl_source_catalog(
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblCatalogBrowseResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - needs full implementation from cbl_catalog.py
     let response = CblCatalogBrowseResponse {
-        scope: if params.q.is_some() && !params.q.as_ref().unwrap().is_empty() { "search".to_string() } else { "folder".to_string() },
+        scope: if params.q.is_some() && !params.q.as_ref().unwrap().is_empty() {
+            "search".to_string()
+        } else {
+            "folder".to_string()
+        },
         folder: params.folder,
         query: params.q,
-        breadcrumbs: vec![CblBreadcrumb { name: "All CBLs".to_string(), path: "".to_string() }],
+        breadcrumbs: vec![CblBreadcrumb {
+            name: "All CBLs".to_string(),
+            path: "".to_string(),
+        }],
         folders: vec![],
         items: vec![],
         page: params.page,
@@ -734,7 +769,7 @@ pub async fn browse_cbl_source_catalog(
         has_next: false,
         has_previous: false,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -747,14 +782,17 @@ pub async fn find_cbl_sources_by_comicvine_issue(
     Query(params): Query<CblOccurrenceParams>,
 ) -> Result<Json<CblComicvineOccurrencePage>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     if comicvine_issue_id.trim().is_empty() {
-        return Err(ApiError::BadRequest("Comic Vine issue ID must not be blank".to_string()));
+        return Err(ApiError::BadRequest(
+            "Comic Vine issue ID must not be blank".to_string(),
+        ));
     }
-    
+
     // Load occurrences
-    let rows = pool.query(
-        r#"
+    let rows = pool
+        .query(
+            r#"
         SELECT 
             csl.id as list_id,
             csl.name as list_name,
@@ -777,46 +815,57 @@ pub async fn find_cbl_sources_by_comicvine_issue(
         ORDER BY csl.id, cse.position
         LIMIT $2 OFFSET $3
         "#,
-        &[&comicvine_issue_id, &params.limit, &params.offset],
-    ).await.map_err(|e| {
-        tracing::error!("find_cbl_sources_by_comicvine_issue query failed: {}", e);
-        ApiError::Internal("CBL comicvine lookup failed".to_string())
-    })?;
-    
-    let occurrences = rows.into_iter().map(|row| CblComicvineOccurrence {
-        list_id: row.get(0),
-        list_name: row.get(1),
-        source_path: row.get(2),
-        source_repository: row.get(3),
-        source_ref: row.get(4),
-        revision_sha: row.get(5),
-        position: row.get(6),
-        series_name: row.get(7),
-        issue_number: row.get(8),
-        volume_year: row.get(9),
-        publication_year: row.get(10),
-        comicvine_issue_id: row.get(11),
-        comicvine_volume_id: row.get(12),
-    }).collect();
-    
+            &[&comicvine_issue_id, &params.limit, &params.offset],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("find_cbl_sources_by_comicvine_issue query failed: {}", e);
+            ApiError::Internal("CBL comicvine lookup failed".to_string())
+        })?;
+
+    let occurrences = rows
+        .into_iter()
+        .map(|row| CblComicvineOccurrence {
+            list_id: row.get(0),
+            list_name: row.get(1),
+            source_path: row.get(2),
+            source_repository: row.get(3),
+            source_ref: row.get(4),
+            revision_sha: row.get(5),
+            position: row.get(6),
+            series_name: row.get(7),
+            issue_number: row.get(8),
+            volume_year: row.get(9),
+            publication_year: row.get(10),
+            comicvine_issue_id: row.get(11),
+            comicvine_volume_id: row.get(12),
+        })
+        .collect();
+
     // Get totals
-    let totals = pool.query_one(
-        r#"
+    let totals = pool
+        .query_one(
+            r#"
         SELECT COUNT(*), COUNT(DISTINCT csl.id)
         FROM cbl_source_entries cse
         JOIN cbl_source_lists csl ON cse.list_id = csl.id
         JOIN external_identities ei ON cse.external_issue_identity_id = ei.id
         WHERE csl.active = true AND ei.external_id = $1
         "#,
-        &[&comicvine_issue_id],
-    ).await.map_err(|e| {
-        tracing::error!("find_cbl_sources_by_comicvine_issue totals query failed: {}", e);
-        ApiError::Internal("CBL comicvine lookup totals failed".to_string())
-    })?;
-    
+            &[&comicvine_issue_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "find_cbl_sources_by_comicvine_issue totals query failed: {}",
+                e
+            );
+            ApiError::Internal("CBL comicvine lookup totals failed".to_string())
+        })?;
+
     let occurrences_total: i64 = totals.get(0);
     let lists_total: i64 = totals.get(1);
-    
+
     let response = CblComicvineOccurrencePage {
         comicvine_issue_id: comicvine_issue_id.trim().to_string(),
         occurrences_total: occurrences_total as i32,
@@ -825,7 +874,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
         occurrences_limit: params.limit,
         occurrences,
     };
-    
+
     Ok(Json(response))
 }
 
@@ -838,7 +887,7 @@ pub async fn find_cbl_candidates_for_reading_list(
     Query(params): Query<CblCandidatesParams>,
 ) -> Result<Json<CblReadingListCandidatesResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - needs full implementation from cbl_comicvine_lookup_service.py
     let response = CblReadingListCandidatesResponse {
         list_id,
@@ -852,7 +901,7 @@ pub async fn find_cbl_candidates_for_reading_list(
         candidates_total: 0,
         candidates: vec![],
     };
-    
+
     Ok(Json(response))
 }
 
@@ -864,7 +913,7 @@ pub async fn cbl_adoption_preview(
     Path(list_id): Path<i32>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - needs full implementation from cbl_reconciliation.py
     // This requires reconcile_cbl_source_list + calculate_cbl_adoption_plan
     let response = CblAdoptionPreviewResponse {
@@ -892,7 +941,7 @@ pub async fn cbl_adoption_preview(
             awaiting_opt_in_positions: vec![],
         },
     };
-    
+
     Ok(Json(response))
 }
 
@@ -905,7 +954,7 @@ pub async fn cbl_adoption_plan(
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - needs full implementation from cbl_reconciliation.py
     let response = CblAdoptionPreviewResponse {
         source: CblSourceFingerprintResponse {
@@ -932,7 +981,7 @@ pub async fn cbl_adoption_plan(
             awaiting_opt_in_positions: vec![],
         },
     };
-    
+
     Ok(Json(response))
 }
 
@@ -944,7 +993,7 @@ pub async fn cbl_reconciliation(
     Path(list_id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = checkout(&state).await?;
-    
+
     // Placeholder - returns basic reconciliation report
     let response = serde_json::json!({
         "total_positions": 0,
@@ -967,7 +1016,7 @@ pub async fn cbl_reconciliation(
         "duplicate_identity_issues": [],
         "first_unread_issue_id": null,
     });
-    
+
     Ok(Json(response))
 }
 
@@ -1074,6 +1123,6 @@ pub async fn cbl_reading_graph_preview(
         waiting_issue_ids: vec![],
         cycle_errors: vec![],
     };
-    
+
     Ok(Json(response))
 }
