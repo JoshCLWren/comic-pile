@@ -1,4 +1,5 @@
 """Regression coverage for provider-derived dispatcher smoke selection."""
+import re
 from pathlib import Path
 
 
@@ -464,3 +465,21 @@ def test_all_cooling_or_quota_exhausted_roster_is_idle_not_failed() -> None:
     assert 'if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then' in resolve_step
     assert "Dispatcher resolved no workers for smoke run" in resolve_step
     assert "Dispatcher resolved no workers' >&2; exit 1" not in resolve_step
+
+
+def test_targeted_dispatch_uses_roster_credential_availability() -> None:
+    """Targeted issue/PR wakeups must not reject configured providers as missing."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    def provider_flags(step_name: str) -> dict[str, str]:
+        step = workflow.split(f"      - name: {step_name}", 1)[1]
+        header = step.split("        run: |", 1)[0]
+        return dict(re.findall(
+            r"^          (FACTORY_(?:HAS_[A-Z0-9_]+|OMNIROUTE_ENABLED)): (.+)$",
+            header, flags=re.MULTILINE,
+        ))
+
+    roster = provider_flags("Resolve and dispatch fixed workers")
+    targeted = provider_flags("Advance selected issue or pull request")
+    assert roster, "Roster credential contract was not found"
+    assert targeted == roster
