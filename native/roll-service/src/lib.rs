@@ -233,6 +233,19 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
+    /// Explicit status with a structured JSON `detail` object.
+    ///
+    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
+    /// conflicts and validation errors. The scalar variants above cannot
+    /// represent that shape (their detail is a JSON string), so cutover
+    /// handlers that must preserve a structured wire contract use this
+    /// variant. The payload is serialized JSON text and parsed on response.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Serialized JSON object used as the `detail` value.
+        detail: String,
+    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -274,6 +287,7 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             ApiError::Detail { status, .. } => *status,
         }
@@ -295,6 +309,7 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
+            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
         }
@@ -352,6 +367,18 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
+        if let ApiError::StructuredDetail { detail, .. } = &self {
+            let value: serde_json::Value = serde_json::from_str(detail)
+                .unwrap_or_else(|_| serde_json::Value::String(detail.clone()));
+            let mut response = (status, Json(serde_json::json!({"detail": value}))).into_response();
+            if status == StatusCode::UNAUTHORIZED {
+                response.headers_mut().insert(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    axum::http::HeaderValue::from_static("Bearer"),
+                );
+            }
+            return response;
+        }
         let detail_owned = self.detail().to_string();
         let mut response = (
             status,

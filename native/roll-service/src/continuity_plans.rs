@@ -45,6 +45,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio_postgres::Transaction;
 use utoipa::ToSchema;
 
 // ============================================================================
@@ -305,11 +306,1156 @@ fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError::NotFound(detail.into())
 }
 
-/// Serialize stored plan JSON, surfacing encoding failures as a 500 rather than
-/// panicking inside a request handler.
-fn serialize_plan_json(value: &[serde_json::Value]) -> Result<String, ApiError> {
-    serde_json::to_string(value)
-        .map_err(|err| ApiError::Internal(format!("Failed to encode plan JSON: {err}")))
+/// Build a structured error whose wire body is `{"detail": <json object>}`.
+///
+/// Python/FastAPI domain errors carry a structured `detail` object. The scalar
+/// `ApiError` variants stringify it, which would put a JSON *string* on the
+/// wire and break the frontend's `detail.code` branching. This helper keeps
+/// the exact object shape (review #4838 finding #6).
+fn structured(status: StatusCode, detail: serde_json::Value) -> ApiError {
+    ApiError::StructuredDetail {
+        status,
+        detail: detail.to_string(),
+    }
+}
+
+/// Build a 422 envelope matching the Python Pydantic `model_validator` shape.
+fn unprocessable(message: impl Into<String>) -> ApiError {
+    structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        serde_json::json!({"code": "validation_error", "message": message.into()}),
+    )
+}
+
+/// 422 `dangling_plan_reference` envelope from Python `validate_node_ownership`.
+fn dangling_node(node_id: &str) -> ApiError {
+    structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        serde_json::json!({"code": "dangling_plan_reference", "node_id": node_id}),
+    )
+}
+
+/// 409 domain-conflict envelope (`detail.code`) used by plan writers.
+fn domain_conflict(detail: serde_json::Value) -> ApiError {
+    structured(StatusCode::CONFLICT, detail)
+}
+
+/// Port of Python `validate_node_ownership`: every referenced issue, thread and
+/// crossover must be owned by the plan owner. Issues are bulk-checked through
+/// the join-through-thread ownership guard; crossovers resolve to a
+/// `DependencyGroup`. Any failure is a 422 `dangling_plan_reference` naming the
+/// offending plan node id (review finding #6).
+async fn validate_node_ownership(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    nodes: &[ContinuityPlanNode],
+) -> Result<(), ApiError> {
+    // Issue refs: bulk ownership check via the central join-through-thread guard.
+    let issue_nodes: Vec<&ContinuityPlanNode> = nodes
+        .iter()
+        .filter(|node| node.node_type == "issue")
+        .collect();
+    if !issue_nodes.is_empty() {
+        let issue_ids: Vec<i32> = issue_nodes.iter().map(|node| node.ref_id).collect();
+        let owned_rows = tx
+            .query(
+                "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id \
+                 WHERE i.id = ANY($1::int[]) AND t.user_id = $2",
+                &[&issue_ids, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let owned: std::collections::HashSet<i32> =
+            owned_rows.iter().map(|row| row.get::<_, i32>(0)).collect();
+        for node in issue_nodes {
+            if !owned.contains(&node.ref_id) {
+                return Err(dangling_node(&node.id));
+            }
+        }
+    }
+
+    for node in nodes {
+        match node.node_type.as_str() {
+            "issue" => continue,
+            "thread" => {
+                let owned = tx
+                    .query_opt(
+                        "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
+                        &[&node.ref_id, &user_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .is_some();
+                if !owned {
+                    return Err(dangling_node(&node.id));
+                }
+            }
+            "crossover" => {
+                let owned = tx
+                    .query_opt(
+                        "SELECT id FROM dependency_groups WHERE id = $1 AND user_id = $2",
+                        &[&node.ref_id, &user_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .is_some();
+                if !owned {
+                    return Err(dangling_node(&node.id));
+                }
+            }
+            _ => return Err(dangling_node(&node.id)),
+        }
+    }
+    Ok(())
+}
+
+impl ContinuityPlanWrite {
+    /// Port of Python `ContinuityPlanWrite.validate_structure` (422 on failure).
+    ///
+    /// Enforces the cross-field invariants that keep downstream Option E
+    /// compiled-rule semantics well defined. Field-level constraints that
+    /// Pydantic enforces before this validator (lengths, enums, positive ids)
+    /// are checked here as well so the native path cannot persist invalid plans.
+    pub fn validate_structure(&self) -> Result<(), ApiError> {
+        use std::collections::{HashMap, HashSet};
+
+        if self.name.trim().is_empty() || self.name.chars().count() > 200 {
+            return Err(unprocessable("name must be 1-200 characters"));
+        }
+        if self.ordering_mode != "informational" && self.ordering_mode != "strict_sequential" {
+            return Err(unprocessable(
+                "ordering_mode must be informational or strict_sequential",
+            ));
+        }
+        if self.lanes.len() > 100 || self.nodes.len() > 1000 {
+            return Err(unprocessable("plan exceeds lane/node limits"));
+        }
+
+        let lane_ids: Vec<&str> = self.lanes.iter().map(|lane| lane.id.as_str()).collect();
+        if lane_ids.len() != lane_ids.iter().collect::<HashSet<_>>().len() {
+            return Err(unprocessable("lane ids must be unique"));
+        }
+        let lane_orders: Vec<i32> = self.lanes.iter().map(|lane| lane.order).collect();
+        if lane_orders.len() != lane_orders.iter().collect::<HashSet<_>>().len() {
+            return Err(unprocessable("lane order values must be unique"));
+        }
+        for lane in &self.lanes {
+            if lane.id.is_empty() || lane.id.chars().count() > 80 {
+                return Err(unprocessable("lane id must be 1-80 characters"));
+            }
+            if lane.name.is_empty() || lane.name.chars().count() > 120 {
+                return Err(unprocessable("lane name must be 1-120 characters"));
+            }
+            if lane.order < 0 {
+                return Err(unprocessable("lane order must be non-negative"));
+            }
+        }
+
+        let node_ids: Vec<&str> = self.nodes.iter().map(|node| node.id.as_str()).collect();
+        if node_ids.len() != node_ids.iter().collect::<HashSet<_>>().len() {
+            return Err(unprocessable("node ids must be unique"));
+        }
+        let issue_refs: Vec<i32> = self
+            .nodes
+            .iter()
+            .filter(|node| node.node_type == "issue")
+            .map(|node| node.ref_id)
+            .collect();
+        if issue_refs.len() != issue_refs.iter().collect::<HashSet<_>>().len() {
+            return Err(unprocessable("an issue may appear at most once in a plan"));
+        }
+
+        let known_lanes: HashSet<&str> = lane_ids.iter().copied().collect();
+        for node in &self.nodes {
+            if node.id.is_empty() || node.id.chars().count() > 80 {
+                return Err(unprocessable("node id must be 1-80 characters"));
+            }
+            if node.ref_id <= 0 {
+                return Err(unprocessable("node ref_id must be positive"));
+            }
+            if node.position < 0 {
+                return Err(unprocessable("node position must be non-negative"));
+            }
+            if !matches!(node.node_type.as_str(), "issue" | "crossover" | "thread") {
+                return Err(unprocessable("invalid node_type"));
+            }
+            if !known_lanes.contains(node.lane_id.as_str()) {
+                return Err(unprocessable("every node must reference an existing lane"));
+            }
+        }
+
+        let mut positions_by_lane: HashMap<&str, Vec<i32>> = HashMap::new();
+        for node in &self.nodes {
+            positions_by_lane
+                .entry(node.lane_id.as_str())
+                .or_default()
+                .push(node.position);
+        }
+        if positions_by_lane
+            .values()
+            .any(|values| values.len() != values.iter().collect::<HashSet<_>>().len())
+        {
+            return Err(unprocessable(
+                "node positions must be unique within each lane",
+            ));
+        }
+
+        if self.ordering_mode == "strict_sequential" {
+            if self.lanes.len() != 1 {
+                return Err(unprocessable(
+                    "strict sequential plans must use exactly one lane",
+                ));
+            }
+            if self.nodes.iter().any(|node| node.node_type == "thread") {
+                return Err(unprocessable(
+                    "strict sequential plans may contain only issue/crossover nodes",
+                ));
+            }
+            let mut positions: Vec<i32> = self.nodes.iter().map(|node| node.position).collect();
+            positions.sort_unstable();
+            if positions != (0..positions.len() as i32).collect::<Vec<i32>>() {
+                return Err(unprocessable(
+                    "strict sequential positions must be contiguous starting at zero",
+                ));
+            }
+        }
+
+        for node in &self.nodes {
+            if node.is_checkpoint && node.node_type != "issue" {
+                return Err(unprocessable(format!(
+                    "checkpoint on node '{}' is only allowed on issue nodes",
+                    node.id
+                )));
+            }
+            if (node.checkpoint_target_ref_id.is_some() || !node.checkpoint_target_ref_ids.is_empty())
+                && !node.is_checkpoint
+            {
+                return Err(unprocessable(format!(
+                    "checkpoint target on node '{}' requires is_checkpoint",
+                    node.id
+                )));
+            }
+            if node.checkpoint_target_ref_ids.len()
+                != node
+                    .checkpoint_target_ref_ids
+                    .iter()
+                    .collect::<HashSet<_>>()
+                    .len()
+            {
+                return Err(unprocessable(format!(
+                    "checkpoint on node '{}' contains duplicate targets",
+                    node.id
+                )));
+            }
+        }
+
+        let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
+            self.nodes.iter().map(|node| (node.id.as_str(), node)).collect();
+        for node in &self.nodes {
+            if node.convergence_gate.is_empty() {
+                continue;
+            }
+            if !matches!(node.node_type.as_str(), "issue" | "crossover") {
+                return Err(unprocessable(format!(
+                    "convergence gate on node '{}' is only allowed on issue/crossover nodes",
+                    node.id
+                )));
+            }
+            let gate_ids: Vec<&str> = node
+                .convergence_gate
+                .iter()
+                .filter_map(|target| target.get("node_id").and_then(|v| v.as_str()))
+                .collect();
+            if gate_ids.len() != node.convergence_gate.len() {
+                return Err(unprocessable("invalid convergence gate target"));
+            }
+            if gate_ids.len() != gate_ids.iter().collect::<HashSet<_>>().len() {
+                return Err(unprocessable(format!(
+                    "convergence gate on node '{}' contains duplicate targets",
+                    node.id
+                )));
+            }
+            for target_id in gate_ids {
+                if target_id == node.id {
+                    return Err(unprocessable(format!(
+                        "convergence gate on node '{}' cannot wait for itself",
+                        node.id
+                    )));
+                }
+                let target_node = nodes_by_id.get(target_id).ok_or_else(|| {
+                    unprocessable(format!(
+                        "convergence gate on node '{}' references unknown node '{}'",
+                        node.id, target_id
+                    ))
+                })?;
+                if !matches!(target_node.node_type.as_str(), "issue" | "crossover") {
+                    return Err(unprocessable(format!(
+                        "convergence gate on node '{}' references node '{}' of type '{}'; \
+                         convergence targets must be issue/crossover nodes",
+                        node.id, target_id, target_node.node_type
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Compiled-rule writer — ports app/services/continuity_plan_writer.py.
+//
+// A plan is not merely a stored JSON document. Saving it must compile its
+// strict/checkpoint/convergence intent into `continuity_rules` rows and the
+// canonical `dependencies` edges that Roll actually enforces, rebuild the
+// normalized `reading_plan_issues` membership, and refresh the derived
+// blocked state atomically. Deleting it must retire only the edges it owned.
+// These helpers keep that contract on the native write path (#4838 P1 #3).
+// ============================================================================
+
+const RULE_NOTE_PREFIX: &str = "canonical:rule:";
+const RULE_BACKFILL_NOTE_PREFIX: &str = "canonical:rule-backfill:";
+
+fn plan_rule_marker(plan_id: i32) -> String {
+    format!("continuity-plan:{plan_id}")
+}
+
+/// Identity of one plan graph node: `(node_type, ref_id)`.
+type PlanNodeKey = (String, i32);
+
+/// One edge the plan compiler wants to enforce.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum EdgeExtra {
+    Checkpoint(i32),
+    Converged(Vec<(String, i32)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CompiledEdge {
+    source_type: String,
+    source_id: i32,
+    target_type: String,
+    target_id: i32,
+    satisfaction: String,
+    extra: Option<EdgeExtra>,
+}
+
+impl CompiledEdge {
+    /// Canonical `(source_issue_id, target_issue_id)` pairs this rule compiles to.
+    /// Mirrors `canonical_constraint_compiler.rule_edge_pairs`.
+    fn pairs(&self) -> Vec<(i32, i32)> {
+        match self.satisfaction.as_str() {
+            "item_read" | "checkpoint"
+                if self.source_type == "issue" && self.target_type == "issue" =>
+            {
+                let source = match &self.extra {
+                    Some(EdgeExtra::Checkpoint(id)) => *id,
+                    _ => self.source_id,
+                };
+                vec![(source, self.target_id)]
+            }
+            "converged" if self.target_type == "issue" => {
+                let mut pairs = Vec::new();
+                if let Some(EdgeExtra::Converged(targets)) = &self.extra {
+                    for (kind, id) in targets {
+                        if kind == "issue" && *id != self.target_id {
+                            pairs.push((*id, self.target_id));
+                        }
+                    }
+                }
+                pairs
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// Cycle detection over the plan's own issue/crossover graph.
+/// Ports `_detect_plan_cycles` in `continuity_plan_writer.py`.
+fn detect_plan_cycles(
+    nodes: &[PlanNodeKey],
+    edges: &[(PlanNodeKey, PlanNodeKey)],
+) -> Option<PlanNodeKey> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut adjacency: BTreeMap<PlanNodeKey, Vec<PlanNodeKey>> = BTreeMap::new();
+    for node in nodes {
+        adjacency.insert(node.clone(), Vec::new());
+    }
+    for (source, target) in edges {
+        if adjacency.contains_key(source) && adjacency.contains_key(target) {
+            if let Some(targets) = adjacency.get_mut(source) {
+                targets.push(target.clone());
+            }
+        }
+    }
+    for targets in adjacency.values_mut() {
+        targets.sort();
+    }
+
+    let mut color: BTreeMap<PlanNodeKey, u8> = nodes.iter().map(|n| (n.clone(), 0)).collect();
+    let mut in_cycle: BTreeSet<PlanNodeKey> = BTreeSet::new();
+    let mut ordered = nodes.to_vec();
+    ordered.sort();
+
+    for start in ordered {
+        if color.get(&start).copied().unwrap_or(0) != 0 {
+            continue;
+        }
+        let mut stack: Vec<(PlanNodeKey, u8)> = vec![(start.clone(), 0)];
+        let mut path: Vec<PlanNodeKey> = Vec::new();
+        while let Some((node, state)) = stack.pop() {
+            if state == 0 {
+                if matches!(color.get(&node).copied(), Some(1 | 2)) {
+                    continue;
+                }
+                color.insert(node.clone(), 1);
+                path.push(node.clone());
+                stack.push((node.clone(), 1));
+                let nexts = adjacency.get(&node).cloned().unwrap_or_default();
+                for next in nexts.into_iter().rev() {
+                    match color.get(&next).copied() {
+                        Some(0) => stack.push((next, 0)),
+                        Some(1) => {
+                            if let Some(index) = path.iter().position(|item| item == &next) {
+                                for item in &path[index..] {
+                                    in_cycle.insert(item.clone());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            } else {
+                if path.last() == Some(&node) {
+                    path.pop();
+                }
+                color.insert(node, 2);
+            }
+        }
+    }
+    in_cycle.into_iter().next()
+}
+
+/// Advisory source metadata from one node — mirrors `_source_metadata_for_node`.
+fn source_metadata_for_node(node: &ContinuityPlanNode) -> Option<serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    if let Some(value) = &node.source_role {
+        map.insert("source_role".into(), serde_json::Value::String(value.clone()));
+    }
+    if let Some(value) = &node.source_confidence {
+        map.insert(
+            "source_confidence".into(),
+            serde_json::Value::String(value.clone()),
+        );
+    }
+    if let Some(value) = &node.source_explanation {
+        map.insert(
+            "source_explanation".into(),
+            serde_json::Value::String(value.clone()),
+        );
+    }
+    if let Some(value) = &node.source_story_arc_ids {
+        map.insert(
+            "source_story_arc_ids".into(),
+            serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
+        );
+    }
+    if let Some(value) = &node.source_target_story_arc_id {
+        map.insert(
+            "source_target_story_arc_id".into(),
+            serde_json::Value::String(value.clone()),
+        );
+    }
+    if map.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(map))
+    }
+}
+
+/// Rebuild normalized membership, source snapshots and placements for one plan.
+/// Mirrors `rebuild_plan_membership` (issue rows only; non-issue nodes keep no
+/// normalized membership until an explicit mapping exists).
+async fn rebuild_plan_membership(
+    tx: &Transaction<'_>,
+    plan_id: i32,
+    nodes: &[ContinuityPlanNode],
+) -> Result<(), ApiError> {
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+    let mut seen_issues = HashSet::new();
+    for node in nodes {
+        if node.node_type == "issue" && !seen_issues.insert(node.ref_id) {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "duplicate_plan_issue",
+                "issue_id": node.ref_id,
+            })));
+        }
+    }
+
+    tx.execute(
+        "DELETE FROM reading_plan_source_placements WHERE plan_id = $1",
+        &[&plan_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    tx.execute(
+        "DELETE FROM reading_plan_sources WHERE plan_id = $1",
+        &[&plan_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    tx.execute(
+        "DELETE FROM reading_plan_issues WHERE plan_id = $1",
+        &[&plan_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Source snapshots, deduplicated by raw path, plus position observations.
+    let mut source_paths: BTreeMap<String, Vec<Option<i32>>> = BTreeMap::new();
+    for node in nodes {
+        if let Some(placements) = &node.source_cbl_placements {
+            for placement in placements {
+                let path = placement
+                    .get("source_path")
+                    .or_else(|| placement.get("path"))
+                    .and_then(|value| value.as_str());
+                if let Some(path) = path {
+                    let position = placement
+                        .get("position")
+                        .and_then(|value| value.as_i64())
+                        .map(|value| value as i32);
+                    source_paths
+                        .entry(path.to_string())
+                        .or_default()
+                        .push(position);
+                }
+            }
+        }
+        if let Some(paths) = &node.source_paths {
+            for path in paths {
+                if !path.is_empty() {
+                    source_paths.entry(path.clone()).or_default();
+                }
+            }
+        }
+    }
+
+    let mut source_ids: BTreeMap<String, i32> = BTreeMap::new();
+    for path in source_paths.keys() {
+        let row = tx
+            .query_one(
+                "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
+                 VALUES ($1, $2, NOW()) RETURNING id",
+                &[&plan_id, path],
+            )
+            .await
+            .map_err(db::query_error)?;
+        source_ids.insert(path.clone(), row.get(0));
+    }
+
+    for node in nodes {
+        if node.node_type != "issue" {
+            continue;
+        }
+        let metadata = source_metadata_for_node(node);
+        tx.execute(
+            "INSERT INTO reading_plan_issues
+             (plan_id, occurrence_id, issue_id, lane_id, display_position,
+              label, reader_role, reader_optional, is_checkpoint, source_metadata_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            &[
+                &plan_id,
+                &node.id,
+                &node.ref_id,
+                &node.lane_id,
+                &node.position,
+                &node.label,
+                &node.reader_role,
+                &node.reader_optional,
+                &node.is_checkpoint,
+                &metadata,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        // Position observations for this occurrence.
+        let mut placements: Vec<(String, Option<i32>)> = Vec::new();
+        if let Some(values) = &node.source_cbl_placements {
+            for placement in values {
+                let path = placement
+                    .get("source_path")
+                    .or_else(|| placement.get("path"))
+                    .and_then(|value| value.as_str());
+                if let Some(path) = path {
+                    if let Some(id) = source_ids.get(path) {
+                        let position = placement
+                            .get("position")
+                            .and_then(|value| value.as_i64())
+                            .map(|value| value as i32);
+                        placements.push((path.to_string(), position));
+                        let _ = id;
+                    }
+                }
+            }
+        }
+        if let Some(paths) = &node.source_paths {
+            for path in paths {
+                if !path.is_empty() && !placements.iter().any(|(p, _)| p == path) {
+                    placements.push((path.clone(), None));
+                }
+            }
+        }
+        let mut unique: BTreeSet<(String, Option<i32>)> = BTreeSet::new();
+        for placement in placements {
+            unique.insert(placement);
+        }
+        for (path, position) in unique {
+            if let Some(source_id) = source_ids.get(&path) {
+                tx.execute(
+                    "INSERT INTO reading_plan_source_placements
+                     (plan_id, occurrence_id, plan_source_id, source_position)
+                     VALUES ($1, $2, $3, $4)",
+                    &[&plan_id, &node.id, source_id, &position],
+                )
+                .await
+                .map_err(db::query_error)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A persisted plan-owned rule, decoded by column name.
+struct StoredRule {
+    id: i32,
+    edge: CompiledEdge,
+}
+
+fn decode_rule(row: &tokio_postgres::Row) -> StoredRule {
+    let satisfaction: String = row.get("satisfaction_type");
+    let extra = match satisfaction.as_str() {
+        "checkpoint" => row
+            .get::<_, Option<i32>>("checkpoint_issue_id")
+            .map(EdgeExtra::Checkpoint),
+        "converged" => {
+            let raw: Option<serde_json::Value> = row.get("convergence_targets");
+            let targets = raw
+                .and_then(|value| value.as_array().cloned())
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|item| {
+                    let kind = item.get("type")?.as_str()?.to_string();
+                    let id = item.get("id")?.as_i64()? as i32;
+                    Some((kind, id))
+                })
+                .collect();
+            Some(EdgeExtra::Converged(targets))
+        }
+        _ => None,
+    };
+    StoredRule {
+        id: row.get("id"),
+        edge: CompiledEdge {
+            source_type: row.get("source_type"),
+            source_id: row.get("source_id"),
+            target_type: row.get("target_type"),
+            target_id: row.get("target_id"),
+            satisfaction,
+            extra,
+        },
+    }
+}
+
+fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
+    use std::collections::{BTreeSet, HashMap};
+
+    let mut by_lane: HashMap<&str, Vec<&ContinuityPlanNode>> = HashMap::new();
+    for node in nodes {
+        by_lane.entry(node.lane_id.as_str()).or_default().push(node);
+    }
+    for lane in by_lane.values_mut() {
+        lane.sort_by_key(|node| (node.position, node.id.clone()));
+    }
+    let by_issue: HashMap<i32, &ContinuityPlanNode> = nodes
+        .iter()
+        .filter(|node| node.node_type == "issue")
+        .map(|node| (node.ref_id, node))
+        .collect();
+
+    let mut edges = Vec::new();
+    for node in nodes {
+        if !node.is_checkpoint {
+            continue;
+        }
+        let mut explicit: BTreeSet<i32> = node.checkpoint_target_ref_ids.iter().copied().collect();
+        if let Some(target) = node.checkpoint_target_ref_id {
+            explicit.insert(target);
+        }
+        let checkpoint_issue_id = if node.node_type == "issue" {
+            Some(node.ref_id)
+        } else {
+            None
+        };
+        if !explicit.is_empty() {
+            for target in explicit {
+                let target_node = match by_issue.get(&target) {
+                    Some(value) => *value,
+                    None => continue,
+                };
+                if target_node.ref_id == node.ref_id {
+                    continue;
+                }
+                edges.push(CompiledEdge {
+                    source_type: node.node_type.clone(),
+                    source_id: node.ref_id,
+                    target_type: target_node.node_type.clone(),
+                    target_id: target_node.ref_id,
+                    satisfaction: "checkpoint".into(),
+                    extra: checkpoint_issue_id.map(EdgeExtra::Checkpoint),
+                });
+            }
+            continue;
+        }
+        let lane_nodes = by_lane.get(node.lane_id.as_str()).cloned().unwrap_or_default();
+        let index = lane_nodes.iter().position(|candidate| candidate.id == node.id);
+        let Some(index) = index else { continue };
+        if index + 1 >= lane_nodes.len() {
+            continue;
+        }
+        let next = lane_nodes[index + 1];
+        if next.node_type == node.node_type && next.ref_id == node.ref_id {
+            continue;
+        }
+        edges.push(CompiledEdge {
+            source_type: node.node_type.clone(),
+            source_id: node.ref_id,
+            target_type: next.node_type.clone(),
+            target_id: next.ref_id,
+            satisfaction: "checkpoint".into(),
+            extra: checkpoint_issue_id.map(EdgeExtra::Checkpoint),
+        });
+    }
+    edges
+}
+
+/// Compile a plan's stored JSON into rules, canonical edges and membership.
+/// The caller owns the surrounding transaction and must roll it back on error.
+async fn compile_plan_rules(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    plan_id: i32,
+    nodes: &[ContinuityPlanNode],
+    ordering_mode: &str,
+    prior_ordering_mode: Option<&str>,
+) -> Result<(), ApiError> {
+    use std::collections::{HashMap, HashSet};
+
+    let marker = plan_rule_marker(plan_id);
+    let incoming_ids: HashSet<i32> = nodes
+        .iter()
+        .filter(|node| node.node_type == "issue")
+        .map(|node| node.ref_id)
+        .collect();
+
+    // Snapshot membership and plan-owned rules before any rebuild.
+    let prior_membership: HashSet<i32> = tx
+        .query(
+            "SELECT DISTINCT issue_id FROM reading_plan_issues WHERE plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| row.get::<_, i32>(0))
+        .collect();
+
+    let old_rows = tx
+        .query(
+            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
+             checkpoint_issue_id, convergence_targets
+             FROM continuity_rules WHERE user_id = $1 AND note = $2 ORDER BY id",
+            &[&user_id, &marker],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let old_rules: Vec<StoredRule> = old_rows.iter().map(decode_rule).collect();
+    let old_pairs: HashSet<(i32, i32)> = old_rules
+        .iter()
+        .flat_map(|rule| rule.edge.pairs())
+        .collect();
+    let old_identities: HashSet<&CompiledEdge> =
+        old_rules.iter().map(|rule| &rule.edge).collect();
+
+    let unchanged_strict_save = ordering_mode == "strict_sequential"
+        && incoming_ids == prior_membership
+        && prior_ordering_mode == Some("strict_sequential");
+
+    let mut edges_to_add: Vec<CompiledEdge> = Vec::new();
+
+    // 1. Strict item_read pairs: retain in-plan pairs already owned by the plan.
+    //    Never infer adjacency from thread position (that is a legacy projection).
+    if ordering_mode == "strict_sequential" {
+        for rule in &old_rules {
+            if rule.edge.satisfaction != "item_read" {
+                continue;
+            }
+            if incoming_ids.contains(&rule.edge.source_id)
+                && incoming_ids.contains(&rule.edge.target_id)
+            {
+                edges_to_add.push(rule.edge.clone());
+            }
+        }
+    }
+
+    // 2. Checkpoint rules from explicitly flagged nodes.
+    edges_to_add.extend(checkpoint_edges(nodes));
+
+    // 3. Convergence rules: a node waits for every gate target.
+    let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
+        nodes.iter().map(|node| (node.id.as_str(), node)).collect();
+    for node in nodes {
+        if node.convergence_gate.is_empty() {
+            continue;
+        }
+        let mut targets: Vec<(String, i32)> = Vec::new();
+        for gate in &node.convergence_gate {
+            let target_id = match gate.get("node_id").and_then(|value| value.as_str()) {
+                Some(value) => value,
+                None => {
+                    return Err(domain_conflict(serde_json::json!({
+                        "code": "invalid_convergence_gate",
+                        "node_id": node.id,
+                    })))
+                }
+            };
+            let target_node = nodes_by_id.get(target_id).ok_or_else(|| {
+                domain_conflict(serde_json::json!({
+                    "code": "invalid_convergence_gate",
+                    "node_id": node.id,
+                }))
+            })?;
+            let entry = (target_node.node_type.clone(), target_node.ref_id);
+            if !targets.contains(&entry) {
+                targets.push(entry);
+            }
+        }
+        if targets.is_empty() {
+            continue;
+        }
+        targets.sort();
+        edges_to_add.push(CompiledEdge {
+            source_type: node.node_type.clone(),
+            source_id: node.ref_id,
+            target_type: node.node_type.clone(),
+            target_id: node.ref_id,
+            satisfaction: "converged".into(),
+            extra: Some(EdgeExtra::Converged(targets)),
+        });
+    }
+
+    // Rebuild normalized membership in the same transaction.
+    rebuild_plan_membership(tx, plan_id, nodes).await?;
+
+    let desired_identities: HashSet<&CompiledEdge> = edges_to_add.iter().collect();
+    if unchanged_strict_save && desired_identities == old_identities {
+        // No rule churn, but repair a missing canonical edge for a surviving
+        // plan-owned rule so Roll eligibility cannot silently change.
+        for rule in &old_rules {
+            for pair in rule.edge.pairs() {
+                let exists: bool = tx
+                    .query_one(
+                        "SELECT EXISTS(SELECT 1 FROM dependencies
+                          WHERE source_issue_id = $1 AND target_issue_id = $2
+                            AND (note LIKE $3 OR note LIKE $4))",
+                        &[
+                            &pair.0,
+                            &pair.1,
+                            &format!("{RULE_NOTE_PREFIX}%"),
+                            &format!("{RULE_BACKFILL_NOTE_PREFIX}%"),
+                        ],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .get(0);
+                if !exists {
+                    crate::continuity_rules::compile_edges(tx, &[pair], rule.id).await?;
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // Cycle detection over the plan graph before any rule is persisted.
+    let plan_keys: Vec<PlanNodeKey> = nodes
+        .iter()
+        .filter(|node| matches!(node.node_type.as_str(), "issue" | "crossover"))
+        .map(|node| (node.node_type.clone(), node.ref_id))
+        .collect();
+    let key_set: HashSet<&PlanNodeKey> = plan_keys.iter().collect();
+    let mut graph_edges: Vec<(PlanNodeKey, PlanNodeKey)> = Vec::new();
+    for edge in &edges_to_add {
+        let source = (edge.source_type.clone(), edge.source_id);
+        match &edge.extra {
+            Some(EdgeExtra::Converged(targets)) => {
+                for (kind, id) in targets {
+                    let target = (kind.clone(), *id);
+                    if key_set.contains(&target) && target != source {
+                        graph_edges.push((target, source.clone()));
+                    }
+                }
+            }
+            _ => {
+                let target = (edge.target_type.clone(), edge.target_id);
+                if key_set.contains(&source) && key_set.contains(&target) && source != target {
+                    graph_edges.push((source, target));
+                }
+            }
+        }
+    }
+    if let Some((node_type, node_id)) = detect_plan_cycles(&plan_keys, &graph_edges) {
+        return Err(domain_conflict(serde_json::json!({
+            "code": "plan_convergence_cycle",
+            "node_type": node_type,
+            "node_id": node_id,
+        })));
+    }
+
+    tx.execute(
+        "DELETE FROM continuity_rules WHERE user_id = $1 AND note = $2",
+        &[&user_id, &marker],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    if edges_to_add.is_empty() {
+        // Retire all previously compiled pairs so orphaned edges stop blocking.
+        let pairs: Vec<(i32, i32)> = old_pairs.into_iter().collect();
+        if !pairs.is_empty() {
+            crate::continuity_rules::retire_edges(tx, user_id, &pairs, -1).await?;
+        }
+        return Ok(());
+    }
+
+    let mut created: Vec<(i32, Vec<(i32, i32)>)> = Vec::new();
+    let mut new_pairs: HashSet<(i32, i32)> = HashSet::new();
+    for edge in &edges_to_add {
+        // A colliding rule owned by somebody else is a 409, never overwritten.
+        let existing: Option<i32> = tx
+            .query_opt(
+                "SELECT id FROM continuity_rules
+                 WHERE user_id = $1 AND source_type = $2 AND source_id = $3
+                   AND target_type = $4 AND target_id = $5",
+                &[
+                    &user_id,
+                    &edge.source_type,
+                    &edge.source_id,
+                    &edge.target_type,
+                    &edge.target_id,
+                ],
+            )
+            .await
+            .map_err(db::query_error)?
+            .map(|row| row.get(0));
+        if existing.is_some() {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "plan_rule_conflict",
+                "source_node_id": format!("{}-{}", edge.source_type, edge.source_id),
+                "target_node_id": format!("{}-{}", edge.target_type, edge.target_id),
+            })));
+        }
+        if edge.satisfaction != "converged"
+            && crate::continuity_rules::would_create_cycle(
+                tx,
+                user_id,
+                &edge.source_type,
+                edge.source_id,
+                &edge.target_type,
+                edge.target_id,
+                None,
+            )
+            .await?
+        {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "continuity_cycle",
+                "source_node_id": format!("{}-{}", edge.source_type, edge.source_id),
+                "target_node_id": format!("{}-{}", edge.target_type, edge.target_id),
+            })));
+        }
+
+        let (checkpoint_issue_id, convergence_targets): (Option<i32>, Option<serde_json::Value>) =
+            match &edge.extra {
+                Some(EdgeExtra::Checkpoint(id)) => (Some(*id), None),
+                Some(EdgeExtra::Converged(targets)) => (
+                    None,
+                    Some(serde_json::Value::Array(
+                        targets
+                            .iter()
+                            .map(|(kind, id)| serde_json::json!({"type": kind, "id": id}))
+                            .collect(),
+                    )),
+                ),
+                None => (None, None),
+            };
+        let id: i32 = tx
+            .query_one(
+                "INSERT INTO continuity_rules
+                 (user_id, source_type, source_id, target_type, target_id,
+                  satisfaction_type, checkpoint_issue_id, convergence_targets, note,
+                  created_at, updated_at)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+                 RETURNING id",
+                &[
+                    &user_id,
+                    &edge.source_type,
+                    &edge.source_id,
+                    &edge.target_type,
+                    &edge.target_id,
+                    &edge.satisfaction,
+                    &checkpoint_issue_id,
+                    &convergence_targets,
+                    &marker,
+                ],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
+        let pairs = edge.pairs();
+        new_pairs.extend(pairs.iter().copied());
+        created.push((id, pairs));
+    }
+
+    // Retire edges the new rule set no longer intends, then compile all new
+    // pairs. compile_edges upserts notes so surviving edges reference live IDs.
+    let retired: Vec<(i32, i32)> = old_pairs.difference(&new_pairs).copied().collect();
+    if !retired.is_empty() {
+        crate::continuity_rules::retire_edges(tx, user_id, &retired, -1).await?;
+    }
+    for (rule_id, pairs) in &created {
+        if !pairs.is_empty() {
+            crate::continuity_rules::compile_edges(tx, pairs, *rule_id).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Retire canonical edges compiled by one plan before its rules are deleted.
+/// Mirrors `retire_plan_edges_for_deletion`: a pair survives when another
+/// rule or another plan still links it, otherwise it is deleted so orphaned
+/// Dependency rows cannot keep blocking Roll.
+async fn retire_plan_edges_for_deletion(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    plan_id: i32,
+) -> Result<(), ApiError> {
+    use std::collections::HashSet;
+
+    let marker = plan_rule_marker(plan_id);
+    let plan_rules = tx
+        .query(
+            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
+             checkpoint_issue_id, convergence_targets
+             FROM continuity_rules WHERE user_id = $1 AND note = $2",
+            &[&user_id, &marker],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(decode_rule)
+        .collect::<Vec<_>>();
+    let deleted_ids: HashSet<i32> = plan_rules.iter().map(|rule| rule.id).collect();
+    let mut pairs: HashSet<(i32, i32)> = plan_rules
+        .iter()
+        .flat_map(|rule| rule.edge.pairs())
+        .collect();
+
+    // Pairs this plan explicitly links through reading_plan_dependencies.
+    let linked = tx
+        .query(
+            "SELECT d.source_issue_id, d.target_issue_id
+             FROM dependencies d
+             JOIN reading_plan_dependencies rpd ON rpd.dependency_id = d.id
+             WHERE rpd.plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &linked {
+        pairs.insert((row.get(0), row.get(1)));
+    }
+    if pairs.is_empty() {
+        return Ok(());
+    }
+
+    // Survivors: other rules owned by this user, and other plans' links.
+    let mut keep: HashSet<(i32, i32)> = HashSet::new();
+    let survivor_rows = tx
+        .query(
+            "SELECT id, source_type, source_id, target_type, target_id, satisfaction_type,
+             checkpoint_issue_id, convergence_targets
+             FROM continuity_rules
+             WHERE user_id = $1 AND satisfaction_type IN ('item_read','checkpoint','converged')",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &survivor_rows {
+        let rule = decode_rule(row);
+        if !deleted_ids.contains(&rule.id) {
+            keep.extend(rule.edge.pairs());
+        }
+    }
+    let other_plan_rows = tx
+        .query(
+            "SELECT d.source_issue_id, d.target_issue_id
+             FROM dependencies d
+             JOIN reading_plan_dependencies rpd ON rpd.dependency_id = d.id
+             WHERE rpd.plan_id <> $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &other_plan_rows {
+        let pair = (row.get::<_, i32>(0), row.get::<_, i32>(1));
+        if pairs.contains(&pair) {
+            keep.insert(pair);
+        }
+    }
+
+    for (source, target) in pairs.difference(&keep) {
+        tx.execute(
+            "DELETE FROM dependencies
+             WHERE source_issue_id = $1 AND target_issue_id = $2
+               AND (note LIKE $3 OR note LIKE $4)",
+            &[
+                source,
+                target,
+                &format!("{RULE_NOTE_PREFIX}%"),
+                &format!("{RULE_BACKFILL_NOTE_PREFIX}%"),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
+/// Persist the derived blocked projection after a plan write, mirroring
+/// Python `_refresh_blocked_state` (which commits its own transaction).
+async fn refresh_blocked_state(state: &AppState, user_id: i32) -> Result<(), ApiError> {
+    let mut conn = db::checkout(state).await?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    if let Err(error) = crate::issue_service::refresh_blocked_threads(&tx, user_id).await {
+        let _ = tx.rollback().await;
+        return Err(error);
+    }
+    tx.commit().await.map_err(db::query_error)
 }
 
 // ============================================================================
@@ -414,6 +1560,7 @@ pub async fn create_continuity_plan(
     user: AuthenticatedUser,
     Json(payload): Json<ContinuityPlanWrite>,
 ) -> Result<(StatusCode, Json<ContinuityPlanResponse>), ApiError> {
+    payload.validate_structure()?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -421,50 +1568,11 @@ pub async fn create_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    // Check that all referenced issues are owned by the user
-    let issue_ids: Vec<i32> = payload
-        .nodes
-        .iter()
-        .filter(|n| n.node_type == "issue")
-        .map(|n| n.ref_id)
-        .collect();
-
-    if !issue_ids.is_empty() {
-        let count: i64 = tx
-            .query_one(
-                "SELECT COUNT(*) FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1::int[]) AND t.user_id = $2",
-                &[&issue_ids, &user.id()],
-            )
-            .await
-            .map_err(db::query_error)?
-            .get(0);
-        if count as usize != issue_ids.len() {
-            tx.rollback().await.map_err(db::query_error)?;
-            return Err(bad_request(
-                "Some referenced issues are not owned by the user",
-            ));
-        }
-    }
-
-    // Check thread nodes
-    for node in &payload.nodes {
-        if node.node_type == "thread" {
-            let found: Option<i32> = tx
-                .query_opt(
-                    "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
-                    &[&node.ref_id, &user.id()],
-                )
-                .await
-                .map_err(db::query_error)?
-                .map(|row| row.get(0));
-            if found.is_none() {
-                tx.rollback().await.map_err(db::query_error)?;
-                return Err(bad_request(format!(
-                    "Thread {} not found or not owned",
-                    node.ref_id
-                )));
-            }
-        }
+    // Ownership of every referenced node (issue/thread/crossover) must match
+    // the Python `validate_node_ownership` guard, including the 422 envelope.
+    if let Err(err) = validate_node_ownership(&tx, user.id(), &payload.nodes).await {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(err);
     }
 
     // Validate lane uniqueness
@@ -502,22 +1610,24 @@ pub async fn create_continuity_plan(
         .iter()
         .map(|n| serde_json::to_value(n).unwrap_or_default())
         .collect();
-    let lanes_text = serialize_plan_json(&lanes_json)?;
-    let nodes_text = serialize_plan_json(&nodes_json)?;
+    // tokio-postgres needs a `serde_json::Value` (not a String) for a `json`
+    // parameter — a `::json` cast alone does not make a String encodable.
+    let lanes_value = serde_json::Value::Array(lanes_json);
+    let nodes_value = serde_json::Value::Array(nodes_json);
 
     let row = tx
         .query_one(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
-            VALUES ($1, $2, $3, $4::json, $5::json, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
             "#,
             &[
                 &user.id(),
                 &payload.name,
                 &payload.ordering_mode,
-                &lanes_text,
-                &nodes_text,
+                &lanes_value,
+                &nodes_value,
             ],
         )
         .await
@@ -536,7 +1646,28 @@ pub async fn create_continuity_plan(
         updated_at: row.get(7),
     };
 
+    // Compile the plan's strict/checkpoint/convergence intent into rules and
+    // canonical edges, and rebuild normalized membership, in this transaction.
+    // Python also calls `ensure_new_plan_has_authority` here, but that adapter
+    // is gated on `OPTION_E_ENABLED` (default false) plus an owner-approved
+    // preview; it is a no-op in the deployed configuration and the native
+    // service deliberately does not expose that experimental switch.
+    if let Err(error) = compile_plan_rules(
+        &tx,
+        user.id(),
+        plan_id,
+        &payload.nodes,
+        &payload.ordering_mode,
+        None,
+    )
+    .await
+    {
+        let _ = tx.rollback().await;
+        return Err(error);
+    }
+
     tx.commit().await.map_err(db::query_error)?;
+    refresh_blocked_state(&state, user.id()).await?;
     Ok((StatusCode::CREATED, Json(plan_response)))
 }
 
@@ -614,8 +1745,9 @@ pub async fn update_continuity_plan(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(plan_id): Path<i32>,
-    Json(payload): Json<ContinuityPlanWrite>,
+    Json(mut payload): Json<ContinuityPlanWrite>,
 ) -> Result<Json<ContinuityPlanResponse>, ApiError> {
+    payload.validate_structure()?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -623,10 +1755,11 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    // Check plan ownership and get current version
+    // Check plan ownership and get the current version and ordering mode.
     let existing = tx
         .query_opt(
-            "SELECT id, lanes_json, nodes_json, updated_at::text FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            "SELECT id, lanes_json, nodes_json, ordering_mode, updated_at::text
+             FROM continuity_plans WHERE id = $1 AND user_id = $2",
             &[&plan_id, &user.id()],
         )
         .await
@@ -634,59 +1767,89 @@ pub async fn update_continuity_plan(
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
     let expected_version: Option<String> = payload.expected_updated_at.clone();
-    let current_updated_at: String = existing.get(3);
+    let current_updated_at: String = existing.get(4);
+    let prior_ordering_mode: String = existing.get(3);
+    let prior_lanes: serde_json::Value = existing.get(1);
+    let prior_nodes: serde_json::Value = existing.get(2);
 
     if let Some(ref expected) = expected_version {
         if expected != &current_updated_at {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError::Conflict(format!(
-                "Plan {plan_id} has changed since last read"
-            )));
+            return Err(domain_conflict(serde_json::json!({
+                "code": "plan_version_conflict",
+                "expected_updated_at": current_updated_at,
+            })));
         }
     }
 
-    // Validate node ownership (same logic as create)
-    let issue_ids: Vec<i32> = payload
+    // `guard_plan_write`: reject a GET-then-save of leftover nodes_json that
+    // would resurrect issues no longer in normalized membership.
+    let incoming_ids: std::collections::HashSet<i32> = payload
         .nodes
         .iter()
-        .filter(|n| n.node_type == "issue")
-        .map(|n| n.ref_id)
+        .filter(|node| node.node_type == "issue")
+        .map(|node| node.ref_id)
         .collect();
-
-    if !issue_ids.is_empty() {
-        let count: i64 = tx
-            .query_one(
-                "SELECT COUNT(*) FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1::int[]) AND t.user_id = $2",
-                &[&issue_ids, &user.id()],
-            )
-            .await
-            .map_err(db::query_error)?
-            .get(0);
-        if count as usize != issue_ids.len() {
-            tx.rollback().await.map_err(db::query_error)?;
-            return Err(bad_request(
-                "Some referenced issues are not owned by the user",
-            ));
-        }
+    let membership_ids: std::collections::HashSet<i32> = tx
+        .query(
+            "SELECT DISTINCT issue_id FROM reading_plan_issues WHERE plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| row.get::<_, i32>(0))
+        .collect();
+    let json_ids: std::collections::HashSet<i32> = prior_nodes
+        .as_array()
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|node| {
+                    node.get("node_type").and_then(|value| value.as_str()) == Some("issue")
+                })
+                .filter_map(|node| node.get("ref_id").and_then(|value| value.as_i64()))
+                .map(|value| value as i32)
+                .collect()
+        })
+        .unwrap_or_default();
+    if !membership_ids.is_empty()
+        && incoming_ids == json_ids
+        && incoming_ids != membership_ids
+    {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(domain_conflict(serde_json::json!({
+            "code": "stale_plan_nodes",
+            "membership_issue_count": membership_ids.len(),
+            "payload_issue_count": incoming_ids.len(),
+        })));
     }
 
-    for node in &payload.nodes {
-        if node.node_type == "thread" {
-            let found: Option<i32> = tx
-                .query_opt(
-                    "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
-                    &[&node.ref_id, &user.id()],
-                )
-                .await
-                .map_err(db::query_error)?
-                .map(|row| row.get(0));
-            if found.is_none() {
-                tx.rollback().await.map_err(db::query_error)?;
-                return Err(bad_request(format!(
-                    "Thread {} not found or not owned",
-                    node.ref_id
-                )));
+    // Ownership of every referenced node (issue/thread/crossover) must match
+    // the Python `validate_node_ownership` guard, including the 422 envelope.
+    if let Err(err) = validate_node_ownership(&tx, user.id(), &payload.nodes).await {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(err);
+    }
+
+    // Preserve server-owned migration proof across ordinary lane replacement.
+    let mut server_contracts: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+    if let Some(lanes) = prior_lanes.as_array() {
+        for lane in lanes {
+            if let (Some(id), Some(contract)) = (
+                lane.get("id").and_then(|value| value.as_str()),
+                lane.get("migration_contract"),
+            ) {
+                if !contract.is_null() {
+                    server_contracts.insert(id.to_string(), contract.clone());
+                }
             }
+        }
+    }
+    for lane in &mut payload.lanes {
+        if let Some(contract) = server_contracts.get(&lane.id) {
+            lane.migration_contract = Some(contract.clone());
         }
     }
 
@@ -700,20 +1863,20 @@ pub async fn update_continuity_plan(
         .iter()
         .map(|n| serde_json::to_value(n).unwrap_or_default())
         .collect();
-    let lanes_text = serialize_plan_json(&lanes_json)?;
-    let nodes_text = serialize_plan_json(&nodes_json)?;
+    let lanes_value = serde_json::Value::Array(lanes_json);
+    let nodes_value = serde_json::Value::Array(nodes_json);
 
     tx.execute(
         r#"
-        UPDATE continuity_plans 
-        SET name = $1, ordering_mode = $2, lanes_json = $3::json, nodes_json = $4::json, updated_at = NOW()
+        UPDATE continuity_plans
+        SET name = $1, ordering_mode = $2, lanes_json = $3, nodes_json = $4, updated_at = NOW()
         WHERE id = $5 AND user_id = $6
         "#,
         &[
             &payload.name,
             &payload.ordering_mode,
-            &lanes_text,
-            &nodes_text,
+            &lanes_value,
+            &nodes_value,
             &plan_id,
             &user.id(),
         ],
@@ -732,9 +1895,7 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    tx.commit().await.map_err(db::query_error)?;
-
-    Ok(Json(ContinuityPlanResponse {
+    let plan_response = ContinuityPlanResponse {
         id: row.get(0),
         user_id: row.get(1),
         name: row.get(2),
@@ -743,7 +1904,26 @@ pub async fn update_continuity_plan(
         nodes: serde_json::from_value(row.get(5)).unwrap_or_default(),
         created_at: row.get(6),
         updated_at: row.get(7),
-    }))
+    };
+
+    if let Err(error) = compile_plan_rules(
+        &tx,
+        user.id(),
+        plan_id,
+        &payload.nodes,
+        &payload.ordering_mode,
+        Some(&prior_ordering_mode),
+    )
+    .await
+    {
+        let _ = tx.rollback().await;
+        return Err(error);
+    }
+
+    tx.commit().await.map_err(db::query_error)?;
+    refresh_blocked_state(&state, user.id()).await?;
+
+    Ok(Json(plan_response))
 }
 
 // ============================================================================
@@ -785,8 +1965,21 @@ pub async fn delete_continuity_plan(
     .map_err(db::query_error)?
     .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
+    // Retire canonical edges compiled by this plan before its rules vanish.
+    // After the Roll cutover those Dependency rows are the only authority, so
+    // orphaned edges would otherwise keep blocking issues forever.
+    retire_plan_edges_for_deletion(&tx, user.id(), plan_id).await?;
+
     // Get marker for deleting plan rules
-    let marker = format!("continuity-plan:{}", plan_id);
+    let marker = plan_rule_marker(plan_id);
+
+    // Tag assignments point at polymorphic ids with no foreign key.
+    tx.execute(
+        "DELETE FROM tag_assignments WHERE target_type = 'continuity_plan' AND target_id = $1",
+        &[&plan_id],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     // Delete plan-linked dependencies
     tx.execute(
@@ -826,6 +2019,7 @@ pub async fn delete_continuity_plan(
         .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
+    refresh_blocked_state(&state, user.id()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -984,30 +2178,35 @@ pub async fn adopt_reading_order(
         "name": lane_name,
         "order": 0
     })]);
-    let lanes_json = serde_json::to_string(&lanes_value)
-        .map_err(|err| ApiError::Internal(format!("Failed to encode plan lanes: {err}")))?;
-    let nodes_json = serde_json::to_string(&nodes_val)
-        .map_err(|err| ApiError::Internal(format!("Failed to encode plan nodes: {err}")))?;
-
     let row = tx
         .query_one(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
-            VALUES ($1, $2, 'informational', $3::json, $4::json, NOW(), NOW())
+            VALUES ($1, $2, 'informational', $3, $4, NOW(), NOW())
             RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
             "#,
-            &[&user.id(), &plan_name, &lanes_json, &nodes_json],
+            &[&user.id(), &plan_name, &lanes_value, &nodes_val],
         )
         .await
         .map_err(db::query_error)?;
 
     let plan_id: i32 = row.get(0);
 
-    // Insert continuity plan membership with the correct plan_id
+    // Insert continuity plan membership with the correct plan_id. The
+    // canonical table has no `node_id` column; occurrence_id carries the
+    // stable per-plan identifier.
     for (idx, thread_id) in thread_ids.iter().enumerate() {
         tx.execute(
-            "INSERT INTO reading_plan_issues (plan_id, issue_id, display_position, node_id) VALUES ($1, $2, $3, $4)",
-            &[&plan_id, thread_id, &(idx as i32), &format!("ro-{}-{}", order_id, thread_id)],
+            "INSERT INTO reading_plan_issues
+             (plan_id, occurrence_id, issue_id, lane_id, display_position)
+             VALUES ($1, $2, $3, $4, $5)",
+            &[
+                &plan_id,
+                &format!("ro-{order_id}-{thread_id}"),
+                thread_id,
+                &lane_id,
+                &(idx as i32),
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -1042,14 +2241,54 @@ pub async fn adopt_reading_order(
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReadingPlanMemberIssue {
+    pub occurrence_id: String,
+    pub issue_id: i32,
+    pub lane_id: String,
+    pub display_position: i32,
+    pub label: Option<String>,
+    pub reader_role: Option<String>,
+    pub reader_optional: Option<bool>,
+    pub is_checkpoint: bool,
+    pub source_metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReadingPlanSourceSnapshot {
+    pub id: i32,
+    pub raw_source_path: String,
+    pub display_name: Option<String>,
+    pub repository: Option<String>,
+    pub source_path: Option<String>,
+    pub revision_sha: Option<String>,
+    pub content_hash: Option<String>,
+    pub adopted_at: Option<String>,
+    pub recorded_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReadingPlanSourcePlacementView {
+    pub id: i32,
+    pub occurrence_id: String,
+    pub plan_source_id: i32,
+    pub source_position: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReadingPlanProgress {
+    pub total_issues: i32,
+    pub read_issues: i32,
+}
+
+/// Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`.
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ReadingPlanMembershipResponse {
     pub plan_id: i32,
-    #[serde(rename = "issue_ids")]
-    pub issue_ids: Vec<i32>,
-    #[serde(rename = "issue_count")]
-    pub issue_count: i32,
-    #[serde(rename = "thread_ids")]
-    pub thread_ids: Vec<i32>,
+    pub issues: Vec<ReadingPlanMemberIssue>,
+    pub dependencies: Vec<ReadingPlanDependencyLink>,
+    pub sources: Vec<ReadingPlanSourceSnapshot>,
+    pub placements: Vec<ReadingPlanSourcePlacementView>,
+    pub progress: ReadingPlanProgress,
 }
 
 #[utoipa::path(
@@ -1087,49 +2326,131 @@ pub async fn get_continuity_plan_membership(
         return Err(not_found(format!("Continuity plan {plan_id} not found")));
     }
 
-    // Get issue membership
+    // Normalized membership rows owned by this plan (Python
+    // `reading_plan_repository.list_plan_issues`).
     let issue_rows = conn
         .query(
-            "SELECT DISTINCT issue_id FROM reading_plan_issues WHERE plan_id = $1",
+            "SELECT occurrence_id, issue_id, lane_id, display_position, label, \
+             reader_role, reader_optional, is_checkpoint, source_metadata_json \
+             FROM reading_plan_issues WHERE plan_id = $1 \
+             ORDER BY display_position, occurrence_id",
             &[&plan_id],
         )
         .await
         .map_err(db::query_error)?;
-    let issue_ids: Vec<i32> = issue_rows.iter().map(|row| row.get(0)).collect();
+    let issues: Vec<ReadingPlanMemberIssue> = issue_rows
+        .iter()
+        .map(|row| ReadingPlanMemberIssue {
+            occurrence_id: row.get(0),
+            issue_id: row.get(1),
+            lane_id: row.get(2),
+            display_position: row.get(3),
+            label: row.get(4),
+            reader_role: row.get(5),
+            reader_optional: row.get(6),
+            is_checkpoint: row.get(7),
+            source_metadata: row.get(8),
+        })
+        .collect();
 
-    // Get thread ids from nodes
-    let node_rows = conn
+    // Dependency provenance: canonical edge endpoints plus this plan's link
+    // explanation (Python `list_plan_dependency_edges` + `list_plan_dependencies`).
+    let dep_rows = conn
         .query(
-            "SELECT nodes_json FROM continuity_plans WHERE id = $1",
+            "SELECT d.id, d.source_issue_id, d.target_issue_id, rpd.explanation \
+             FROM reading_plan_dependencies rpd \
+             JOIN dependencies d ON d.id = rpd.dependency_id \
+             WHERE rpd.plan_id = $1 ORDER BY d.id",
             &[&plan_id],
         )
         .await
         .map_err(db::query_error)?;
+    let dependencies: Vec<ReadingPlanDependencyLink> = dep_rows
+        .iter()
+        .map(|row| ReadingPlanDependencyLink {
+            dependency_id: row.get(0),
+            source_issue_id: row.get(1),
+            target_issue_id: row.get(2),
+            explanation: row.get(3),
+        })
+        .collect();
 
-    let thread_ids: Vec<i32> = if let Some(row) = node_rows.first() {
-        let nodes: Vec<serde_json::Value> = row.get(0);
-        nodes
-            .iter()
-            .filter_map(|node| {
-                if node.get("node_type").and_then(|v| v.as_str()) == Some("thread") {
-                    node.get("ref_id")
-                        .and_then(|v| v.as_i64())
-                        .map(|v| v as i32)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // Source snapshots (Python `list_plan_sources`). `display_name` is resolved
+    // from external catalogs by the Python reader; no catalog-backed name is
+    // available to the native process, so it is reported as null here.
+    let source_rows = conn
+        .query(
+            "SELECT id, raw_source_path, repository, source_path, revision_sha, \
+             content_hash, adopted_at::text, recorded_at::text \
+             FROM reading_plan_sources WHERE plan_id = $1 ORDER BY id",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let sources: Vec<ReadingPlanSourceSnapshot> = source_rows
+        .iter()
+        .map(|row| ReadingPlanSourceSnapshot {
+            id: row.get(0),
+            raw_source_path: row.get(1),
+            display_name: None,
+            repository: row.get(2),
+            source_path: row.get(3),
+            revision_sha: row.get(4),
+            content_hash: row.get(5),
+            adopted_at: row.get(6),
+            recorded_at: row.get(7),
+        })
+        .collect();
 
-    let issue_count = issue_ids.len() as i32;
+    // Source-position observations (Python `list_plan_source_placements`).
+    let placement_rows = conn
+        .query(
+            "SELECT id, occurrence_id, plan_source_id, source_position \
+             FROM reading_plan_source_placements WHERE plan_id = $1 ORDER BY id",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let placements: Vec<ReadingPlanSourcePlacementView> = placement_rows
+        .iter()
+        .map(|row| ReadingPlanSourcePlacementView {
+            id: row.get(0),
+            occurrence_id: row.get(1),
+            plan_source_id: row.get(2),
+            source_position: row.get(3),
+        })
+        .collect();
+
+    // Progress derived from global Issue read state (Python `get_plan_progress`).
+    let total_issues: i64 = conn
+        .query_one(
+            "SELECT COUNT(DISTINCT issue_id) FROM reading_plan_issues WHERE plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let read_issues: i64 = conn
+        .query_one(
+            "SELECT COUNT(DISTINCT rpi.issue_id) FROM reading_plan_issues rpi \
+             JOIN issues i ON i.id = rpi.issue_id \
+             WHERE rpi.plan_id = $1 AND i.status = 'read'",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+
     Ok(Json(ReadingPlanMembershipResponse {
         plan_id,
-        issue_ids,
-        issue_count,
-        thread_ids,
+        issues,
+        dependencies,
+        sources,
+        placements,
+        progress: ReadingPlanProgress {
+            total_issues: total_issues as i32,
+            read_issues: read_issues as i32,
+        },
     }))
 }
 
@@ -1352,6 +2673,8 @@ pub async fn confirm_plan_projection(
     Path(plan_id): Path<i32>,
     Json(payload): Json<ReadingOrderProjectionRequest>,
 ) -> Result<Json<ReadingOrderProjectionResult>, ApiError> {
+    use std::collections::{HashMap, HashSet};
+
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -1359,16 +2682,23 @@ pub async fn confirm_plan_projection(
         .await
         .map_err(db::query_error)?;
 
-    // Check plan ownership
-    tx.query_opt(
-        "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
-        &[&plan_id, &user.id()],
-    )
-    .await
-    .map_err(db::query_error)?
-    .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    // Load the owned plan. `continuity_plans` is keyed by `id`; there is no
+    // `plan_id` column (the #4838 review's original P1). Read ordering_mode
+    // and lanes so flattening matches the canonical Python projection.
+    let plan_row = tx
+        .query_opt(
+            "SELECT id, ordering_mode, lanes_json, nodes_json
+             FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    let ordering_mode: String = plan_row.get(1);
+    let lanes_json: serde_json::Value = plan_row.get(2);
+    let nodes_json: serde_json::Value = plan_row.get(3);
 
-    // Check reading order ownership
+    // Load the owned reading order.
     tx.query_opt(
         "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2",
         &[&payload.reading_order_id, &user.id()],
@@ -1382,79 +2712,215 @@ pub async fn confirm_plan_projection(
         ))
     })?;
 
-    // Get plan nodes
-    let plan_rows = tx
-        .query_one(
-            "SELECT nodes_json, plan_id FROM continuity_plans WHERE id = $1",
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let nodes: Vec<serde_json::Value> = plan_rows.get(0);
-
-    // Extract thread nodes
-    let mut thread_nodes: Vec<(i32, i32, String)> = Vec::new(); // (position, thread_id, node_id)
-    let mut node_ids_with_positions: std::collections::HashMap<String, i32> =
-        std::collections::HashMap::new();
-
-    for (pos, node) in nodes.iter().enumerate() {
-        if node.get("node_type").and_then(|v| v.as_str()) == Some("thread") {
-            if let (Some(thread_id), Some(node_id)) = (
-                node.get("ref_id")
-                    .and_then(|v| v.as_i64())
-                    .map(|v| v as i32),
-                node.get("id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
-            ) {
-                thread_nodes.push((pos as i32, thread_id, node_id.clone()));
-                node_ids_with_positions.insert(node_id, pos as i32);
-            }
-        }
+    #[derive(Clone)]
+    struct ProjectNode {
+        id: String,
+        node_type: String,
+        ref_id: i32,
+        lane_id: String,
+        position: i32,
     }
 
-    // Get existing order items
-    let existing_items = tx
+    let nodes: Vec<ProjectNode> = nodes_json
+        .as_array()
+        .map(|values| {
+            values
+                .iter()
+                .map(|value| ProjectNode {
+                    id: value.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    node_type: value
+                        .get("node_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    ref_id: value
+                        .get("ref_id")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    lane_id: value
+                        .get("lane_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    position: value
+                        .get("position")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Flatten deterministically: strict sequential validates a single lane
+    // with contiguous positions; informational flattens lane by lane.
+    let lane_orders: HashMap<String, i32> = lanes_json
+        .as_array()
+        .map(|lanes| {
+            lanes
+                .iter()
+                .filter_map(|lane| {
+                    let id = lane.get("id")?.as_str()?.to_string();
+                    let order = lane.get("order")?.as_i64()? as i32;
+                    Some((id, order))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut ordered = nodes.clone();
+    if ordering_mode == "strict_sequential" {
+        if lane_orders.len() != 1 {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential plans must use exactly one lane",
+            })));
+        }
+        let lane_id = lane_orders.keys().next().cloned().unwrap_or_default();
+        if nodes.iter().any(|node| node.lane_id != lane_id) {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential plans must have all nodes in single lane",
+            })));
+        }
+        let mut positions: Vec<i32> = ordered.iter().map(|node| node.position).collect();
+        positions.sort_unstable();
+        if positions != (0..positions.len() as i32).collect::<Vec<i32>>() {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential positions must be contiguous starting at zero",
+            })));
+        }
+        ordered.sort_by(|a, b| a.position.cmp(&b.position).then(a.id.cmp(&b.id)));
+    } else {
+        ordered.sort_by(|a, b| {
+            lane_orders
+                .get(&a.lane_id)
+                .copied()
+                .unwrap_or(0)
+                .cmp(&lane_orders.get(&b.lane_id).copied().unwrap_or(0))
+                .then(a.position.cmp(&b.position))
+                .then(a.id.cmp(&b.id))
+        });
+    }
+
+    let thread_ids: Vec<i32> = ordered
+        .iter()
+        .filter(|node| node.node_type == "thread")
+        .map(|node| node.ref_id)
+        .collect();
+    let thread_titles: HashMap<i32, String> = if thread_ids.is_empty() {
+        HashMap::new()
+    } else {
+        tx.query(
+            "SELECT id, title FROM threads WHERE user_id = $1 AND id = ANY($2::int[])",
+            &[&user.id(), &thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+        .collect()
+    };
+
+    let existing_rows = tx
         .query(
-            "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position",
+            "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1",
             &[&payload.reading_order_id],
         )
         .await
         .map_err(db::query_error)?;
+    let mut existing_positions: HashMap<i32, i32> = HashMap::new();
+    for row in &existing_rows {
+        existing_positions.insert(row.get(0), row.get(1));
+    }
 
-    // Check for conflicts - duplicate threads in plan
-    let mut seen_threads = std::collections::HashSet::new();
-    let mut duplicates = Vec::new();
-    for (_, thread_id, _) in &thread_nodes {
-        if seen_threads.contains(thread_id) {
-            duplicates.push(*thread_id);
-        } else {
-            seen_threads.insert(thread_id);
+    let mut conflicts: Vec<serde_json::Value> = Vec::new();
+    let mut seen_threads: HashSet<i32> = HashSet::new();
+    let mut thread_positions: HashMap<i32, Vec<i32>> = HashMap::new();
+    for node in &ordered {
+        if node.node_type != "thread" {
+            conflicts.push(serde_json::json!({
+                "code": "non_thread_node",
+                "message": format!(
+                    "Reading order projection only supports thread nodes; {} node {} cannot be projected.",
+                    node.node_type, node.id
+                ),
+                "node_id": node.id,
+                "thread_id": node.ref_id,
+                "existing_positions": [],
+            }));
+            continue;
         }
-    }
-
-    if !duplicates.is_empty() {
-        tx.rollback().await.map_err(db::query_error)?;
-        let node_id = thread_nodes
-            .iter()
-            .find(|(_, t, _)| *t == duplicates[0])
-            .map(|(_, _, n)| n.clone())
-            .unwrap_or_default();
-        let detail = serde_json::json!({
-            "code": "projection_conflicts",
-            "conflicts": [{
+        if !thread_titles.contains_key(&node.ref_id) {
+            conflicts.push(serde_json::json!({
+                "code": "missing_thread",
+                "message": format!(
+                    "Thread {} from node {} is not owned by the user.",
+                    node.ref_id, node.id
+                ),
+                "node_id": node.id,
+                "thread_id": node.ref_id,
+                "existing_positions": [],
+            }));
+            continue;
+        }
+        thread_positions
+            .entry(node.ref_id)
+            .or_default()
+            .push(node.position);
+        if seen_threads.contains(&node.ref_id) {
+            let mut positions = thread_positions.get(&node.ref_id).cloned().unwrap_or_default();
+            positions.sort_unstable();
+            conflicts.push(serde_json::json!({
                 "code": "duplicate_thread",
-                "node_id": node_id,
-                "thread_id": duplicates[0],
-                "message": "Thread appears multiple times in the plan",
-                "existing_positions": []
-            }]
-        });
-        return Err(crate::ApiError::Conflict(detail.to_string()));
+                "message": format!(
+                    "Thread {} appears multiple times in the plan; deduplicate node positions before projection.",
+                    node.ref_id
+                ),
+                "node_id": node.id,
+                "thread_id": node.ref_id,
+                "existing_positions": positions,
+            }));
+            continue;
+        }
+        seen_threads.insert(node.ref_id);
     }
 
-    // Apply projection: delete existing items and insert new ones
+    if !conflicts.is_empty() {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(domain_conflict(serde_json::json!({
+            "code": "projection_conflicts",
+            "conflicts": conflicts,
+        })));
+    }
+
+    #[derive(Clone, Copy)]
+    enum EntrySource {
+        Added,
+        Updated,
+        Existing,
+    }
+    let mut entries: Vec<(i32, EntrySource)> = Vec::new();
+    let mut position = 1;
+    for node in &ordered {
+        if node.node_type != "thread" || !thread_titles.contains_key(&node.ref_id) {
+            continue;
+        }
+        let source = match existing_positions.get(&node.ref_id) {
+            None => EntrySource::Added,
+            Some(old) if *old != position => EntrySource::Updated,
+            Some(_) => EntrySource::Existing,
+        };
+        entries.push((node.ref_id, source));
+        position += 1;
+    }
+
     tx.execute(
         "DELETE FROM reading_order_items WHERE reading_order_id = $1",
         &[&payload.reading_order_id],
@@ -1465,22 +2931,16 @@ pub async fn confirm_plan_projection(
     let mut added: i32 = 0;
     let mut updated: i32 = 0;
     let mut kept: i32 = 0;
-
-    for (pos, thread_id, _node_id) in thread_nodes {
-        let existing_position = existing_items
-            .iter()
-            .find(|row| row.get::<_, i32>(0) == thread_id)
-            .map(|row| row.get::<_, i32>(1));
-        match existing_position {
-            None => added += 1,
-            Some(old_pos) if old_pos == pos + 1 => kept += 1,
-            Some(_) => updated += 1,
+    for (index, (thread_id, source)) in entries.iter().enumerate() {
+        match source {
+            EntrySource::Added => added += 1,
+            EntrySource::Updated => updated += 1,
+            EntrySource::Existing => kept += 1,
         }
-
-        let position: i32 = pos + 1;
+        let position = (index as i32) + 1;
         tx.execute(
             "INSERT INTO reading_order_items (reading_order_id, thread_id, position, issue_number) VALUES ($1, $2, $3, NULL)",
-            &[&payload.reading_order_id, &thread_id, &position],
+            &[&payload.reading_order_id, thread_id, &position],
         )
         .await
         .map_err(db::query_error)?;
@@ -1494,7 +2954,7 @@ pub async fn confirm_plan_projection(
         added_count: added,
         updated_count: updated,
         kept_count: kept,
-        total_positions: added + updated + kept,
+        total_positions: entries.len() as i32,
     }))
 }
 
@@ -1587,6 +3047,8 @@ pub async fn create_release_source(
     let source_id: i32;
     let created_at: String;
     let updated_at: String;
+    let mut last_synced_at: Option<String> = None;
+    let mut enabled = true;
 
     if let Some(row) = existing {
         source_id = row.get(0);
@@ -1600,8 +3062,8 @@ pub async fn create_release_source(
             .map_err(db::query_error)?;
         created_at = source_row.get(0);
         updated_at = source_row.get(1);
-        let _last_synced_at: Option<String> = source_row.get(2);
-        let _enabled: bool = source_row.get(3);
+        last_synced_at = source_row.get(2);
+        enabled = source_row.get(3);
     } else {
         // Create new release source
         let row = tx
@@ -1637,8 +3099,8 @@ pub async fn create_release_source(
         provider,
         provider_volume_id,
         provider_title,
-        enabled: true,
-        last_synced_at: None,
+        enabled,
+        last_synced_at,
         created_at,
         updated_at,
     };
@@ -2097,4 +3559,285 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
     }
 
     serde_json::Value::Object(display)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lane(id: &str, order: i32) -> ContinuityPlanLane {
+        ContinuityPlanLane {
+            id: id.to_string(),
+            name: format!("Lane {id}"),
+            order,
+            inferred_gate_kind: None,
+            migration_contract: None,
+        }
+    }
+
+    fn node(id: &str, node_type: &str, ref_id: i32, lane_id: &str, position: i32) -> ContinuityPlanNode {
+        ContinuityPlanNode {
+            id: id.to_string(),
+            node_type: node_type.to_string(),
+            ref_id,
+            lane_id: lane_id.to_string(),
+            position,
+            label: None,
+            source_role: None,
+            source_confidence: None,
+            source_explanation: None,
+            source_paths: None,
+            source_cbl_placements: None,
+            source_story_arc_ids: None,
+            source_target_story_arc_id: None,
+            reader_role: None,
+            reader_optional: None,
+            is_checkpoint: false,
+            checkpoint_target_ref_id: None,
+            checkpoint_target_ref_ids: Vec::new(),
+            convergence_gate: Vec::new(),
+        }
+    }
+
+    fn payload(ordering_mode: &str, lanes: Vec<ContinuityPlanLane>, nodes: Vec<ContinuityPlanNode>) -> ContinuityPlanWrite {
+        ContinuityPlanWrite {
+            name: "Plan".to_string(),
+            ordering_mode: ordering_mode.to_string(),
+            lanes,
+            nodes,
+            expected_updated_at: None,
+        }
+    }
+
+    #[test]
+    fn validate_structure_accepts_valid_informational_plan() {
+        let write = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 1, "l1", 0)],
+        );
+        assert!(write.validate_structure().is_ok());
+    }
+
+    #[test]
+    fn validate_structure_rejects_duplicate_issue_refs() {
+        let write = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 1, "l1", 0), node("n2", "issue", 1, "l1", 1)],
+        );
+        let err = write.validate_structure().expect_err("duplicate issue must fail");
+        assert!(format!("{err:?}").contains("an issue may appear at most once"));
+    }
+
+    #[test]
+    fn validate_structure_rejects_unknown_lane() {
+        let write = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 1, "missing", 0)],
+        );
+        assert!(write.validate_structure().is_err());
+    }
+
+    #[test]
+    fn validate_structure_rejects_non_contiguous_strict_positions() {
+        let write = payload(
+            "strict_sequential",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 1, "l1", 0), node("n2", "issue", 2, "l1", 2)],
+        );
+        let err = write.validate_structure().expect_err("gap must fail");
+        assert!(format!("{err:?}").contains("contiguous starting at zero"));
+    }
+
+    #[test]
+    fn validate_structure_rejects_checkpoint_on_thread() {
+        let mut checkpoint = node("n1", "thread", 1, "l1", 0);
+        checkpoint.is_checkpoint = true;
+        let write = payload("informational", vec![lane("l1", 0)], vec![checkpoint]);
+        let err = write.validate_structure().expect_err("checkpoint must fail");
+        assert!(format!("{err:?}").contains("only allowed on issue nodes"));
+    }
+
+    #[test]
+    fn validate_structure_rejects_self_convergence_gate() {
+        let mut gated = node("n1", "issue", 1, "l1", 0);
+        gated.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n1"})];
+        let write = payload("informational", vec![lane("l1", 0)], vec![gated]);
+        let err = write.validate_structure().expect_err("self gate must fail");
+        assert!(format!("{err:?}").contains("cannot wait for itself"));
+    }
+
+    #[test]
+    fn dangling_node_uses_422_envelope() {
+        let err = dangling_node("n7");
+        assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let text = err.detail().to_string();
+        assert!(text.contains("dangling_plan_reference"));
+        assert!(text.contains("n7"));
+    }
+
+    async fn plan_db_fixture() -> (
+        std::sync::Arc<AppState>,
+        AuthenticatedUser,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (4838, 'plan-writer-test');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
+                 VALUES (4838, 4838, 'Plan test', 'Comic', 2, 1, 'active');
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (483801, 4838, '1', 'unread', NOW(), 1),
+                        (483802, 4838, '2', 'unread', NOW(), 2);",
+            )
+            .await
+            .expect("seed plan writer fixture");
+        drop(connection);
+        (state, AuthenticatedUser::for_test(4838), guard)
+    }
+
+    #[tokio::test]
+    async fn create_compiles_checkpoint_rule_and_delete_retires_edge() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let mut second = node("n2", "issue", 483802, "l1", 1);
+        second.is_checkpoint = true;
+        second.checkpoint_target_ref_id = Some(483801);
+        let write = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 483801, "l1", 0), second],
+        );
+        let (status, Json(created)) = create_continuity_plan(State(state.clone()), user, Json(write))
+            .await
+            .expect("create plan");
+        assert_eq!(status, StatusCode::CREATED);
+
+        let conn = db::checkout(&state).await.expect("verify connection");
+        let rule_count: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM continuity_rules WHERE note = $1 AND user_id = $2",
+                &[&format!("continuity-plan:{}", created.id), &user.id()],
+            )
+            .await
+            .expect("rule count")
+            .get(0);
+        assert_eq!(rule_count, 1);
+        let membership: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM reading_plan_issues WHERE plan_id = $1",
+                &[&created.id],
+            )
+            .await
+            .expect("membership count")
+            .get(0);
+        assert_eq!(membership, 2);
+        let edge: Option<i32> = conn
+            .query_opt(
+                "SELECT id FROM dependencies
+                 WHERE source_issue_id = 483802 AND target_issue_id = 483801
+                   AND note LIKE 'canonical:rule:%'",
+                &[],
+            )
+            .await
+            .expect("compiled edge")
+            .map(|row| row.get(0));
+        assert!(edge.is_some(), "checkpoint must compile a canonical edge");
+        drop(conn);
+
+        let status = delete_continuity_plan(
+            State(state.clone()),
+            user,
+            axum::extract::Path(created.id),
+        )
+        .await
+        .expect("delete plan");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let conn = db::checkout(&state).await.expect("verify connection 2");
+        let edge_after: Option<i32> = conn
+            .query_opt(
+                "SELECT id FROM dependencies
+                 WHERE source_issue_id = 483802 AND target_issue_id = 483801
+                   AND note LIKE 'canonical:rule:%'",
+                &[],
+            )
+            .await
+            .expect("edge after delete")
+            .map(|row| row.get(0));
+        assert!(edge_after.is_none(), "deleting a plan must retire its edge");
+        let rule_after: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM continuity_rules WHERE note = $1",
+                &[&format!("continuity-plan:{}", created.id)],
+            )
+            .await
+            .expect("rules after delete")
+            .get(0);
+        assert_eq!(rule_after, 0);
+    }
+
+    #[tokio::test]
+    async fn create_with_convergence_cycle_returns_structured_409_and_rolls_back() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let mut first = node("n1", "issue", 483801, "l1", 0);
+        first.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n2"})];
+        let mut second = node("n2", "issue", 483802, "l1", 1);
+        second.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n1"})];
+        let write = payload("informational", vec![lane("l1", 0)], vec![first, second]);
+
+        let error = create_continuity_plan(State(state.clone()), user, Json(write))
+            .await
+            .expect_err("a convergence cycle must be rejected");
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        assert!(error.detail().contains("plan_convergence_cycle"));
+
+        let conn = db::checkout(&state).await.expect("verify connection");
+        let plans: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM continuity_plans WHERE user_id = $1",
+                &[&user.id()],
+            )
+            .await
+            .expect("plan count")
+            .get(0);
+        assert_eq!(plans, 0, "a failed write must leave no plan behind");
+    }
+
+    #[tokio::test]
+    async fn update_with_stale_version_returns_structured_conflict() {
+        let (state, user, _guard) = plan_db_fixture().await;
+        let write = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 483801, "l1", 0)],
+        );
+        let (_, Json(created)) =
+            create_continuity_plan(State(state.clone()), user, Json(write))
+                .await
+                .expect("create plan");
+
+        let mut update = payload(
+            "informational",
+            vec![lane("l1", 0)],
+            vec![node("n1", "issue", 483801, "l1", 0)],
+        );
+        update.expected_updated_at = Some("2000-01-01 00:00:00+00".to_string());
+        let error = update_continuity_plan(
+            State(state.clone()),
+            user,
+            axum::extract::Path(created.id),
+            Json(update),
+        )
+        .await
+        .expect_err("a stale version must be rejected");
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        assert!(error.detail().contains("plan_version_conflict"));
+    }
 }

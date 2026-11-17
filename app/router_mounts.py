@@ -287,6 +287,7 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         frozenset(
             {
                 "collection-exclusions",
+                "continuity-plans",
                 "continuity-rules",
                 "custom-cbls",
                 "dependencies",
