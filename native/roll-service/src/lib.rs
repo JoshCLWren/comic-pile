@@ -746,11 +746,23 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
         .route("/api/v2/creators/", get(creators_v2::list_creators))
-        .route("/api/v2/creators/summaries", get(creators_v2::get_summaries))
+        .route(
+            "/api/v2/creators/summaries",
+            get(creators_v2::get_summaries),
+        )
         .route("/api/v2/creators/compare", get(creators_v2::get_comparison))
-        .route("/api/v2/creators/discoveries", get(creators_v2::get_discoveries))
-        .route("/api/v2/creators/team-chemistry", get(creators_v2::get_team_chemistry))
-        .route("/api/v2/creators/{creator_key}", get(creators_v2::get_detail))
+        .route(
+            "/api/v2/creators/discoveries",
+            get(creators_v2::get_discoveries),
+        )
+        .route(
+            "/api/v2/creators/team-chemistry",
+            get(creators_v2::get_team_chemistry),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}",
+            get(creators_v2::get_detail),
+        )
         .route(
             "/api/v2/creators/{creator_key}/series/{series_key}/issues",
             get(creators_v2::get_series_issues),

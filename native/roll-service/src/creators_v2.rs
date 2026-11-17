@@ -586,7 +586,6 @@ impl CreatorLibrary {
     fn issue(&self, id: i64) -> Option<&OwnedIssue> {
         self.issue_index.get(&id).map(|i| &self.issues[*i])
     }
-
 }
 
 fn manual_creator_id(name: &str) -> i64 {
@@ -602,7 +601,11 @@ fn manual_creator_id(name: &str) -> i64 {
 }
 
 fn normalize_manual_role(role: &str) -> Option<String> {
-    let normalized = role.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let normalized = role
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
     if normalized.is_empty() {
         return None;
     }
@@ -620,7 +623,11 @@ fn coerce_creator_id(value: &Value) -> Option<i64> {
     if let Some(u) = value.as_u64() {
         return Some(u as i64);
     }
-    value.as_str().filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))?.parse().ok()
+    value
+        .as_str()
+        .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))?
+        .parse()
+        .ok()
 }
 
 fn extract_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
@@ -639,11 +646,19 @@ fn extract_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
         let Some(external_id) = obj.get("id").and_then(coerce_creator_id) else {
             continue;
         };
-        let Some(name) = obj.get("name").and_then(|v| v.as_str()).map(str::trim).filter(|n| !n.is_empty()) else {
+        let Some(name) = obj
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        else {
             continue;
         };
         let roles_raw = match obj.get("role") {
-            Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect::<Vec<_>>(),
+            Some(Value::Array(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect::<Vec<_>>(),
             Some(Value::String(s)) => s.split(',').map(str::to_string).collect(),
             _ => vec![],
         };
@@ -663,7 +678,11 @@ fn extract_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
             });
         }
     }
-    out.sort_by(|a, b| a.external_id.cmp(&b.external_id).then(a.roles.cmp(&b.roles)));
+    out.sort_by(|a, b| {
+        a.external_id
+            .cmp(&b.external_id)
+            .then(a.roles.cmp(&b.roles))
+    });
     out
 }
 
@@ -680,12 +699,20 @@ fn extract_manual_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
         let Some(obj) = item.as_object() else {
             continue;
         };
-        let Some(name) = obj.get("name").and_then(|v| v.as_str()).map(str::trim).filter(|n| !n.is_empty()) else {
+        let Some(name) = obj
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        else {
             continue;
         };
         let normalized_name = name.split_whitespace().collect::<Vec<_>>().join(" ");
         let roles_raw: Vec<String> = match obj.get("roles") {
-            Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+            Some(Value::Array(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
             Some(Value::String(s)) => s.split(',').map(str::to_string).collect(),
             _ => vec![],
         };
@@ -705,7 +732,11 @@ fn extract_manual_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
             });
         }
     }
-    out.sort_by(|a, b| a.external_id.cmp(&b.external_id).then(a.roles.cmp(&b.roles)));
+    out.sort_by(|a, b| {
+        a.external_id
+            .cmp(&b.external_id)
+            .then(a.roles.cmp(&b.roles))
+    });
     out
 }
 
@@ -769,7 +800,11 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         .map_err(query_error)?
     {
         let issue_id: i64 = row.get(0);
-        let found = extract_credits(row.try_get::<_, Option<String>>(1).map_err(query_error)?.as_deref());
+        let found = extract_credits(
+            row.try_get::<_, Option<String>>(1)
+                .map_err(query_error)?
+                .as_deref(),
+        );
         if !found.is_empty() {
             metadata_issues.insert(issue_id);
             credits.entry(issue_id).or_default().extend(found);
@@ -788,7 +823,11 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         }
     }
     for values in credits.values_mut() {
-        values.sort_by(|a, b| a.external_id.cmp(&b.external_id).then(a.roles.cmp(&b.roles)));
+        values.sort_by(|a, b| {
+            a.external_id
+                .cmp(&b.external_id)
+                .then(a.roles.cmp(&b.roles))
+        });
         values.dedup_by(|a, b| a.external_id == b.external_id && a.roles == b.roles);
     }
 
@@ -809,7 +848,10 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         .map_err(query_error)?
     {
         let issue_id: i64 = row.get(0);
-        let rating: f64 = row.try_get::<_, f64>(1).or_else(|_| row.try_get::<_, f32>(1).map(f64::from)).map_err(query_error)?;
+        let rating: f64 = row
+            .try_get::<_, f64>(1)
+            .or_else(|_| row.try_get::<_, f32>(1).map(f64::from))
+            .map_err(query_error)?;
         ratings.insert(issue_id, rating);
         if let Ok(timestamp) = row.try_get::<_, DateTime<Utc>>(2) {
             rating_timestamps.insert(issue_id, timestamp);
@@ -865,7 +907,11 @@ async fn resolve_user_id(state: &AppState, claims: &VerifiedAccessClaims) -> Res
 
 fn parse_creator_key(key: &str) -> Option<i64> {
     let parts: Vec<&str> = key.split(':').collect();
-    if parts.len() != 2 || parts[0] != "creator" || parts[1].is_empty() || !parts[1].chars().all(|c| c.is_ascii_digit()) {
+    if parts.len() != 2
+        || parts[0] != "creator"
+        || parts[1].is_empty()
+        || !parts[1].chars().all(|c| c.is_ascii_digit())
+    {
         return None;
     }
     parts[1].parse().ok()
@@ -876,7 +922,11 @@ fn parse_series_key(key: &str) -> Option<i64> {
         Some(index) => (&key[..index], ":", &key[index + 1..]),
         None => (key, "", ""),
     };
-    if separator.is_empty() || prefix != "thread" || suffix.is_empty() || !suffix.chars().all(|c| c.is_ascii_digit()) {
+    if separator.is_empty()
+        || prefix != "thread"
+        || suffix.is_empty()
+        || !suffix.chars().all(|c| c.is_ascii_digit())
+    {
         return None;
     }
     suffix.parse().ok()
@@ -895,12 +945,17 @@ fn split_keys(raw: &str) -> Vec<String> {
 }
 
 fn validate_summary_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
-    let raw = raw.map(str::trim).filter(|value| !value.is_empty()).ok_or_else(|| {
-        bad_request("keys must be a non-empty comma-separated list of creator keys")
-    })?;
+    let raw = raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            bad_request("keys must be a non-empty comma-separated list of creator keys")
+        })?;
     let keys = split_keys(raw);
     if keys.is_empty() {
-        return Err(bad_request("keys must be a non-empty comma-separated list of creator keys"));
+        return Err(bad_request(
+            "keys must be a non-empty comma-separated list of creator keys",
+        ));
     }
     if keys.len() > MAX_CREATOR_KEYS {
         return Err(bad_request(format!(
@@ -919,7 +974,10 @@ fn validate_summary_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
 
 fn validate_comparison_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
     let message = "keys must be a comma-separated list of 2-4 canonical creator keys";
-    let raw = raw.map(str::trim).filter(|value| !value.is_empty()).ok_or_else(|| bad_request(message))?;
+    let raw = raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| bad_request(message))?;
     let keys = split_keys(raw);
     if keys.is_empty() {
         return Err(bad_request(message));
@@ -986,7 +1044,12 @@ fn pstdev(values: &[f64]) -> f64 {
         return 0.0;
     }
     let average = mean(values);
-    (values.iter().map(|value| (value - average).powi(2)).sum::<f64>() / values.len() as f64).sqrt()
+    (values
+        .iter()
+        .map(|value| (value - average).powi(2))
+        .sum::<f64>()
+        / values.len() as f64)
+        .sqrt()
 }
 
 fn iso_timestamp(value: &DateTime<Utc>) -> String {
@@ -1030,7 +1093,10 @@ fn attribution(library: &CreatorLibrary, creator_id: i64) -> Option<Attribution>
 }
 
 fn has_headline_role(credit: &CreatorCredit) -> bool {
-    credit.roles.iter().any(|role| HEADLINE_ROLES.contains(&role.as_str()))
+    credit
+        .roles
+        .iter()
+        .any(|role| HEADLINE_ROLES.contains(&role.as_str()))
 }
 
 fn roles_on_issue(library: &CreatorLibrary, creator_id: i64, issue_id: i64) -> Vec<String> {
@@ -1058,7 +1124,9 @@ fn coverage(library: &CreatorLibrary) -> CreatorSummaryCoverage {
         }
     }
     let with_metadata = |ids: &HashSet<i64>| {
-        ids.iter().filter(|id| library.metadata_issues.contains(id)).count() as i64
+        ids.iter()
+            .filter(|id| library.metadata_issues.contains(id))
+            .count() as i64
     };
     let rated_total = rated.len() as i64;
     let rated_with = with_metadata(&rated);
@@ -1176,19 +1244,23 @@ fn aggregate_series(
         let Some(issue) = library.issue(issue_id) else {
             continue;
         };
-        let aggregate = groups.entry(issue.thread_id).or_insert_with(|| SeriesAggregate {
-            thread_id: issue.thread_id,
-            thread_title: issue.thread_title.clone(),
-            attributed_issue_count: 0,
-            rated_issue_ids: Vec::new(),
-            ratings: Vec::new(),
-            roles: BTreeSet::new(),
-            unread_issue_count: 0,
-            read_unrated_issue_count: 0,
-            metadata_complete: completeness.get(&issue.thread_id).copied().unwrap_or(true),
-        });
+        let aggregate = groups
+            .entry(issue.thread_id)
+            .or_insert_with(|| SeriesAggregate {
+                thread_id: issue.thread_id,
+                thread_title: issue.thread_title.clone(),
+                attributed_issue_count: 0,
+                rated_issue_ids: Vec::new(),
+                ratings: Vec::new(),
+                roles: BTreeSet::new(),
+                unread_issue_count: 0,
+                read_unrated_issue_count: 0,
+                metadata_complete: completeness.get(&issue.thread_id).copied().unwrap_or(true),
+            });
         aggregate.attributed_issue_count += 1;
-        aggregate.roles.extend(roles_on_issue(library, creator_id, issue_id));
+        aggregate
+            .roles
+            .extend(roles_on_issue(library, creator_id, issue_id));
         if issue.status == "unread" {
             aggregate.unread_issue_count += 1;
         }
@@ -1207,7 +1279,11 @@ fn aggregate_series(
     aggregates.sort_by(|a, b| {
         b.rated_issue_count()
             .cmp(&a.rated_issue_count())
-            .then_with(|| a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+            .then_with(|| {
+                a.thread_title
+                    .to_lowercase()
+                    .cmp(&b.thread_title.to_lowercase())
+            })
             .then_with(|| a.thread_title.cmp(&b.thread_title))
             .then_with(|| a.thread_id.cmp(&b.thread_id))
     });
@@ -1363,9 +1439,24 @@ fn compute_insights(
             .copied()
             .min_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(Ordering::Equal))
     };
-    let strongest = pick(|aggregate| (-(aggregate.average_rating().unwrap_or(0.0)), series_sort_key(aggregate.thread_id)));
-    let weakest = pick(|aggregate| (aggregate.average_rating().unwrap_or(0.0), series_sort_key(aggregate.thread_id)));
-    let most_rated = pick(|aggregate| (-(aggregate.rated_issue_count() as f64), series_sort_key(aggregate.thread_id)));
+    let strongest = pick(|aggregate| {
+        (
+            -(aggregate.average_rating().unwrap_or(0.0)),
+            series_sort_key(aggregate.thread_id),
+        )
+    });
+    let weakest = pick(|aggregate| {
+        (
+            aggregate.average_rating().unwrap_or(0.0),
+            series_sort_key(aggregate.thread_id),
+        )
+    });
+    let most_rated = pick(|aggregate| {
+        (
+            -(aggregate.rated_issue_count() as f64),
+            series_sort_key(aggregate.thread_id),
+        )
+    });
 
     let mut issue_insights: Vec<CreatorIssueInsight> = headline_rated
         .iter()
@@ -1415,7 +1506,10 @@ fn compute_insights(
             .iter()
             .filter(|aggregate| aggregate.rated_issue_count() >= MIN_SERIES_SAMPLE as i64)
             .collect();
-        if sample_sized.iter().any(|aggregate| !aggregate.metadata_complete) {
+        if sample_sized
+            .iter()
+            .any(|aggregate| !aggregate.metadata_complete)
+        {
             Some(INCOMPLETE_METADATA_SERIES_MESSAGE.to_string())
         } else if !sample_sized.is_empty() {
             Some(NON_HEADLINE_SERIES_MESSAGE.to_string())
@@ -1560,12 +1654,23 @@ fn build_detail(
         series_groups_complete,
         rated_issues: rated_rows,
         rated_population_scope: "headline_roles_only".to_string(),
-        headline_roles: HEADLINE_ROLES.iter().map(|role| role.to_string()).collect::<BTreeSet<_>>().into_iter().collect(),
+        headline_roles: HEADLINE_ROLES
+            .iter()
+            .map(|role| role.to_string())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
         read_unrated_issues: read_unrated_rows,
         upcoming_issues: upcoming_rows,
         next_cursor,
         rating_distribution: rating_distribution(&headline_ratings),
-        insights: compute_insights(library, creator_id, attribution, &headline_rated, &aggregates),
+        insights: compute_insights(
+            library,
+            creator_id,
+            attribution,
+            &headline_rated,
+            &aggregates,
+        ),
     }
 }
 
@@ -1578,7 +1683,9 @@ fn build_series_issues(
 ) -> Option<CreatorSeriesIssueListResponse> {
     let attribution = attribution(library, creator_id)?;
     let aggregates = aggregate_series(library, creator_id, &attribution);
-    let aggregate = aggregates.iter().find(|aggregate| aggregate.thread_id == thread_id)?;
+    let aggregate = aggregates
+        .iter()
+        .find(|aggregate| aggregate.thread_id == thread_id)?;
     let group_ids: BTreeSet<i64> = aggregate.rated_issue_ids.iter().copied().collect();
     let rows = recent_rows(library, creator_id, &group_ids, offset, limit);
     let group = build_series_group(aggregate);
@@ -1639,14 +1746,22 @@ fn summary_item(
         .issue_ids
         .iter()
         .filter(|id| {
-            library.issue(**id).map(|issue| issue.status == "read").unwrap_or(false)
+            library
+                .issue(**id)
+                .map(|issue| issue.status == "read")
+                .unwrap_or(false)
                 && !library.ratings.contains_key(id)
         })
         .count() as i64;
     let upcoming = attribution
         .issue_ids
         .iter()
-        .filter(|id| library.issue(**id).map(|issue| issue.status == "unread").unwrap_or(false))
+        .filter(|id| {
+            library
+                .issue(**id)
+                .map(|issue| issue.status == "unread")
+                .unwrap_or(false)
+        })
         .count() as i64;
     CreatorSummaryItem {
         canonical_creator_key: creator_key.to_string(),
@@ -1703,7 +1818,11 @@ fn build_list(
         "ratings_count" => items.sort_by(|a, b| {
             b.ratings_count
                 .cmp(&a.ratings_count)
-                .then(a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()))
+                .then(
+                    a.display_name
+                        .to_lowercase()
+                        .cmp(&b.display_name.to_lowercase()),
+                )
                 .then(a.canonical_creator_key.cmp(&b.canonical_creator_key))
         }),
         "average_rating" => items.sort_by(|a, b| {
@@ -1717,7 +1836,11 @@ fn build_list(
                         .unwrap_or(Ordering::Equal)
                 })
                 .then_with(|| b.ratings_count.cmp(&a.ratings_count))
-                .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()))
+                .then_with(|| {
+                    a.display_name
+                        .to_lowercase()
+                        .cmp(&b.display_name.to_lowercase())
+                })
                 .then_with(|| a.canonical_creator_key.cmp(&b.canonical_creator_key))
         }),
         _ => items.sort_by(|a, b| {
@@ -1742,10 +1865,7 @@ fn build_list(
     }
 }
 
-fn build_summaries(
-    library: &CreatorLibrary,
-    keys: &[String],
-) -> CreatorSummariesResponse {
+fn build_summaries(library: &CreatorLibrary, keys: &[String]) -> CreatorSummariesResponse {
     let mut summaries = BTreeMap::new();
     for key in keys {
         let Some(creator_id) = parse_creator_key(key) else {
@@ -1754,7 +1874,10 @@ fn build_summaries(
         let Some(attribution) = attribution(library, creator_id) else {
             continue;
         };
-        summaries.insert(key.clone(), summary_item(library, creator_id, key, &attribution));
+        summaries.insert(
+            key.clone(),
+            summary_item(library, creator_id, key, &attribution),
+        );
     }
     CreatorSummariesResponse {
         summaries,
@@ -1770,7 +1893,10 @@ fn distribution_key(rating: f64) -> String {
     }
 }
 
-fn issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<CreatorComparisonIssueRef> {
+fn issue_refs(
+    library: &CreatorLibrary,
+    issue_ids: &BTreeSet<i64>,
+) -> Vec<CreatorComparisonIssueRef> {
     let mut entries: Vec<(bool, String, String, i64, i64, CreatorComparisonIssueRef)> = issue_ids
         .iter()
         .copied()
@@ -1792,8 +1918,18 @@ fn issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<Creato
             )
         })
         .collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)).then(a.4.cmp(&b.4)));
-    entries.into_iter().take(MAX_ISSUE_REFS).map(|entry| entry.5).collect()
+    entries.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
+            .then(a.4.cmp(&b.4))
+    });
+    entries
+        .into_iter()
+        .take(MAX_ISSUE_REFS)
+        .map(|entry| entry.5)
+        .collect()
 }
 
 fn build_comparison(
@@ -1817,7 +1953,10 @@ fn build_comparison(
             *distribution.entry(distribution_key(*rating)).or_default() += 1;
         }
         let top_rating_rate = (!ratings.is_empty()).then(|| {
-            round3(ratings.iter().filter(|rating| **rating >= 5.0).count() as f64 / ratings.len() as f64)
+            round3(
+                ratings.iter().filter(|rating| **rating >= 5.0).count() as f64
+                    / ratings.len() as f64,
+            )
         });
         let role_stats: Vec<CreatorComparisonRoleStat> = attribution
             .roles
@@ -1828,12 +1967,9 @@ fn build_comparison(
                     .iter()
                     .copied()
                     .filter(|id| {
-                        library
-                            .credits
-                            .get(id)
-                            .into_iter()
-                            .flatten()
-                            .any(|credit| credit.external_id == creator_id && credit.roles.contains(role))
+                        library.credits.get(id).into_iter().flatten().any(|credit| {
+                            credit.external_id == creator_id && credit.roles.contains(role)
+                        })
                     })
                     .collect();
                 let role_ratings: Vec<f64> = ids
@@ -1860,7 +1996,11 @@ fn build_comparison(
                 .partial_cmp(&a.average_rating().unwrap_or(0.0))
                 .unwrap_or(Ordering::Equal)
                 .then_with(|| b.attributed_issue_count.cmp(&a.attributed_issue_count))
-                .then_with(|| a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+                .then_with(|| {
+                    a.thread_title
+                        .to_lowercase()
+                        .cmp(&b.thread_title.to_lowercase())
+                })
                 .then_with(|| a.thread_title.cmp(&b.thread_title))
                 .then_with(|| a.thread_id.cmp(&b.thread_id))
         });
@@ -1880,14 +2020,22 @@ fn build_comparison(
             .issue_ids
             .iter()
             .copied()
-            .filter(|id| library.issue(*id).map(|issue| issue.status == "unread").unwrap_or(false))
+            .filter(|id| {
+                library
+                    .issue(*id)
+                    .map(|issue| issue.status == "unread")
+                    .unwrap_or(false)
+            })
             .collect();
         let read_unrated_ids: BTreeSet<i64> = attribution
             .issue_ids
             .iter()
             .copied()
             .filter(|id| {
-                library.issue(*id).map(|issue| issue.status == "read").unwrap_or(false)
+                library
+                    .issue(*id)
+                    .map(|issue| issue.status == "read")
+                    .unwrap_or(false)
                     && !library.ratings.contains_key(id)
             })
             .collect();
@@ -1926,10 +2074,12 @@ fn build_comparison(
             rated_issues_with_creator_metadata: library_coverage.rated_issues_with_creator_metadata,
             ratings_complete: library_coverage.ratings_complete,
             read_unrated_issues_total: library_coverage.read_unrated_issues_total,
-            read_unrated_issues_with_creator_metadata: library_coverage.read_unrated_issues_with_creator_metadata,
+            read_unrated_issues_with_creator_metadata: library_coverage
+                .read_unrated_issues_with_creator_metadata,
             read_unrated_complete: library_coverage.read_unrated_complete,
             unread_issues_total: library_coverage.unread_issues_total,
-            unread_issues_with_creator_metadata: library_coverage.unread_issues_with_creator_metadata,
+            unread_issues_with_creator_metadata: library_coverage
+                .unread_issues_with_creator_metadata,
             upcoming_complete: library_coverage.upcoming_complete,
         },
         insufficient_data_keys,
@@ -1982,13 +2132,21 @@ fn discovery_profile(library: &CreatorLibrary, creator_id: i64) -> Option<Discov
     let unread_issue_count = attribution
         .issue_ids
         .iter()
-        .filter(|id| library.issue(**id).map(|issue| issue.status == "unread").unwrap_or(false))
+        .filter(|id| {
+            library
+                .issue(**id)
+                .map(|issue| issue.status == "unread")
+                .unwrap_or(false)
+        })
         .count() as i64;
     let read_unrated_issue_count = attribution
         .issue_ids
         .iter()
         .filter(|id| {
-            library.issue(**id).map(|issue| issue.status == "read").unwrap_or(false)
+            library
+                .issue(**id)
+                .map(|issue| issue.status == "read")
+                .unwrap_or(false)
                 && !library.ratings.contains_key(id)
         })
         .count() as i64;
@@ -2022,7 +2180,13 @@ fn discovery_profile(library: &CreatorLibrary, creator_id: i64) -> Option<Discov
     })
 }
 
-fn reason(metric: &str, label: &str, value: f64, threshold: f64, comparison: &str) -> CreatorDiscoveryReason {
+fn reason(
+    metric: &str,
+    label: &str,
+    value: f64,
+    threshold: f64,
+    comparison: &str,
+) -> CreatorDiscoveryReason {
     CreatorDiscoveryReason {
         metric: metric.to_string(),
         label: label.to_string(),
@@ -2032,7 +2196,10 @@ fn reason(metric: &str, label: &str, value: f64, threshold: f64, comparison: &st
     }
 }
 
-fn discovery_entry(profile: &DiscoveryProfile, reasons: Vec<CreatorDiscoveryReason>) -> CreatorDiscoveryEntry {
+fn discovery_entry(
+    profile: &DiscoveryProfile,
+    reasons: Vec<CreatorDiscoveryReason>,
+) -> CreatorDiscoveryEntry {
     CreatorDiscoveryEntry {
         canonical_creator_key: profile.key.clone(),
         display_name: profile.display_name.clone(),
@@ -2057,7 +2224,13 @@ fn discovery_entry(profile: &DiscoveryProfile, reasons: Vec<CreatorDiscoveryReas
     }
 }
 
-fn discovery_view(mode: &str, title: &str, description: &str, min_sample: i64, mut entries: Vec<CreatorDiscoveryEntry>) -> CreatorDiscoveryView {
+fn discovery_view(
+    mode: &str,
+    title: &str,
+    description: &str,
+    min_sample: i64,
+    mut entries: Vec<CreatorDiscoveryEntry>,
+) -> CreatorDiscoveryView {
     let total = entries.len() as i64;
     let truncated = entries.len() > MAX_DISCOVERY_ENTRIES;
     entries.truncate(MAX_DISCOVERY_ENTRIES);
@@ -2099,8 +2272,20 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 profile,
                 vec![
                     reason("average_rating", "average rating", average, 4.0, "gte"),
-                    reason("rating_stddev", "rating standard deviation", stddev, 0.5, "lte"),
-                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                    reason(
+                        "rating_stddev",
+                        "rating standard deviation",
+                        stddev,
+                        0.5,
+                        "lte",
+                    ),
+                    reason(
+                        "rated_issue_count",
+                        "rated issues",
+                        count as f64,
+                        5.0,
+                        "gte",
+                    ),
                 ],
             );
             consistently_loved.push((-average, stddev, -count, profile.key.clone(), entry));
@@ -2110,7 +2295,13 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 profile,
                 vec![
                     reason("rating_spread", "rating spread", spread, 2.0, "gte"),
-                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                    reason(
+                        "rated_issue_count",
+                        "rated issues",
+                        count as f64,
+                        5.0,
+                        "gte",
+                    ),
                 ],
             );
             polarizing.push((-stddev, -spread, -count, profile.key.clone(), entry));
@@ -2118,7 +2309,13 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
         if count >= 1 {
             let entry = discovery_entry(
                 profile,
-                vec![reason("rated_issue_count", "rated issues", count as f64, 1.0, "gte")],
+                vec![reason(
+                    "rated_issue_count",
+                    "rated issues",
+                    count as f64,
+                    1.0,
+                    "gte",
+                )],
             );
             most_read.push((-count, -average, profile.key.clone(), entry));
         }
@@ -2127,7 +2324,13 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 profile,
                 vec![
                     reason("top_rating_rate", "top-rating rate", top, 0.6, "gte"),
-                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                    reason(
+                        "rated_issue_count",
+                        "rated issues",
+                        count as f64,
+                        5.0,
+                        "gte",
+                    ),
                 ],
             );
             top_rate.push((-top, -count, -average, profile.key.clone(), entry));
@@ -2137,7 +2340,13 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 profile,
                 vec![
                     reason("average_rating", "average rating", average, 4.0, "gte"),
-                    reason("rated_issue_count", "rated issues", count as f64, 4.0, "lte"),
+                    reason(
+                        "rated_issue_count",
+                        "rated issues",
+                        count as f64,
+                        4.0,
+                        "lte",
+                    ),
                 ],
             );
             small_sample.push((-average, -count, profile.key.clone(), entry));
@@ -2147,15 +2356,33 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 profile,
                 vec![
                     reason("average_rating", "average rating", average, 4.0, "gte"),
-                    reason("unread_issue_count", "unread issues", profile.unread_issue_count as f64, 1.0, "gte"),
+                    reason(
+                        "unread_issue_count",
+                        "unread issues",
+                        profile.unread_issue_count as f64,
+                        1.0,
+                        "gte",
+                    ),
                 ],
             );
-            loved_unread.push((-profile.unread_issue_count, -average, -count, profile.key.clone(), entry));
+            loved_unread.push((
+                -profile.unread_issue_count,
+                -average,
+                -count,
+                profile.key.clone(),
+                entry,
+            ));
         }
         if profile.trend_points.len() >= TREND_MIN_SAMPLE {
             let midpoint = profile.trend_points.len() / 2;
-            let earlier: Vec<f64> = profile.trend_points[..midpoint].iter().map(|point| point.2).collect();
-            let recent: Vec<f64> = profile.trend_points[midpoint..].iter().map(|point| point.2).collect();
+            let earlier: Vec<f64> = profile.trend_points[..midpoint]
+                .iter()
+                .map(|point| point.2)
+                .collect();
+            let recent: Vec<f64> = profile.trend_points[midpoint..]
+                .iter()
+                .map(|point| point.2)
+                .collect();
             let earlier_average = round2(mean(&earlier));
             let recent_average = round2(mean(&recent));
             let delta = round2(recent_average - earlier_average);
@@ -2163,44 +2390,98 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
                 let mut entry = discovery_entry(
                     profile,
                     vec![
-                        reason("trend_delta", "change in average", delta.abs(), TREND_MIN_DELTA, "gte"),
-                        reason("trend_sample_count", "dated rated issues", profile.trend_points.len() as f64, TREND_MIN_SAMPLE as f64, "gte"),
+                        reason(
+                            "trend_delta",
+                            "change in average",
+                            delta.abs(),
+                            TREND_MIN_DELTA,
+                            "gte",
+                        ),
+                        reason(
+                            "trend_sample_count",
+                            "dated rated issues",
+                            profile.trend_points.len() as f64,
+                            TREND_MIN_SAMPLE as f64,
+                            "gte",
+                        ),
                     ],
                 );
-                entry.trend_direction = Some(if delta > 0.0 { "warmed" } else { "cooled" }.to_string());
+                entry.trend_direction =
+                    Some(if delta > 0.0 { "warmed" } else { "cooled" }.to_string());
                 entry.earlier_average_rating = Some(earlier_average);
                 entry.recent_average_rating = Some(recent_average);
                 entry.trend_delta = Some(delta);
                 entry.trend_sample_count = profile.trend_points.len() as i64;
-                trend.push((-delta.abs(), profile.trend_points.len(), profile.key.clone(), entry));
+                trend.push((
+                    -delta.abs(),
+                    profile.trend_points.len(),
+                    profile.key.clone(),
+                    entry,
+                ));
             }
         }
     }
 
     let finish4 = |mut rows: Vec<(f64, f64, i64, String, CreatorDiscoveryEntry)>| {
-        rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
+        rows.sort_by(|a, b| {
+            a.0.partial_cmp(&b.0)
+                .unwrap_or(Ordering::Equal)
+                .then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+                .then(a.2.cmp(&b.2))
+                .then(a.3.cmp(&b.3))
+        });
         rows.into_iter().map(|row| row.4).collect::<Vec<_>>()
     };
     let consistently_loved = finish4(consistently_loved);
     let polarizing = finish4(polarizing);
 
-    most_read.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)));
+    most_read.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+            .then(a.2.cmp(&b.2))
+    });
     let most_read: Vec<CreatorDiscoveryEntry> = most_read.into_iter().map(|row| row.3).collect();
 
-    top_rate.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.partial_cmp(&b.2).unwrap_or(Ordering::Equal)).then(a.3.cmp(&b.3)));
+    top_rate.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(Ordering::Equal)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.partial_cmp(&b.2).unwrap_or(Ordering::Equal))
+            .then(a.3.cmp(&b.3))
+    });
     let top_rate: Vec<CreatorDiscoveryEntry> = top_rate.into_iter().map(|row| row.4).collect();
 
-    small_sample.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
-    let small_sample: Vec<CreatorDiscoveryEntry> = small_sample.into_iter().map(|row| row.3).collect();
+    small_sample.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(Ordering::Equal)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+    });
+    let small_sample: Vec<CreatorDiscoveryEntry> =
+        small_sample.into_iter().map(|row| row.3).collect();
 
-    loved_unread.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
-    let loved_unread: Vec<CreatorDiscoveryEntry> = loved_unread.into_iter().map(|row| row.4).collect();
+    loved_unread.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
+            .then(a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
+    });
+    let loved_unread: Vec<CreatorDiscoveryEntry> =
+        loved_unread.into_iter().map(|row| row.4).collect();
 
-    trend.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+    trend.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(Ordering::Equal)
+            .then(b.1.cmp(&a.1))
+            .then(a.2.cmp(&b.2))
+    });
     let trend: Vec<CreatorDiscoveryEntry> = trend.into_iter().map(|row| row.3).collect();
 
     let rated_ids: HashSet<i64> = library.ratings.keys().copied().collect();
-    let with_metadata = rated_ids.iter().filter(|id| library.metadata_issues.contains(id)).count() as i64;
+    let with_metadata = rated_ids
+        .iter()
+        .filter(|id| library.metadata_issues.contains(id))
+        .count() as i64;
 
     CreatorDiscoveryResponse {
         views: vec![
@@ -2234,7 +2515,8 @@ struct TeamInputs {
 }
 
 fn team_inputs(library: &CreatorLibrary) -> TeamInputs {
-    let mut eligible_issue_creators: BTreeMap<i64, BTreeMap<i64, BTreeSet<String>>> = BTreeMap::new();
+    let mut eligible_issue_creators: BTreeMap<i64, BTreeMap<i64, BTreeSet<String>>> =
+        BTreeMap::new();
     let mut display_names: HashMap<i64, String> = HashMap::new();
     let mut baseline_ratings: HashMap<i64, BTreeMap<i64, f64>> = HashMap::new();
     for issue in &library.issues {
@@ -2246,8 +2528,14 @@ fn team_inputs(library: &CreatorLibrary) -> TeamInputs {
         };
         let mut members: BTreeMap<i64, BTreeSet<String>> = BTreeMap::new();
         for credit in credits {
-            display_names.entry(credit.external_id).or_insert_with(|| credit.display_name.clone());
-            if credit.roles.iter().any(|role| HEADLINE_ROLES.contains(&role.as_str())) {
+            display_names
+                .entry(credit.external_id)
+                .or_insert_with(|| credit.display_name.clone());
+            if credit
+                .roles
+                .iter()
+                .any(|role| HEADLINE_ROLES.contains(&role.as_str()))
+            {
                 baseline_ratings
                     .entry(credit.external_id)
                     .or_default()
@@ -2261,7 +2549,10 @@ fn team_inputs(library: &CreatorLibrary) -> TeamInputs {
                 .cloned()
                 .collect();
             if !eligible.is_empty() {
-                members.entry(credit.external_id).or_default().extend(eligible);
+                members
+                    .entry(credit.external_id)
+                    .or_default()
+                    .extend(eligible);
             }
         }
         if members.len() >= 2 {
@@ -2293,7 +2584,10 @@ fn team_distribution(ratings: &[f64]) -> BTreeMap<String, i64> {
     counts.into_iter().collect()
 }
 
-fn team_issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<CreatorTeamIssueRef> {
+fn team_issue_refs(
+    library: &CreatorLibrary,
+    issue_ids: &BTreeSet<i64>,
+) -> Vec<CreatorTeamIssueRef> {
     let mut entries: Vec<(String, String, i64, i64, CreatorTeamIssueRef)> = issue_ids
         .iter()
         .copied()
@@ -2310,13 +2604,27 @@ fn team_issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<C
                     thread_title: issue.thread_title.clone(),
                     issue_number: issue.issue_number.clone(),
                     effective_rating: library.ratings.get(&id).copied(),
-                    status: if library.ratings.contains_key(&id) { "read" } else { "unread" }.to_string(),
+                    status: if library.ratings.contains_key(&id) {
+                        "read"
+                    } else {
+                        "unread"
+                    }
+                    .to_string(),
                 },
             )
         })
         .collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
-    entries.into_iter().take(MAX_ISSUE_REFS).map(|entry| entry.4).collect()
+    entries.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
+    });
+    entries
+        .into_iter()
+        .take(MAX_ISSUE_REFS)
+        .map(|entry| entry.4)
+        .collect()
 }
 
 type RankedTeamPair<'a> = (f64, usize, (i64, i64), &'a BTreeSet<i64>);
@@ -2379,7 +2687,11 @@ fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryRespons
                     .collect();
                 members.push(CreatorTeamMember {
                     canonical_creator_key: format!("creator:{creator_id}"),
-                    display_name: inputs.display_names.get(&creator_id).cloned().unwrap_or_default(),
+                    display_name: inputs
+                        .display_names
+                        .get(&creator_id)
+                        .cloned()
+                        .unwrap_or_default(),
                     roles: roles.into_iter().collect(),
                     baseline_rated_count: baseline.len() as i64,
                     difference_from_baseline: baseline_average
@@ -2394,22 +2706,30 @@ fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryRespons
             let mut series_counts: BTreeMap<i64, (String, i64)> = BTreeMap::new();
             for issue_id in issues.iter().copied() {
                 if let Some(issue) = library.issue(issue_id) {
-                    let entry = series_counts.entry(issue.thread_id).or_insert_with(|| (issue.thread_title.clone(), 0));
+                    let entry = series_counts
+                        .entry(issue.thread_id)
+                        .or_insert_with(|| (issue.thread_title.clone(), 0));
                     entry.1 += 1;
                 }
             }
             let mut shared_series: Vec<CreatorTeamSeriesRef> = series_counts
                 .into_iter()
-                .map(|(thread_id, (thread_title, shared_issue_count))| CreatorTeamSeriesRef {
-                    thread_id,
-                    thread_title,
-                    shared_issue_count,
-                })
+                .map(
+                    |(thread_id, (thread_title, shared_issue_count))| CreatorTeamSeriesRef {
+                        thread_id,
+                        thread_title,
+                        shared_issue_count,
+                    },
+                )
                 .collect();
             shared_series.sort_by(|a, b| {
                 b.shared_issue_count
                     .cmp(&a.shared_issue_count)
-                    .then(a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+                    .then(
+                        a.thread_title
+                            .to_lowercase()
+                            .cmp(&b.thread_title.to_lowercase()),
+                    )
                     .then(a.thread_id.cmp(&b.thread_id))
             });
             shared_series.truncate(MAX_SHARED_SERIES);
@@ -2428,7 +2748,10 @@ fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryRespons
         .collect();
 
     let rated_ids: HashSet<i64> = library.ratings.keys().copied().collect();
-    let with_metadata = rated_ids.iter().filter(|id| library.metadata_issues.contains(id)).count() as i64;
+    let with_metadata = rated_ids
+        .iter()
+        .filter(|id| library.metadata_issues.contains(id))
+        .count() as i64;
     CreatorTeamChemistryResponse {
         pairs,
         pairs_total: qualifying.len() as i64,
@@ -2475,15 +2798,16 @@ fn drilldown_issue(
     CreatorMetricIssue {
         issue_id,
         thread_id: issue.map(|issue| issue.thread_id).unwrap_or(0),
-        thread_title: issue.map(|issue| issue.thread_title.clone()).unwrap_or_default(),
-        issue_number: issue.map(|issue| issue.issue_number.clone()).unwrap_or_default(),
+        thread_title: issue
+            .map(|issue| issue.thread_title.clone())
+            .unwrap_or_default(),
+        issue_number: issue
+            .map(|issue| issue.issue_number.clone())
+            .unwrap_or_default(),
         status: issue.map(|issue| issue.status.clone()).unwrap_or_default(),
         effective_rating: library.ratings.get(&issue_id).copied(),
         effective_rating_source: None,
-        effective_rating_timestamp: library
-            .rating_timestamps
-            .get(&issue_id)
-            .map(iso_timestamp),
+        effective_rating_timestamp: library.rating_timestamps.get(&issue_id).map(iso_timestamp),
         creator_roles: roles_on_issue(library, creator_id, issue_id),
         exclusion_reason,
         missing_rating_cause: None,
@@ -2544,14 +2868,23 @@ fn build_drilldown(
     page_size: i64,
 ) -> Result<CreatorMetricDrilldown, ApiError> {
     const VALID: &[&str] = &[
-        "average-rating", "median-rating", "rated-issue-count", "five-star-rate",
-        "rating-distribution", "unread-count", "read-unrated-count", "role-stats", "series-stats",
+        "average-rating",
+        "median-rating",
+        "rated-issue-count",
+        "five-star-rate",
+        "rating-distribution",
+        "unread-count",
+        "read-unrated-count",
+        "role-stats",
+        "series-stats",
     ];
     if !VALID.contains(&metric_type) {
         return Err(bad_request(format!("Invalid metric type: {metric_type}")));
     }
     let Some(attribution) = attribution(library, creator_id) else {
-        return Err(not_found(format!("Metric {metric_type} not available for creator {creator_key}")));
+        return Err(not_found(format!(
+            "Metric {metric_type} not available for creator {creator_key}"
+        )));
     };
     let all_ids: Vec<i64> = attribution.issue_ids.iter().copied().collect();
     let rated_ids: Vec<i64> = all_ids
@@ -2589,34 +2922,75 @@ fn build_drilldown(
             if ratings.is_empty() {
                 let excluded: Vec<CreatorMetricIssue> = all_ids
                     .iter()
-                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .map(|id| {
+                        drilldown_issue(
+                            library,
+                            creator_id,
+                            *id,
+                            Some("No stored effective rating".to_string()),
+                        )
+                    })
                     .collect();
                 return Ok(base_drilldown(
-                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    metric_type,
+                    creator_key,
+                    empty_calculation(),
+                    0,
+                    vec![],
+                    excluded,
                     paginate::<i64>(&[], page, page_size).1,
                 ));
             }
             let points: f64 = ratings.iter().sum();
             let average = points / ratings.len() as f64;
             let calculation = CreatorMetricCalculation {
-                formula: format!("{points} total rating points ÷ {} rated issues = {average:.2}★", ratings.len()),
+                formula: format!(
+                    "{points} total rating points ÷ {} rated issues = {average:.2}★",
+                    ratings.len()
+                ),
                 numerator: format!("{points} total rating points"),
                 denominator: Some(format!("{} rated issues", ratings.len())),
                 percentage: Some(format!("{average:.2}★")),
             };
             let (paged, pagination) = paginate(&rated_ids, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
-            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
-            Ok(base_drilldown(metric_type, creator_key, calculation, ratings.len() as i64, included, excluded, pagination))
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
+            let excluded = non_rated
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id))))
+                .collect();
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                ratings.len() as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "median-rating" => {
             if ratings.is_empty() {
                 let excluded: Vec<CreatorMetricIssue> = all_ids
                     .iter()
-                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .map(|id| {
+                        drilldown_issue(
+                            library,
+                            creator_id,
+                            *id,
+                            Some("No stored effective rating".to_string()),
+                        )
+                    })
                     .collect();
                 return Ok(base_drilldown(
-                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    metric_type,
+                    creator_key,
+                    empty_calculation(),
+                    0,
+                    vec![],
+                    excluded,
                     paginate::<i64>(&[], page, page_size).1,
                 ));
             }
@@ -2657,10 +3031,30 @@ fn build_drilldown(
             let (paged, pagination) = paginate(&sorted, page, page_size);
             let included = paged
                 .into_iter()
-                .map(|id| drilldown_issue(library, creator_id, id, median_ids.contains(&id).then(|| "Median observation".to_string())))
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        id,
+                        median_ids
+                            .contains(&id)
+                            .then(|| "Median observation".to_string()),
+                    )
+                })
                 .collect();
-            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
-            Ok(base_drilldown(metric_type, creator_key, calculation, count as i64, included, excluded, pagination))
+            let excluded = non_rated
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id))))
+                .collect();
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                count as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "rated-issue-count" => {
             let calculation = CreatorMetricCalculation {
@@ -2670,18 +3064,44 @@ fn build_drilldown(
                 percentage: None,
             };
             let (paged, pagination) = paginate(&rated_ids, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
-            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
-            Ok(base_drilldown(metric_type, creator_key, calculation, rated_ids.len() as i64, included, excluded, pagination))
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
+            let excluded = non_rated
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id))))
+                .collect();
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                rated_ids.len() as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "five-star-rate" => {
             if ratings.is_empty() {
                 let excluded: Vec<CreatorMetricIssue> = all_ids
                     .iter()
-                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .map(|id| {
+                        drilldown_issue(
+                            library,
+                            creator_id,
+                            *id,
+                            Some("No stored effective rating".to_string()),
+                        )
+                    })
                     .collect();
                 let mut result = base_drilldown(
-                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    metric_type,
+                    creator_key,
+                    empty_calculation(),
+                    0,
+                    vec![],
+                    excluded,
                     paginate::<i64>(&[], page, page_size).1,
                 );
                 result.calculation.percentage = Some("0%".to_string());
@@ -2694,27 +3114,53 @@ fn build_drilldown(
                 .collect();
             let rate = five_star.len() as f64 / ratings.len() as f64 * 100.0;
             let calculation = CreatorMetricCalculation {
-                formula: format!("{} five-star ratings ÷ {} rated issues = {rate:.1}%", five_star.len(), ratings.len()),
+                formula: format!(
+                    "{} five-star ratings ÷ {} rated issues = {rate:.1}%",
+                    five_star.len(),
+                    ratings.len()
+                ),
                 numerator: format!("{} five-star ratings", five_star.len()),
                 denominator: Some(format!("{} rated issues", ratings.len())),
                 percentage: Some(format!("{rate:.1}%")),
             };
             let (paged, pagination) = paginate(&five_star, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
             let mut excluded: Vec<CreatorMetricIssue> = rated_ids
                 .iter()
                 .filter(|id| !five_star.contains(id))
                 .map(|id| {
                     let rating = library.ratings.get(id).copied().unwrap_or(0.0);
-                    drilldown_issue(library, creator_id, *id, Some(format!("Rated {rating}★, not 5★")))
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        *id,
+                        Some(format!("Rated {rating}★, not 5★")),
+                    )
                 })
                 .collect();
-            excluded.extend(non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))));
-            Ok(base_drilldown(metric_type, creator_key, calculation, five_star.len() as i64, included, excluded, pagination))
+            excluded.extend(
+                non_rated.into_iter().map(|id| {
+                    drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))
+                }),
+            );
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                five_star.len() as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "rating-distribution" => {
             let Some(raw_value) = rating_value else {
-                return Err(bad_request("Rating value is required for rating-distribution metric type"));
+                return Err(bad_request(
+                    "Rating value is required for rating-distribution metric type",
+                ));
             };
             let Ok(target) = raw_value.parse::<f64>() else {
                 return Err(bad_request(format!("Invalid rating value: {raw_value}")));
@@ -2728,9 +3174,24 @@ fn build_drilldown(
                 };
                 let excluded: Vec<CreatorMetricIssue> = all_ids
                     .iter()
-                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .map(|id| {
+                        drilldown_issue(
+                            library,
+                            creator_id,
+                            *id,
+                            Some("No stored effective rating".to_string()),
+                        )
+                    })
                     .collect();
-                let mut result = base_drilldown(metric_type, creator_key, calculation, 0, vec![], excluded, paginate::<i64>(&[], page, page_size).1);
+                let mut result = base_drilldown(
+                    metric_type,
+                    creator_key,
+                    calculation,
+                    0,
+                    vec![],
+                    excluded,
+                    paginate::<i64>(&[], page, page_size).1,
+                );
                 result.rating_value = Some(raw_value.to_string());
                 result.bucket_count = Some(0);
                 result.bucket_percentage = Some(0.0);
@@ -2739,24 +3200,63 @@ fn build_drilldown(
             let bucket: Vec<i64> = rated_ids
                 .iter()
                 .copied()
-                .filter(|id| library.ratings.get(id).is_some_and(|rating| *rating == target))
+                .filter(|id| {
+                    library
+                        .ratings
+                        .get(id)
+                        .is_some_and(|rating| *rating == target)
+                })
                 .collect();
             let percentage = bucket.len() as f64 / ratings.len() as f64 * 100.0;
             let calculation = CreatorMetricCalculation {
-                formula: format!("{} of {} rated issues are exactly {raw_value}★ = {percentage:.1}%", bucket.len(), ratings.len()),
+                formula: format!(
+                    "{} of {} rated issues are exactly {raw_value}★ = {percentage:.1}%",
+                    bucket.len(),
+                    ratings.len()
+                ),
                 numerator: format!("{} issues with {raw_value}★ rating", bucket.len()),
                 denominator: Some(format!("{} rated issues", ratings.len())),
                 percentage: Some(format!("{percentage:.1}%")),
             };
             let (paged, pagination) = paginate(&bucket, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
             let mut excluded: Vec<CreatorMetricIssue> = rated_ids
                 .iter()
-                .filter(|id| library.ratings.get(id).is_some_and(|rating| *rating != target))
-                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Rated {}★, not {raw_value}★", library.ratings.get(id).copied().unwrap_or(0.0)))))
+                .filter(|id| {
+                    library
+                        .ratings
+                        .get(id)
+                        .is_some_and(|rating| *rating != target)
+                })
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        *id,
+                        Some(format!(
+                            "Rated {}★, not {raw_value}★",
+                            library.ratings.get(id).copied().unwrap_or(0.0)
+                        )),
+                    )
+                })
                 .collect();
-            excluded.extend(non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))));
-            let mut result = base_drilldown(metric_type, creator_key, calculation, ratings.len() as i64, included, excluded, pagination);
+            excluded.extend(
+                non_rated.into_iter().map(|id| {
+                    drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))
+                }),
+            );
+            let mut result = base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                ratings.len() as i64,
+                included,
+                excluded,
+                pagination,
+            );
             result.rating_value = Some(raw_value.to_string());
             result.bucket_count = Some(bucket.len() as i64);
             result.bucket_percentage = Some(round2(percentage));
@@ -2766,7 +3266,11 @@ fn build_drilldown(
             let unread: Vec<i64> = all_ids
                 .iter()
                 .copied()
-                .filter(|id| library.issue(*id).is_some_and(|issue| issue.status == "unread"))
+                .filter(|id| {
+                    library
+                        .issue(*id)
+                        .is_some_and(|issue| issue.status == "unread")
+                })
                 .collect();
             let calculation = CreatorMetricCalculation {
                 formula: format!("{} unread issues attributed to this creator", unread.len()),
@@ -2775,36 +3279,81 @@ fn build_drilldown(
                 percentage: None,
             };
             let (paged, pagination) = paginate(&unread, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
             let excluded: Vec<CreatorMetricIssue> = all_ids
                 .iter()
-                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "read"))
-                .map(|id| drilldown_issue(library, creator_id, *id, Some("Issue is marked as read".to_string())))
+                .filter(|id| {
+                    library
+                        .issue(**id)
+                        .is_some_and(|issue| issue.status == "read")
+                })
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        *id,
+                        Some("Issue is marked as read".to_string()),
+                    )
+                })
                 .collect();
-            Ok(base_drilldown(metric_type, creator_key, calculation, unread.len() as i64, included, excluded, pagination))
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                unread.len() as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "read-unrated-count" => {
             let read_unrated: Vec<i64> = all_ids
                 .iter()
                 .copied()
                 .filter(|id| {
-                    library.issue(*id).is_some_and(|issue| issue.status == "read")
+                    library
+                        .issue(*id)
+                        .is_some_and(|issue| issue.status == "read")
                         && !library.ratings.contains_key(id)
                 })
                 .collect();
             let calculation = CreatorMetricCalculation {
-                formula: format!("{} attributed issues are marked read and have no effective rate event", read_unrated.len()),
+                formula: format!(
+                    "{} attributed issues are marked read and have no effective rate event",
+                    read_unrated.len()
+                ),
                 numerator: format!("{} read issues without ratings", read_unrated.len()),
                 denominator: None,
                 percentage: None,
             };
             let (paged, pagination) = paginate(&read_unrated, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some("Read but has no effective rating".to_string()))).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        id,
+                        Some("Read but has no effective rating".to_string()),
+                    )
+                })
+                .collect();
             let excluded: Vec<CreatorMetricIssue> = all_ids
                 .iter()
-                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "unread") || library.ratings.contains_key(*id))
+                .filter(|id| {
+                    library
+                        .issue(**id)
+                        .is_some_and(|issue| issue.status == "unread")
+                        || library.ratings.contains_key(*id)
+                })
                 .map(|id| {
-                    let reason = if library.issue(*id).is_some_and(|issue| issue.status == "unread") {
+                    let reason = if library
+                        .issue(*id)
+                        .is_some_and(|issue| issue.status == "unread")
+                    {
                         "Issue is unread"
                     } else {
                         "Issue has an effective rating"
@@ -2812,7 +3361,15 @@ fn build_drilldown(
                     drilldown_issue(library, creator_id, *id, Some(reason.to_string()))
                 })
                 .collect();
-            Ok(base_drilldown(metric_type, creator_key, calculation, read_unrated.len() as i64, included, excluded, pagination))
+            Ok(base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                read_unrated.len() as i64,
+                included,
+                excluded,
+                pagination,
+            ))
         }
         "role-stats" => {
             let Some(role) = role else {
@@ -2821,10 +3378,16 @@ fn build_drilldown(
             let role_issues: Vec<i64> = all_ids
                 .iter()
                 .copied()
-                .filter(|id| roles_on_issue(library, creator_id, *id).iter().any(|value| value == role))
+                .filter(|id| {
+                    roles_on_issue(library, creator_id, *id)
+                        .iter()
+                        .any(|value| value == role)
+                })
                 .collect();
             if role_issues.is_empty() {
-                return Err(not_found(format!("Role {role} not available for creator {creator_key}")));
+                return Err(not_found(format!(
+                    "Role {role} not available for creator {creator_key}"
+                )));
             }
             let role_ratings: Vec<f64> = role_issues
                 .iter()
@@ -2838,18 +3401,40 @@ fn build_drilldown(
                 } else {
                     format!("{role}\n{} credited issues\n0 with effective ratings\nNo rating data available", role_issues.len())
                 },
-                numerator: if role_ratings.is_empty() { "No rated issues".to_string() } else { format!("{} rated issues", role_ratings.len()) },
+                numerator: if role_ratings.is_empty() {
+                    "No rated issues".to_string()
+                } else {
+                    format!("{} rated issues", role_ratings.len())
+                },
                 denominator: Some(format!("{} total issues", role_issues.len())),
                 percentage: average.map(|value| format!("{value:.2}★")),
             };
             let (paged, pagination) = paginate(&role_issues, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
             let excluded: Vec<CreatorMetricIssue> = all_ids
                 .iter()
                 .filter(|id| !role_issues.contains(id))
-                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Creator not credited as {role} on this issue"))))
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        *id,
+                        Some(format!("Creator not credited as {role} on this issue")),
+                    )
+                })
                 .collect();
-            let mut result = base_drilldown(metric_type, creator_key, calculation, role_issues.len() as i64, included, excluded, pagination);
+            let mut result = base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                role_issues.len() as i64,
+                included,
+                excluded,
+                pagination,
+            );
             result.role = Some(role.to_string());
             result.role_issue_count = Some(role_issues.len() as i64);
             result.role_rated_issue_count = Some(role_ratings.len() as i64);
@@ -2858,7 +3443,9 @@ fn build_drilldown(
         }
         "series-stats" => {
             let Some(raw_key) = series_key else {
-                return Err(bad_request("Series key is required for series-stats metric type"));
+                return Err(bad_request(
+                    "Series key is required for series-stats metric type",
+                ));
             };
             let Some(thread_id) = parse_series_key(raw_key) else {
                 return Err(bad_request(format!("Invalid series key: {raw_key}")));
@@ -2866,17 +3453,24 @@ fn build_drilldown(
             let series_issues: Vec<i64> = all_ids
                 .iter()
                 .copied()
-                .filter(|id| library.issue(*id).is_some_and(|issue| issue.thread_id == thread_id))
+                .filter(|id| {
+                    library
+                        .issue(*id)
+                        .is_some_and(|issue| issue.thread_id == thread_id)
+                })
                 .collect();
             if series_issues.is_empty() {
-                return Err(not_found(format!("Series {raw_key} not available for creator {creator_key}")));
+                return Err(not_found(format!(
+                    "Series {raw_key} not available for creator {creator_key}"
+                )));
             }
             let series_ratings: Vec<f64> = series_issues
                 .iter()
                 .filter_map(|id| library.ratings.get(id).copied())
                 .collect();
             let points: f64 = series_ratings.iter().sum();
-            let average = (!series_ratings.is_empty()).then(|| round2(points / series_ratings.len() as f64));
+            let average =
+                (!series_ratings.is_empty()).then(|| round2(points / series_ratings.len() as f64));
             let title = series_issues
                 .iter()
                 .filter_map(|id| library.issue(*id))
@@ -2889,18 +3483,40 @@ fn build_drilldown(
                 } else {
                     format!("{title}\n{} attributed issues\n0 with effective ratings\nNo rating data available", series_issues.len())
                 },
-                numerator: if series_ratings.is_empty() { "No rated issues".to_string() } else { format!("{} rated issues", series_ratings.len()) },
+                numerator: if series_ratings.is_empty() {
+                    "No rated issues".to_string()
+                } else {
+                    format!("{} rated issues", series_ratings.len())
+                },
                 denominator: Some(format!("{} total issues", series_issues.len())),
                 percentage: average.map(|value| format!("{value:.2}★")),
             };
             let (paged, pagination) = paginate(&series_issues, page, page_size);
-            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, None))
+                .collect();
             let excluded: Vec<CreatorMetricIssue> = all_ids
                 .iter()
                 .filter(|id| !series_issues.contains(id))
-                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Issue not part of {title}"))))
+                .map(|id| {
+                    drilldown_issue(
+                        library,
+                        creator_id,
+                        *id,
+                        Some(format!("Issue not part of {title}")),
+                    )
+                })
                 .collect();
-            let mut result = base_drilldown(metric_type, creator_key, calculation, series_issues.len() as i64, included, excluded, pagination);
+            let mut result = base_drilldown(
+                metric_type,
+                creator_key,
+                calculation,
+                series_issues.len() as i64,
+                included,
+                excluded,
+                pagination,
+            );
             result.series_id = Some(thread_id);
             result.series_title = Some(title);
             result.series_issue_count = Some(series_issues.len() as i64);
@@ -2930,7 +3546,9 @@ fn page_params(
     }
     let offset = offset.unwrap_or(0);
     if offset < 0 {
-        return Err(ApiError::Unprocessable("offset must be non-negative".to_string()));
+        return Err(ApiError::Unprocessable(
+            "offset must be non-negative".to_string(),
+        ));
     }
     Ok((limit as usize, offset as usize))
 }
@@ -2939,7 +3557,9 @@ fn drilldown_page(page: Option<i64>, page_size: Option<i64>) -> Result<(i64, i64
     let page = page.unwrap_or(1);
     let page_size = page_size.unwrap_or(50);
     if page < 1 {
-        return Err(ApiError::Unprocessable("page must be at least 1".to_string()));
+        return Err(ApiError::Unprocessable(
+            "page must be at least 1".to_string(),
+        ));
     }
     if !(1..=200).contains(&page_size) {
         return Err(ApiError::Unprocessable(
@@ -2958,13 +3578,17 @@ pub async fn list_creators(
     let (limit, offset) = page_params(query.limit, query.offset, 20, 50)?;
     let min_ratings = query.min_ratings.unwrap_or(0).max(0);
     let sort = query.sort.unwrap_or_else(|| "name".to_string());
-    let search = query.search.map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).map(|value| {
-        if value.chars().count() > 100 {
-            value.chars().take(100).collect()
-        } else {
-            value
-        }
-    });
+    let search = query
+        .search
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            if value.chars().count() > 100 {
+                value.chars().take(100).collect()
+            } else {
+                value
+            }
+        });
     let library = load_library(&state, user_id).await?;
     Ok(Json(build_list(
         &library,
@@ -3001,7 +3625,14 @@ pub async fn get_detail(
     let library = load_library(&state, user_id).await?;
     let owner = attribution(&library, creator_id)
         .ok_or_else(|| not_found(format!("Creator {creator_key} not found in your library")))?;
-    Ok(Json(build_detail(&library, &creator_key, creator_id, &owner, limit, offset)))
+    Ok(Json(build_detail(
+        &library,
+        &creator_key,
+        creator_id,
+        &owner,
+        limit,
+        offset,
+    )))
 }
 
 pub async fn get_series_issues(
@@ -3020,7 +3651,9 @@ pub async fn get_series_issues(
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
     if attribution(&library, creator_id).is_none() {
-        return Err(not_found(format!("Creator {creator_key} not found in your library")));
+        return Err(not_found(format!(
+            "Creator {creator_key} not found in your library"
+        )));
     }
     let response = build_series_issues(&library, creator_id, thread_id, limit, offset)
         .ok_or_else(|| not_found(format!("Series {series_key} not found in your library")))?;
@@ -3063,7 +3696,9 @@ pub async fn get_metric_drilldown(
     Query(query): Query<CreatorMetricQuery>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
     let Some(creator_id) = parse_creator_key(&creator_key) else {
-        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+        return Err(bad_request(format!(
+            "Invalid creator key format: {creator_key}"
+        )));
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
@@ -3089,18 +3724,29 @@ pub async fn get_rating_distribution_drilldown(
     Query(query): Query<CreatorMetricPageQuery>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
     let Some(creator_id) = parse_creator_key(&creator_key) else {
-        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+        return Err(bad_request(format!(
+            "Invalid creator key format: {creator_key}"
+        )));
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
     let result = build_drilldown(
-        &library, creator_id, &creator_key, "rating-distribution", None,
-        Some(&rating_value), None, page, page_size,
+        &library,
+        creator_id,
+        &creator_key,
+        "rating-distribution",
+        None,
+        Some(&rating_value),
+        None,
+        page,
+        page_size,
     )
     .map_err(|error| {
         if error.status() == StatusCode::NOT_FOUND {
-            not_found(format!("Rating distribution {rating_value} not available for creator {creator_key}"))
+            not_found(format!(
+                "Rating distribution {rating_value} not available for creator {creator_key}"
+            ))
         } else {
             error
         }
@@ -3115,17 +3761,29 @@ pub async fn get_role_drilldown(
     Query(query): Query<CreatorMetricPageQuery>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
     let Some(creator_id) = parse_creator_key(&creator_key) else {
-        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+        return Err(bad_request(format!(
+            "Invalid creator key format: {creator_key}"
+        )));
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
     let result = build_drilldown(
-        &library, creator_id, &creator_key, "role-stats", Some(&role), None, None, page, page_size,
+        &library,
+        creator_id,
+        &creator_key,
+        "role-stats",
+        Some(&role),
+        None,
+        None,
+        page,
+        page_size,
     )
     .map_err(|error| {
         if error.status() == StatusCode::NOT_FOUND {
-            not_found(format!("Role {role} not available for creator {creator_key}"))
+            not_found(format!(
+                "Role {role} not available for creator {creator_key}"
+            ))
         } else {
             error
         }
@@ -3140,17 +3798,29 @@ pub async fn get_series_drilldown(
     Query(query): Query<CreatorMetricPageQuery>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
     let Some(creator_id) = parse_creator_key(&creator_key) else {
-        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+        return Err(bad_request(format!(
+            "Invalid creator key format: {creator_key}"
+        )));
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
     let result = build_drilldown(
-        &library, creator_id, &creator_key, "series-stats", None, None, Some(&series_key), page, page_size,
+        &library,
+        creator_id,
+        &creator_key,
+        "series-stats",
+        None,
+        None,
+        Some(&series_key),
+        page,
+        page_size,
     )
     .map_err(|error| {
         if error.status() == StatusCode::NOT_FOUND {
-            not_found(format!("Series {series_key} not available for creator {creator_key}"))
+            not_found(format!(
+                "Series {series_key} not available for creator {creator_key}"
+            ))
         } else {
             error
         }
@@ -3271,17 +3941,73 @@ mod tests {
 
     fn fixture_library() -> CreatorLibrary {
         let issues = vec![
-            OwnedIssue { id: 1, status: "read".into(), thread_id: 10, thread_title: "Series A".into(), issue_number: "1".into(), queue_position: 1, position: 1 },
-            OwnedIssue { id: 2, status: "read".into(), thread_id: 10, thread_title: "Series A".into(), issue_number: "2".into(), queue_position: 1, position: 2 },
-            OwnedIssue { id: 3, status: "read".into(), thread_id: 11, thread_title: "Series B".into(), issue_number: "1".into(), queue_position: 2, position: 1 },
-            OwnedIssue { id: 4, status: "read".into(), thread_id: 11, thread_title: "Series B".into(), issue_number: "2".into(), queue_position: 2, position: 2 },
-            OwnedIssue { id: 5, status: "unread".into(), thread_id: 12, thread_title: "Series C".into(), issue_number: "1".into(), queue_position: 3, position: 1 },
+            OwnedIssue {
+                id: 1,
+                status: "read".into(),
+                thread_id: 10,
+                thread_title: "Series A".into(),
+                issue_number: "1".into(),
+                queue_position: 1,
+                position: 1,
+            },
+            OwnedIssue {
+                id: 2,
+                status: "read".into(),
+                thread_id: 10,
+                thread_title: "Series A".into(),
+                issue_number: "2".into(),
+                queue_position: 1,
+                position: 2,
+            },
+            OwnedIssue {
+                id: 3,
+                status: "read".into(),
+                thread_id: 11,
+                thread_title: "Series B".into(),
+                issue_number: "1".into(),
+                queue_position: 2,
+                position: 1,
+            },
+            OwnedIssue {
+                id: 4,
+                status: "read".into(),
+                thread_id: 11,
+                thread_title: "Series B".into(),
+                issue_number: "2".into(),
+                queue_position: 2,
+                position: 2,
+            },
+            OwnedIssue {
+                id: 5,
+                status: "unread".into(),
+                thread_id: 12,
+                thread_title: "Series C".into(),
+                issue_number: "1".into(),
+                queue_position: 3,
+                position: 1,
+            },
         ];
-        let issue_index = issues.iter().enumerate().map(|(index, issue)| (issue.id, index)).collect();
+        let issue_index = issues
+            .iter()
+            .enumerate()
+            .map(|(index, issue)| (issue.id, index))
+            .collect();
         let credits = HashMap::from([
-            (1, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]),
+            (
+                1,
+                vec![
+                    credit(7, "writer", "Writer Seven"),
+                    credit(12, "penciler", "Penciler Twelve"),
+                ],
+            ),
             (2, vec![credit(7, "writer", "Writer Seven")]),
-            (3, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]),
+            (
+                3,
+                vec![
+                    credit(7, "writer", "Writer Seven"),
+                    credit(12, "penciler", "Penciler Twelve"),
+                ],
+            ),
             (4, vec![credit(7, "writer", "Writer Seven")]),
             (5, vec![credit(7, "writer", "Writer Seven")]),
         ]);
@@ -3292,7 +4018,14 @@ mod tests {
             (3, Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap()),
         ]);
         let metadata_issues = HashSet::from([1, 2, 3, 4, 5]);
-        CreatorLibrary { issues, issue_index, credits, ratings, rating_timestamps, metadata_issues }
+        CreatorLibrary {
+            issues,
+            issue_index,
+            credits,
+            ratings,
+            rating_timestamps,
+            metadata_issues,
+        }
     }
 
     #[test]
@@ -3326,7 +4059,12 @@ mod tests {
         assert_eq!(distribution.median_rating, 4.0);
         assert_eq!(distribution.min_rating, 3.0);
         assert_eq!(distribution.max_rating, 5.0);
-        let filled: Vec<(f64, i64)> = distribution.buckets.iter().filter(|bucket| bucket.count > 0).map(|bucket| (bucket.rating, bucket.count)).collect();
+        let filled: Vec<(f64, i64)> = distribution
+            .buckets
+            .iter()
+            .filter(|bucket| bucket.count > 0)
+            .map(|bucket| (bucket.rating, bucket.count))
+            .collect();
         assert_eq!(filled, vec![(3.0, 1), (4.0, 1), (5.0, 1)]);
         assert!(rating_distribution(&[]).is_none());
         assert_eq!(distribution_key(4.0), "4");
@@ -3336,7 +4074,14 @@ mod tests {
     #[test]
     fn detail_preserves_headline_population_coverage_and_pagination() {
         let library = fixture_library();
-        let detail = build_detail(&library, "creator:7", 7, &attribution(&library, 7).unwrap(), 50, 0);
+        let detail = build_detail(
+            &library,
+            "creator:7",
+            7,
+            &attribution(&library, 7).unwrap(),
+            50,
+            0,
+        );
         assert_eq!(detail.summary.ratings_count, 3);
         assert_eq!(detail.summary.average_rating, Some(4.0));
         assert_eq!(detail.summary.read_unrated_count, 1);
@@ -3344,18 +4089,31 @@ mod tests {
         assert_eq!(detail.coverage.rated_issues_total, 3);
         assert_eq!(detail.rated_issues.len(), 3);
         assert_eq!(detail.rated_issues[0].issue_id, 3);
-        assert_eq!(detail.headline_roles, vec!["artist", "colorist", "inker", "letterer", "penciler", "writer"]);
+        assert_eq!(
+            detail.headline_roles,
+            vec!["artist", "colorist", "inker", "letterer", "penciler", "writer"]
+        );
         assert_eq!(detail.series_groups_total, 2);
         assert_eq!(detail.series_groups[0].thread_id, 10);
         assert_eq!(detail.series_groups[0].sort_key, "000000000010");
-        assert_eq!(detail.series_groups[0].population_scope, "all_verified_credits");
+        assert_eq!(
+            detail.series_groups[0].population_scope,
+            "all_verified_credits"
+        );
         assert_eq!(detail.rated_population_scope, "headline_roles_only");
         assert_eq!(detail.next_cursor, None);
         let insights = detail.insights.expect("insights");
         assert_eq!(insights.individual_issue_limit, 3);
         assert_eq!(insights.highest_rated_issues[0].issue_id, 2);
         assert!(insights.series_message.is_some());
-        let page = build_detail(&library, "creator:7", 7, &attribution(&library, 7).unwrap(), 1, 0);
+        let page = build_detail(
+            &library,
+            "creator:7",
+            7,
+            &attribution(&library, 7).unwrap(),
+            1,
+            0,
+        );
         assert_eq!(page.next_cursor, Some("1".to_string()));
     }
 
@@ -3367,7 +4125,14 @@ mod tests {
         assert_eq!(response.rated_issue_count, 2);
         assert_eq!(response.total, 2);
         assert_eq!(response.population_scope, "all_verified_credits");
-        assert_eq!(response.issues.iter().map(|row| row.issue_id).collect::<Vec<_>>(), vec![2, 1]);
+        assert_eq!(
+            response
+                .issues
+                .iter()
+                .map(|row| row.issue_id)
+                .collect::<Vec<_>>(),
+            vec![2, 1]
+        );
         assert!(build_series_issues(&library, 7, 999, 50, 0).is_none());
     }
 
@@ -3376,19 +4141,37 @@ mod tests {
         let library = fixture_library();
         let list = build_list(&library, None, "name", 20, 0, 0);
         assert_eq!(list.total, 2);
-        assert!(list.items.iter().any(|item| item.canonical_creator_key == "creator:7"));
+        assert!(list
+            .items
+            .iter()
+            .any(|item| item.canonical_creator_key == "creator:7"));
         let filtered = build_list(&library, Some("Penciler"), "ratings_count", 20, 0, 2);
         assert_eq!(filtered.total, 1);
         assert_eq!(filtered.items[0].canonical_creator_key, "creator:12");
-        let summaries = build_summaries(&library, &["creator:7".to_string(), "creator:999".to_string()]);
+        let summaries = build_summaries(
+            &library,
+            &["creator:7".to_string(), "creator:999".to_string()],
+        );
         assert_eq!(summaries.summaries.len(), 1);
         assert_eq!(summaries.summaries["creator:7"].ratings_count, 3);
-        let comparison = build_comparison(&library, &["creator:7".to_string(), "creator:12".to_string()]);
-        assert_eq!(comparison.comparisons["creator:7"].average_rating, Some(4.0));
+        let comparison = build_comparison(
+            &library,
+            &["creator:7".to_string(), "creator:12".to_string()],
+        );
+        assert_eq!(
+            comparison.comparisons["creator:7"].average_rating,
+            Some(4.0)
+        );
         assert_eq!(comparison.comparisons["creator:7"].median_rating, Some(4.0));
-        assert_eq!(comparison.comparisons["creator:7"].rating_distribution["4"], 1);
+        assert_eq!(
+            comparison.comparisons["creator:7"].rating_distribution["4"],
+            1
+        );
         assert_eq!(comparison.comparisons["creator:12"].ratings_count, 2);
-        assert_eq!(comparison.insufficient_data_keys, vec!["creator:7", "creator:12"]);
+        assert_eq!(
+            comparison.insufficient_data_keys,
+            vec!["creator:7", "creator:12"]
+        );
         assert_eq!(comparison.coverage.rated_issues_total, 3);
     }
 
@@ -3399,9 +4182,17 @@ mod tests {
         assert_eq!(discoveries.views.len(), 7);
         assert_eq!(discoveries.minimum_reliable_sample, 5);
         assert_eq!(discoveries.max_entries_per_view, 10);
-        let most_read = discoveries.views.iter().find(|view| view.mode == "most_read").expect("view");
+        let most_read = discoveries
+            .views
+            .iter()
+            .find(|view| view.mode == "most_read")
+            .expect("view");
         assert_eq!(most_read.entries[0].canonical_creator_key, "creator:7");
-        let loved_unread = discoveries.views.iter().find(|view| view.mode == "loved_with_unread").expect("view");
+        let loved_unread = discoveries
+            .views
+            .iter()
+            .find(|view| view.mode == "loved_with_unread")
+            .expect("view");
         assert_eq!(loved_unread.entries[0].canonical_creator_key, "creator:7");
         // Two shared rated issues are below the three-issue ranking floor.
         let team = build_team_chemistry(&library);
@@ -3419,7 +4210,13 @@ mod tests {
             position: 1,
         });
         team_library.issue_index.insert(6, 5);
-        team_library.credits.insert(6, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]);
+        team_library.credits.insert(
+            6,
+            vec![
+                credit(7, "writer", "Writer Seven"),
+                credit(12, "penciler", "Penciler Twelve"),
+            ],
+        );
         team_library.ratings.insert(6, 4.5);
         team_library.metadata_issues.insert(6);
         let team = build_team_chemistry(&team_library);
@@ -3433,48 +4230,177 @@ mod tests {
     #[test]
     fn metric_drilldowns_preserve_calculation_and_pagination_semantics() {
         let library = fixture_library();
-        let average = build_drilldown(&library, 7, "creator:7", "average-rating", None, None, None, 1, 50).expect("average");
+        let average = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "average-rating",
+            None,
+            None,
+            None,
+            1,
+            50,
+        )
+        .expect("average");
         assert_eq!(average.total_count, 3);
-        assert_eq!(average.calculation.formula, "12 total rating points ÷ 3 rated issues = 4.00★");
+        assert_eq!(
+            average.calculation.formula,
+            "12 total rating points ÷ 3 rated issues = 4.00★"
+        );
         assert!(average.calculation.percentage.is_some());
-        let median = build_drilldown(&library, 7, "creator:7", "median-rating", None, None, None, 1, 50).expect("median");
-        assert_eq!(median.calculation.formula, "3 rated issues sorted by rating\nmiddle value (#2) = 4★");
-        assert_eq!(median.included_issues.iter().filter(|row| row.exclusion_reason.as_deref() == Some("Median observation")).count(), 1);
-        let five_star = build_drilldown(&library, 7, "creator:7", "five-star-rate", None, None, None, 1, 50).expect("five star");
+        let median = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "median-rating",
+            None,
+            None,
+            None,
+            1,
+            50,
+        )
+        .expect("median");
+        assert_eq!(
+            median.calculation.formula,
+            "3 rated issues sorted by rating\nmiddle value (#2) = 4★"
+        );
+        assert_eq!(
+            median
+                .included_issues
+                .iter()
+                .filter(|row| row.exclusion_reason.as_deref() == Some("Median observation"))
+                .count(),
+            1
+        );
+        let five_star = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "five-star-rate",
+            None,
+            None,
+            None,
+            1,
+            50,
+        )
+        .expect("five star");
         assert_eq!(five_star.total_count, 1);
-        assert_eq!(five_star.calculation.formula, "1 five-star ratings ÷ 3 rated issues = 33.3%");
-        let distribution = build_drilldown(&library, 7, "creator:7", "rating-distribution", None, Some("4.0"), None, 1, 50).expect("distribution");
+        assert_eq!(
+            five_star.calculation.formula,
+            "1 five-star ratings ÷ 3 rated issues = 33.3%"
+        );
+        let distribution = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "rating-distribution",
+            None,
+            Some("4.0"),
+            None,
+            1,
+            50,
+        )
+        .expect("distribution");
         assert_eq!(distribution.rating_value.as_deref(), Some("4.0"));
         assert_eq!(distribution.bucket_count, Some(1));
         assert_eq!(distribution.bucket_percentage, Some(33.33));
-        let unread = build_drilldown(&library, 7, "creator:7", "unread-count", None, None, None, 1, 50).expect("unread");
+        let unread = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "unread-count",
+            None,
+            None,
+            None,
+            1,
+            50,
+        )
+        .expect("unread");
         assert_eq!(unread.total_count, 1);
-        let role = build_drilldown(&library, 7, "creator:7", "role-stats", Some("writer"), None, None, 1, 50).expect("role");
+        let role = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "role-stats",
+            Some("writer"),
+            None,
+            None,
+            1,
+            50,
+        )
+        .expect("role");
         assert_eq!(role.role_issue_count, Some(5));
         assert_eq!(role.role_rated_issue_count, Some(3));
-        let series = build_drilldown(&library, 7, "creator:7", "series-stats", None, None, Some("thread:10"), 1, 50).expect("series");
+        let series = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "series-stats",
+            None,
+            None,
+            Some("thread:10"),
+            1,
+            50,
+        )
+        .expect("series");
         assert_eq!(series.series_issue_count, Some(2));
         assert_eq!(series.series_title.as_deref(), Some("Series A"));
-        let second_page = build_drilldown(&library, 7, "creator:7", "average-rating", None, None, None, 2, 1).expect("paged");
+        let second_page = build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "average-rating",
+            None,
+            None,
+            None,
+            2,
+            1,
+        )
+        .expect("paged");
         assert_eq!(second_page.pagination.total_pages, 3);
         assert_eq!(second_page.pagination.next_page_token, Some(3));
-        assert!(build_drilldown(&library, 7, "creator:7", "not-a-metric", None, None, None, 1, 50).is_err());
+        assert!(build_drilldown(
+            &library,
+            7,
+            "creator:7",
+            "not-a-metric",
+            None,
+            None,
+            None,
+            1,
+            50
+        )
+        .is_err());
     }
 
     #[test]
     fn validation_errors_use_the_python_contract() {
         assert_eq!(
-            validate_comparison_keys(Some("creator:7")).unwrap_err().status(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            validate_summary_keys(Some("creator:not-a-number")).unwrap_err().status(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            build_drilldown(&library_fixture_without_creator(), 7, "creator:7", "average-rating", None, None, None, 1, 50)
+            validate_comparison_keys(Some("creator:7"))
                 .unwrap_err()
                 .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            validate_summary_keys(Some("creator:not-a-number"))
+                .unwrap_err()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            build_drilldown(
+                &library_fixture_without_creator(),
+                7,
+                "creator:7",
+                "average-rating",
+                None,
+                None,
+                None,
+                1,
+                50
+            )
+            .unwrap_err()
+            .status(),
             StatusCode::NOT_FOUND
         );
     }
