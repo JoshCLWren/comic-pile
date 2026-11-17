@@ -893,7 +893,7 @@ def main() -> int:
     """Run from the dispatcher using read-only GitHub candidate snapshots."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--issues", type=Path)
-    parser.add_argument("--prs", type=Path, required=True)
+    parser.add_argument("--prs", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--factory-health", type=Path, help="Trusted Neon worker and provider health snapshot")
     parser.add_argument("--workers", type=Path, help="Eligible worker ID array")
