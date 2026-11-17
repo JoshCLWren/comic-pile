@@ -1,6 +1,8 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod active_issue_stats;
+pub mod activity;
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
@@ -638,6 +640,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(legacy_dependencies::delete),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route("/api/v2/activity", get(activity::activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
             "/api/v1/identity-inbox/search/issues",
