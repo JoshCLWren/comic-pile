@@ -450,7 +450,7 @@ jobs:
           fi
 
           for candidate in "${ready_prs[@]}"; do
-            IFS=$'\t' read -r pr head pr_labels <<< "$candidate"
+            IFS=$'\t' read -r pr head _ <<< "$candidate"
             [[ -n "$pr" && -n "$head" ]] || continue
             if ! authorization="$(python3 "$review_controller" authorized --pr "$pr")"; then
               echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2

@@ -126,7 +126,7 @@ jobs:
           nohup .venv/bin/python scripts/e2e_native_ingress.py \
             > /tmp/ingress.log 2>&1 &
           ready=0
-          for i in $(seq 1 45); do
+          for _ in $(seq 1 45); do
             python_ready=0
             native_ready=0
             if curl -fsS http://127.0.0.1:9001/health >/dev/null; then
