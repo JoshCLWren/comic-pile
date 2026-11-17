@@ -1549,10 +1549,13 @@ impl utoipa::Modify for ReadingPlanSyncSecurityAddon {
 /// serverless instances from double-adopting the same releases.
 const RELEASE_SYNC_CRON_LOCK_KEY: i64 = 1_065_200_001;
 
-/// Wall-clock budget for starting new owners in one scheduled run. The
-/// serverless function must answer within its platform limit; owners left over
-/// are reported as deferred for the next daily run.
-const CRON_MAX_DURATION: Duration = Duration::from_secs(50);
+/// Wall-clock budget for starting new owners in one scheduled run. Owners left
+/// over are reported as deferred for the next daily run via a 200
+/// `ScheduledSyncResponse{truncated: true, users_deferred: N}`, matching the
+/// Python contract. The ingress timeout in `crate::bound_request` is derived
+/// from this value with a margin so this budget always elapses first and the
+/// truncated report can actually be returned instead of a 503.
+pub(crate) const CRON_MAX_DURATION: Duration = Duration::from_secs(50);
 
 /// One owner whose sync failed during a scheduled run.
 #[derive(Debug, Clone, Serialize)]
@@ -1674,7 +1677,8 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 
 /// Fail-closed Vercel Cron secret gate, matching `require_cron_secret`: a
 /// deployment without a usable secret returns 503, a missing or incorrect
-/// bearer returns 401. Credentials are never logged.
+/// bearer returns 401. Credentials are never logged. The `Bearer` scheme is
+/// matched case-insensitively (RFC 6750), like Python's `scheme.lower()`.
 fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
     let Some(secret) = expected.map(str::trim).filter(|value| !value.is_empty()) else {
         return Err(ApiError::ServiceUnavailable(
@@ -1684,7 +1688,10 @@ fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), Api
     let presented = headers
         .get("authorization")
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
+        .and_then(|value| {
+            let (scheme, presented) = value.split_once(' ')?;
+            (scheme.eq_ignore_ascii_case("bearer") && !presented.is_empty()).then_some(presented)
+        });
     match presented {
         Some(value) if constant_time_eq(value.as_bytes(), secret.as_bytes()) => Ok(()),
         _ => Err(ApiError::Unauthorized("Unauthorized".to_string())),
@@ -1709,15 +1716,18 @@ pub async fn scheduled_release_sync_cron(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let secret = std::env::var("CRON_SECRET").ok();
-    run_scheduled_release_sync(&state, &headers, secret.as_deref()).await
+    run_scheduled_release_sync(&state, &headers, secret.as_deref(), CRON_MAX_DURATION).await
 }
 
-/// Scheduled run body with the secret injected, so tests never mutate global
-/// environment state. The production handler above supplies `CRON_SECRET`.
+/// Scheduled run body with the secret and wall-clock budget injected, so tests
+/// never mutate global environment state and can exercise the truncation
+/// branch directly. The production handler supplies `CRON_SECRET` and
+/// `CRON_MAX_DURATION`; the latter mirrors Python's `max_duration_seconds`.
 async fn run_scheduled_release_sync(
     state: &Arc<AppState>,
     headers: &HeaderMap,
     secret: Option<&str>,
+    max_duration: Duration,
 ) -> Result<Response, ApiError> {
     cron_authorize(headers, secret)?;
 
@@ -1768,7 +1778,7 @@ async fn run_scheduled_release_sync(
 
     let mut report = ScheduledSyncReport::new("completed", as_of_text, owner_ids.len() as i32);
     for (index, user_id) in owner_ids.into_iter().enumerate() {
-        if started.elapsed() >= CRON_MAX_DURATION {
+        if started.elapsed() >= max_duration {
             report.truncated = true;
             report.users_deferred = report.users_total.saturating_sub(index as i32);
             break;
@@ -1901,6 +1911,20 @@ mod tests {
         .expect("matching secret");
     }
 
+    #[test]
+    fn cron_authorize_accepts_case_insensitive_bearer_scheme() {
+        for header in [
+            "bearer a-very-secret-value",
+            "BEARER a-very-secret-value",
+            "Bearer a-very-secret-value",
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert("authorization", HeaderValue::from_static(header));
+            cron_authorize(&headers, Some("a-very-secret-value"))
+                .expect("case-insensitive bearer scheme");
+        }
+    }
+
     async fn seed_cron_owner(connection: &deadpool_postgres::Client, user_id: i32) {
         let plan_id = 1_000 + user_id;
         let thread_id = 2_000 + user_id;
@@ -1940,6 +1964,7 @@ mod tests {
             &state,
             &cron_headers("a-very-secret-value"),
             Some("a-very-secret-value"),
+            CRON_MAX_DURATION,
         )
         .await
         .expect("scheduled sync response");
@@ -1981,6 +2006,7 @@ mod tests {
             &state,
             &cron_headers("a-very-secret-value"),
             Some("a-very-secret-value"),
+            CRON_MAX_DURATION,
         )
         .await
         .expect("scheduled sync response");
@@ -1993,5 +2019,45 @@ mod tests {
         assert_eq!(payload["status"], "already_running");
         assert_eq!(payload["success"], true);
         transaction.rollback().await.expect("release lock");
+    }
+
+    #[tokio::test]
+    async fn scheduled_sync_reports_truncation_when_budget_exhausted() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        seed_cron_owner(&connection, 1).await;
+        seed_cron_owner(&connection, 2).await;
+        drop(connection);
+
+        // A 1ms budget is exhausted before the first owner can start, so the
+        // run must return a 200 truncated report (never a 503) and defer the
+        // remaining owners, matching the Python cron contract.
+        let response = run_scheduled_release_sync(
+            &state,
+            &cron_headers("a-very-secret-value"),
+            Some("a-very-secret-value"),
+            Duration::from_millis(1),
+        )
+        .await
+        .expect("scheduled sync response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let bytes = axum::body::to_bytes(response.into_body(), 2_000_000)
+            .await
+            .expect("response body");
+        let payload: Value = serde_json::from_slice(&bytes).expect("json payload");
+        assert_eq!(payload["status"], "completed");
+        assert_eq!(payload["success"], false);
+        assert_eq!(payload["result"]["truncated"], true);
+        assert_eq!(payload["result"]["users_total"], 2);
+        assert_eq!(payload["result"]["users_deferred"], 2);
+        assert_eq!(payload["result"]["users_processed"], 0);
+        assert!(payload["message"]
+            .as_str()
+            .expect("message")
+            .contains("2 users deferred"));
     }
 }
