@@ -80,6 +80,40 @@ describe('CompletedThreadsSection', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('shows only the loaded count and an explicit next-page action', async () => {
+    const user = userEvent.setup()
+    const onLoadMore = vi.fn()
+    render(
+      <CompletedThreadsSection
+        threads={completedThreads}
+        hasNextPage
+        onLoadMore={onLoadMore}
+        onReactivate={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Show Finished (2+)' })).toBeInTheDocument()
+    expect(screen.getByText('2 finished series loaded, more available')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show Finished (2+)' }))
+    await user.click(screen.getByRole('button', { name: 'Load more finished series' }))
+    expect(onLoadMore).toHaveBeenCalledOnce()
+  })
+
+  it('preserves retry access when a completed collection fails', async () => {
+    const user = userEvent.setup()
+    const retry = vi.fn()
+    render(
+      <CompletedThreadsSection
+        threads={[]}
+        isError
+        onRetry={retry}
+        onReactivate={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load finished series.")
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
   it('renders nothing when there are no completed threads', () => {
     const { container } = render(
       <CompletedThreadsSection
