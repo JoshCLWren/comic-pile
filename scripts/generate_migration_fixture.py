@@ -36,7 +36,11 @@ from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.custom_cbl_source_link import CustomCBLSourceLink
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.reading_plan_membership import ReadingPlanDependency, ReadingPlanIssue, ReadingPlanSource
+from app.models.reading_plan_membership import (
+    ReadingPlanDependency,
+    ReadingPlanIssue,
+    ReadingPlanSource,
+)
 from app.models.reading_session import ReadingSession
 from app.models.thread import Thread
 from app.models.user import User
@@ -429,7 +433,6 @@ def _session_rows() -> list[dict[str, Any]]:
             "intent_confidence": None,
             "intent_source": None,
             "intent_version": None,
-            "intent_updated_at": None,
             "session_mode_correction_guidance": None,
         }
     ]
