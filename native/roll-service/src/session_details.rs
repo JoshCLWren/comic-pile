@@ -66,8 +66,9 @@ pub struct SessionDetailsResponse {
     pub events: Vec<SessionEventDetail>,
 }
 
-const SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested, predicted_bandwidth, active_bandwidth, bandwidth_confidence, bandwidth_source, bandwidth_version, predicted_intent, active_intent, intent_confidence, intent_source, intent_version FROM sessions WHERE id = $1 AND user_id = $2";
+const SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested, predicted_bandwidth, active_bandwidth, bandwidth_confidence, bandwidth_source, bandwidth_version, predicted_intent, active_intent, intent_confidence, intent_source, intent_version, snoozed_thread_ids FROM sessions WHERE id = $1 AND user_id = $2";
 const EVENTS_SQL: &str = "SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context, die, result, selection_method, rating, issues_read, queue_move, die_after FROM events WHERE session_id = $1 ORDER BY timestamp DESC, id DESC";
+const SNAPSHOT_TITLES_SQL: &str = "SELECT thread_states::text FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
 const LADDER_SQL: &str = "SELECT die_after FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE (user_id = $1 OR session_id = $2) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 
@@ -230,6 +231,10 @@ pub async fn get_session_details(
         );
         internal()
     })?;
+    // Python `build_narrative_summary` treats a persisted snooze column as the
+    // authoritative boundary state and only replays the event stream when it is
+    // absent. Preserve the null/empty distinction here.
+    let snoozed_raw: Option<Value> = session_row.try_get(21).ok();
 
     // Fetch all events for this session
     let event_rows = connection
@@ -297,10 +302,10 @@ pub async fn get_session_details(
         }
     }
 
-    // Load thread titles
+    // Load live thread titles
     let mut thread_titles = HashMap::new();
     if !thread_ids.is_empty() {
-        let thread_id_list: Vec<i32> = thread_ids.into_iter().collect();
+        let thread_id_list: Vec<i32> = thread_ids.iter().copied().collect();
         let thread_rows = connection
             .query(
                 "SELECT id, title FROM threads WHERE id = ANY($1)",
@@ -327,10 +332,102 @@ pub async fn get_session_details(
         }
     }
 
-    // Build narrative summary using the same logic as Python
+    // Python `build_session_event_details` recovers a deleted thread's last-known
+    // title from the session's snapshots (newest first, first title wins). Events
+    // stay flagged `thread_deleted`; the recovered title only softens the label.
+    let mut snapshot_titles: HashMap<i32, String> = HashMap::new();
+    let missing_ids: Vec<i32> = thread_ids
+        .iter()
+        .copied()
+        .filter(|tid| !thread_titles.contains_key(tid))
+        .collect();
+    if !missing_ids.is_empty() {
+        let snapshot_rows = connection
+            .query(SNAPSHOT_TITLES_SQL, &[&session_id])
+            .await
+            .map_err(db::query_error)?;
+        for row in snapshot_rows {
+            let states_text: Option<String> = row.try_get(0).ok();
+            let Some(states_text) = states_text else {
+                continue;
+            };
+            let Ok(states) = serde_json::from_str::<Value>(&states_text) else {
+                continue;
+            };
+            let Some(object) = states.as_object() else {
+                continue;
+            };
+            for (key, state) in object {
+                if key.starts_with('_') {
+                    continue;
+                }
+                let Ok(tid) = key.parse::<i32>() else {
+                    continue;
+                };
+                if !missing_ids.contains(&tid) || snapshot_titles.contains_key(&tid) {
+                    continue;
+                }
+                let title = state
+                    .get("title")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|title| !title.is_empty());
+                if let Some(title) = title {
+                    snapshot_titles.insert(tid, title.to_string());
+                }
+            }
+            if snapshot_titles.len() == missing_ids.len() {
+                break;
+            }
+        }
+    }
+
+    // Python `build_narrative_summary` always returns four keys, including
+    // `snoozed` (series still snoozed at the session boundary).
+    let still_snoozed_ids: Vec<i32> = match snoozed_raw.as_ref().and_then(|value| value.as_array())
+    {
+        Some(ids) => ids
+            .iter()
+            .filter_map(|value| value.as_i64())
+            .filter_map(|id| i32::try_from(id).ok())
+            .collect(),
+        None => {
+            // No persisted boundary state: replay the session's own ordered
+            // snooze/unsnooze actions. EVENTS_SQL is DESC, so reverse for ASC.
+            let mut replay = std::collections::BTreeSet::new();
+            for row in event_rows.iter().rev() {
+                let event_type: Option<String> = row.try_get(1).ok();
+                let tid: Option<i32> = row.try_get(3).ok();
+                match (event_type.as_deref(), tid) {
+                    (Some("snooze"), Some(tid)) => {
+                        replay.insert(tid);
+                    }
+                    (Some("unsnooze"), Some(tid)) => {
+                        replay.remove(&tid);
+                    }
+                    _ => {}
+                }
+            }
+            replay.into_iter().collect()
+        }
+    };
+    let snoozed_titles: Vec<String> = {
+        let titles: std::collections::BTreeSet<String> = still_snoozed_ids
+            .into_iter()
+            .map(|tid| {
+                thread_titles
+                    .get(&tid)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Thread #{}", tid))
+            })
+            .collect();
+        titles.into_iter().collect()
+    };
+
     let mut narrative_summary: HashMap<String, Vec<String>> = HashMap::new();
     narrative_summary.insert("read".to_string(), Vec::new());
     narrative_summary.insert("skipped".to_string(), Vec::new());
+    narrative_summary.insert("snoozed".to_string(), snoozed_titles);
     narrative_summary.insert("completed".to_string(), Vec::new());
 
     // Format events
@@ -375,9 +472,11 @@ pub async fn get_session_details(
             thread_id.or(selected_thread_id)
         };
 
-        let thread_title =
-            event_thread_id.and_then(|tid| thread_titles.get(&tid).map(|s| s.as_str()));
-        let thread_deleted = event_thread_id.is_some() && thread_title.is_none();
+        let live_title = event_thread_id.and_then(|tid| thread_titles.get(&tid));
+        let thread_title = live_title
+            .or_else(|| event_thread_id.and_then(|tid| snapshot_titles.get(&tid)))
+            .map(|title| title.as_str());
+        let thread_deleted = event_thread_id.is_some() && live_title.is_none();
 
         let context: Value = context_text
             .as_deref()
@@ -671,8 +770,9 @@ mod tests {
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'session-details-test'), (9102, 'session-details-other');
                  INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Owned Comic', 'comics', 3, NULL, NULL, 1, 'active', false), (9202, 9102, 'Foreign Comic', 'Comic', 2, NULL, NULL, 1, 'active', false);
-                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested) VALUES (9301, 9101, NOW(), NULL, 6, NULL, 9201, false), (9302, 9102, NOW(), NULL, 6, NULL, 9202, false), (9303, 9101, NOW(), NULL, 6, NULL, NULL, false);
-                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result) VALUES (9301, 'roll', NOW(), 9201, NULL, 6, NULL, 4), (9301, 'rate', NOW() + interval '1 minute', NULL, 9201, 6, 4, NULL), (9303, 'roll', NOW(), 9201, NULL, 6, NULL, 2);",
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES (9301, 9101, NOW(), NULL, 6, NULL, 9201, false, NULL), (9302, 9102, NOW(), NULL, 6, NULL, 9202, false, NULL), (9303, 9101, NOW(), NULL, 6, NULL, NULL, false, NULL), (9304, 9101, NOW(), NULL, 6, NULL, NULL, false, '[9201]');
+                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result) VALUES (9301, 'roll', NOW(), 9201, NULL, 6, NULL, 4), (9301, 'rate', NOW() + interval '1 minute', NULL, 9201, 6, 4, NULL), (9303, 'roll', NOW(), 9201, NULL, 6, NULL, 2), (9304, 'roll', NOW(), 9203, NULL, 6, NULL, 4), (9304, 'snooze', NOW() + interval '1 minute', NULL, 9201, NULL, NULL, NULL);
+                  INSERT INTO snapshots (session_id, thread_states, session_state, created_at, description) VALUES (9304, '{\"9203\": {\"title\": \"Lost Comic\"}, \"_meta\": 1}'::json, '{}'::json, NOW(), 'Session start');",
             )
             .await
             .expect("seed session details fixture");
@@ -728,5 +828,47 @@ mod tests {
             .expect_err("foreign must 404");
         assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
         assert_eq!(foreign.detail(), "Session not found");
+    }
+
+    #[tokio::test]
+    async fn session_details_narrative_summary_includes_snoozed_key() {
+        let (state, user, _guard) = database_fixture().await;
+        let Json(response) = get_session_details(Path(9304), user, State(state.clone()))
+            .await
+            .expect("session details");
+        let wire = serde_json::to_value(&response).expect("serialize details response");
+        let summary = wire["narrative_summary"]
+            .as_object()
+            .expect("narrative summary");
+        for key in ["read", "skipped", "snoozed", "completed"] {
+            assert!(
+                summary.contains_key(key),
+                "narrative_summary must expose `{}` like the Python service",
+                key
+            );
+            assert!(summary[key].is_array(), "`{}` must be a list", key);
+        }
+        let snoozed = summary["snoozed"].as_array().expect("snoozed list");
+        assert_eq!(snoozed.len(), 1);
+        assert_eq!(snoozed[0].as_str(), Some("Owned Comic"));
+    }
+
+    #[tokio::test]
+    async fn session_details_recovers_deleted_thread_title_from_snapshot() {
+        let (state, user, _guard) = database_fixture().await;
+        let Json(response) = get_session_details(Path(9304), user, State(state.clone()))
+            .await
+            .expect("session details");
+        let roll = response
+            .events
+            .iter()
+            .find(|event| event.type_ == "roll")
+            .expect("roll event");
+        assert_eq!(roll.thread_title.as_deref(), Some("Lost Comic"));
+        assert!(roll.thread_deleted, "thread is missing from live threads");
+        assert_eq!(
+            roll.description.as_deref(),
+            Some("Selected Lost Comic (deleted)")
+        );
     }
 }

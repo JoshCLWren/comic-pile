@@ -18167,12 +18167,12 @@ export interface operations {
     };
     list_sessions_v1_documentation: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_size: number | null;
-                page_token: string | null;
+            query?: {
+                page_size?: number;
+                page_token?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

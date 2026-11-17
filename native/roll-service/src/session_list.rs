@@ -34,6 +34,9 @@ use utoipa::ToSchema;
 
 /// Query parameters for session history pagination.
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+// utoipa's `IntoParams` defaults to `path`; the Python contract and the frontend
+// both send these as query parameters, so declare the correct wire location.
+#[into_params(parameter_in = Query)]
 pub struct SessionListParams {
     #[schema(default = 50, minimum = 1, maximum = 200)]
     pub page_size: Option<i32>,
@@ -102,11 +105,15 @@ pub struct SessionHistoryListResponse {
 }
 
 const SESSION_PAGE_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested FROM sessions WHERE user_id = $1 ORDER BY started_at DESC, id DESC LIMIT $2";
-const SESSION_PAGE_WITH_CURSOR_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested FROM sessions WHERE user_id = $1 AND (started_at < $2 OR (started_at = $2 AND id < $3)) ORDER BY started_at DESC, id DESC LIMIT $4";
+const SESSION_PAGE_WITH_CURSOR_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested FROM sessions WHERE user_id = $1 AND (started_at < $2 OR (started_at = $2 AND id > $3)) ORDER BY started_at DESC, id DESC LIMIT $4";
 const SNAPSHOT_COUNT_SQL: &str = "SELECT session_id, count(*)::int FROM snapshots WHERE session_id = ANY($1) GROUP BY session_id";
 const LADDER_SQL: &str = "SELECT session_id, die_after FROM events WHERE session_id = ANY($1) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY session_id, timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT session_id, die_after, context::text FROM events WHERE session_id = ANY($1) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY session_id, timestamp DESC, id DESC";
 const LATEST_ROLL_SQL: &str = "SELECT session_id, selected_thread_id, result FROM events WHERE session_id = ANY($1) AND type = 'roll' ORDER BY session_id, timestamp DESC, id DESC";
+// Python `project_session_history_events` records the issue identity an event
+// established for a thread inside a session; it is the immutable source for a
+// History card and wins over the thread's current `next_unread_issue_id`.
+const ISSUE_IDENTITY_SQL: &str = "SELECT session_id, type, selected_thread_id, thread_id, issue_id, issue_number FROM events WHERE session_id = ANY($1) AND type IN ('roll','rate') AND (selected_thread_id IS NOT NULL OR thread_id IS NOT NULL) ORDER BY session_id, timestamp ASC, id ASC";
 const RATES_UNDO_SQL: &str = "SELECT session_id, type, issues_read, rating FROM events WHERE session_id = ANY($1) AND type IN ('rate','undo') ORDER BY session_id, timestamp ASC, id ASC";
 const TAGS_ANY_SQL: &str = "SELECT tag.id, tag.name, tag.normalized_name, tag.scope, tag.owner_user_id, tag.color, to_char(tag.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(tag.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), assignment.target_id FROM tag_assignments assignment JOIN tags tag ON tag.id = assignment.tag_id WHERE assignment.target_type = 'Thread' AND assignment.target_id = ANY($1) AND (tag.scope = 'global' OR tag.owner_user_id = $2) ORDER BY tag.scope DESC, tag.normalized_name ASC";
 const QUEUE_POSITION_ANY_SQL: &str = "SELECT id, seq::int FROM (SELECT id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS seq FROM threads WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked WHERE id = ANY($2)";
@@ -399,6 +406,54 @@ pub async fn list_sessions(
             (sid, (issues_read, last_rating))
         })
         .collect();
+
+    // Python `project_session_history_events` keyed issue identity by
+    // (session_id, thread_id): a roll overwrites the recorded identity while a
+    // rate only contributes when no roll has established one for that thread.
+    let identity_rows = connection
+        .query(ISSUE_IDENTITY_SQL, &[&session_ids])
+        .await
+        .map_err(db::query_error)?;
+    let mut issue_by_session_thread: std::collections::HashMap<
+        (i32, i32),
+        (Option<i32>, Option<String>),
+    > = std::collections::HashMap::new();
+    for row in &identity_rows {
+        let sid: i32 = row.try_get(0).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            internal()
+        })?;
+        let event_type: String = row.try_get(1).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            internal()
+        })?;
+        let selected_thread_id: Option<i32> = row.try_get(2).ok();
+        let thread_id: Option<i32> = row.try_get(3).ok();
+        let issue_id: Option<i32> = row.try_get(4).ok();
+        let issue_number: Option<String> = row.try_get(5).ok();
+        if issue_id.is_none() && issue_number.is_none() {
+            continue;
+        }
+        let key = if event_type == "roll" {
+            selected_thread_id.map(|tid| (sid, tid))
+        } else {
+            thread_id.map(|tid| (sid, tid))
+        };
+        let Some(key) = key else { continue };
+        if event_type == "roll" {
+            issue_by_session_thread.insert(key, (issue_id, issue_number));
+        } else {
+            issue_by_session_thread
+                .entry(key)
+                .or_insert((issue_id, issue_number));
+        }
+    }
 
     // Collect thread IDs for active threads
     let mut thread_ids = std::collections::HashSet::new();
@@ -743,12 +798,21 @@ pub async fn list_sessions(
                                 stored_remaining
                             };
 
-                            let (next_issue_id, next_issue_number) = match next_unread_issue_id {
-                                Some(issue_id) if total_issues.is_some() => next_issue_map
-                                    .get(&issue_id)
-                                    .map(|(id, num)| (Some(*id), num.clone()))
-                                    .unwrap_or((None, None)),
-                                _ => (None, None),
+                            // Prefer the identity the session recorded for this
+                            // thread over the thread's current next-unread issue,
+                            // so History rows never borrow another series' number.
+                            let (issue_id, issue_number) = if let Some(historical) =
+                                issue_by_session_thread.get(&(sid, thread_id_value))
+                            {
+                                (historical.0, historical.1.clone())
+                            } else {
+                                match next_unread_issue_id {
+                                    Some(current_id) if total_issues.is_some() => next_issue_map
+                                        .get(&current_id)
+                                        .map(|(id, num)| (Some(*id), num.clone()))
+                                        .unwrap_or((None, None)),
+                                    _ => (None, None),
+                                }
                             };
 
                             let tags = tags_map.get(&thread_id_value).cloned().unwrap_or_default();
@@ -768,10 +832,10 @@ pub async fn list_sessions(
                                 issues_read,
                                 last_rating,
                                 tags,
-                                issue_id: next_issue_id,
-                                issue_number: next_issue_number.clone(),
-                                next_issue_id,
-                                next_issue_number,
+                                issue_id,
+                                issue_number: issue_number.clone(),
+                                next_issue_id: issue_id,
+                                next_issue_number: issue_number,
                             })
                         }
                     }
@@ -871,21 +935,10 @@ pub async fn list_sessions(
             None => current_die(manual_die, None, start_die),
         };
         let active_thread = active_threads.get(&sid).and_then(|v| v.clone());
-        let last_rolled_result = active_thread
-            .as_ref()
-            .and_then(|t| t.last_rolled_result)
-            .or_else(|| {
-                action_rows.iter().find_map(|r| {
-                    let action_sid: i32 = r.try_get(0).ok()?;
-                    if action_sid == sid {
-                        let action_type: String = r.try_get(1).ok()?;
-                        if action_type == "roll" {
-                            return r.try_get(3).ok().flatten();
-                        }
-                    }
-                    None
-                })
-            });
+        // Python: `active_thread.last_rolled_result if active_thread else None`.
+        // A session with no active thread has no result, even if it has roll
+        // events in the action stream.
+        let last_rolled_result = active_thread.as_ref().and_then(|t| t.last_rolled_result);
 
         responses.push(SessionListItemResponse {
             id: sid,
@@ -1052,9 +1105,12 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'session-list-test'), (9102, 'session-list-other');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Owned Comic', 'comics', 3, NULL, NULL, 1, 'active', false), (9202, 9102, 'Foreign Comic', 'Comic', 2, NULL, NULL, 1, 'active', false);
-                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested) VALUES (9301, 9101, NOW(), NULL, 6, NULL, 9201, false), (9302, 9102, NOW(), NULL, 6, NULL, 9202, false), (9303, 9101, NOW(), NULL, 6, NULL, NULL, false);
-                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result) VALUES (9301, 'roll', NOW(), 9201, NULL, 6, NULL, 4), (9301, 'rate', NOW() + interval '1 minute', NULL, 9201, 6, 4, NULL), (9303, 'roll', NOW(), 9201, NULL, 6, NULL, 2);",
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Owned Comic', 'comics', 3, NULL, NULL, 1, 'active', false), (9202, 9102, 'Foreign Comic', 'Comic', 2, NULL, NULL, 1, 'active', false), (9204, 9101, 'Series A', 'Comic', 5, 5, NULL, 2, 'active', false);
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) VALUES (9401, 9204, '1', 'unread', NOW(), 1), (9402, 9204, '2', 'unread', NOW(), 2);
+                 UPDATE threads SET next_unread_issue_id = 9402 WHERE id = 9204;
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested) VALUES (9301, 9101, NOW() - interval '1 minute', NULL, 6, NULL, 9201, false), (9302, 9102, NOW(), NULL, 6, NULL, 9202, false), (9303, 9101, NOW(), NULL, 6, NULL, NULL, false), (9304, 9101, NOW() - interval '2 minutes', NULL, 6, NULL, NULL, false), (9305, 9101, NOW() - interval '3 minutes', NULL, 6, NULL, NULL, false);
+                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result) VALUES (9301, 'roll', NOW() - interval '1 minute', 9201, NULL, 6, NULL, 4), (9301, 'rate', NOW(), NULL, 9201, 6, 4, NULL), (9303, 'roll', NOW(), 9201, NULL, 6, NULL, 2);
+                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, issue_id, issue_number, die, die_after, result) VALUES (9304, 'roll', NOW() - interval '2 minutes', 9204, NULL, 9401, '1', 6, NULL, 3), (9305, 'roll', NOW() - interval '3 minutes', NULL, NULL, NULL, NULL, 6, NULL, 6);",
             )
             .await
             .expect("seed session list fixture");
@@ -1075,9 +1131,8 @@ mod tests {
         )
         .await
         .expect("list sessions");
-        assert_eq!(response.sessions.len(), 2);
-        // Both sessions share the fixture's statement timestamp, so the
-        // started_at DESC, id DESC tie-break puts the higher id first.
+        assert_eq!(response.sessions.len(), 4);
+        // started_at DESC puts the newest session first.
         assert_eq!(response.sessions[0].id, 9303);
         assert_eq!(response.sessions[0].user_id, 9101);
         assert_eq!(response.sessions[0].start_die, 6);
@@ -1147,5 +1202,93 @@ mod tests {
         for session in &response.sessions {
             assert_eq!(session.user_id, 9101);
         }
+    }
+
+    #[test]
+    fn session_list_openapi_params_are_query_location() {
+        let document = serde_json::to_value(SessionListApi::openapi()).expect("openapi");
+        for path in ["/api/sessions/", "/api/v1/sessions/"] {
+            let params = document["paths"][path]["get"]["parameters"]
+                .as_array()
+                .expect("parameters");
+            assert!(
+                params
+                    .iter()
+                    .any(|param| param["name"] == "page_size" && param["in"] == "query"),
+                "page_size must be a query parameter on {}",
+                path
+            );
+            assert!(
+                params
+                    .iter()
+                    .any(|param| param["name"] == "page_token" && param["in"] == "query"),
+                "page_token must be a query parameter on {}",
+                path
+            );
+        }
+    }
+
+    #[test]
+    fn session_page_cursor_predicate_matches_python() {
+        assert!(
+            SESSION_PAGE_WITH_CURSOR_SQL
+                .contains("started_at < $2 OR (started_at = $2 AND id > $3)"),
+            "cursor must match Python's `started_at < cursor OR (started_at == cursor AND id > cursor_id)`"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_sessions_uses_historical_issue_identity() {
+        let (state, user, _guard) = database_fixture().await;
+        let Json(response) = list_sessions(
+            Query(SessionListParams {
+                page_size: Some(50),
+                page_token: None,
+            }),
+            user,
+            State(state.clone()),
+        )
+        .await
+        .expect("list sessions");
+        let session = response
+            .sessions
+            .iter()
+            .find(|session| session.id == 9304)
+            .expect("session 9304");
+        let active = session.active_thread.as_ref().expect("active thread");
+        // The roll recorded issue 9401 ('1') for this thread; the thread's
+        // current next_unread_issue_id points at 9402 ('2') and must not win.
+        assert_eq!(active.issue_id, Some(9401));
+        assert_eq!(active.issue_number.as_deref(), Some("1"));
+        assert_eq!(active.next_issue_id, Some(9401));
+        assert_eq!(active.next_issue_number.as_deref(), Some("1"));
+    }
+
+    #[tokio::test]
+    async fn list_sessions_last_rolled_result_has_no_event_fallback() {
+        let (state, user, _guard) = database_fixture().await;
+        let Json(response) = list_sessions(
+            Query(SessionListParams {
+                page_size: Some(50),
+                page_token: None,
+            }),
+            user,
+            State(state.clone()),
+        )
+        .await
+        .expect("list sessions");
+        let session = response
+            .sessions
+            .iter()
+            .find(|session| session.id == 9305)
+            .expect("session 9305");
+        assert!(
+            session.active_thread.is_none(),
+            "a roll without a selected thread has no active thread"
+        );
+        assert_eq!(
+            session.last_rolled_result, None,
+            "Python returns None when there is no active thread"
+        );
     }
 }

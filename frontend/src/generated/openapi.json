@@ -28048,26 +28048,20 @@
         "operationId": "list_sessions_v1_documentation",
         "parameters": [
           {
-            "in": "path",
+            "in": "query",
             "name": "page_size",
-            "required": true,
+            "required": false,
             "schema": {
               "format": "int32",
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": "integer"
             }
           },
           {
-            "in": "path",
+            "in": "query",
             "name": "page_token",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
