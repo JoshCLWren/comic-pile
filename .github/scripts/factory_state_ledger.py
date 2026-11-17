@@ -328,6 +328,33 @@ def worker_claim(repo: str, worker: str, *, active_only: bool = False) -> tuple[
 
     return asyncio.run(_read())
 
+def recorded_runtime_runs(repo: str, run_ids: list[str]) -> set[str]:
+    """Return the Entry run IDs that already have a terminal runtime outcome.
+
+    The deferred outcome reconciler uses this to avoid re-projecting a run
+    (model-health streaks are not idempotent per run).
+    """
+    if not enabled() or not run_ids:
+        return set()
+    if any(not run_id.isdecimal() for run_id in run_ids):
+        raise ValueError("invalid run ID")
+
+    async def _read() -> set[str]:
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        try:
+            rows = await conn.fetch(
+                """SELECT detail->>'run_id' AS run_id FROM public.factory_state_events
+                   WHERE source='github-actions' AND detail->>'repo'=$1
+                     AND detail->>'event_id' = ANY($2::text[])""",
+                repo, [f"runtime:{run_id}" for run_id in run_ids],
+            )
+            return {str(row["run_id"]) for row in rows}
+        finally:
+            await conn.close()
+
+    return asyncio.run(_read())
+
+
 def record_events(repo: str, entries: list[dict[str, Any]]) -> int:
     if not enabled() or not entries:
         return 0
