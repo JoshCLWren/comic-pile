@@ -717,33 +717,41 @@ async fn load_user(state: &AppState, user_id: i32) -> Result<(String, bool), Api
 fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugReportError> {
     let title_chars = request.title.chars().count();
     if title_chars < 1 {
-        return Err(BugReportError::Validation(vec![validation_string_too_short(
-            "title",
-            &serde_json::Value::String(request.title.clone()),
-            1,
-        )]));
+        return Err(BugReportError::Validation(vec![
+            validation_string_too_short(
+                "title",
+                &serde_json::Value::String(request.title.clone()),
+                1,
+            ),
+        ]));
     }
     if title_chars > MAX_TITLE_CHARS {
-        return Err(BugReportError::Validation(vec![validation_string_too_long(
-            "title",
-            &serde_json::Value::String(request.title.clone()),
-            MAX_TITLE_CHARS,
-        )]));
+        return Err(BugReportError::Validation(vec![
+            validation_string_too_long(
+                "title",
+                &serde_json::Value::String(request.title.clone()),
+                MAX_TITLE_CHARS,
+            ),
+        ]));
     }
     let description_chars = request.description.chars().count();
     if description_chars < 1 {
-        return Err(BugReportError::Validation(vec![validation_string_too_short(
-            "description",
-            &serde_json::Value::String(request.description.clone()),
-            1,
-        )]));
+        return Err(BugReportError::Validation(vec![
+            validation_string_too_short(
+                "description",
+                &serde_json::Value::String(request.description.clone()),
+                1,
+            ),
+        ]));
     }
     if description_chars > MAX_DESCRIPTION_CHARS {
-        return Err(BugReportError::Validation(vec![validation_string_too_long(
-            "description",
-            &serde_json::Value::String(request.description.clone()),
-            MAX_DESCRIPTION_CHARS,
-        )]));
+        return Err(BugReportError::Validation(vec![
+            validation_string_too_long(
+                "description",
+                &serde_json::Value::String(request.description.clone()),
+                MAX_DESCRIPTION_CHARS,
+            ),
+        ]));
     }
     let title = request.title.trim().to_string();
     let description = request.description.trim().to_string();
@@ -1060,25 +1068,28 @@ mod tests {
     /// ran, so the native port must emit the same `detail` array shape.
     #[test]
     fn parse_request_preserves_pydantic_validation_error_shapes() {
-        let cases: Vec<(&str, &[u8], Vec<serde_json::Value>)> = vec![
+        let cases: Vec<(&str, Vec<u8>, Vec<serde_json::Value>)> = vec![
             (
                 "malformed JSON",
-                b"{not json".as_slice(),
+                b"{not json".to_vec(),
                 vec![validation_json_invalid()],
             ),
             (
                 "non-object body",
-                br#"[]"#.as_slice(),
+                br#"[]"#.to_vec(),
                 vec![validation_model_type("input", &serde_json::json!([]))],
             ),
             (
                 "missing required fields",
-                br#"{}"#.as_slice(),
-                vec![validation_missing("title"), validation_missing("description")],
+                br#"{}"#.to_vec(),
+                vec![
+                    validation_missing("title"),
+                    validation_missing("description"),
+                ],
             ),
             (
                 "empty title",
-                br#"{"title":"","description":"details"}"#.as_slice(),
+                br#"{"title":"","description":"details"}"#.to_vec(),
                 vec![validation_string_too_short(
                     "title",
                     &serde_json::Value::String(String::new()),
@@ -1087,10 +1098,11 @@ mod tests {
             ),
             (
                 "overlong description",
-                format!(r#"{{"title":"title","description":"{}"}}"#, "d".repeat(2001))
-                    .as_bytes()
-                    .to_vec()
-                    .leak(),
+                format!(
+                    r#"{{"title":"title","description":"{}"}}"#,
+                    "d".repeat(2001)
+                )
+                .into_bytes(),
                 vec![validation_string_too_long(
                     "description",
                     &serde_json::Value::String("d".repeat(2001)),
@@ -1099,17 +1111,17 @@ mod tests {
             ),
             (
                 "non-string title",
-                br#"{"title":3,"description":"details"}"#.as_slice(),
+                br#"{"title":3,"description":"details"}"#.to_vec(),
                 vec![validation_string_type("title", &serde_json::json!(3))],
             ),
             (
                 "invalid report type",
-                br#"{"title":"title","description":"details","report_type":"other"}"#.as_slice(),
+                br#"{"title":"title","description":"details","report_type":"other"}"#.to_vec(),
                 vec![validation_literal_error(&serde_json::json!("other"))],
             ),
             (
                 "non-object diagnostics",
-                br#"{"title":"title","description":"details","diagnostics":"broken"}"#.as_slice(),
+                br#"{"title":"title","description":"details","diagnostics":"broken"}"#.to_vec(),
                 vec![validation_model_type(
                     "diagnostics",
                     &serde_json::json!("broken"),
@@ -1118,9 +1130,13 @@ mod tests {
         ];
 
         for (name, body, expected) in cases {
-            let error = parse_request(body).expect_err(name);
+            let error = parse_request(&body).expect_err(name);
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
-            assert_eq!(error.detail_json(), serde_json::json!({"detail": expected}), "{name}");
+            assert_eq!(
+                error.detail_json(),
+                serde_json::json!({"detail": expected}),
+                "{name}"
+            );
         }
     }
 
