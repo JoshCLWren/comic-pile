@@ -289,11 +289,14 @@ def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> N
     workflow = (ROOT / ".github/workflows/factory-fast-merge.yml").read_text()
     script = SCRIPT.read_text()
     assert "pull_request_target:" in workflow
-    assert "workflow_job:" in workflow
-    assert "github.event.workflow_job.head_sha" in workflow
-    assert "Python Lint (ruff)" in workflow
-    assert "Python Type Check (ty)" in workflow
+    assert "workflow_job:" not in workflow
     assert "workflow_run:" not in workflow
+    ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "factory-fast-merge-wakeup:" in ci_workflow
+    assert "needs: [python-lint, python-typecheck]" in ci_workflow
+    assert "needs.python-lint.result == 'success'" in ci_workflow
+    assert "needs.python-typecheck.result == 'success'" in ci_workflow
+    assert "gh workflow run factory-fast-merge.yml" in ci_workflow
     assert "secrets.PR_REBASE_TOKEN" in workflow
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
