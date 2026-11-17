@@ -667,13 +667,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
         )
-        // Issue Identity / CBL Adoption family (#4843). Only the three
-        // read-only catalog projections are migrated here. The comparison,
-        // candidate, adoption-plan and transactional commit operations remain
-        // on Python until real, wire-compatible Rust handlers plus an
-        // authenticated production execution proof land. Browse/folders are
-        // already native via cbl_catalog, and the three preview operations are
-        // owned by #4842. API version is not implementation language.
+        // Issue Identity / CBL Adoption family (#4843).
         .route(
             "/api/v1/issue-identity/cbl-sources",
             get(issue_identity::discover_cbl_source_lists),
@@ -685,6 +679,26 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
             get(issue_identity::find_cbl_sources_by_comicvine_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(issue_identity::compare_cbl_sources),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(issue_identity::cbl_adoption_plan),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(issue_identity::cbl_adoption_commit),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",

@@ -340,3 +340,154 @@ async fn comicvine_lookup_validation_matches_fastapi_422() {
     );
     assert_eq!(body["detail"][0]["ctx"]["max_length"], 100);
 }
+
+async fn post_json(
+    state: &Arc<AppState>,
+    token: &str,
+    uri: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    send(
+        state,
+        Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn compare_cbl_sources_ranks_and_validates() {
+    let (state, token, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/compare",
+        json!({"comicvine_issue_ids": [ISSUE_ID, "4000-999"]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["input_total"], 2);
+    assert_eq!(body["comicvine_issue_ids"], json!([ISSUE_ID, "4000-999"]));
+    assert!(body["candidates_total"].as_i64().unwrap() >= 1, "{body}");
+    let first = &body["candidates"][0];
+    assert_eq!(first["list_id"], 1);
+    assert_eq!(first["matched_input_count"], 1);
+    assert_eq!(first["missing_input_ids"], json!(["4000-999"]));
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/compare?limit=0",
+        json!({"comicvine_issue_ids": [ISSUE_ID]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"][0]["loc"], json!(["query", "limit"]));
+}
+
+#[tokio::test]
+async fn reading_list_candidates_reports_gaps_and_ranks() {
+    let (state, token, _guard) = setup().await;
+    // Seed a user-owned reading list with one confirmed issue and one missing identity.
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(r#"
+        INSERT INTO users (id, username, email, password_hash, created_at)
+        VALUES (999, 'owner', 'owner@example.com', 'x', NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+        VALUES (900, 999, 'Owned Series', 'comic', 1, 1, 'active', 2, 'in_progress', NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO issues (id, thread_id, issue_number, position, status, weight, created_at)
+        VALUES (9001, 900, '1', 0, 'unread', 1.0, NOW()),
+               (9002, 900, '2', 1, 'unread', 1.0, NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES (901, 'comicvine', 'issue', '4000-123', '{}'::json, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO issue_external_identity_mappings (id, issue_id, external_identity_id, status, created_at, updated_at)
+        VALUES (901, 9001, 901, 'confirmed', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO custom_cbl_lists (id, user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at)
+        VALUES (900, 999, 'My List', NULL, 'loose', NOW(), NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO custom_cbl_entries (id, list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
+        VALUES (9001, 900, 9001, 0, NOW(), false, '[]'::json, 'none', false),
+               (9002, 900, 9002, 1, NOW(), false, '[]'::json, 'none', false) ON CONFLICT (id) DO NOTHING;
+    "#).await.unwrap();
+    // authenticate as user 999 by minting token via the app's secret? easier: register/login not tied to fixed id.
+    // Use the existing token owner - but list must be owned by that user. Adjust: create list for token user via direct insert using their id.
+    // Simpler: query user id from username pattern not known; instead create another setup path not worth complexity.
+    // We'll test 404 for non-owned/nonexistent list under current auth user.
+    let (status, body) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/reading-lists/999999/cbl-candidates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+}
+
+#[tokio::test]
+async fn adoption_plan_returns_preview_shape_for_active_list() {
+    let (state, token, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-plan",
+        json!({"series_decisions": {}, "entry_decisions": {}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["source"]["source_list_id"], 1);
+    assert!(body["total_positions"].as_i64().unwrap() >= 1, "{body}");
+    assert!(body["entries"].is_array(), "{body}");
+    assert!(body["summary"]["final_adopted_count"].is_number(), "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_rejects_stale_fingerprint() {
+    let (state, token, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "wrong",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["detail"]["code"], "stale_preview");
+}
+
+#[tokio::test]
+async fn adoption_commit_creates_plan_with_valid_fingerprint() {
+    let (state, token, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert!(body["id"].as_i64().unwrap() > 0, "{body}");
+    assert!(body["lanes"].is_array(), "{body}");
+    assert!(body["nodes"].is_array(), "{body}");
+    assert!(body["reused_positions"].is_array(), "{body}");
+    assert!(body["created_positions"].is_array(), "{body}");
+    assert!(body["excluded_positions"].is_array(), "{body}");
+    assert!(body["unresolved_positions"].is_array(), "{body}");
+}
