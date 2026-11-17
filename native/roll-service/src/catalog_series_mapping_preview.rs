@@ -242,7 +242,7 @@ fn count(plan: &Value, key: &str) -> i64 {
     ),
     security(("HTTPBearer" = []))
 )]
-pub fn documentation() {}
+pub fn catalog_series_mapping_preview_documentation() {}
 
 /// Mounted handler for `POST /api/v1/catalog/series-mappings/preview`.
 pub async fn preview_series_mapping_handler(

@@ -237,7 +237,7 @@ fn flatten(
     ),
     security(("HTTPBearer" = []))
 )]
-pub fn documentation() {}
+pub fn continuity_plans_project_preview_documentation() {}
 
 /// Mounted handler for `POST .../reading-orders/project-preview`.
 pub async fn preview_plan_projection_handler(
@@ -260,13 +260,21 @@ pub async fn preview_plan_projection_handler(
             }),
         ));
     }
+    // Persisted ids are int4; bind with i32 so PostgreSQL never has to coerce
+    // an int8 parameter against an indexed int4 key (and tokio-postgres does
+    // not accept an i64 bind for an int4 parameter).
+    let plan_key = i32::try_from(plan_id)
+        .map_err(|_| not_found(format!("Continuity plan {plan_id} not found")))?;
+    let order_key = i32::try_from(request.reading_order_id).map_err(|_| {
+        not_found(format!("Reading order {} not found", request.reading_order_id))
+    })?;
     let connection = db::checkout(&state).await?;
 
     let plan_row = connection
         .query_opt(
             "SELECT name, ordering_mode, nodes_json, lanes_json FROM continuity_plans \
              WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user.id()],
+            &[&plan_key, &user.id()],
         )
         .await
         .map_err(db::query_error)?
@@ -279,7 +287,7 @@ pub async fn preview_plan_projection_handler(
     let order_row = connection
         .query_opt(
             "SELECT name FROM reading_orders WHERE id = $1 AND user_id = $2",
-            &[&request.reading_order_id, &user.id()],
+            &[&order_key, &user.id()],
         )
         .await
         .map_err(db::query_error)?
@@ -294,35 +302,38 @@ pub async fn preview_plan_projection_handler(
     let parsed = parse_nodes(&nodes_json, plan_id)?;
     let (ordered_nodes, dropped_node_ids) = flatten(parsed, &ordering_mode, &lanes_json, plan_id)?;
 
-    let thread_ids: Vec<i64> = ordered_nodes
+    let thread_keys: Vec<i32> = ordered_nodes
         .iter()
         .filter(|node| node.node_type == "thread")
-        .map(|node| node.ref_id)
+        .filter_map(|node| i32::try_from(node.ref_id).ok())
         .collect();
     let mut thread_titles: HashMap<i64, Option<String>> = HashMap::new();
-    if !thread_ids.is_empty() {
+    if !thread_keys.is_empty() {
         let rows = connection
             .query(
-                "SELECT id, title FROM threads WHERE user_id = $1 AND id = ANY($2::int8[])",
-                &[&user.id(), &thread_ids],
+                "SELECT id, title FROM threads WHERE user_id = $1 AND id = ANY($2::int4[])",
+                &[&user.id(), &thread_keys],
             )
             .await
             .map_err(db::query_error)?;
         for row in rows {
-            thread_titles.insert(row.get(0), row.get(1));
+            thread_titles.insert(i64::from(row.get::<_, i32>(0)), row.get(1));
         }
     }
 
     let existing_rows = connection
         .query(
             "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1",
-            &[&request.reading_order_id],
+            &[&order_key],
         )
         .await
         .map_err(db::query_error)?;
     let mut existing_positions: HashMap<i64, i64> = HashMap::new();
     for row in &existing_rows {
-        existing_positions.insert(row.get(0), row.get(1));
+        existing_positions.insert(
+            i64::from(row.get::<_, i32>(0)),
+            i64::from(row.get::<_, i32>(1)),
+        );
     }
 
     let mut conflicts = Vec::new();

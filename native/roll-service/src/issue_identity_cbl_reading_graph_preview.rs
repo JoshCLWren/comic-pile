@@ -220,7 +220,7 @@ fn validate_request(request: &ReadingGraphPreviewRequest) -> Result<(), PreviewE
     ),
     security(("HTTPBearer" = []))
 )]
-pub fn documentation() {}
+pub fn issue_identity_cbl_reading_graph_preview_documentation() {}
 
 /// Mounted handler for `POST .../cbl/{list_id}/reading-graph-preview`.
 pub async fn preview_cbl_reading_graph_handler(

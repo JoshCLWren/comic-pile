@@ -119,7 +119,7 @@ fn group_id(entry: &SourceEntry, comicvine_series_id: Option<&str>) -> String {
     ),
     security(("HTTPBearer" = []))
 )]
-pub fn documentation() {}
+pub fn issue_identity_adoption_preview_documentation() {}
 
 /// Mounted handler for `GET /api/v1/issue-identity/cbl/{list_id}/adoption-preview`.
 pub async fn api_cbl_adoption_preview_handler(
