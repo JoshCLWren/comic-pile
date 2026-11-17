@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Production Vercel Rust build guard for the unified Cargo workspace.
 #
-# @vercel/rust runs this root build script before compiling each native function.
+# Invoked by @vercel/rust without any vercel.json config: packages/rust/src/index.ts
+# calls runUserScripts(workPath) -> @vercel/build-utils runShellScript("build.sh")
+# before compileCargoBinary, once per native function declared under "builds".
+# Verified against @vercel/rust source on 2026-11-17 (no external build-command
+# setting is required). build.sh and check-rust-workspace-lock.mjs are committed
+# at the repo root and are not excluded by .vercelignore.
+#
 # The script proves that the root ingress package and the roll-service member
 # resolve one locked graph, then compiles both Vercel binaries through the root
 # Cargo.lock. COMICPILE_EXPECTED_LOCK_SHA256 makes the build script fail if
