@@ -712,8 +712,8 @@ class ClassifierTests(unittest.TestCase):
         log = (
             self.BASE
             + "FIXED_MODEL_OPENCODE_OK\n"
-            + "2026-11-14T16:43:18.8168504Z   FACTORY_OPAQUE_LOOKUP_ID: 5030123456\n"
-            + "2026-11-14T16:43:18.8168504Z   FACTORY_OPAQUE_RECORD_ID: 5029876543\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_HEARTBEAT_COMMENT_ID: 5030123456\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_ATTEMPT_COMMENT_ID: 5029876543\n"
         )
         self.assertEqual(classify(log).outcome_class, "no_work")
 

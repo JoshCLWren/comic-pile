@@ -68,6 +68,11 @@ raise SystemExit(1)
 """
 
 
+# Quoted, timestamped Actions log samples in classifier self-tests are
+# historical data that the classifier must keep tolerating, not live paths.
+LOG_SAMPLE = re.compile(r'^\s*\+?\s*f?"\d{4}-\d{2}-\d{2}T\S+Z ')
+
+
 def _factory_sources() -> list[Path]:
     """Every executable factory path: workflows, actions and trusted scripts."""
     files = [
@@ -138,7 +143,8 @@ def test_no_factory_path_posts_or_patches_issue_1093_comments() -> None:
         f"{path.relative_to(ROOT)}:{number}: {line.strip()}"
         for path in _factory_sources()
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-        if any(pattern.search(line) for pattern in RETIRED_REGISTRY)
+        if not LOG_SAMPLE.match(line)
+        and any(pattern.search(line) for pattern in RETIRED_REGISTRY)
     ]
     assert offenders == []
     # A comment write to any issue from a factory path must name its target;
