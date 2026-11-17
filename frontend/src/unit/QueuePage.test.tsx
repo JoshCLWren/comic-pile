@@ -155,6 +155,7 @@ const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
   // Completed rows come from the independent Rust collection, never the active Queue response.
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   mockedUseCompletedThreads.mockReturnValue({
     // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 }],
@@ -535,7 +536,8 @@ describe('Keyboard Accessibility', () => {
         loadMore: vi.fn(),
       }
     })
-    mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  mockedUseCompletedThreads.mockReturnValue({
       // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
       threads: [{ id: 3, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
       hasNextPage: false, isLoadingMore: false, isError: false,
@@ -600,6 +602,7 @@ describe('Keyboard Accessibility', () => {
   ], isLoading: false, refetch })
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   mockedUseCompletedThreads.mockReturnValue({
     // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
@@ -1137,6 +1140,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const user = userEvent.setup()
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   mockedUseCompletedThreads.mockReturnValue({
     // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
