@@ -54,6 +54,14 @@ export function selectedModel(response, model) {
     option.id === 'model' && option.currentValue === model) === true;
 }
 
+/** Build a bounded, structured reason from an ACP JSON-RPC error. No raw logs or transcripts. */
+export function acpErrorReason(method, error) {
+  const code = typeof error?.code === 'number' ? `code ${error.code}` : 'unknown code';
+  const name = typeof error?.data?.errorName === 'string' && error.data.errorName
+    ? ` ${error.data.errorName}` : '';
+  return `ACP ${method} failed (${code}${name})`;
+}
+
 /** Injected command is for protocol tests; the CLI always starts actual opencode acp. */
 export async function runReview({ cwd, head, base = 'origin/main', output, model,
   issue, pr, reviewer, context = '', timeoutMs = 20 * 60 * 1000,
@@ -130,7 +138,7 @@ ${diff}`;
       } else if (pending.has(message.id)) {
         const request = pending.get(message.id);
         pending.delete(message.id);
-        if (message.error) request.reject(new Error(`ACP ${request.method} failed`));
+        if (message.error) request.reject(new Error(acpErrorReason(request.method, message.error)));
         else request.resolve(message.result);
       }
     } catch (error) { fail(error); }
