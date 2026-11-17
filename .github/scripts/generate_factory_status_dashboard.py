@@ -19,7 +19,6 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 REPO_URL = f"https://github.com/{REPO}"
 OUTPUT = Path(os.environ.get("FACTORY_DASHBOARD_OUTPUT", "site/index.html"))
 SCRIPTS = Path(__file__).resolve().parent
-MANIFEST = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
 OWNER_RE = re.compile(r"^factory:(?P<worker>\d+)$")
 WORKER_RE = re.compile(r"^opencode-free-model-factory-(?P<worker>\d+)$")
 ATTEMPT_MARKER = "<!-- factory-attempt-outcome:v1 "
@@ -111,7 +110,12 @@ def latest_completion_funnel(comments: Iterable[Mapping[str, Any]]) -> dict[str,
     return {}
 
 
-def load_manifest_rows(path: Path) -> list[dict[str, str]]:
+def load_manifest_rows(path: Path | None = None) -> list[dict[str, str]]:
+    if path is None:
+        from factory_worker_slots import slots
+
+        return [slot.as_record() | {"model": ""} for slot in slots()]
+
     rows: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
@@ -304,6 +308,9 @@ def build_worker_rows(
             if work or heartbeat.get("outcome") == "running"
             else "idle",
             "attempt_outcome": str(attempt.get("attempt outcome") or ""),
+            "delivery_outcome": str(attempt.get("delivery_outcome") or ""),
+            "delivery_pr": str(attempt.get("delivery_pr") or ""),
+            "persisted_work": str(attempt.get("persisted_work") or ""),
             "attempt_detail": str(attempt.get("detail") or ""),
             "attempt_run": str(attempt.get("run") or ""),
             "updated": max(
@@ -380,31 +387,64 @@ def age_text(value: str, *, now: datetime) -> str:
     return f"{minutes // 1440}d ago"
 
 
-def collect_opencode_free_roster() -> dict[str, Any]:
-    """Load the live OpenCode free-roster probe, never aborting the dashboard."""
-    try:
-        probe = load_module(
-            "probe_opencode_free_roster_dashboard",
-            SCRIPTS / "probe_opencode_free_roster.py",
-        )
-        return probe.collect_roster().as_dict()
-    except Exception as exc:
-        return {
-            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "freshness": "stale",
-            "detail": (
-                "OpenCode free-roster probe failed; table is unknown/stale. "
-                f"{exc}"
-            ),
-            "connections": [],
-            "models": [],
-            "counts": {},
+def collect_opencode_free_roster(
+    view: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Show observed model outcomes, with zero standalone provider probes."""
+    attempts = (view or {}).get("attempts", {})
+    if not isinstance(attempts, Mapping):
+        attempts = {}
+    observed: dict[str, dict[str, str]] = {}
+    statuses = {
+        "success": "ok",
+        "no_work": "ok",
+        "model_unavailable": "unsupported",
+        "provider_quota": "rate_limited",
+        "provider_throttle": "rate_limited",
+    }
+    for attempt in attempts.values():
+        if not isinstance(attempt, Mapping):
+            continue
+        if attempt.get("source") != "opencode-free":
+            continue
+        model = str(attempt.get("model") or "").strip()
+        if not model:
+            continue
+        outcome = str(attempt.get("attempt outcome") or attempt.get("attempt_outcome") or "")
+        observed[model] = {
+            "model_id": model,
+            "status": statuses.get(outcome, "unknown"),
+            "detail": outcome or "catalog-listed, execution not yet verified",
+            "connection": "opencode-free",
+            "http_status": "",
         }
+    rows = list(observed.values())
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = row["status"]
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "freshness": "fresh" if rows else "stale",
+        "detail": (
+            "Based on trusted real worker outcomes. Catalog membership is only "
+            "a candidate; no separate smoke or pricing probe was run."
+        ),
+        "connections": [],
+        "models": rows,
+        "counts": counts,
+    }
 
 
 def load_expected_roster() -> dict[str, object]:
     """Read the active-worker authority rather than infer liveness from old comments."""
-    return json.loads((SCRIPTS.parent / "factory-expected-workers.json").read_text())
+    from factory_worker_slots import slots
+
+    return {
+        "expected_workers": [int(slot.worker) for slot in slots()],
+        "retired_workers": [],
+        "paused_workers": [],
+    }
 
 
 def collect_snapshot() -> dict[str, Any]:
@@ -425,7 +465,7 @@ def collect_snapshot() -> dict[str, Any]:
     active_workers = {str(worker) for worker in roster["expected_workers"]} - {
         str(worker) for worker in [*roster.get("retired_workers", []), *roster.get("paused_workers", [])]
     }
-    manifest_rows = [row for row in load_manifest_rows(MANIFEST) if row["worker"] in active_workers]
+    manifest_rows = [row for row in load_manifest_rows() if row["worker"] in active_workers]
     workers = [row["worker"] for row in manifest_rows]
     owned = completion.owned_worker_ids([*issues, *prs])
     slot_health = capacity.get("slot_health_counts") or {}
@@ -438,11 +478,23 @@ def collect_snapshot() -> dict[str, Any]:
     opened_day = github_search_total(completion, f"is:pr created:>={day}")
     merged_day = github_search_total(completion, f"is:pr is:merged merged:>={day}")
 
-    comments = completion.registry_comments()
-    policy = completion.load_policy()
-    trusted = [comment for comment in comments if policy.comment_is_trusted(comment)]
-    attempts, heartbeats = latest_worker_records(trusted)
-    heartbeat_report = heartbeat_monitor.heartbeat_health(trusted, roster, now=datetime.now(timezone.utc))
+    view, _health = completion.durable_factory_state()
+    # One bounded read for worker/model/provider backoff and active reservations.
+    # Fail soft rather than publishing a false zero when telemetry is unavailable.
+    try:
+        from factory_state_operations import export_dashboard_retry
+        retry = export_dashboard_retry(REPO)
+    except Exception as exc:
+        retry = {"backoffs": [], "reservations": [], "pr_retries": [],
+                 "error": type(exc).__name__}
+    attempts = view["attempts"]
+    heartbeats = view["heartbeats"]
+    heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
+        view, roster, now=datetime.now(timezone.utc),
+    )
+    # Allocator telemetry lives in the completion drain's Actions job summary.
+    # Issue #1093 is retired as a registry; the dashboard never reads it.
+    funnel: dict[str, str] = {}
     credits = merge_credit(recently_merged_prs(completion))
     worker_rows = build_worker_rows(
         manifest_rows,
@@ -461,7 +513,7 @@ def collect_snapshot() -> dict[str, Any]:
     try:
         delivery_rows = delivery.collect_delivery_funnel(
             lambda endpoint: completion.gh_json(['api', f'repos/{REPO}/{endpoint}']),
-            load_manifest_rows(MANIFEST), now=datetime.now(timezone.utc),
+            load_manifest_rows(), now=datetime.now(timezone.utc),
             cache_path=Path(os.environ.get('FACTORY_FUNNEL_CACHE', 'site/funnel-cache.json')),
         )
         delivery_error = ''
@@ -509,11 +561,13 @@ def collect_snapshot() -> dict[str, Any]:
             "merged_day": merged_day,
             "net_day": opened_day - merged_day,
         },
-        "funnel": latest_completion_funnel(trusted),
+        "funnel": funnel,
         "workers": worker_rows,
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
-        "opencode_free_roster": collect_opencode_free_roster(),
+        "opencode_free_roster": collect_opencode_free_roster(view),
+        "candidate_health": view.get("health") or {"models": [], "providers": []},
+        "retry": retry,
     }
 
 
@@ -754,8 +808,8 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
     verdict_class, verdict_title, verdict_detail = system_verdict(snapshot)
     cards = [
         ("Open PRs", snapshot["open_prs"], f"{REPO_URL}/pulls"),
-        ("Working now", snapshot["busy_workers"], f"{REPO_URL}/issues/1093"),
-        ("Executable slots", snapshot["executable_slot_capacity"], f"{REPO_URL}/issues/1093"),
+        ("Working now", snapshot["busy_workers"], f"{REPO_URL}/actions/workflows/free-model-factory-entry.yml"),
+        ("Executable slots", snapshot["executable_slot_capacity"], f"{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"),
         ("7d merge credit", snapshot.get("merged_week", 0), f"{REPO_URL}/pulls?q=is%3Amerged"),
     ]
     cards_html = "".join(
@@ -774,7 +828,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
             ("Conflict", "conflict", "factory%3Amerge-conflict"),
         ]
     )
-    funnel_text = "Latest allocator telemetry unavailable"
+    funnel_text = "Allocator telemetry: completion drain job summaries"
     if funnel:
         funnel_text = (
             f"target {funnel.get('completion target', '?')} · "
@@ -799,7 +853,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <div class="panel"><h2>PR pipeline</h2>{pipeline_html}</div>
 <div class="panel"><h2>Throughput · last hour</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_hour'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_hour'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_hour'] < 0 else 'bad' if throughput['net_hour'] > 0 else ''}">{signed(int(throughput['net_hour']))}</strong></div></div>
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div><div class="row"><span>Factories with 7d merge credit</span><strong>{esc(snapshot.get('productive_workers_week', 0))}</strong></div></div>
-<div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/issues/1093"><span>Heartbeat + allocator registry</span><strong>#1093 ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
+<div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/actions/workflows/free-model-factory-entry.yml"><span>Worker runs + trusted outcomes</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
 </section>
 {render_delivery_funnel(snapshot)}
 {render_roster_section(snapshot)}
@@ -814,7 +868,16 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 def main() -> int:
     snapshot = collect_snapshot()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(render_dashboard(snapshot), encoding="utf-8")
+    # Embed the existing trusted snapshot and UI in the same published HTML.
+    # No new per-refresh GitHub commits, static roster, or API credentials.
+    payload = json.dumps(snapshot, ensure_ascii=True, separators=(",", ":"))
+    payload = payload.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
+    css = load_module("factory_fleet_style", SCRIPTS / "factory_fleet_style.py").STYLESHEET
+    js = (SCRIPTS / "factory_fleet_console.cjs").read_text(encoding="utf-8")
+    page = render_dashboard(snapshot)
+    page = page.replace("</head>", f"<style>{css}</style></head>", 1)
+    page = page.replace("</body>", f'<script id="fleet-snapshot" type="application/json">{payload}</script><script>{js}</script></body>', 1)
+    OUTPUT.write_text(page, encoding="utf-8")
     print(json.dumps(snapshot, sort_keys=True))
     return 0
 

@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Protocol
 
-from factory_roster import load_roster_lock
+from factory_provider_registry import PROVIDERS
+
 
 
 @dataclass(frozen=True)
@@ -92,46 +93,57 @@ def _json_catalog(raw_catalog: str) -> list[dict[str, Any]] | None:
     return [item for item in items if isinstance(item, dict)]
 
 
-class OpenAICompatibleAdapter:
-    """Adapter for providers exposing an OpenAI-compatible model catalog."""
+# Catalogs such as NVIDIA's publish embedding, reranking, retrieval, reward
+# and safety-classifier models beside chat models, with no type metadata.
+# They can never run an OpenCode coding session; every lease that tried one
+# (e.g. nvidia/embed-qa-4 in run 44091809870) burned a failover attempt and
+# only earned a temporary cooldown. Without explicit "language" metadata, a
+# model whose id names one of these non-chat capabilities is not a candidate.
+_NON_CHAT_ID = re.compile(
+    r"(?:^|[/_.-])(?:[a-z0-9]*embed[a-z0-9]*|rerank[a-z0-9]*|[a-z]*retriever|reward|"
+    r"content-safety|safety-guard|[a-z]*guard|clip|nv-ingest|parse|detector|ocr)(?:$|[/_.:-])",
+    re.I,
+)
 
-    def __init__(
-        self,
-        provider: str,
-        runtime_prefix: str,
-        *,
-        free_only: bool = False,
-    ) -> None:
-        """Configure provider metadata and eligibility policy."""
+
+def _non_chat_model(model: str, item: dict[str, Any]) -> bool:
+    """True for a model id naming a non-chat capability, absent type metadata."""
+    return item.get("type") is None and bool(_NON_CHAT_ID.search(model))
+
+
+class OpenAICompatibleAdapter:
+    """Discover live provider models, not an approved price/ID roster."""
+
+    mode = "catalog"
+
+    def __init__(self, provider: str, runtime_prefix: str) -> None:
         self.provider = provider
         self.runtime_prefix = runtime_prefix
-        self.free_only = free_only
-        self.mode = "catalog"
 
     def discover(
-        self,
-        raw_catalog: str,
-        configured_models: Sequence[str] = (),
+        self, raw_catalog: str, configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Return catalog models allowed by free-cost and configured policy."""
         items = _json_catalog(raw_catalog)
         if items is None:
-            return Discovery(
-                provider=self.provider,
-                mode=self.mode,
-                status="invalid",
-                detail="provider catalog was not valid OpenAI-compatible JSON",
-            )
+            return Discovery(self.provider, self.mode, "invalid", detail="invalid catalog JSON")
 
         configured = _configured_filter(configured_models)
         models: set[str] = set()
         for item in items:
             model = item.get("id")
-            if not isinstance(model, str) or not model:
+            if not isinstance(model, str) or not model or any(ch.isspace() for ch in model):
                 continue
             if configured is not None and model not in configured:
                 continue
-            if self.free_only and not _openrouter_model_is_free(item):
+            # OpenRouter's free-account endpoint type, not a static model list.
+            if self.provider == "openrouter-free" and not model.endswith(":free"):
+                continue
+            supported = item.get("supported_parameters")
+            if isinstance(supported, list) and "tools" not in supported:
+                continue
+            if item.get("type") not in (None, "language"):
+                continue
+            if _non_chat_model(model, item):
                 continue
             models.add(model)
 
@@ -140,211 +152,77 @@ class OpenAICompatibleAdapter:
             for model in sorted(models)
         )
         return Discovery(
-            provider=self.provider,
-            mode=self.mode,
+            provider=self.provider, mode=self.mode,
             status="available" if candidates else "empty",
             candidates=candidates,
-            detail=f"provider catalog exposed {len(candidates)} eligible candidate(s)",
+            detail=f"provider published {len(candidates)} candidate(s); execution not yet proven",
         )
 
 
 class OpenCodeFreeAdapter:
-    """Adapter for the project-scoped output of opencode models."""
+    """Discover current OpenCode selectors without model-name or price rules."""
 
     provider = "opencode-free"
     mode = "cli_catalog"
 
     def discover(
-        self,
-        raw_catalog: str,
-        configured_models: Sequence[str] = (),
+        self, raw_catalog: str, configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Parse available OpenCode provider/model selectors."""
         configured = _configured_filter(configured_models)
-        retired = set(load_roster_lock()["retired_models"])
         models: set[str] = set()
         for raw_line in raw_catalog.splitlines():
             selector = raw_line.strip()
             if not selector or selector.startswith("#") or "/" not in selector:
                 continue
             provider_id, model = selector.split("/", 1)
-            if provider_id != "opencode" or not model or model in retired:
+            if provider_id != "opencode" or not model:
                 continue
             if configured is not None and model not in configured:
                 continue
             models.add(model)
-
         candidates = tuple(
             _candidate(self.provider, model, "opencode", "opencode_models")
             for model in sorted(models)
         )
         return Discovery(
-            provider=self.provider,
-            mode=self.mode,
+            provider=self.provider, mode=self.mode,
             status="available" if candidates else "empty",
             candidates=candidates,
-            detail=f"OpenCode exposed {len(candidates)} eligible candidate(s)",
-        )
-
-
-class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
-    """Expose OmniRoute's native free intent routes for factory execution."""
-
-    FACTORY_ROUTES = ("auto/coding:free", "auto/reasoning:free")
-
-    def __init__(self) -> None:
-        """Configure the external OmniRoute OpenAI-compatible adapter."""
-        super().__init__("omniroute-free", "omniroute")
-
-    def discover(
-        self,
-        raw_catalog: str,
-        configured_models: Sequence[str] = (),
-    ) -> Discovery:
-        """Expose native virtual intents while OmniRoute owns model selection."""
-        items = _json_catalog(raw_catalog)
-        if items is None:
-            return Discovery(
-                provider=self.provider,
-                mode=self.mode,
-                status="invalid",
-                detail="provider catalog was not valid OpenAI-compatible JSON",
-            )
-
-        configured = _configured_filter(configured_models)
-        routes = tuple(
-            route
-            for route in self.FACTORY_ROUTES
-            if configured is None or route in configured
-        )
-        if not routes:
-            return Discovery(
-                provider=self.provider,
-                mode=self.mode,
-                status="empty",
-                detail="configured policy excluded the native OmniRoute factory routes",
-            )
-
-        catalog_models = {
-            str(item.get("id"))
-            for item in items
-            if isinstance(item.get("id"), str)
-        }
-        candidates = tuple(
-            _candidate(
-                self.provider,
-                route,
-                self.runtime_prefix,
-                (
-                    "provider_catalog"
-                    if route in catalog_models
-                    else "native_auto_route_fallback"
-                ),
-            )
-            for route in routes
-        )
-        return Discovery(
-            provider=self.provider,
-            mode=self.mode,
-            status="available",
-            candidates=candidates,
-            detail=(
-                "OmniRoute native auto/coding:free and auto/reasoning:free "
-                "intents delegate free-tier, tool-compatibility, quality, "
-                "quota, and fallback decisions to OmniRoute"
-            ),
+            detail=f"OpenCode published {len(candidates)} candidate(s)",
         )
 
 
 class RuntimeOnlyAdapter:
-    """Adapter for a provider route that cannot be enumerated reliably."""
+    """For a provider with no reliable, non-interactive enumeration contract."""
+
+    mode = "runtime_only"
 
     def __init__(self, provider: str) -> None:
-        """Configure provider metadata and eligibility policy."""
         self.provider = provider
-        self.mode = "runtime_only"
 
     def discover(
-        self,
-        raw_catalog: str,
-        configured_models: Sequence[str] = (),
+        self, raw_catalog: str, configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Fail closed until an actual execution or trusted probe proves a route."""
         del raw_catalog, configured_models
         return Discovery(
-            provider=self.provider,
-            mode=self.mode,
-            status="indeterminate",
-            detail=(
-                "provider cannot enumerate candidates reliably; "
-                "use normalized runtime evidence"
-            ),
+            provider=self.provider, mode=self.mode, status="indeterminate",
+            detail="requires an actual invocation; no enumerated candidates",
         )
 
 
-def _decimal_is_zero(value: Any) -> bool:
-    """Return whether a provider price value is numeric zero."""
-    try:
-        return Decimal(str(value)) == 0
-    except (InvalidOperation, TypeError, ValueError):
-        return False
-
-
-def _openrouter_model_is_free(item: dict[str, Any]) -> bool:
-    """Return whether OpenRouter catalog metadata proves a free model."""
-    model = item.get("id")
-    if isinstance(model, str) and (
-        model.endswith(":free") or model == "openrouter/free"
-    ):
-        return True
-
-    pricing = item.get("pricing")
-    if not isinstance(pricing, dict):
-        return False
-    return _decimal_is_zero(pricing.get("prompt")) and _decimal_is_zero(
-        pricing.get("completion")
-    )
-
+# Credentials and published endpoints are integration metadata, not rosters.
+# Any new compatible provider registered there automatically gains discovery.
 
 ADAPTERS: dict[str, ProviderAdapter] = {
-    # NVIDIA documents model invocation but not a reliable account-scoped
-    # enumeration contract. Actual probes remain the authoritative evidence.
-    "nvidia": RuntimeOnlyAdapter("nvidia"),
-    "opencode-free": OpenCodeFreeAdapter(),
-    "openrouter-free": OpenAICompatibleAdapter(
-        "openrouter-free",
-        "openrouter",
-        free_only=True,
-    ),
-    # OmniRoute owns discovery, free-tier filtering, quality scoring, tool
-    # compatibility, quota handling, and fallback across underlying providers.
-    "omniroute-free": OmniRouteFreeAdapter(),
-    # Kilo documents a changing free model set exposed through interactive model
-    # selection, but no reliable non-interactive enumeration contract. Keep that
-    # limitation here and require actual attempt evidence before counting it.
-    "kilo-auto": RuntimeOnlyAdapter("kilo-auto"),
-    # Z.AI, Ollama Cloud, and native Mistral are fixed OpenAI-compatible pins.
-    # They are not enumerated by OpenCode CLI catalogs; runtime smoke is the
-    # evidence. Mistral accepts only codestral-latest.
-    "z-ai": RuntimeOnlyAdapter("z-ai"),
-    "ollama-cloud": RuntimeOnlyAdapter("ollama-cloud"),
-    "mistral": RuntimeOnlyAdapter("mistral"),
-    # OrcaRouter and Requesty are metered free OpenAI-compatible routers with
-    # small per-account daily request limits; runtime smoke is the evidence and
-    # factory-source-budgets.json caps daily dispatches.
-    "orcarouter": RuntimeOnlyAdapter("orcarouter"),
-    "requesty": RuntimeOnlyAdapter("requesty"),
-    # The Workers Free plan hard-stops at its daily neuron allowance.
-    # Only allow pre-approved free models and runtime smoke evidence.
-    "cloudflare-workers-ai": RuntimeOnlyAdapter("cloudflare-workers-ai"),
-    # Credentials and free-tier access are account-scoped. Never infer
-    # authorization or a free balance merely from a published model catalog.
-    "gemini-free": RuntimeOnlyAdapter("gemini-free"),
-    "groq-free": RuntimeOnlyAdapter("groq-free"),
-    "aion-free": RuntimeOnlyAdapter("aion-free"),
-    "cohere-eval": RuntimeOnlyAdapter("cohere-eval"),
-    "typhoon-free": RuntimeOnlyAdapter("typhoon-free"),
+    source: OpenAICompatibleAdapter(source, spec.provider)
+    for source, spec in PROVIDERS.items()
 }
+ADAPTERS.update({
+    "opencode-free": OpenCodeFreeAdapter(),
+    "openrouter-free": OpenAICompatibleAdapter("openrouter-free", "openrouter"),
+    "omniroute-free": OpenAICompatibleAdapter("omniroute-free", "omniroute"),
+    "kilo-auto": RuntimeOnlyAdapter("kilo-auto"),
+})
 
 
 def discover(

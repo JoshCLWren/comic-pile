@@ -44,7 +44,7 @@ def _schema_candidates() -> list[Path]:
 # resources. Admin and debug tooling was pruned (#4861); every other bare
 # ``/api`` path must be a compatibility alias for a family that also has a
 # canonical ``/api/v1`` route. Metrics is the retained eager surface.
-LEGACY_ONLY_TOOLING = frozenset({"metrics", "ping"})
+LEGACY_ONLY_TOOLING = frozenset({"metrics"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
@@ -70,8 +70,8 @@ REQUIRED_V1_FAMILIES = frozenset(
 
 
 # The generated client surface (issue #1741) must reference no bare domain
-# paths except versioned resources, ping and native same-path startup metrics (#4854).
-CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping", "/api/metrics"})
+# paths except versioned resources and native same-path startup metrics (#4854).
+CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/metrics"})
 CLIENT_VERSIONED_PREFIXES = ("/api/v1/", "/api/v2/")
 
 
@@ -223,7 +223,7 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
     Issue #1741 acceptance: ``frontend/src/generated/openapi.ts`` has zero
     bare domain-path references. The schema that feeds that generated client
     keeps infrastructure paths, canonical v1/v2 routes, and the exempt
-    ``/api/ping`` heartbeat and same-path native ``/api/metrics`` paths.
+    same-path native ``/api/metrics`` path.
     """
     schema = _load_schema()
     paths = list(schema.get("paths", {}))
@@ -244,7 +244,6 @@ def test_generated_client_has_zero_bare_domain_path_references() -> None:
     assert any(path.startswith("/api/v1/") for path in paths), (
         "Generated client schema lost all canonical /api/v1 routes."
     )
-    assert "/api/ping" in paths, "Ping heartbeat path missing from client schema."
 
 
 @pytest.mark.parametrize(

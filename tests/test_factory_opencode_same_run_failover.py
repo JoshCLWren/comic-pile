@@ -9,16 +9,14 @@ WORKFLOW = ROOT / ".github/workflows/free-model-factory-run.yml"
 SELECTOR = ROOT / ".github/scripts/factory_live_opencode.py"
 
 
-def test_catalog_retry_remains_bounded_and_free_provider_scoped() -> None:
-    source = WORKFLOW.read_text()
-    preflight = source.split("- name: Wait for exact model in OpenCode catalog", 1)[1].split(
-        "- name: Run continuous fixed-model factory session", 1
-    )[0]
-    assert "max_candidates=5" in preflight
-    assert 'attempted+=("$model")' in preflight
-    assert 'exclusions+=(--attempted "$prior")' in preflight
-    assert '--provider "$SOURCE" --catalog "$catalog"' in preflight
-    assert "--exclusions-file" in preflight
+def test_catalog_retry_is_bounded_once_per_pair_within_the_lease() -> None:
+    """Each eligible pair is attempted at most once per assignment (#5280)."""
+    worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
+    selector = worker.split("select_next_eligible_model() {", 1)[1].split("\n}\n", 1)[0]
+    assert 'attempted_pairs+=("$pair")' in selector
+    assert 'select_args+=(--attempted-pair "$pair")' in selector
+    assert "(( $(remaining) > 540 )) || return 1" in selector
+    assert "--exclusions-file" in selector
 
 
 def test_actual_work_is_first_inference_for_all_factory_sources() -> None:

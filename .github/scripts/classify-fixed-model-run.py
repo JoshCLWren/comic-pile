@@ -43,7 +43,8 @@ QUOTA_RE = re.compile(
     r"(?:monthly|daily|weekly|free) usage limit(?: reached)?|"
     r"reached your [a-z ]*usage limit|"
     r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
-    r"quota[ _](?:exceeded|exhausted)|free-models-per-day-high-balance|"
+    r"quota[ _](?:exceeded|exhausted)|api key budget limit exceeded|"
+    r"free-models-per-day-high-balance|"
     r"rate limit exceeded: free-models-per-day[^\\s]*",
     re.I,
 )
@@ -337,15 +338,7 @@ def classify(log: str) -> Result:
         )
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
-    if QUOTA_RE.search(log) or (
-        values["source"] in {"z-ai", "kilo-auto"}
-        and re.search(
-            r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
-            r"\b429 too many requests\b|too many requests",
-            log,
-            re.I,
-        )
-    ):
+    if QUOTA_RE.search(log):
         return Result(
             **common,
             outcome="PROVIDER QUOTA",
@@ -658,12 +651,12 @@ class ClassifierTests(unittest.TestCase):
         )
         self.assertEqual(classify(log).outcome_class, "no_work")
 
-    def test_explicit_http_429_retains_free_provider_quota_policy(self) -> None:
+    def test_explicit_http_429_is_provider_throttle_without_quota_evidence(self) -> None:
         log = (
             self.BASE.replace("source=omniroute-opencode", "source=z-ai")
             + "FIXED_MODEL_OPENCODE_OK\nHTTP 429 Too Many Requests\n"
         )
-        self.assertEqual(classify(log).outcome_class, "provider_quota")
+        self.assertEqual(classify(log).outcome_class, "provider_throttle")
 
     def test_explicit_account_daily_limit_remains_provider_quota(self) -> None:
         log = self.BASE + "FIXED_MODEL_OPENCODE_OK\n"

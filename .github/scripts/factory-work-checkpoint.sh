@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Trusted deterministic work writer. A private index leaves the agent alone;
-# assigned PR updates are fenced by live ownership and atomic fast-forward pushes.
+# snapshots go to a private per-run tracking branch; assigned PRs advance only
+# through the trusted wrapper after its scope and fast-check guards.
 set -Eeuo pipefail
 
 [[ "$#" -eq 4 ]] || { echo 'usage: factory-work-checkpoint.sh MODE NUMBER WORKER RUN_ID' >&2; exit 2; }
@@ -34,20 +35,27 @@ trap 'stop_requested=1' USR1 TERM INT
 # wrapper's optional same-lease correction attempt.
 trap ':' USR2
 
+publish_pending=0
 publish_checkpoint() {
-  [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" && -n "${GITHUB_REPOSITORY:-}" ]] || return 0
+  [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" && -n "${GITHUB_REPOSITORY:-}" ]] || { publish_pending=0; return 0; }
   python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" --run-id "$run_id" || {
-    echo '::warning::Checkpoint saved; work PR publication will retry on the next interval' >&2
+    echo '::warning::Checkpoint saved; work PR publication will retry' >&2
     return 1
   }
+  publish_pending=0
 }
 
+# API/CI budget (2026-11-17): every interval used to run the GitHub-backed
+# write check and full PR publication (~20 REST calls), and PR-mode snapshots
+# also advanced the PR's head branch. Each such push re-ran every PR workflow
+# and every check-completion wakeup dispatched the full controller, which
+# exhausted the shared installation quota (PR #5299: 12 pushes in 11 minutes).
+# Snapshots now go only to the run's private tracking branch (no PR, no
+# workflows: push triggers are main-only). An unchanged worktree costs zero API
+# calls, and publication happens once, on the final flush. The trusted wrapper
+# alone advances an assigned PR after its scope and fast-check guards pass.
 checkpoint_once() {
   local current_tree commit parent local_head
-  if [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" ]]; then
-    python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
-      --run-id "$run_id" --check-write --mode "$mode" --number "$number" --worker "$worker" --work-branch "${ref#refs/heads/}" || return 1
-  fi
   # The agent can inspect refs, but this writer only snapshots the exact
   # checked-out target branch. Never follow its arbitrary branch switches.
   [[ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null || :)" == "$source_branch" ]] || return 0
@@ -56,10 +64,10 @@ checkpoint_once() {
   # touching the agent's index or HEAD. Git's ignore rules remain effective.
   GIT_INDEX_FILE="$index" git add -A -- . || return 1
   current_tree="$(GIT_INDEX_FILE="$index" git write-tree)" || return 1
-  if [[ "$current_tree" == "$last_tree" ]]; then
-    # A successful git push does not prove GitHub accepted PR publication.
-    [[ "$last_commit" == "$base_sha" ]] || publish_checkpoint
-    return 0
+  [[ "$current_tree" != "$last_tree" ]] || return 0
+  if [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" ]]; then
+    python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+      --run-id "$run_id" --check-write --mode "$mode" --number "$number" --worker "$worker" --work-branch "${ref#refs/heads/}" || return 1
   fi
   parent="$last_commit"
   local_head="$(git rev-parse HEAD)" || return 1
@@ -72,20 +80,16 @@ checkpoint_once() {
   fi
   commit="$(printf 'checkpoint(factory): worker %s run %s %s #%s (persisted work; validation pending)\n\nIssue: %s\nModel: %s\nRuntime-model: %s\nSource-branch: %s\nBase-commit: %s\n' \
     "$worker" "$run_id" "$mode" "$number" "${issue:-unknown}" "$model" "$runtime_model" "$source_branch" "$base_sha" | git commit-tree "$current_tree" -p "$parent")" || return 1
-  local -a destinations=("$commit:$ref")
-  if [[ "$mode" == pr ]]; then
-    # Both refs advance together or neither does. No force push or side PR.
-    destinations+=("$commit:refs/heads/$source_branch")
-  fi
-  if GIT_TERMINAL_PROMPT=0 git push --atomic --quiet origin "${destinations[@]}"; then
+  # Fast-forward only; never force. The assigned PR branch is not touched.
+  if GIT_TERMINAL_PROMPT=0 git push --quiet origin "$commit:$ref"; then
     last_tree="$current_tree"
     last_commit="$commit"
+    publish_pending=1
     if [[ -n "${FACTORY_CHECKPOINT_REF_FILE:-}" ]]; then
       printf '%s\n%s\n' "$commit" "${ref#refs/heads/}" > "$FACTORY_CHECKPOINT_REF_FILE.tmp"
       mv "$FACTORY_CHECKPOINT_REF_FILE.tmp" "$FACTORY_CHECKPOINT_REF_FILE"
     fi
     printf '[factory-checkpoint] saved %s #%s: %s (%s)\n' "$mode" "$number" "$ref" "$commit"
-    publish_checkpoint
   else
     echo '::warning::Factory checkpoint push failed; retrying on next interval' >&2
     return 1
@@ -105,6 +109,12 @@ while :; do
     # TERM/USR1 can arrive while git or PR publication is running. Capture
     # again after that operation so a final correction cannot miss the flush.
     checkpoint_once || echo '::warning::Final factory checkpoint attempt failed' >&2
+    # Publish once, bounded, after the session's snapshots are complete.
+    for delay in 0 2 5; do
+      (( publish_pending == 1 )) || break
+      sleep "$delay"
+      publish_checkpoint || true
+    done
     break
   fi
 done

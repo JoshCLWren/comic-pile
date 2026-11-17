@@ -39,7 +39,9 @@ def test_own_label_writes_update_scheduling_memory(tmp_path, monkeypatch):
     discovery.discover('owner/repo', 'pr', lambda: [{'number': 42, 'labels': []}])
     labels = [{'name': 'factory:unowned'}]
     discovery.update_labels('owner/repo', 'pr', 42, labels)
-    assert discovery.read_snapshot('owner/repo', 'pr')[0]['labels'] == labels
+    snapshot = discovery.read_snapshot('owner/repo', 'pr')
+    assert snapshot is not None
+    assert snapshot[0]['labels'] == labels
 
 
 @pytest.fixture

@@ -105,7 +105,7 @@ def create_thread(token: str, title: str, issues_count: int, format: str = "Comi
         Thread ID
     """
     response = requests.post(
-        f"{API_BASE}/api/threads/",
+        f"{API_BASE}/api/v1/threads/",
         headers={"Authorization": f"Bearer {token}"},
         json={"title": title, "format": format, "issues_remaining": issues_count},
         timeout=REQUESTS_TIMEOUT,
@@ -124,7 +124,7 @@ def migrate_thread(token: str, thread_id: int, last_issue_read: int, total_issue
         total_issues: Total issues in the series
     """
     response = requests.post(
-        f"{API_BASE}/api/threads/{thread_id}:migrateToIssues",
+        f"{API_BASE}/api/v1/threads/{thread_id}:migrateToIssues",
         headers={"Authorization": f"Bearer {token}"},
         json={"last_issue_read": last_issue_read, "total_issues": total_issues},
         timeout=REQUESTS_TIMEOUT,

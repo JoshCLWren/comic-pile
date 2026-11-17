@@ -262,6 +262,15 @@ export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse
 
 export type ListResponse = components['schemas']['IdentityInboxResponse']
 
+export interface ListActivityRequest {
+  query?: {
+    limit?: number
+    page_token?: string
+  }
+}
+
+export type ListActivityResponse = components['schemas']['ActivityResponse']
+
 export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
@@ -528,6 +537,7 @@ export interface NativeV2Client {
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   list(): Promise<ListResponse>
+  listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
@@ -747,6 +757,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     list() {
       return client.get<ListResponse>("/v1/identity-inbox")
+    },
+    listActivity(args: ListActivityRequest = {}) {
+      return client.get<ListActivityResponse>(
+        "/v2/activity",
+        { params: compactQuery(args.query) },
+      )
     },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")

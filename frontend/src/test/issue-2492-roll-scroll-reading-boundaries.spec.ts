@@ -13,7 +13,7 @@
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, readAppScrollState, scrollAppTo, waitForRollPageReady } from './helpers'
 
 const VIEWPORTS = [
   { name: 'phone portrait', width: 390, height: 844 },
@@ -45,17 +45,15 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       await gotoRollPage(page)
       await waitForRollPageReady(page)
 
-      // The page must actually be scrollable, otherwise the retained-offset
-      // precondition cannot be modeled.
-      const isScrollable = await page.evaluate(
-        () => document.documentElement.scrollHeight > window.innerHeight,
-      )
-      expect(isScrollable).toBe(true)
+      // Verify that the real app scroller can move. The document itself is
+      // intentionally non-scrollable; #root owns the scroll position.
+      const initialScroll = await readAppScrollState(page)
+      expect(initialScroll.rootScrollHeight).toBeGreaterThan(initialScroll.rootClientHeight)
 
       // Start from a non-zero scroll position so the fresh roll must move the
       // viewport to the rating surface start.
-      await page.evaluate(() => window.scrollTo(0, 380))
-      const preRollOffset = await page.evaluate(() => window.scrollY)
+      await scrollAppTo(page, 380)
+      const preRollOffset = (await readAppScrollState(page)).rootScrollTop
       expect(preRollOffset).toBeGreaterThan(0)
 
       // Dispatch the click without Playwright's auto-scroll normalization so

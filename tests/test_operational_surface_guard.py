@@ -1,17 +1,16 @@
 """Operational-surface stability guards for the deliberately unversioned allowlist.
 
-The v1 cutover contract (issue #1742) allowlists exactly four surfaces that must
-remain reachable outside ``/api/v1``: health probes, ping, docs, and static
-assets. These are consumed by uptime monitors, cold-start crons, browsers, and
-the SPA bundle rather than versioned API clients, so relocating them is a
-production incident even when every API consumer has migrated.
+The v1 cutover contract (issue #1742) allowlists surfaces that must remain
+reachable outside ``/api/v1``: health probes, docs, and static assets. These
+are consumed by uptime monitors, browsers, and the SPA bundle rather than
+versioned API clients, so relocating them is a production incident even when
+every API consumer has migrated.
 
 Regression provenance: an earlier cutover attempt moved the operational health
 mount (at the time registered alongside analytics) from ``/api`` to ``/api/v1``,
-which orphaned ``/api/health``, shifted the canonical bounded probes to
-``/api/v1/v1/health/*``, and broke the frontend heartbeat fetch of
-``/api/ping``. The guards below pin those surfaces so the final bare-mount
-deletion step cannot silently relocate them.
+which orphaned ``/api/health`` and shifted the canonical bounded probes to
+``/api/v1/v1/health/*``. The guards below pin Python-served surfaces so the
+final bare-mount deletion step cannot silently relocate them.
 
 These tests inspect routing tables only; they never open database connections.
 """
@@ -26,12 +25,10 @@ from app.main import create_app
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 #: Bare paths that operational consumers depend on and that must never move
-#: behind a version prefix. Ping was used for serverless cold-start warming
-#: (issue #1389) but is now removed from frontend; ``/api/health`` is the
-#: dependency-free uptime liveness URL.
+#: behind a version prefix. ``/api/health`` is the legacy dependency-free uptime
+#: liveness URL served by the Python app.
 _BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
     {
-        "GET /api/ping",
         "GET /api/health",
     }
 )

@@ -169,8 +169,8 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # uses the native v2 resource.
         ("GET", "/api/v1/analytics/metrics"): "/api/native_roll.rs",
         ("GET", "/api/analytics/metrics"): "/api/native_roll.rs",
-        # Bug-report twins are same-path Rust cutovers (#4852); Python stays
-        # shadowed until production proof.
+        # Bug-report twins are same-path Rust cutovers (#4852); the Python
+        # handler was retired once the native routes were live (#5162).
         ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
         ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
         # Preferences and Taste Bank signals keep their browser-called

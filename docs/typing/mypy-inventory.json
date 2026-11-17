@@ -35,7 +35,6 @@
     "app/api/issue_identity.py",
     "app/api/metrics.py",
     "app/api/performance_metric.py",
-    "app/api/ping.py",
     "app/api/preferences.py",
     "app/api/prerequisite.py",
     "app/api/queue.py",
@@ -1627,27 +1626,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/api/ping.py",
-      "module": "app.api.ping",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -18385,20 +18363,6 @@
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"PerformanceMetricComparison\""
-    },
-    {
-      "file": "app/api/ping.py",
-      "line": 3,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/ping.py",
-      "line": 8,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"ping\" untyped"
     },
     {
       "file": "app/api/preferences.py",

@@ -238,18 +238,19 @@ def test_dashboard_keeps_existing_fleet_content_when_roster_is_stale():
     assert "zen is off" not in rendered.lower()
 
 
-def test_collect_opencode_free_roster_is_fail_soft(monkeypatch: pytest.MonkeyPatch):
-    """Dashboard generation survives a broken probe import or runtime crash."""
-
-    def boom(_name: str, _path: Path):
-        raise RuntimeError("probe module exploded")
-
-    monkeypatch.setattr(dashboard, "load_module", boom)
-    roster = dashboard.collect_opencode_free_roster()
-
-    assert roster["freshness"] == "stale"
-    assert "unknown/stale" in str(roster["detail"])
-    assert roster["models"] == []
+def test_opencode_panel_uses_observed_runs_without_network_probes() -> None:
+    """Test opencode panel uses observed runs without network probes."""
+    attempt = {
+        "source": "opencode-free",
+        "model": "synthetic/current-provider-model",
+        "attempt_outcome": "provider_throttle",
+    }
+    panel = dashboard.collect_opencode_free_roster({"attempts": {"worker": attempt}})
+    assert panel["freshness"] == "fresh"
+    assert panel["models"][0]["model_id"] == "synthetic/current-provider-model"
+    assert panel["models"][0]["status"] == "rate_limited"
+    assert "no separate smoke" in panel["detail"]
+    assert dashboard.collect_opencode_free_roster({})["models"] == []
 
 
 def test_worker_rows_join_runtime_health_merge_credit_and_current_work():
@@ -355,7 +356,9 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     completion = SimpleNamespace(
         load_controller=lambda: work,
         owned_worker_ids=lambda _items: {"39"},
-        registry_comments=lambda: [],
+        durable_factory_state=lambda: (
+            {"attempts": {}, "heartbeats": {}, "health": {"models": [], "providers": []}}, {}
+        ),
         gh_json=lambda _args: [],
         load_policy=lambda: policy,
     )
@@ -397,6 +400,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
         ],
     }
     full = SimpleNamespace(
+        TELEMETRY_COMMENT_ID=5396686993,
         current_demand=lambda _controller: (demand, capacity),
         completion_worker_target=lambda _demand: 1,
     )
@@ -415,7 +419,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     monkeypatch.setattr(
         dashboard,
         "collect_opencode_free_roster",
-        lambda: {
+        lambda _view: {
             "checked_at": "2026-09-05T20:00:00Z",
             "freshness": "stale",
             "detail": "probe skipped in unit test",
@@ -427,7 +431,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     monkeypatch.setattr(
         dashboard,
         "load_manifest_rows",
-        lambda _path: [
+        lambda _path=None: [
             {
                 "worker": "39",
                 "source": "opencode-free",
