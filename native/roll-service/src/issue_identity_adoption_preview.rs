@@ -132,8 +132,7 @@ pub async fn api_cbl_adoption_preview_handler(
 ) -> Result<Json<CBLAdoptionPreviewResponse>, ApiError> {
     // The CBL source-list key is an int4 column; an int64 path value that
     // cannot fit is simply a list that cannot exist.
-    let list_key = i32::try_from(list_id)
-        .map_err(|_| source_not_found(list_id))?;
+    let list_key = i32::try_from(list_id).map_err(|_| source_not_found(list_id))?;
     let connection = db::checkout(&state).await?;
     let list_row = connection
         .query_opt(

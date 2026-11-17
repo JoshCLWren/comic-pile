@@ -266,7 +266,10 @@ pub async fn preview_plan_projection_handler(
     let plan_key = i32::try_from(plan_id)
         .map_err(|_| not_found(format!("Continuity plan {plan_id} not found")))?;
     let order_key = i32::try_from(request.reading_order_id).map_err(|_| {
-        not_found(format!("Reading order {} not found", request.reading_order_id))
+        not_found(format!(
+            "Reading order {} not found",
+            request.reading_order_id
+        ))
     })?;
     let connection = db::checkout(&state).await?;
 
