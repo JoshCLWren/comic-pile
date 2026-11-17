@@ -345,6 +345,61 @@ pub async fn list_inbox(
         .await
         .map_err(db::query_error)?;
 
+    // Batch-load candidates for every issue on this page in one query. The
+    // detail endpoint resolves candidates by issue_id; grouping them per issue
+    // here preserves the same wire contract without an N+1 round trip.
+    let issue_ids: Vec<i32> = rows.iter().map(|r| r.get(4)).collect();
+    let candidate_rows = if issue_ids.is_empty() {
+        Vec::new()
+    } else {
+        conn.query(
+            "SELECT cm.issue_id, cm.external_identity_id, cm.status, cm.confidence, \
+                    cm.evidence_source, cm.evidence_json::text, cm.rejection_reason, \
+                    ex.provider, ex.external_id, ex.external_url, ex.metadata_json::text \
+             FROM issue_external_identity_mappings cm \
+             JOIN external_identities ex ON ex.id = cm.external_identity_id \
+             WHERE cm.issue_id = ANY($1) \
+               AND cm.status IN ('candidate','confirmed','unresolved') \
+             ORDER BY cm.issue_id, cm.confidence DESC NULLS LAST",
+            &[&issue_ids],
+        )
+        .await
+        .map_err(db::query_error)?
+    };
+
+    let mut candidates_by_issue: std::collections::HashMap<i32, Vec<IdentityInboxCandidate>> =
+        std::collections::HashMap::new();
+    for cr in candidate_rows {
+        let candidate_issue_id: i32 = cr.get(0);
+        let ext_id: i32 = cr.get(1);
+        let cstatus: String = cr.get(2);
+        let confidence: Option<f64> = cr.get(3);
+        let evidence_source: Option<String> = cr.get(4);
+        let evidence_text: Option<String> = cr.get(5);
+        let rejection_reason: Option<String> = cr.get(6);
+        let cprovider: String = cr.get(7);
+        let comicvine_id: String = cr.get(8);
+        let external_url: Option<String> = cr.get(9);
+        let meta_text: Option<String> = cr.get(10);
+        let metadata_json = parse_json_text(meta_text);
+        let evidence_json = parse_json_text(evidence_text);
+        candidates_by_issue
+            .entry(candidate_issue_id)
+            .or_default()
+            .push(IdentityInboxCandidate {
+                external_identity_id: ext_id,
+                provider: cprovider,
+                comicvine_id: Some(comicvine_id),
+                external_url,
+                metadata_json,
+                status: cstatus,
+                confidence,
+                evidence_source,
+                evidence_json,
+                rejection_reason,
+            });
+    }
+
     let mut items = Vec::new();
     for r in rows {
         let mapping_id: i32 = r.get(0);
@@ -363,6 +418,10 @@ pub async fn list_inbox(
         let evidence_text: Option<String> = r.get(13);
         let metadata = parse_json_text(meta_text);
         let evidence = parse_json_text(evidence_text);
+        let candidates = candidates_by_issue
+            .get(&issue_id)
+            .cloned()
+            .unwrap_or_default();
         items.push(IdentityInboxItem {
             mapping_id,
             issue_id,
@@ -373,7 +432,7 @@ pub async fn list_inbox(
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
             why_stopped: why_stopped(&status, &evidence),
-            candidates: vec![],
+            candidates,
             created_at,
             updated_at,
         });
@@ -1085,6 +1144,90 @@ mod tests {
         };
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["total"], 0);
+    }
+
+    #[tokio::test]
+    async fn list_inbox_batch_loads_candidates_for_owned_issues_only() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES \
+                (1,'owner',false,NOW()), (2,'other',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                (1,1,'Owned thread','comics',2,0,'active','[]'::json,false,false,false,NOW()), \
+                (2,2,'Other thread','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                (1,1,'#1','unread',0,NOW()), \
+                (2,1,'#2','unread',1,NOW()), \
+                (3,2,'#1','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()), \
+                (2,'comicvine','issue','cv-2','{}'::json,NOW(),NOW()), \
+                (3,'comicvine','issue','cv-3','{}'::json,NOW(),NOW()), \
+                (4,'comicvine','issue','cv-4','{}'::json,NOW(),NOW()), \
+                (5,'comicvine','issue','cv-5','{}'::json,NOW(),NOW()), \
+                (6,'comicvine','issue','cv-6','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json), \
+                (2,1,2,'confirmed','user_confirmed',0.9,NOW(),NOW(),'{}'::json), \
+                (3,2,3,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json), \
+                (4,2,4,'confirmed','user_confirmed',0.8,NOW(),NOW(),'{}'::json), \
+                (5,3,5,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json), \
+                (6,3,6,'confirmed','user_confirmed',0.7,NOW(),NOW(),'{}'::json);",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.total, 2);
+        assert_eq!(response.items.len(), 2);
+        let item_one = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 1)
+            .unwrap();
+        let item_two = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 2)
+            .unwrap();
+        assert_eq!(
+            item_one
+                .candidates
+                .iter()
+                .map(|c| c.external_identity_id)
+                .collect::<Vec<_>>(),
+            vec![2, 1]
+        );
+        assert_eq!(
+            item_two
+                .candidates
+                .iter()
+                .map(|c| c.external_identity_id)
+                .collect::<Vec<_>>(),
+            vec![4, 3]
+        );
+        assert!(!response.items.iter().any(|item| item.issue_id == 3));
+        assert!(!response
+            .items
+            .iter()
+            .any(|item| { item.candidates.iter().any(|c| c.external_identity_id == 6) }));
     }
 
     #[tokio::test]
