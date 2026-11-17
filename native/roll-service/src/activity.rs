@@ -30,7 +30,7 @@ const DEFAULT_PAGE_SIZE: i64 = 50;
 
 /// Cursor token for activity pagination.
 #[derive(Debug, Deserialize)]
-struct ActivityQuery {
+pub struct ActivityQuery {
     /// Cursor token (event_id) for pagination.
     page_token: Option<String>,
     /// Page size override.
@@ -149,6 +149,9 @@ fn build_timestamp(sec: f64, us: Option<f64>) -> String {
 /// The query includes:
 /// - Events from sessions owned by the user (via session_id join)
 /// - Sessionless events that have user_id directly (snoozes, ratings, etc.)
+///
+/// Supports cursor-based pagination via $5 (cursor_event_id). When provided,
+/// only events older than the cursor event are returned.
 const ACTIVITY_SQL: &str = r#"
 WITH auth AS (
     SELECT u.id AS user_id,
@@ -160,6 +163,12 @@ WITH auth AS (
 ),
 me AS (
     SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3
+),
+cursor_ts AS (
+    SELECT timestamp AS cursor_timestamp
+    FROM events
+    WHERE id = $5
+    LIMIT 1
 ),
 page_events AS (
     SELECT e.id AS event_id,
@@ -173,8 +182,10 @@ page_events AS (
            e.issue_number
     FROM events e
     LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id) AND t.user_id = (SELECT user_id FROM me)
-    WHERE e.user_id = (SELECT user_id FROM me)
-       OR e.session_id IN (SELECT id FROM sessions WHERE user_id = (SELECT user_id FROM me))
+    CROSS JOIN cursor_ts
+    WHERE (e.user_id = (SELECT user_id FROM me)
+        OR e.session_id IN (SELECT id FROM sessions WHERE user_id = (SELECT user_id FROM me)))
+      AND ($5 IS NULL OR (e.timestamp, e.id) < (cursor_ts.cursor_timestamp, $5))
     ORDER BY e.timestamp DESC, e.id DESC
     LIMIT $4 + 1
 )
@@ -203,13 +214,21 @@ LIMIT 1;
 pub async fn activity(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
+    Query(query): Query<ActivityQuery>,
 ) -> Result<Json<ActivityResponse>, ApiError> {
     let expected_epoch = claims.expected_epoch()?;
     let username = claims.username().to_string();
     let jti = claims.jti().to_string();
-    let page_size = DEFAULT_PAGE_SIZE;
-    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 4] =
-        [&username, &jti, &expected_epoch, &page_size as &i64];
+    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE).clamp(1, 200);
+    let cursor_event_id: Option<i32> = query.page_token.and_then(|t| t.parse().ok());
+
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 5] = [
+        &username,
+        &jti,
+        &expected_epoch,
+        &page_size as &i64,
+        &cursor_event_id,
+    ];
 
     let connection = db::checkout(&state).await?;
     ACTIVITY_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
