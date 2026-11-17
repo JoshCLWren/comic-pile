@@ -1526,12 +1526,19 @@ fn build_detail(
 
     let rated_rows = recent_rows(library, creator_id, &headline_rated, offset, limit);
     let read_unrated_rows = recent_rows(library, creator_id, &read_unrated, offset, limit);
-    let upcoming_rows: Vec<CreatorIssueRow> = upcoming
+    let mut upcoming_issues: Vec<&OwnedIssue> = upcoming
         .iter()
         .copied()
         .filter_map(|id| library.issue(id))
         .filter(|issue| library.credits.contains_key(&issue.id))
-        .collect::<Vec<_>>()
+        .collect();
+    upcoming_issues.sort_by(|a, b| {
+        a.queue_position
+            .cmp(&b.queue_position)
+            .then(a.position.cmp(&b.position))
+            .then(a.id.cmp(&b.id))
+    });
+    let upcoming_rows: Vec<CreatorIssueRow> = upcoming_issues
         .into_iter()
         .skip(offset)
         .take(limit)

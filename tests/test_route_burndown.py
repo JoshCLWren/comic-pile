@@ -3,8 +3,8 @@
 The generator in ``scripts/generate_route_burndown.py`` derives one checked-in
 inventory (``docs/api/v2-route-inventory.json``) and one compact generated
 ``AGENTS.md`` runtime section from deployed ingress in ``vercel.json``. These
-tests pin the current burndown (41 live operations: 40 Native Rust + the one
-transitional Python operation) and the ``--check`` determinism contract.
+tests pin the current burndown (all live v2 operations are Native Rust) and
+the ``--check`` determinism contract.
 """
 
 from __future__ import annotations
@@ -453,6 +453,34 @@ def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> No
     assert "/api/v2/creators/{creator_key}" in paths
     assert "/api/v2/creators/{creator_key}/series/{series_key}/issues" in paths
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
+
+
+def test_creator_v2_operations_are_native_and_v1_creator_routes_retired() -> None:
+    """Every creator browser operation is Rust v2; no v1 creator route remains."""
+    inventory = load_json(INVENTORY_PATH)
+    operations = inventory["operations"]
+    assert isinstance(operations, list)
+    creator_operations = [
+        operation
+        for operation in operations
+        if isinstance(operation, dict)
+        and str(operation.get("path", "")).startswith("/api/v2/creators")
+    ]
+    assert len(creator_operations) == 11
+    for operation in creator_operations:
+        assert operation.get("runtime") == "native-rust"
+        assert operation.get("status") == "target"
+        assert operation.get("owning_issue") == 4836
+        assert operation.get("ingress_destination") == "/api/native_roll.rs"
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    v1_operations = full_surface["v1_operations"]
+    assert isinstance(v1_operations, list)
+    assert not any(
+        str(operation.get("path", "")).startswith("/api/v1/creators")
+        for operation in v1_operations
+        if isinstance(operation, dict)
+    )
 
 
 def test_dependency_fragment_covers_native_and_python_metadata() -> None:
