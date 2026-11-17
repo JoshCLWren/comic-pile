@@ -460,6 +460,27 @@ mod tests {
         assert_eq!(dropped, vec!["n1"]);
     }
 
+    /// Database-backed exercise of the mounted read-only preview. A missing
+    /// plan must return the owner-scoped 404 without touching any row.
+    #[tokio::test]
+    async fn preview_plan_projection_read_only_handler_reaches_the_database() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let error = preview_plan_projection_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(9_001_001),
+            Json(ReadingOrderProjectionRequest {
+                reading_order_id: 9_001_001,
+            }),
+        )
+        .await
+        .expect_err("missing plan is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+    }
+
     #[test]
     fn strict_sequential_rejects_non_contiguous_positions() {
         let nodes = serde_json::json!([

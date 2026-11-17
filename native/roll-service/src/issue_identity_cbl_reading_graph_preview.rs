@@ -471,6 +471,29 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    /// Database-backed exercise of the mounted read-only preview. A missing
+    /// source list returns the Python structured 404 and writes nothing.
+    #[tokio::test]
+    async fn preview_cbl_reading_graph_read_only_handler_reaches_the_database() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let error = preview_cbl_reading_graph_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(9_001_001),
+            Json(ReadingGraphPreviewRequest {
+                included_positions: vec![1],
+                overlap_choices: Vec::new(),
+                target_list_id: None,
+            }),
+        )
+        .await
+        .expect_err("missing source list is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+    }
+
     #[test]
     fn response_serializes_all_wire_fields() {
         let preview = ReadingGraphPreview {
