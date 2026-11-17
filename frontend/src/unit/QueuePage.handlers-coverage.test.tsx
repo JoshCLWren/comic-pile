@@ -409,7 +409,9 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: /add to queue/i }))
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
 
-    await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[1]!)
+    // The second action lives on the completed row, which is revealed by expanding the shelf.
+    await user.click(screen.getByRole('button', { name: /show finished/i }))
+    await user.click(screen.getByRole('button', { name: /add done back to queue/i }))
     await user.click(screen.getByRole('button', { name: /close modal/i }))
     await user.click(screen.getByText('reposition callback'))
     await user.click(screen.getByRole('button', { name: /close modal/i }))
