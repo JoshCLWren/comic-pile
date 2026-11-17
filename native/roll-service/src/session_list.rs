@@ -432,7 +432,7 @@ pub async fn list_sessions(
         .map_err(db::query_error)?;
     let mut latest_action_per_session: std::collections::HashMap<i32, (String, Option<i32>, Option<i32>)> =
         std::collections::HashMap::new();
-    for row in action_rows {
+    for row in &action_rows {
         let sid: i32 = row.try_get(0).map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),

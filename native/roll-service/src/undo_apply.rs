@@ -721,7 +721,8 @@ async fn restore_thread_from_state(
             .filter_map(|row| row.try_get(0).ok())
             .collect();
 
-        let snapshot_issues = state.get(ISSUE_STATES_KEY).and_then(|v| v.as_array()).unwrap_or(&Vec::new());
+        let empty_values: Vec<serde_json::Value> = Vec::new();
+        let snapshot_issues = state.get(ISSUE_STATES_KEY).and_then(|v| v.as_array()).unwrap_or(&empty_values);
         let snapshot_ids: std::collections::HashSet<i32> = snapshot_issues
             .iter()
             .filter_map(|i| i.get("id").and_then(|v| v.as_i64().map(|x| x as i32)))

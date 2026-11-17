@@ -416,7 +416,7 @@ pub async fn get_session_details(
             "roll" => {
                 description = Some(format!(
                     "Selected {}",
-                    thread_title.map(deleted_title).unwrap_or("a thread")
+                    thread_title.map(deleted_title).unwrap_or_else(|| "a thread".to_string())
                 ));
             }
             "rate" => {
@@ -438,13 +438,13 @@ pub async fn get_session_details(
             "snooze" => {
                 description = Some(format!(
                     "Snoozed {}",
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "unsnooze" => {
                 description = Some(format!(
                     "Unsnoozed {}",
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "dismiss" => {
@@ -452,7 +452,7 @@ pub async fn get_session_details(
                 description = Some(format!(
                     "{} {}",
                     word,
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "skip" | "rolled_but_skipped" => {
@@ -460,19 +460,19 @@ pub async fn get_session_details(
                 description = Some(format!(
                     "{} {}",
                     word,
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "move" => {
                 description = Some(format!(
                     "Moved {}",
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "shuffle" => {
                 description = Some(format!(
                     "Shuffled {}",
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 ));
             }
             "session_mode" => {
@@ -483,12 +483,12 @@ pub async fn get_session_details(
                 let mut desc_parts = vec![format!(
                     "{} {}",
                     word,
-                    thread_title.map(deleted_title).unwrap_or("thread")
+                    thread_title.map(deleted_title).unwrap_or("thread".to_string())
                 )];
                 if let Some(r) = rating {
                     desc_parts.push(format!("rating {:.1}", r));
                 }
-                if let Some(inum) = issue_number {
+                if let Some(inum) = issue_number.as_ref() {
                     desc_parts.push(format!("#{}", inum));
                 }
                 description = Some(desc_parts.join(" · "));
