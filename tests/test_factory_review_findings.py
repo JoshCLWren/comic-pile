@@ -261,53 +261,20 @@ def test_greptile_review_body_and_pr_summary_are_included(tmp_path: Path) -> Non
     assert "greptile_comment" not in summary
 
 
-def test_coderabbit_review_summary_is_passed_to_repair_worker(tmp_path: Path) -> None:
-    """Agents can fix findings CodeRabbit could not attach as inline comments."""
+def test_retired_coderabbit_review_is_not_injected_into_worker_prompt(tmp_path: Path) -> None:
+    """Historical bot review bodies are not part of the factory's findings."""
     out = format_findings(
         tmp_path,
-        reviews=[
-            {
-                "user": {"login": "coderabbitai[bot]"},
-                "state": "COMMENTED",
-                "commit_id": HEAD,
-                "submitted_at": "2026-11-02T17:12:03Z",
-                "body": "**Outside diff range comments (1)**\n"
-                "**Major**: stale Rust assertions in tests/test_factory_fast_checks.py",
-            }
-        ],
+        reviews=[{
+            "user": {"login": "coderabbitai[bot]"},
+            "state": "COMMENTED",
+            "commit_id": HEAD,
+            "submitted_at": "2026-11-02T17:12:03Z",
+            "body": "Outdated CodeRabbit warning",
+        }],
     )
-    rabbit = out[out.index("### CodeRabbit top-level review findings") :
-                 out.index("## Other unresolved review threads")]
-    assert "stale Rust assertions" in rabbit
-    assert "current head; verify each finding" in rabbit
-
-
-def test_coderabbit_old_review_is_labeled_stale_and_not_confused_with_greptile(
-    tmp_path: Path,
-) -> None:
-    """Expose review provenance without treating a stale head as actionable."""
-    out = format_findings(
-        tmp_path,
-        reviews=[
-            {
-                "user": {"login": "coderabbitai[bot]"},
-                "state": "COMMENTED",
-                "commit_id": OLD_HEAD,
-                "submitted_at": "2026-11-02T17:00:00Z",
-                "body": "Old CodeRabbit advice",
-            },
-            {
-                "user": {"login": "greptile-apps[bot]"},
-                "commit_id": HEAD,
-                "submitted_at": "2026-11-02T17:10:00Z",
-                "body": "Greptile says this is fine",
-            },
-        ],
-    )
-    rabbit = out[out.index("### CodeRabbit top-level review findings") :
-                 out.index("## Other unresolved review threads")]
-    assert "OLDER head" in rabbit and "Old CodeRabbit advice" in rabbit
-    assert "Greptile says this is fine" not in rabbit
+    assert "CodeRabbit top-level review findings" not in out
+    assert "Outdated CodeRabbit warning" not in out
 
 
 def test_pr_agent_check_output_is_lower_priority_advisory(tmp_path: Path) -> None:
@@ -339,8 +306,8 @@ def test_pr_agent_check_output_is_lower_priority_advisory(tmp_path: Path) -> Non
 def test_empty_inputs_say_none(tmp_path: Path) -> None:
     out = format_findings(tmp_path, body="no greptile here")
     assert "No unresolved Greptile review threads." in out
-    # Greptile threads, top-level reviews, PR summary, CodeRabbit, PR-Agent.
-    assert out.count("None.") == 5
+    # Greptile threads, top-level reviews, PR summary, PR-Agent.
+    assert out.count("None.") == 4
 
 
 def test_long_bodies_are_clipped(tmp_path: Path) -> None:

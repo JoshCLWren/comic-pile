@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
+import { useCompletedThreads } from '../../hooks/useCompletedThreads'
 import { useSession } from '../../hooks/useSession'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useRollPendingSync } from './useRollPendingSync'
@@ -68,11 +69,13 @@ export default function QueuePage() {
   const reactivateMutation = useReactivateThread()
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
-  // Excluded rows have a separate bounded read because the active queue omits them.
+  // Completed and excluded series have their own bounded, cursor-owned reads.
+  // The active Queue endpoint cannot return finished rows (#5171).
+  const completed = useCompletedThreads()
   const { threads: excludedThreads } = useExcludedThreads(true)
   const { handleRestore, restoreError, isRestoring } = useQueueRestore()
 
-  const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
+  const { activeThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
     searchQuery,
@@ -220,7 +223,13 @@ export default function QueuePage() {
         />
 
         <CompletedThreadsSection
-          threads={completedThreads}
+          threads={completed.threads}
+          hasNextPage={completed.hasNextPage}
+          isLoadingMore={completed.isLoadingMore}
+          isError={completed.isError}
+          isLoading={completed.isLoading}
+          onLoadMore={completed.loadMore}
+          onRetry={completed.retry}
           onReactivate={modals.openReactivateModal}
         />
 
@@ -274,7 +283,7 @@ export default function QueuePage() {
           issuesToAdd={modals.issuesToAdd}
           setIssuesToAdd={modals.setIssuesToAdd}
           activeThreads={activeThreads}
-          completedThreads={completedThreads}
+          completedThreads={completed.threads}
           queueSize={authoritativeActiveCount}
           onCreateSubmit={modals.handleCreateSubmit}
           onEditSubmit={modals.handleEditSubmit}

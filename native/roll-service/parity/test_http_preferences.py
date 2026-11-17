@@ -24,8 +24,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from uuid import uuid4
+
+from route_harness import cargo_example_path
 
 import pytest
 from jose import jwt
@@ -34,13 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.models import TasteSignal, User
 
 SECRET = "synthetic-native-preferences-secret"
-# CI builds into native/roll-service/target; the managed local wrapper keeps
-# its own bounded target directory, so locate the built example without
-# changing how this test builds or runs anything.
-EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_preferences"
-)
+EXAMPLE = cargo_example_path("http_preferences")
 
 PREFERENCES_URI = "/api/v1/users/me/preferences"
 SIGNALS_URI = "/api/v1/users/me/taste-signals"

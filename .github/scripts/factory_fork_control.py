@@ -22,7 +22,7 @@ import time
 from urllib.parse import quote
 import zipfile
 
-from factory_roster import load_roster_rows
+from factory_worker_slots import resolve
 
 REPO = "JoshCLWren/comic-pile"
 EXECUTION_PATH = ".github/workflows/factory-fork-execution.yml"
@@ -46,6 +46,11 @@ PROVIDER_ENV = {
     "mistral": ("MISTRAL_API_KEY",),
     "orcarouter": ("ORCAROUTER_API_KEY",),
     "requesty": ("REQUESTY_API_KEY",),
+    "gemini-free": ("GEMINI_API_KEY",),
+    "groq-free": ("GROQ_API_KEY",),
+    "aion-free": ("AION_API_KEY",),
+    "cohere-eval": ("COHERE_API_KEY",),
+    "typhoon-free": ("TYPHOON_API_KEY",),
 }
 
 
@@ -92,12 +97,8 @@ def _comments(pr: int) -> list[dict[str, object]]:
 
 
 def _source(worker: str) -> str:
-    staged = Path(__file__).with_name("free-model-factories.tsv")
-    roster = staged if staged.is_file() else Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    for row in load_roster_rows(roster):
-        if row["worker"] == worker:
-            return row["source"]
-    raise ValueError("worker is not in the trusted roster")
+    """Derive the trusted provider source from the durable worker identity."""
+    return resolve(worker).source
 
 
 def _owner(pr: dict[str, object]) -> str | None:

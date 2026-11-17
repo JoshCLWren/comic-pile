@@ -41,6 +41,7 @@ pub mod reading_mode;
 pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
+pub mod reading_plan_sync;
 pub mod reading_session;
 pub mod releases;
 pub mod roll_exclusions;
@@ -48,6 +49,7 @@ pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
 pub mod session_history;
@@ -542,6 +544,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_orders::insert_reading_order_item),
         )
         .route(
+            "/api/v1/reading-plan-sync/status",
+            get(reading_plan_sync::get_sync_status),
+        )
+        .route(
+            "/api/v1/reading-plan-sync/sync",
+            post(reading_plan_sync::sync_released_issues_endpoint),
+        )
+        .route(
             "/api/v2/queue-entries/{thread_id}",
             get(queue::get_queue_entry),
         )
@@ -556,6 +566,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            get(issue_read::list_thread_issues),
+        )
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),

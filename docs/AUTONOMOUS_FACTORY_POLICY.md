@@ -12,6 +12,10 @@ Success is measured by issues truthfully closed and production defects removed. 
 
 For original owner-requested engineering objectives, follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md): do not redefine the finish line through a self-authored issue, partial PR, shadow-only phase, or a ready-to-merge milestone. A runnable objective is done only after merged, deployed, and end-to-end verified on the real intended path; issue-level closure may be narrower than the owner's objective.
 
+## Owner-directed Rust cutover backlog freeze (2026-11-15)
+
+Scheduled factories, local coding agents, reviewers and automated controllers **must not open new GitHub issues or sub-issues, split existing issues, or convert CI/test findings into new backlog tickets without an explicit owner instruction for that exact creation**. Continue repairing problems within the approved issue/PR/objective when safe. When genuine out-of-scope work is encountered, attach compact evidence to the existing canonical issue or PR comment and leave ownership and acceptance truthful; do not manufacture a second executable parent or a swarm of children. Keep existing issues and PRs moving and close completed work normally. An owner-directed interactive change may explicitly authorize a bounded split with a parent checklist and a clearly designated execution owner. This freeze does not change the existing single-incident production deployment recovery mechanism; main CI failures must remain check/run failures, never new main-breakage issues.
+
 ## Continuous delivery cycle
 
 The delivery factory follows this permanent cycle:
@@ -177,26 +181,31 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   a separate trusted-main cleanup job releases the lease before the per-worker
   concurrency lock ends; started sessions keep their existing wrapper lifecycle.
 - Exact-head review assignments use the multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) while OmniRoute is dark; they must not smoke `auto/reasoning:free` or `auto/coding:free`.
-- UPDATE (2026-10-17): `opencode-free` now rotates among all live, provably free OpenCode 2 models at execution time, independent of OmniRoute and advisory TSV model pins. Free slots keep durable worker identities; `big-pickle` is one eligible free model, not an incentive to add duplicate fixed factories. A nonzero catalog price always disqualifies a model and the bounded model smoke remains mandatory.
-- INCIDENT (2026-09-06): OmniRoute is disabled (`FACTORY_OMNIROUTE_ENABLED=off` by default) after repeated free-pool instability. `auto/coding:free`, `auto/reasoning:free`, and `auto/best-free` are all OmniRoute routes and must not run. Service is restored through the pre-OmniRoute-only multi-provider Entry path (`nvidia`, `opencode-free`, `openrouter-free`, `kilo-auto`) with a separate multi-provider concurrency budget. do not restore the temporary `auto/best-free` capacity bridge. While OmniRoute is dark, `openrouter-free` retains pinned lanes; `opencode-free` uses live free-model rotation. Both prove execution with bounded smoke/session, rather than requiring pre-existing historical health evidence. `opencode-free` pins must stay on OpenCode free-roster ids (`big-pickle`, `*-free`, muse-spark variants); `openrouter-free` pins must stay on OpenRouter free-tier ids (`*:free` or `openrouter/free`) — never paid/stealth models. Re-enable OmniRoute only after Josh confirms gateway health by setting `FACTORY_OMNIROUTE_ENABLED=on` (live kill switch for worker refuse, lane configure, catalog discovery, and capacity).
+- UPDATE (2026-11-16): Runtime model selection is catalog driven across registered providers, with no fixed price or free-name eligibility gate. Actual execution determines model usability.
+- INCIDENT (2026-09-06): OmniRoute can remain disabled by its existing provider-health control. The other registered provider lanes operate independently and select models at runtime.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 
-## Fixed-model roster discovery and retirement
+## Runtime provider discovery and ephemeral models
 
-The factory roster `.github/free-model-factories.tsv` supplies durable worker IDs, scheduling buckets and legacy/provider-specific metadata. For `opencode-free` the model column is advisory; an execution-time catalog lookup and free-only policy select the actual model. NVIDIA, OpenRouter, and other fixed provider pins retain their existing semantics.
+Worker/lease capacity is derived from the provider integration registry by
+`factory_worker_slots.py`, never from manually approved model IDs. The
+dispatcher verifies credential availability, provider capacity, current
+ownership and runtime health before assignment. A new published model can
+be used without a roster-update PR. Current catalogs give **candidates**;
+successful useful execution and a verified PR or review result prove callability.
 
-`.github/workflows/factory-model-discovery.yml` runs on a six-hour schedule and on `workflow_dispatch`. It discovers live models with OpenCode CLI semantics (`opencode models opencode`, `opencode models nvidia`, and `opencode models openrouter` when OpenRouter pins exist), wrapping `scripts/opencode-model-catalog.sh` when present. NVIDIA catalog presence is judged only by that OpenCode nvidia list — never prune a NVIDIA pin solely because integrate.api.nvidia.com omitted it. Sticky `#1093` `factory-model-retired-410:v1` comments with `Source: nvidia` are the durable "turned off" signal the NVIDIA probe already fail-closes on. Discovery consumes those markers and retires matching bare model ids from the roster even when `opencode models nvidia` still lists them.
+Never gate on published price, a model name's `:free` suffix, or an old
+retirement pin. Follow real authentication failures, throttles, quotas,
+compatible-model metadata and bounded Fibonacci backoffs. The roster TSV,
+generated snapshot/worker lock and scheduled pin-retirement workflow have
+been deleted. Reintroducing them is not an acceptable provider migration.
 
-`opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
-
-The scheduled discovery workflow now audits live OpenCode Free models without allocating or retiring worker slots. New free models, including `big-pickle`, join the runtime rotation directly, so model catalog churn does not create a roster PR or duplicate factory identities. Catalog reports remain available for operators. For fixed providers, the workflow can still open a retirement PR when a pinned model disappears or a NVIDIA 410 marker proves permanent retirement. The generic planner retains its legacy manual add/retire capabilities, but the scheduled workflow calls `--dynamic-opencode-free --no-add-unused-free`. Permanent retirement evidence for other providers stays effective.
-
-Both discovery and the factory runner install the current OpenCode 2 release from `@opencode/cli@latest` using `.github/scripts/install-opencode-v2.sh`; the installer enforces the V2 major version but deliberately pins no exact release. The TSV now defines durable capacity/worker identities for OpenCode Free, not the complete set of models runnable by those slots. Discovery's roster-sync PR continues to reconcile legacy roster metadata, but it is not a prerequisite for execution of newly available free OpenCode models.
-
-Operator flow: fixed OpenCode Free workers directly select and smoke models from the live catalog. Scheduled **Factory Model Discovery** reports free entries, but opens a PR only for non-dynamic fixed-provider retirement. Any generated retirement PR must pass `validate-free-model-factories.py` and CI before merging. To audit locally use `python3 .github/scripts/factory_model_retirement.py plan --dynamic-opencode-free --no-add-unused-free --catalog-json tests/fixtures/opencode-catalog/keep-present.json`.
-
-Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_API_KEY` for Zen list auth), `NVIDIA_API_KEY` when NVIDIA pins must be listed, `OPENROUTER_API_KEY` when OpenRouter pins exist, and `PR_REBASE_TOKEN` so the retirement PR triggers pull-request workflows. A recorded `--catalog-json` fixture is the CI substitute when the `opencode` binary is unavailable.
+OpenCode and Kilo use their installed CLI discovery. Compatible HTTP
+providers use published `/models` contracts and their credentialed
+integration metadata. The exact advertised model identifier is passed
+unchanged to the runtime. Runner status and model choice belong in observed
+outcomes, not source-controlled provider inventory.
 
 ## Anti-loop rules
 
@@ -495,7 +504,7 @@ Rules:
 - Fixed-model PR creation must use `PR_REBASE_TOKEN`, like git pushes. Keep the
   workflow token for controller comments and labels; creating the PR with that
   token attributes it to `github-actions[bot]`, which can leave Actions awaiting
-  approval and causes CodeRabbit to skip initial review.
+  approval and delay independent review workflows.
 - Never push directly to `main`.
 - Never create or convert a draft PR unless Josh explicitly requests a draft.
 - Never enable auto-merge.
@@ -694,9 +703,7 @@ assuming the account is available.
 
 ## External scheduled-factory heartbeat
 
-Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
-
-A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
+The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to Neon by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. Neon and those job logs are authoritative. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
@@ -791,3 +798,62 @@ all pages of open same-issue factory PR files. Reuse an available overlapping
 PR and its exact branch/head; preserve live ownership and fork checkout fences.
 Revalidate before a new PR is created. Unreadable state or a live owner blocks
 duplicate creation; disjoint files remain eligible for separate PRs.
+
+## Additional provider free-tier lanes (2026-11-15)
+
+This fleet uses free-only or evaluation-only credentials. The roster and source caps
+are not equivalent to a provider-side spending limit. API keys MUST belong to
+accounts/projects that cannot auto-bill beyond a free allowance. Missing keys
+skip execution; never substitute a paid model, silently switch to a billed plan,
+or copy a credential into source control.
+
+- `gemini-free`: `GEMINI_API_KEY`, free-tier Google AI Studio project only;
+  `gemini-3.8-flash` and `gemini-3.1-flash-lite`. On the Google free tier,
+  prompt content may be used for product improvement; never submit secrets.
+  Base URL: https://generativelanguage.googleapis.com/v1beta/openai
+- `groq-free`: `GROQ_API_KEY`, free account and tool-capable GPT-OSS 120B,
+  GPT-OSS 20B, and Qwen 3.8 27B. Shared rate limits (including tokens/day)
+  are enforced by Groq, with a conservative factory daily dispatch cap.
+  Base URL: https://api.groq.com/openai/v1
+- `vercel-ai-gateway`: existing `AI_GATEWAY_API_KEY`; only explicit zero-price
+  models (`reflection/beam-free`, `nvidia/nemotron-3.5-lightning-free`,
+  `stealth/glyph-cluster`). Every run checks current catalog input and output
+  prices **before** inference; missing or paid entries fail closed. The $5 free
+  monthly credit is not authorization to consume paid model inference.
+- `aion-free`: `AION_API_KEY`, daily free allowance (20K tokens). Pin only
+  Aion 3.5 Mini; paid model price may consume the free daily allowance.
+  Use an account without paid top-ups or auto-payment. One dispatch per UTC day.
+  Base URL: https://api.aionlabs.ai/v1
+- `cohere-eval`: `COHERE_API_KEY`, free evaluation key only. Command A+;
+  1K evaluation requests per month. Do not treat this key as paid production.
+  Base URL: https://api.cohere.ai/compatibility/v1
+- `typhoon-free`: `TYPHOON_API_KEY`, 2.5 30B and 2.1 12B model variants.
+  Free research/light-use tier with conservative daily dispatch cap.
+  Base URL: https://api.opentyphoon.ai/v1
+
+LLM7.io is **not** a coding factory lane because the provider restricts tool
+calling to paid Pro access. Do not add a fake free contributor slot. Its text-only
+free tier may be considered for a separately implemented independent static
+reviewer, subject to review-stage routing and separate credentials.
+
+Adding worker IDs does not provision provider accounts or secrets. Existing Neon
+model-health exclusions, source cooldowns, account-level budget accounting, and
+runtime authorization must remain authoritative.
+
+## Owner-authorized persisted work PRs (2026-11-15, #5183)
+
+Trusted wrappers publish unvalidated code periodically and at finalization on the
+actual normal, non-draft issue implementation PR against `main`. This is the
+resumable unit of work, with a real issue title, intentional scoped closure,
+acceptance/handoff context and parsed producer metadata. Repairs advance the
+assigned PR branch atomically with a tracking ref, under the actual live lease;
+no competing recovery PR is created. Any eligible agent continues that same PR.
+
+The active actual factory owns the PR. When execution ends, incomplete work is
+released to `factory:changes-requested` + `factory:unowned` for repair pickup.
+Old-run reconciliation preserves resumed owners, stages and ordinary commits.
+Publication never certifies checks, approval or successful delivery. Failed
+checks preserve code and remain failed. Normal product CI/review/merge gates
+remain intact; the existing factory-only fast lane is unchanged. See
+[persisted work handoff](FACTORY_CHECKPOINTS.md) for trusted execution, branch
+identity, cancellation reconciliation and retention.

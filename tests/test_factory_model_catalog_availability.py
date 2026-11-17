@@ -64,37 +64,47 @@ def test_model_preflight_distinguishes_model_absence_from_catalog_failure(
         assert "did not expose" in result.stderr
 
 
+WORKER = WORKFLOW.parents[1] / "scripts" / "free-model-factory-worker.sh"
+
+
+def _failover_selector() -> str:
+    worker = WORKER.read_text(encoding="utf-8")
+    return worker.split("select_next_eligible_model() {", 1)[1].split("\n}\n", 1)[0]
+
+
 def test_factory_workflow_records_precise_preflight_outcome() -> None:
-    """A bad model cools down, but a catalog outage never retires its model."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert 'bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"' in workflow
-    assert "if (( model_wait_status == 3 )); then" in workflow
-    assert "model_unavailable" in workflow
-    assert "elif (( model_wait_status != 0 )); then" in workflow
-    assert "control_plane_failure" in workflow
-    assert "exit 1" in workflow
+    """A bad model cools down, but a catalog outage never retires its model.
+
+    The executable-catalog check now runs inside the leased failover loop,
+    right before the next real coding attempt (#5280).
+    """
+    selector = _failover_selector()
+    assert 'bash "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh" "$next_runtime"' in selector
+    assert "if (( candidate_status == 3 )); then" in selector
+    assert "model_unavailable model" in selector
+    assert "if (( candidate_status != 0 )); then" in selector
+    assert "control_plane_failure" in selector
 
 
 def test_catalog_preflight_hands_selected_model_directly_to_real_work() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    preflight = workflow.split("      - name: Wait for exact model in OpenCode catalog", 1)[1].split(
-        "      - name: Run continuous fixed-model factory session", 1
-    )[0]
-    assert "id: model_preflight" in preflight
-    assert "max_candidates=5" in preflight
-    assert 'attempted+=("$model")' in preflight
-    assert '--provider "$SOURCE" --catalog "$catalog"' in preflight
-    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in preflight
-    assert "opencode run" not in preflight
+    prework = workflow.split("      - name: Run continuous fixed-model factory session", 1)[0]
+    # No pre-work model ceiling or inference probe: real work is the test.
+    assert "max_candidates=5" not in prework
+    assert "opencode run" not in prework
     assert "Smoke exact pinned model through OpenCode" not in workflow
     assert 'FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
+    selector = _failover_selector()
+    assert 'RUNTIME_MODEL="$next_runtime"' in selector
+    assert "FACTORY_FLEET_TRANSITION" in selector
 
 
-def test_model_rotation_is_explicitly_provider_bound() -> None:
-    """No paid fallback or cross-provider execution is introduced."""
+def test_model_rotation_is_bound_to_trusted_fleet_admission() -> None:
+    """Cross-provider rotation only uses Neon-admitted sources and free filters."""
+    selector = _failover_selector()
+    assert '--eligible-sources-file "$RUNNER_TEMP/factory-fleet-sources.json"' in selector
+    assert '--exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json"' in selector
+    assert "--blocked-provider" in selector
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert 'if [[ "$DEEPSEEK_MODE" == normal ]]' in workflow
-    assert '[[ "$SOURCE" == opencode-free || "$SOURCE" == openrouter-free ]]' in workflow
-    assert 'bash scripts/opencode-model-catalog.sh openrouter verbose refresh' in workflow
-    assert "provider_quota" in workflow
-    assert "free-model" in workflow
+    assert "export-fleet-failover-sources" in workflow
+    assert "FACTORY_FLEET_SOURCES: ${{ needs.validate_assignment.outputs.fleet_sources }}" in workflow

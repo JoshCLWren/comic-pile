@@ -297,6 +297,7 @@ describe('QueueThreadCard', () => {
                 issue_number: '1',
                 label: 'One Year In #1',
                 volume_label: 'One Year In (2025)',
+                reading_lists: [],
               },
             ],
             editor: { kind: 'reading_list', list_id: 4, label: 'Ultimate' },
@@ -329,6 +330,7 @@ describe('QueueThreadCard', () => {
         thread_id: 1,
         state: 'unavailable',
         summary: 'Option E is not active for Test Thread.',
+        blockers: [],
       },
     })
 
@@ -346,6 +348,7 @@ describe('QueueThreadCard', () => {
         thread_id: 1,
         state: 'available',
         summary: 'Saga #6 is available next.',
+        blockers: [],
       },
     })
 

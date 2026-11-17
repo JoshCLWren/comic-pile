@@ -131,9 +131,20 @@ def test_unresolved_run_fails_closed_when_identity_registry_is_unavailable(
     controller: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A failed durable identity read must not be mistaken for a zombie."""
+    """A failed durable identity read must not be mistaken for a zombie.
+
+    Run-to-worker identity comes from the Neon runtime view (#5238). When it
+    and the run's job listing are both unreadable, the fence is preserved.
+    """
+    import factory_runtime_view
+
     now = 2_000_000_000
     monkeypatch.setattr(controller.time, "time", lambda: now)
+
+    def unavailable(_repo: str, _ids: list[str]) -> dict[str, str]:
+        raise RuntimeError("runtime view unavailable")
+
+    monkeypatch.setattr(factory_runtime_view, "run_workers", unavailable)
 
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         joined = " ".join(args)
@@ -141,8 +152,8 @@ def test_unresolved_run_fails_closed_when_identity_registry_is_unavailable(
             return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=controller.FIXED_LEASE_TTL_SECONDS + 1)]}]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
-        if "issues/1093/comments" in joined:
-            raise RuntimeError("attempt registry unavailable")
+        if "/actions/runs/99/jobs" in joined:
+            raise RuntimeError("jobs listing unavailable")
         raise AssertionError(joined)
 
     monkeypatch.setattr(controller, "gh_json", fake_gh_json)

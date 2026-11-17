@@ -18,11 +18,6 @@ from factory_capacity_policy import (
 from factory_work_policy import eligibility
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
-TELEMETRY_ISSUE = "1093"
-# Stable, verified GitHub Actions telemetry comment on issue #1093. The exact
-# comment is checked for our marker before PATCH; never scan 1,900+ registry
-# comments or create another comment when this anchor is missing.
-TELEMETRY_COMMENT_ID = 5396686993
 
 
 def load_controller():
@@ -106,15 +101,10 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
         )
 
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    candidates = controller.load_manifest_candidates(manifest)
+    candidates = controller.load_manifest_candidates()
     owned = controller.owned_worker_ids([*issues, *prs])
     try:
-        comments = controller.registry_comments()
-        health = controller.latest_worker_health(
-            comments,
-            trusted=policy.comment_is_trusted,
-        )
+        _view, health = controller.durable_factory_state(now_epoch=now_epoch)
     except RuntimeError as exc:
         print(
             f"[factory-completion] capacity evidence unavailable; failing closed: {exc}",
@@ -141,12 +131,14 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
     return demand, capacity
 
 
-def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
-    """Persist demand, allocation, and claim results for operational verification."""
+def persist_funnel_telemetry(result: dict[str, object]) -> None:
+    """Publish demand, allocation, and claim results to the Actions job summary.
+
+    The trusted Actions run (its log and job summary) is the operational
+    record. Issue #1093 is retired as a registry and is never written.
+    """
     selected = list(result.get("selected_workers") or [])
-    # Most explicit wakeups have no executable work. Avoid a write, and even
-    # the marker verification read, for those empty signals. Cron still keeps
-    # the shared operational report fresh every five minutes.
+    # Most explicit wakeups have no executable work; skip their summary.
     if not selected and os.environ.get("GITHUB_EVENT_NAME") != "schedule":
         return
     assignments = list(result.get("assignments") or [])
@@ -194,27 +186,14 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
             f"Updated: {now}",
         ]
     )
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary:
+        return
     try:
-        endpoint = f"repos/{controller.REPO}/issues/comments/{TELEMETRY_COMMENT_ID}"
-        current = controller.gh_json(["api", endpoint])
-        # Comment IDs survive edits. Fail closed if the comment was removed,
-        # moved, or repurposed instead of overwriting unrelated information.
-        if (
-            not isinstance(current, dict)
-            or current.get("id") != TELEMETRY_COMMENT_ID
-            or TELEMETRY_MARKER not in str(current.get("body") or "")
-            or str(current.get("issue_url") or "").rstrip("/")
-            != f"https://api.github.com/repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}"
-        ):
-            print(
-                "[factory-completion] telemetry anchor missing/mismatched; "
-                "skipping update without registry pagination",
-                file=sys.stderr,
-            )
-            return
-        controller.run_gh(["api", "--method", "PATCH", endpoint, "-f", f"body={body}"])
-    except RuntimeError as exc:
-        print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
+        with open(summary, "a", encoding="utf-8") as stream:
+            stream.write(body + "\n")
+    except OSError as exc:
+        print(f"[factory-completion] unable to write funnel summary: {exc}", file=sys.stderr)
 
 
 def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]) -> dict[str, object]:
@@ -263,7 +242,7 @@ def main() -> int:
     controller = load_controller()
     demand, capacity = current_demand(controller)
     result = signal_dispatch(controller, demand, capacity)
-    persist_funnel_telemetry(controller, result)
+    persist_funnel_telemetry(result)
     print(json.dumps(result, sort_keys=True))
     return 0
 

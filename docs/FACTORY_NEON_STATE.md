@@ -1,319 +1,135 @@
-# Neon-backed factory discovery and coordination
+# Factory execution and coordination state
 
-The isolated database supports both a shared discovery cache and an atomic
-worker reservation ledger. Neon is authoritative for **transactional factory
-worker reservations**; GitHub remains authoritative for live target labels,
-review verdicts, required checks, exact heads, and merge authorization.
+GitHub is authoritative for issues, PRs, labels, ownership at mutation boundaries,
+commit SHAs, reviews, CI, merges and closure. Neon never authorizes a merge.
+Only trusted control-plane jobs receive the existing restricted `factory_state`
+connection in project `delicate-sea-51036121`; model jobs receive no Neon secret.
 
-The dispatcher needs **both** a fresh GitHub ownership check and a successful
-Neon transaction to assign work. A Neon conflict or outage does not fall back
-to a potentially duplicate claim in trusted dispatcher jobs.
+## Execution handoff
 
-## Provisioning
+The dispatcher discovers candidates once in its trusted Actions job. Small
+assignments travel directly through workflow inputs: worker, target kind/number,
+stage, linked issue, branch, exact PR SHA and original claim UUID. Reusable
+trusted preparation acquires the worker workflow lock, verifies the live,
+unexpired transactional claim and GitHub target/stage, and exports bounded
+model-health information through job outputs. The model job reads its assigned
+target, rejects stage/head drift, and checks the checkout SHA. Fork routing
+rejects head drift too. It does not reconstruct the queue.
 
-- Existing Neon project: `comic-pile` (no new project or compute)
-- Separate PostgreSQL database: `factory_state`
-- Restricted database role: `factory_state_rw`, read/write grants for
-  `factory_state.public` only
-- Schema versioned at `.github/factory-state-schema.sql`.
-- Provisioned against the project's default Neon branch on 2026-11-13.
+Cleanup receives the original claim UUID. A stale completion cannot discover
+and release a newer UUID; an unfenced old cleanup fails closed. Input-driven
+workers never perform broad startup/EXIT ownership scans. Explicit publication
+handoffs and trusted cleanup preserve the existing checkpoint and non-draft PR
+behavior. Controller deployments preserve active sessions; normal liveness and
+lease expiration recover interruptions.
 
-The trusted factory jobs reuse the **existing** `NEON_API_KEY` Actions secret and
-`NEON_PROJECT_ID` Actions variable to retrieve a connection for *only* the
-factory role and database. The secret is available only inside the composite
-setup step; the DSN is masked and held in a `0600` temporary file on the trusted
-runner. The file path, not the connection string, is exported between its steps.
+Entry persists its trusted classified outcome before sending a completion run
+ID to the signal-only completion bridge. The bridge performs one Actions
+workflow dispatch with no checkout, Neon connection, demand/registry discovery,
+model selection or lease mutation. The duplicate refill workflow and five-minute
+completion-demand scan are removed. The canonical hourly dispatcher watchdog
+recovers missed events; productive roster cycles retain their bounded successor.
+Migration-lane reconciliation retains its dedicated event workflow.
 
-Neither coding-agent workflows nor the local Qwen reviewer use the connection.
-Never add the composite action to workflows that execute model-generated code.
+## Discovery is per job
 
-## Cached reads and budgets
+`factory_discovery.py` stores only the current trusted job's scheduling memory
+under `RUNNER_TEMP`. It is neither a database nor an artifact cache: no TTL,
+refresh lease, compression, cross-run synchronization or latest-artifact lookup
+exists. The runner deletes these files when its job ends. Repo/kind isolation
+prevents accidental inventory reuse. Jev and auxiliary migration/no-progress
+recovery consume the same inventory; sensitive target reads stay live.
 
-| Cache key suffix | TTL | Refresh source |
-|---|---:|---|
-| `open-issues` | 7 minutes 30 seconds | GitHub `issue list` |
-| `open-prs` | 7 minutes 30 seconds | GitHub `pr list` |
-| `registry-comments` | 6 minutes | Issue #1093 comments, incremental by updated timestamp |
+PR wakeups pass `pr:<number>` to the dispatcher, which reads that PR and its
+linked issue instead of listing the repository. Issue wakeups pass their exact
+issue. A new issue still requires one open-PR inventory to establish absence of
+an existing canonical PR safely; an issue webhook alone cannot prove that
+absence. Recovery/roster cycles discover the bounded open issue/PR inventories
+once. Worker ownership uses a targeted live label query independent of this
+candidate view, so narrowing discovery cannot conceal another active target.
+Aged-PR historical discovery runs only on the hourly recovery event.
 
-The first heartbeat load visits historical pages once. Subsequent refreshes use
-GitHub's `since` query with a one-minute overlap, merging changes by immutable
-comment ID. Deletions are not visible through this incremental endpoint; a
-rare full refresh may still be needed if an administrator deletes heartbeat
-comments, so operational policy should avoid deleting registry history.
+The generic REST cache, target projection writer, webhook synchronization,
+projection reconciliation and compression transport are deleted. The REST shim
+only adapts CLI response shapes and reads this job's explicit inventory; generic
+API calls and all individual targets/checks/reviews/mutations remain live.
 
-A shared Neon refresh lease (75 seconds) prevents most simultaneous jobs from
-re-fetching the same source. A cache hit consumes **zero** GitHub REST requests.
-Cold-cache readers wait up to 15 seconds for the refreshing job; a bounded expired discovery result may be shared while an active refresh lease is held. On a
-database failure or prolonged lock contention, the original live GitHub read
-remains available. There is no grant of authority from stale data.
+## Storage mapping and remaining dependencies
 
-## Worker lifecycle and transactional leases
+| Existing storage | Purpose | Destination/status |
+| --- | --- | --- |
+| `factory-github-get-v1:*` KV | Duplicated GitHub REST responses | Removed; bounded migration cleanup deletes rows |
+| `<repo>:open-issues`, `<repo>:open-prs` KV | Candidate discovery | Per-job memory; obsolete rows deleted |
+| `factory-projection-v1:*` KV | Duplicated issue/PR state and full-snapshot watermarks | Removed; targeted event inputs and hourly recovery replace synchronization |
+| `<repo>:registry-comments` KV | Retired full registry snapshot | Replaced by compact lifecycle/model/provider records, targeted trusted GitHub marker checks, and bounded comment deltas. Remove the row after deployed workflow verification |
+| `factory-lease-v1:*` KV | Atomic worker and target exclusion | Retained; acquired together under a short transaction lock, renewed only after live run verification, released by original UUID |
+| Worker/model/provider backoff KV families | Fibonacci/exponential retry across independent runs | Retained; no model/provider credentials or source retirement on ordinary transient failures |
+| `factory_model_health` | Verified source/model failures, cooldowns, explicit 410 retirement | Retained coordination; prevents concurrent independent runs repeatedly probing broken routes |
+| `factory_provider_budget` | Account quota/cooldown/concurrency policy | Retained coordination; GitHub cannot atomically reserve provider capacity |
+| `factory_provider_reservation` | Capacity tied to original claim token and expiry | Retained in the same acquisition/release transaction as worker/target leases |
+| `factory_pr_stage_retry` | Exact-head/stage retry not-before | Retained coordination; a new SHA is immediately eligible |
+| `factory_worker_metrics` | Bounded source/model delivery ranking counters | Retained operational dependency; execution failure remains distinct from persisted code delivery |
+| `factory_runtime_event_keys` | Idempotence across independent terminal collectors | Retained coordination; duplicate completion must not double-count/reset breakers |
+| `factory_check_projection` | Advisory CI/review observations | Production writer retired; CI/review completions directly wake exact-head PR scheduling, legacy table requires one-time cleanup |
+| `factory_reconciliation_cursor` | Backfill and coalesced wakeups | Existing consumers remain; remove obsolete scopes after consumers migrate |
+| `factory_state_events` | Lifecycle/retry history plus old discovery observations | Runtime history still has consumers; duplicated/obsolete observations and bounded retention cleanup remain outstanding |
 
-The trusted dispatcher now atomically reserves a worker and every associated
-issue/PR target under a PostgreSQL transaction advisory lock. Existing
-`factory_state_kv` rows store keys `factory-lease-v1:<repo>:worker:<id>`
-and `factory-lease-v1:<repo>:target:<number>`, with one claim UUID and a
-15-minute safety expiration. This is **not** the 75-second cache refresh
-lock. A failed claim rolls back only its own UUID after verifying GitHub labels;
-a verified explicit release clears the whole claim.
+Leases and provider reservations must survive independent workflows because
+Actions artifacts, outputs and concurrency groups cannot atomically reserve a
+worker, all linked targets and provider capacity. The database lock covers only
+claim/renew/release transactions, never a model session. GitHub ownership is
+rechecked before label changes; exact-head CI/review/merge gates remain live.
 
-The trusted completion collector records verified worker starts and
-success/failure *signals* from registry comments. These terminal signals are
-not liveness heartbeats and never extend a lease. The controller renews
-unexpired leases only for workers it independently verifies have active
-GitHub Actions runs, and clears token-matching Neon claims after verified
-GitHub label release. Pre-session abort cleanup configures the restricted Neon
-connection in its own trusted runner before touching GitHub labels. If the
-connection is unavailable, it refuses a split release; the lease can expire
-and be reconciled safely instead. A separate post-session cleanup job runs
-inside the same per-worker concurrency lock after every executing worker exits,
-checks live GitHub target ownership, and releases the matching Neon claim.
-This also handles retries where the worker already removed its owner labels.
-Both trusted cleanup jobs refuse to release labels if the Neon connection is
-unavailable. The coding/model job receives no Neon key or DSN. The worker Entry
-independently runs a trusted, non-model post-worker
-job to classify the finished factory-job log and persist the immutable
-completion/failure event. It separately dispatches the capacity Completion
-Drain. The outcome recorder does not share the drain's dispatcher concurrency
-lock, so capacity backlogs cannot postpone durable event recording. The
-runtime observer remains an idempotent backup when workflow_run notifications
-are delivered. Agent execution, including the local Qwen reviewer, never
-gets database credentials.
+The status job's bounded `prune-obsolete` migration removes only this repository's
+retired GET/target/open-inventory keys, skips an active old refresh lock, and
+processes at most 1,000 records per invocation. It cannot delete lease, backoff,
+registry or provider state. This cleanup is not a replacement cache. Physical
+Postgres allocation can remain until ordinary vacuum reclaims dead storage.
 
-These first-stage leases deliberately retain the live GitHub target checks.
-Worker health and stale-run reconciliation still use some GitHub API reads.
-Per-item issue/PR projections and event-triggered selective reconciliation are
-follow-up work; **do not claim this change alone eliminates broad discovery**.
+## CI and review completion routing
 
-## Event-fed target projections
+The check-completion workflow sends an explicit `pr:<number>` wakeup only for
+an open, non-draft PR on its current exact head. It never uses an advisory
+database snapshot to authorize a merge. Ordinary CI/guard/review success and
+failure events do **no Neon lookup or write**. A failed trusted review transports
+only its exact head and workflow-run ID into the retained
+`factory_pr_stage_retry` table, idempotently, so a broken reviewer does not
+immediately spin. The lightweight event job still verifies live GitHub PR
+state before dispatch. This replaces the old per-check projection writer and
+its additional coalesced-database wakeup.
 
-A trusted `Factory Target Projection Ingest` workflow receives GitHub
-`issues` and `pull_request_target` events and stores each changed target in
-the existing `factory_state_kv` table under
-`factory-projection-v1:<repo>:<issue|pr>:<number>`.
+The old `factory_check_projection` relation is no longer created by fresh
+schema initialization or consumed by factory readers. Its historical rows
+remain physically present until the separately verified retention migration
+removes them.
 
-The webhook job checks out **main**, never the PR head, runs no model-generated
-code, and uses the existing restricted `factory_state_rw` Neon connection.
-It normalizes GitHub webhook fields into the same shape used by the controller
-(`number`, labels, timestamps, and for PRs head SHA, draft and merge metadata).
-Closed targets are tombstoned, not returned as work.
+## Measurements and scope status
 
-The first trusted webhook bootstraps each missing complete issue/PR snapshot
-once under per-kind advisory locks, without repeated full scans across concurrent
-events. Webhook events read one live target *inside* the advisory transaction,
-ensuring equal-timestamp deliveries cannot reorder authoritative state.
+Baseline inspection on 2026-11-15, before migration:
 
-Once bootstrapped, the dispatcher reads projected open issues and PRs from Neon
-instead of repeatedly running broad GitHub lists. A full GitHub discovery
-snapshot rechecks each kind every **60 minutes** when the dispatcher next
-needs the data, repairing missing webhooks, stale labels, and missed closures.
-Snapshot writes use a transaction lock shared with webhook writes, timestamp
-ordering, and a full-snapshot watermark to avoid overwriting newer events.
-Only changed target rows produce reconciliation events.
-
-If Neon is not configured or a projection read fails, the existing shared
-GitHub discovery cache remains as a fallback. Exact-head CI/review/merge and
-label ownership checks are still performed live at mutation boundaries.
-
-
-## Safety and freshness
-
-Discovery results may be up to the TTL old. Every label mutation and every
-exact-head review, CI, and merge gate still rechecks current GitHub state at its
-mutation boundary. A trusted dispatcher without a Neon connection refuses new
-assignments rather than inventing ownership. A cache record never by itself allows a merge. Work selection
-can briefly lag a new issue or PR; it must not bypass controls.
-
-The Neon database shares the existing Neon project's compute, so avoid
-sub-second polling. JSON snapshots are compact and time-bounded.
-
-## Operational queries
-
-Run these in Neon's SQL editor with database `factory_state`:
-
-```sql
-SELECT cache_key, jsonb_array_length(payload) AS records,
-       fetched_at, expires_at,
-       refresh_owner, refresh_until
-FROM public.factory_state_kv
-ORDER BY cache_key;
-```
-
-```sql
-SELECT created_at, event_type, detail
-FROM public.factory_state_events
-ORDER BY id DESC
-LIMIT 30;
-```
-
-A healthy dispatcher, completion drain, or status page log should show
-`[factory-state] refreshed` or `[factory-state] shared cache hit`.
-If it prints `cache read unavailable`, the job is using GitHub's original
-read path and must be investigated rather than described as cached.
-
-## Neon-first GitHub read policy
-
-All **trusted factory control-plane workflows** must try Neon before GitHub
-for read-only discovery, when a fresh shared projection exists. The common
-`.github/scripts/factory-gh-rest-shim.sh` delegates the read policy to
-`.github/scripts/factory_gh_read_through.py`. The dispatcher, capacity
-refill, completion drain, and status dashboard use the same shim. The hourly
-issue/PR reconciler additionally reads the projected PR inventory before
-scanning live GitHub.
-
-- **Issue/PR discovery:** Use the webhook-fed Neon projection while its
-  reconciliation watermark is less than 60 minutes old. Missing or older
-  projections fall back to GitHub, never to an empty inventory.
-- **Shared safe GET lists:** The centralized cache covers explicit
-  non-authoritative REST discovery lists. Open issue/PR fallback lists are cached for 7 minutes 30 seconds;
-  recent repository comments for 10 minutes; raw registry comments for
-  15 minutes; all-PR history lists for 20 minutes. Individual issue/PR
-  comments are cached for 30 minutes and issue dependency discovery for
-  60 minutes. The shared incremental registry has a separate 6-minute TTL.
-  Expired or absent data is fetched once under the existing 75-second Neon
-  refresh lease and published for concurrent readers. A Neon outage
-  uses the live GitHub path.
-- **Never cache authorization:** Individual target reads at a claim/label
-  mutation boundary, GitHub Actions run liveness, review threads, review
-  verdicts, required CI checks, mergeability, exact-head merge authorization,
-  and every API write remain live GitHub operations. The DB may narrow
-  candidates, but cannot authorize a mutation or merge.
-- **Security:** Only trusted controller runners receive the restricted
-  factory_state connection. Coding workers and local Qwen never do.
-  API responses with custom headers, arbitrary repositories, GraphQL,
-  or mutation flags cannot enter the shared GET cache.
-- **Proof:** The read-through tests cover fresh hit, stale refresh,
-  cross-repo isolation, bypasses and HTTP errors. To validate real savings,
-  compare per-workflow REST request telemetry and quota samples before/after.
-  No claim of an achieved percentage reduction is made without that evidence.
-
-## Compact cache transport and automatic expiration
-
-The generic `factory-github-get-v1` cache stores responses over 4 KiB using
-zlib plus base64 **only when the encoded result is smaller**. The trusted
-read-through shim transparently decodes them before writing the original
-GitHub CLI output. Older raw snapshots remain readable during rollout. This
-reduces database-to-runner traffic; it does not change GitHub response shapes
-or eliminate the original live GitHub request on a miss.
-
-The existing trusted Factory Status Pages workflow runs a bounded
-`prune-expired` operation against the same restricted database when it
-executes (normally every five minutes and after updates to that workflow).
-It is independent of the timeout-prone historical PR recovery sweep. It only
-removes `factory-github-get-v1:%` rows expired by more than 30 minutes,
-skips active refresh locks, and processes at most 1,000 rows in five batches.
-It never prunes projections, provider health, worker reservations, registry
-comments or event history. PostgreSQL autovacuum reclaims dead tuples
-eventually; the job does not require or invoke VACUUM FULL.
-
-When a refreshed snapshot is unchanged at the parsed JSON
-record level, its TTL is extended without retransmitting the entire snapshot
-as a new UPDATE parameter or rewriting its external TOAST value. The hourly
-canonical PR-history query projects only number, branch ref, state, and
-merge timestamp before passing it to Neon. GitHub CLI does not support
-`--slurp` and `--jq` together, so the history query applies `--jq` per
-page with `--paginate` and reconstructs the nested page array locally.
-Live exact-target verification remains mandatory for sensitive decisions.
-
-## Remaining API work
-
-Issue/PR events now update individual Neon projections and a live listing
-reconciles drift every 60 minutes. Exact-head checks and merge verification
-remain live GitHub operations. Those actions must remain live at the
-authoritative mutation boundary. Other workflow-specific full scans should be
-measured separately instead of assuming this cache fixes the entire quota.
-
-
-## Operational state and decision projections
-
-The trusted factory now maintains decision state, not just JSON discovery
-snapshots. It is created non-destructively by the idempotent DDL inside
-.github/scripts/factory_state_operations.py, using the existing
-factory_state database and factory_state_rw role. No model/agent runner
-receives a connection.
-
-| Relation | Purpose |
+| Category | Observed rows / bytes |
 | --- | --- |
-| factory_model_health | Exact source/model availability, last verified run, cooldown, sticky 410 retirement |
-| factory_provider_budget | Account-scope throttle/quota cooldown, optional explicit concurrency cap and daily budget |
-| factory_provider_reservation | Capacity reservation tied to the existing worker/target claim UUID and its renewal/release |
-| factory_pr_stage_retry | Per-PR, exact-head, exact-stage retry not-before timestamps |
-| factory_check_projection | Advisory CI/review outcomes recorded by trusted workflow-run events |
-| factory_worker_metrics | Attempts, persisted useful work, completed and failed runs for source-preserving worker ranking |
-| factory_runtime_event_keys | Idempotence for the two trusted terminal-run collectors |
-| factory_reconciliation_cursor | Last target-reconciliation watermark and coalesced event-driven dispatch wakeups |
+| KV physical allocation | ~537 live rows; 174,710,784 allocated bytes including indexes/dead tuples |
+| Generic GET payloads | 72 rows; 12,351,733 payload bytes |
+| Repository discovery/registry payloads | 3 rows; 989,729 payload bytes |
+| Target projection payloads | 401 rows; 928,150 payload bytes |
+| Lease payloads | 21 rows; 2,577 payload bytes |
+| Worker/model/provider backoff payloads | 38 rows; 7,494 payload bytes |
+| Event relation | 13,813 rows; 3,973,120 allocated bytes |
+| Dispatcher 43770738388 artifacts | One Jev decision artifact; 444 bytes |
 
-The authoritative product gates remain on GitHub. The Neon check projection
-**does not grant an approval or green CI**, and merge scripts must still verify
-the live exact head, required checks, ownership and review as previously.
+`pg_stat_statements` is unavailable. Cumulative table counters are not per-cycle
+query measurements, and physical allocation is not active payload size. Do not
+claim achieved query or storage savings from these baseline figures alone.
 
-### Selection and release
+Merged handoff #5218 (`16753f4f69`) passed main CI 43770738444 and production
+deployment 43770738284. Completion #5219 (`4a670a4085`) used actual fast-merge run
+43771375653 and passed main CI 43771394475. Live completion signal 43771827145
+completed successfully with an actual terminal Entry run ID and woke dispatcher
+43771835176, whose run title carries that completion context.
 
-The trusted dispatcher initializes this schema and backfills the last trusted
-model outcome for each source/model from the existing registry on its first
-run. Future terminal outcomes project provider/model health directly.
-factory-model-discovery.yml contributes catalog absence evidence without
-changing the checked-in roster. An expired absence can be probed again,
-while explicit retired 410 markers remain sticky.
-
-During a worker claim, the existing per-repository advisory lock now also
-reserves provider capacity in the **same SQL transaction** as the
-worker and issue/PR leases. Releases and verified lease renewals update
-the provider reservation under the same ownership token. Aborted
-assignments cannot leave a leaked provider-capacity reservation.
-
-Daily metered-source usage is computed from trusted
-worker_assigned events in Neon, with the old live GitHub run-list path
-available only on a DB read failure. Quota/throttle observations are scoped
-to the provider account, except independent OmniRoute model routes. No
-unpublished provider concurrency limit is guessed: null means unconfigured.
-Checked-in source dispatch caps are still enforced under the atomic lease.
-
-Workers returning a classified failure update the model/provider circuit
-breaker from trusted job logs, not untrusted comments. An unchanged PR head
-and stage can briefly cool down a failed repair; a new SHA is immediately
-eligible. Failed review providers have a bounded backoff. A coalesced
-Factory Check Projection Ingest workflow may wake the existing dispatcher
-on a relevant completed check, no more frequently than once per two minutes.
-This workflow never checks out or executes PR-head code.
-
-A model's successful execution is not the same as a completed product issue.
-Productivity rankings use persisted useful work evidence and retain
-source-diverse dispatch positions. They are advisory scheduling decisions,
-not permission to bypass policy or assigned-work eligibility.
-
-### Operational inspection
-
-The trusted dispatcher prints the one-time backfill count and health-based
-worker exclusions. The operational CLI can be used with the restricted
-factory DSN on a trusted runner:
-
-    python3 .github/scripts/factory_state_operations.py bootstrap
-    python3 .github/scripts/factory_state_operations.py stats
-
-Check the actual DB with these bounded queries:
-
-    SELECT source, model, status, cooldown_until, last_outcome
-    FROM public.factory_model_health ORDER BY updated_at DESC LIMIT 30;
-
-    SELECT source, cooldown_until, quota_reset_at, concurrency_limit,
-           usage_day, daily_used
-    FROM public.factory_provider_budget ORDER BY source;
-
-    SELECT scope, checkpoint, checked_at, changed_count
-    FROM public.factory_reconciliation_cursor ORDER BY checked_at DESC LIMIT 20;
-
-A DB outage must not turn missing data into healthy evidence. New claims still
-require the existing transactional Neon lease and GitHub ownership check.
-The read-only projections have bounded fallbacks, but neither missing cache
-nor a late webhook is grounds to merge.
-
-## Work as smoke
-
-The fixed-model runner no longer spends inference requests on standalone model
-smoke prompts, NVIDIA chat probes, Kilo smokes, or tool-canary prompts. Trusted
-catalog checks, existing Neon model exclusions, and the zero-price Pixel Canary
-catalog guard remain. Only a real leased coding/review mission invokes an LLM.
-A successful real-session exit proves the selected model, and an unassigned
-worker is recorded as idle without provider inference. Delivery still requires
-verified PR persistence and lease handoff, independent of model execution.
+**The registry-snapshot migration:** after the production cutover, legacy check-table cleanup,
+redundant lifecycle observations, final bounded-retention policy/cleanup,
+complete live worker/continuation evidence and actual before/after per-cycle
+measurements remain. A green merge or a simulated handoff does not establish
+those acceptance criteria.

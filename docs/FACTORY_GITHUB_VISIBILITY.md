@@ -8,7 +8,7 @@ Every active factory-owned issue or pull request carries the `factory` label.
 
 Exactly one owner label identifies the worker responsible for the next action:
 
-- `factory:<worker-number>` for active fixed-model workers listed in `.github/factory-expected-workers.json`;
+- `factory:<worker-number>` for active provider slots derived by `.github/scripts/factory_worker_slots.py`;
 - `factory:1` through `factory:5` are historical disabled ChatGPT schedules;
 - `factory:local` for the local OpenCode factory;
 - `factory:unowned` when no worker currently owns the next action.
@@ -70,7 +70,7 @@ or prove deployment. `factory:merge-conflict` remains independent observability.
 
 The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Pull requests on `factory/*` branches are also recognized automatically. A linked issue claim supplies the initial pull-request owner when the branch name starts with `factory/<issue-number>-...`.
 
-Only marker comments from the repository owner, members, or collaborators are trusted. Formal review transitions are accepted from trusted collaborators and CodeRabbit. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.
+Only marker comments from the repository owner, members, or collaborators are trusted. Formal review transitions are accepted from trusted collaborators and independent Greptile findings. Public commenters and untrusted fork branches cannot spoof factory ownership or stage labels.
 
 Labels are visibility metadata, not merge evidence. A label-only change never counts as substantive factory progress and never overrides exact-head CI, review threads, mergeability, issue scope, or the canonical autonomous factory policy.
 
@@ -104,13 +104,13 @@ Greptile (`greptile-apps[bot]`) submits `COMMENTED` reviews whose actionable fin
 - **Live wrapper scope.** `free-model-factory-worker.sh` (with the shared primitives) is the only wrapper any workflow dispatches (`free-model-factory-run.yml`). The outcome gate and fast checks live there. `omniroute-factory-worker.sh` and `nvidia-factory-worker.sh` are not invoked by any workflow.
 - **Fail-closed pagination.** Every review-thread lookup reads every page. The wrappers' `current_head_review_blockers` gate uses `factory_count_unresolved_review_threads`, which fails the gate when a page is missing, unparseable, or still reports `hasNextPage`. The findings helper also pages through the comments nested in each unresolved thread. A thread whose comments cannot all be fetched is marked INCOMPLETE, and the mission is told not to emit `FACTORY_GATE_READY` until the agent has inspected the threads directly. Repair routing throws, leaving the reconciler run red, rather than treating a truncated listing with no findings seen as "no Greptile findings". It reads each thread's first comment (`comments(first:1)`) plus its 20 most recent comments. Only the comments after Greptile's latest one decide the rule, so that window is exact whenever it contains Greptile's latest comment or a trusted reply. The outcome gate fails closed (no `.open.json`) when thread or comment pagination is incomplete. The review controller already fails closed (`retry`) on truncated thread or comment pages.
 
-CodeRabbit (`coderabbitai[bot]`) is a separate **reviewer-only** routing signal, never a trusted source of owner labels, readiness, or approval markers. A `COMMENTED` CodeRabbit review submitted for the **live exact head** routes a factory PR to `factory:changes-requested` if it has an unresolved, non-outdated CodeRabbit inline thread without a later trusted response, or if its top-level body explicitly lists one or more `Outside diff range comments (N)`. Walkthrough-only and skipped reviews do not route. A trusted reply to an inline finding waits for a new CodeRabbit response rather than endlessly re-routing, while new findings can re-route. Every PR worker mission includes CodeRabbit's latest review body with its reviewed commit identified, plus all unresolved inline threads; agents verify actionable findings and fix or concretely rebut them. The existing exact-head review-thread merge gate remains authoritative. The review router reads live PR state on review/inline-reply events, so delayed events cannot mistake an older review for the current head.
+The merge drain asks Jev to request CodeRabbit reviews on its existing cadence (a failed request never blocks a merge). CodeRabbit review bodies and inline comments stay advisory: they do not gate factory merges or route factory PRs into repair or worker prompts. Historical GitHub comments remain visible but do not grant factory authorization.
 
 If factory pull requests later use a separate GitHub App or machine-user identity, independent reviewers should submit formal `APPROVE` or `REQUEST_CHANGES` reviews. At that point the built-in review filters can become a stronger first-class view. Do not add a required-approval branch rule until a reliable independent reviewer identity exists, because the present single-account setup would deadlock factory-authored pull requests.
 
 ## Active heartbeat monitoring
 
-Registry issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is telemetry, not backlog work. Active fixed-model workers use durable `opencode-free-model-factory-<number>` heartbeat identities. `.github/factory-expected-workers.json` defines the expected roster; retired and paused workers are excluded.
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active fixed-model workers use durable `opencode-free-model-factory-<number>` identities. Their lifecycle (`worker_started` at trusted assignment validation, `worker_outcome_signal` at trusted lease release) is written to Neon by the run workflow's trusted jobs; terminal outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. `.github/factory-expected-workers.json` defines the expected roster; retired and paused workers are excluded.
 
 `.github/workflows/fixed-model-factory-dispatch-recovery.yml` runs every 15 minutes. It records per-worker freshness, last heartbeat timestamp, last run, and the latest classified runtime outcome in the job summary and the `factory-heartbeat-health` JSON artifact. The generated GitHub Pages fleet scoreboard uses the same observations. At 20 minutes an observation becomes stale; missing heartbeats are reported separately. One fresh worker cannot hide stale peers in these diagnostics.
 
@@ -118,7 +118,7 @@ Freshness and provider availability are separate. Weekly quota exhaustion is leg
 
 ## Historical disabled ChatGPT heartbeat schedules
 
-Registry issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is operational telemetry, not executable backlog work. Factories must never claim, implement, label, or close the registry or the watchdog's alert issue.
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is a retired registry and remains non-executable. Factories must never claim, implement, label, close, or comment on it or the watchdog's alert issue.
 
 The five legacy ChatGPT schedules are disabled. Their permanent comments are historical records, excluded from active monitoring. The former heartbeat format and comment IDs are retained for provenance:
 
@@ -155,7 +155,7 @@ This section states the durable App identity contract that every active factory 
 
 ### One App per active durable worker
 
-The canonical roster of active durable workers is `.github/factory-expected-workers.json` (`expected_workers` array). Each active worker gets exactly one GitHub App identity. Retired workers (`retired_workers`) keep their persisted mapping but never receive new credentials.
+The active worker identities are derived from the provider/slot registry, without a committed expected-worker JSON. Existing App identities remain persisted independently; absent or retired provider slots must not receive new credentials.
 
 The provenance key is the **worker number** (e.g., `48`). All mapping, bootstrap, and credential logic keys off this number.
 

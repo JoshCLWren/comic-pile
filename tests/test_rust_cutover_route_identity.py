@@ -169,8 +169,8 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # uses the native v2 resource.
         ("GET", "/api/v1/analytics/metrics"): "/api/native_roll.rs",
         ("GET", "/api/analytics/metrics"): "/api/native_roll.rs",
-        # Bug-report twins are same-path Rust cutovers (#4852); Python stays
-        # shadowed until production proof.
+        # Bug-report twins are same-path Rust cutovers (#4852); the Python
+        # handler was retired once the native routes were live (#5162).
         ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
         ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
         # Preferences and Taste Bank signals keep their browser-called
@@ -183,11 +183,6 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
             "PUT",
             "/api/v1/users/me/taste-signals/creator/creator%3Awriter%3Adk/verdict",
         ): "/api/native_roll.rs",
-        # Taste Bank discovery cards keep their browser-called /api/v1 URLs and
-        # are now served same-path by native Rust (#4853). The Python handler
-        # stays mounted until production proof.
-        ("GET", "/api/v1/taste/discoveries"): "/api/native_roll.rs",
-        ("POST", "/api/v1/taste/discoveries/7/dismiss"): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)

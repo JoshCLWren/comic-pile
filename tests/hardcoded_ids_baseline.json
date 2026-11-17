@@ -52,17 +52,11 @@
       "User(id=1)",
       "user_id=1"
     ],
-    "tests/test_momentum.py": [
-      "user_id=1"
-    ],
     "tests/test_prompt_eligibility.py": [
       "user_id=1"
     ],
     "tests/test_queue_api.py": [
       "User(id=123)"
-    ],
-    "tests/test_read_frontier_service.py": [
-      "user_id=2"
     ],
     "tests/test_reading_list_evaluator.py": [
       "user_id=1"
@@ -98,11 +92,6 @@
     ],
     "tests/test_taste_acceptance.py": [
       "user_id=1"
-    ],
-    "tests/test_test_helpers.py": [
-      "user_id=1",
-      "user_id=7",
-      "user_id=99"
     ],
     "tests/test_thread_api.py": [
       "User(id=999)"

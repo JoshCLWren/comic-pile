@@ -483,27 +483,10 @@ def wrapper_recorded_contributors(pr_number: int, *, head: str) -> set[str]:
 
 
 def roster_model_for_worker(worker: str) -> str | None:
-    """Return the factory roster model pin for one worker, if present.
-
-    Args:
-        worker: Fixed-model factory worker id.
-
-    Returns:
-        Roster model id, or ``None`` when the worker is not pinned.
-    """
-    roster = importlib.import_module("factory_roster")
-    # The controller and its roster are captured from trusted main before the
-    # worker switches to an untrusted PR branch. Never read the branch's TSV.
-    controller_file = Path(__file__).resolve()
-    if controller_file.parent.name == "scripts" and controller_file.parent.parent.name == ".github":
-        roster_path = controller_file.parent.parent / "free-model-factories.tsv"
-    else:
-        roster_path = controller_file.with_name("free-model-factories.tsv")
-    for row in roster.load_roster_rows(roster_path):
-        if str(row["worker"]) == str(worker):
-            model = str(row["model"] or "").strip()
-            return model or None
-    return None
+    """Report the actually invoked model, never infer one from a worker ID."""
+    del worker
+    selected = os.environ.get("FACTORY_RUNTIME_MODEL", "").strip()
+    return selected or None
 
 
 def persist_author_model_marker(*, pr_number: int, head: str, worker: str) -> str | None:
@@ -1306,6 +1289,13 @@ def interpret_review_threads(
         comment_nodes = comments.get("nodes")
         if not isinstance(comment_nodes, list) or not comment_nodes:
             return gate_result("retry", "unresolved review thread lacked commit metadata")
+        # This reviewer was removed from the factory, so its historical
+        # comments must not hold PRs. Unknown/human reviewer metadata still
+        # follows the normal fail-closed exact-head gate.
+        origin = comment_nodes[0].get("author") if isinstance(comment_nodes[0], dict) else None
+        login = origin.get("login") if isinstance(origin, dict) else None
+        if login in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         saw_commit = False
         for comment in comment_nodes:
             if not isinstance(comment, dict):
@@ -1331,6 +1321,9 @@ def review_thread_query_required(comments: object | None, *, head: str) -> GateR
     """
     rows = flatten_pages(comments)
     for comment in rows:
+        author = (comment.get("user") or {}).get("login")
+        if author in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         commit_id = comment.get("commit_id")
         if not commit_id or str(commit_id) == head:
             return None
@@ -1346,6 +1339,9 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
         detail = redact_review_text(str(exc))[-500:]
         return gate_result("retry", f"review submissions could not be inspected: {detail}")
     for review in flatten_pages(pages):
+        author = (review.get("user") or {}).get("login")
+        if author in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         if review.get("state") == "CHANGES_REQUESTED" and review.get("commit_id") == head:
             return gate_result("deny", "current head has CHANGES_REQUESTED")
 
@@ -1385,7 +1381,7 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
                         "query=query($owner:String!,$name:String!,$number:Int!){"
                         "repository(owner:$owner,name:$name){pullRequest(number:$number){"
                         "reviewThreads(first:100){nodes{isResolved comments(first:100){"
-                        "nodes{commit{oid}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
+                        "nodes{commit{oid} author{login}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
                     ),
                 ]
             ),

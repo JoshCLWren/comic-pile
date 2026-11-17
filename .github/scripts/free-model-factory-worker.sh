@@ -117,24 +117,26 @@ record_terminal_outcome() {
 
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
+  # Preserve trusted infrastructure failures through the final handoff.
+  if [[ -f "$TERMINAL_OUTCOME_FILE" ]] &&       grep -Eq '^control_plane_failure[[:space:]]' "$TERMINAL_OUTCOME_FILE"; then
+    return 0
+  fi
   # GNU timeout returns 124 when this worker's own deadline expires.
   # Reading source/docs mentioning quotas must not poison provider health.
   if (( status == 124 )); then
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|api key budget (limit )?exceeded|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)|(does|do)(n.t| not) have enough credits' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
-  elif [[ ( "$SOURCE" == z-ai || "$SOURCE" == kilo-auto ) && -f "$log_file" ]] && grep -Eqi '(^|[^0-9.])429([^0-9]|$)|too many requests' "$log_file"; then
-    record_terminal_outcome provider_quota "Free provider account rate limit requires quota backoff (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     if [[ "$SOURCE" == nvidia ]]; then
       printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
     fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|free tier users do not have access to this model|HTTP[^0-9]*404|404 Not Found|function id [^ ]+ version [^ ]+: specified function [^\n]*not found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
@@ -187,8 +189,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_implementation_delivery.py "$trusted_dir/factory_implementation_delivery.py"
   cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
   # Bind model provenance to a trusted main checkout snapshot, not PR data.
-  cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-  cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+  cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
+  cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
   TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
@@ -198,6 +200,17 @@ stage_trusted_review_controller() {
   chmod +x "$trusted_dir/factory-review-controller.py"
   TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
   export TRUSTED_REVIEW_CONTROLLER
+}
+
+# Pin the checkpoint writer to trusted main before loading arbitrary PR code.
+# The model may edit repository scripts but cannot replace this running helper.
+stage_trusted_checkpoint_helper() {
+  TRUSTED_WORK_CHECKPOINT="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-work-checkpoint.XXXXXXXX")"
+  cp .github/scripts/factory-work-checkpoint.sh "$TRUSTED_WORK_CHECKPOINT"
+  chmod +x "$TRUSTED_WORK_CHECKPOINT"
+  TRUSTED_CHECKPOINT_HANDOFF="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-checkpoint-handoff.XXXXXXXX.py")"
+  cp .github/scripts/factory_checkpoint_handoff.py "$TRUSTED_CHECKPOINT_HANDOFF"
+  export TRUSTED_CHECKPOINT_HANDOFF
 }
 
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
@@ -341,106 +354,126 @@ read_trusted_completion_decision() {
 }
 
 select_controller_assignment() {
-  local -a prs=() issues=()
-  local pr_json issue_json pr_numbers issue_numbers canonical_pr_json canonical_pr
-  local pr branch linked_issue issue pr_stage
-
-  if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
-    log "unable to query controller-leased PRs for ${OWNER}"
-    return 3
+  local assignment="${FACTORY_ASSIGNMENT:-}" target
+  [[ -n "$assignment" ]] || { log 'dispatcher assignment input is required'; return 3; }
+  if ! jq -e --arg worker "$WORKER" '
+    .worker == $worker and (.kind == "issue" or .kind == "pr")
+    and (.number | type == "number" and . > 0 and floor == .)
+  ' <<< "$assignment" >/dev/null; then
+    log 'invalid dispatcher assignment'; return 3
   fi
-  if ! pr_numbers="$(jq -r '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number' <<< "$pr_json")"; then
-    log "unable to parse controller-leased PRs for ${OWNER}"
-    return 3
+  MODE="$(jq -r '.kind' <<< "$assignment")"
+  NUMBER="$(jq -r '.number' <<< "$assignment")"
+  target="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}")" || return 3
+  if ! jq -e --arg owner "$OWNER" '.state == "open" and ([.labels[].name] | index($owner) != null)' <<< "$target" >/dev/null; then
+    log 'assigned target ownership changed'; return 3
   fi
-  mapfile -t prs < <(printf '%s' "$pr_numbers")
-
-  if (( ${#prs[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open PRs (${prs[*]})"
-    return 2
-  fi
-
-  if ! issue_json="$(gh issue list --state open --limit 300 --label "$OWNER" --json number)"; then
-    log "unable to query controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  if ! issue_numbers="$(jq -r '.[].number' <<< "$issue_json")"; then
-    log "unable to parse controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  mapfile -t issues < <(printf '%s' "$issue_numbers")
-
-  if (( ${#prs[@]} == 1 )); then
-    pr="${prs[0]}"
-    if ! branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"; then
-      log "unable to resolve branch for controller-leased PR #${pr}"
-      return 3
+  if [[ "$MODE" == pr ]]; then
+    target="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}")" || return 3
+    if ! jq -e --arg head "$(jq -r '.head' <<< "$assignment")" '.head.sha == $head' <<< "$target" >/dev/null; then
+      log 'assigned PR head moved'; return 3
     fi
-    if [[ -z "$branch" ]]; then
-      log "controller-leased PR #${pr} returned an empty branch"
-      return 3
+    BRANCH="$(jq -r '.head.ref' <<< "$target")"
+    # The controller exports stage_of(live labels), which is null for a PR
+    # the reconciler left stageless. Compare the same projection: a null
+    # stage must still be stageless, never a label literally named "null".
+    ASSIGNED_PR_STAGE="$(jq -r '.stage // empty' <<< "$assignment")"
+    if ! jq -e --arg stage "$ASSIGNED_PR_STAGE" '
+      [.labels[].name] as $labels
+      | if $stage == "" then
+          ($labels | map(select(IN("factory:building", "factory:review",
+            "factory:changes-requested", "factory:ci", "factory:ready",
+            "factory:blocked"))) | length) == 0
+        else ($labels | index($stage)) != null end
+    ' <<< "$target" >/dev/null; then
+      log 'assigned PR stage changed'; return 3
     fi
-    if ! linked_issue="$(linked_issue_from_pr "$pr")"; then
-      log "unable to resolve linked issue for controller-leased PR #${pr}"
-      return 3
-    fi
-    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
-    if [[ -z "$pr_stage" ]]; then
-      log "controller-leased PR #${pr} has no supported completion stage"
-      return 3
-    fi
-
-    for issue in "${issues[@]:-}"; do
-      [[ -n "$issue" ]] || continue
-      if [[ -z "$linked_issue" || "$issue" != "$linked_issue" ]]; then
-        log "controller invariant failed: ${OWNER} owns PR #${pr} plus unrelated issue #${issue}"
-        return 2
-      fi
-    done
-
-    MODE='pr'
-    NUMBER="$pr"
-    BRANCH="$branch"
-    ASSIGNED_PR_STAGE="$pr_stage"
-    read_trusted_completion_decision "$pr" "$WORKER"
-    return 0
-  fi
-
-  if (( ${#issues[@]} == 1 )); then
-    issue="${issues[0]}"
-    if ! canonical_pr_json="$(gh pr list --state open --limit 500 --json number,headRefName)"; then
-      log "unable to verify canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if ! canonical_pr="$(jq -r --arg issue "$issue" '[.[] | select((.headRefName // "") | test("^factory/[0-9]+-" + $issue + "-")) | .number] | first // empty' <<< "$canonical_pr_json")"; then
-      log "unable to parse canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if [[ -n "$canonical_pr" ]]; then
-      log "controller invariant failed: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists"
-      return 2
-    fi
-
-    MODE='issue'
-    NUMBER="$issue"
+    read_trusted_completion_decision "$NUMBER" "$WORKER"
+  else
     BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-    return 0
   fi
-
-  if (( ${#issues[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open issues (${issues[*]})"
-    return 2
-  fi
-
-  return 1
+  return 0
 }
 
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
+
+# Keep all selection and configuration code on the trusted main snapshot.
+# The agent may check out/edit a PR branch before a fallback is needed.
+stage_trusted_model_failover() {
+  FACTORY_TRUSTED_FAILOVER_DIR="$(mktemp -d "$RUNNER_TEMP/factory-model-failover.XXXXXXXX")"
+  local filename
+  for filename in \
+    factory_model_failover.py factory_live_opencode.py factory_candidate_health.py \
+    factory_completion_controller.py factory_work_policy.py factory_review_policy.py \
+    factory_provider_candidates.py factory_provider_registry.py \
+    factory_runtime_model_select.py factory_published_model_catalog.py \
+    factory_kilo_catalog.py; do
+    cp ".github/scripts/$filename" "$FACTORY_TRUSTED_FAILOVER_DIR/$filename"
+  done
+  cp scripts/factory_eligibility.py "$FACTORY_TRUSTED_FAILOVER_DIR/factory_eligibility.py"
+  cp .github/scripts/wait-opencode-model.sh "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh"
+  export FACTORY_TRUSTED_FAILOVER_DIR
+}
+
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
-trap 'release_owned_targets session-end-handoff || true' EXIT
+stage_trusted_model_failover
+
+# Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
+# A separate Git index avoids interfering with an agent editing files.
+CHECKPOINT_PID=''
+CHECKPOINT_LOG=''
+CHECKPOINT_REF_FILE=''
+start_work_checkpoint() {
+  [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  local checkpoint_issue
+  if [[ "$MODE" == issue ]]; then
+    checkpoint_issue="$NUMBER"
+  else
+    checkpoint_issue="$(linked_issue_from_pr "$NUMBER")" || checkpoint_issue=''
+    if [[ -z "$checkpoint_issue" ]]; then
+      log "checkpoint issue linkage unavailable for PR #${NUMBER}; preserving explicit unknown-issue identity"
+    fi
+  fi
+  CHECKPOINT_REF_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-persisted-ref.XXXXXXXX")"
+  export FACTORY_CHECKPOINT_REF_FILE="$CHECKPOINT_REF_FILE"
+  CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
+  FACTORY_CHECKPOINT_ISSUE="$checkpoint_issue" FACTORY_CHECKPOINT_MODEL="$MODEL" \
+    FACTORY_CHECKPOINT_RUNTIME_MODEL="$RUNTIME_MODEL" \
+    bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
+  CHECKPOINT_PID="$!"
+  log "automatic persisted work enabled for run $GITHUB_RUN_ID (every 45s)"
+}
+
+stop_work_checkpoint() {
+  [[ -n "$CHECKPOINT_PID" ]] || return 0
+  kill -USR1 "$CHECKPOINT_PID" 2>/dev/null || true
+  wait "$CHECKPOINT_PID" || log 'persisted work writer did not exit cleanly'
+  CHECKPOINT_PID=''
+  [[ ! -f "$CHECKPOINT_LOG" ]] || tail -n 8 "$CHECKPOINT_LOG" || true
+}
+
+discard_delivered_checkpoint() {
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  stop_work_checkpoint
+  # Record exact-head validation; canonical open work branches are retained.
+  python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+    --run-id "$GITHUB_RUN_ID" --delivered-pr "$1" --cleanup || \
+    log 'checkpoint cleanup deferred to independent reconciliation'
+}
+
+finish_persisted_work() {
+  stop_work_checkpoint
+  release_owned_targets session-end-handoff || true
+  # Release the saved PR as well as its source issue, after execution really ends.
+  [[ -z "${GITHUB_RUN_ID:-}" ]] || python3 "$TRUSTED_CHECKPOINT_HANDOFF" \
+    --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --source-ended || true
+}
+trap 'finish_persisted_work' EXIT
 
 MODE=''
 NUMBER=''
@@ -489,6 +522,12 @@ elif (( fork_route != 0 && fork_route != 1 )); then
 fi
 if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
   checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  if [[ "$MODE" == pr && "$(git rev-parse HEAD)" != "$(jq -r '.head' <<< "$FACTORY_ASSIGNMENT")" ]]; then
+    log 'assigned PR moved during checkout; refusing stale execution'
+    record_terminal_outcome control_plane_failure 'assigned PR head moved during checkout'
+    exit 2
+  fi
+  start_work_checkpoint
 fi
 
 available="$(remaining)"
@@ -502,19 +541,152 @@ if (( agent_timeout < 300 )); then
   exit 1
 fi
 
+# Iterate eligible provider/model pairs within this lease.
+ORIGINAL_SOURCE="$SOURCE"
+attempted_pairs=()
+blocked_providers=()
+ACCOUNT_REFUSAL_RE='insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package|(does|do)(n.t| not) have enough credits'
+account_wide_failure() {
+  grep -Eqi "$ACCOUNT_REFUSAL_RE" "/tmp/opencode-factory-$WORKER.log"
+}
+# OpenCode prints some provider account refusals (Pollinations "doesn't have
+# enough credits") and still exits 0. A fast, edit-free zero exit whose log
+# carries such a refusal never reached the model: treat it as the provider
+# failure it is so the lease fails over instead of burning a review attempt.
+zero_exit_provider_refusal() {
+  local elapsed="$1"
+  (( elapsed < FAST_FAILOVER_SECONDS )) || return 1
+  [[ -z "$(git status --porcelain)" ]] || return 1
+  account_wide_failure
+}
+record_model_failover_failure() {
+  local failed_source="$1" failed_model="$2" classification="$3" scope="$4"
+  # The timestamped log marker is the attested record the trusted Entry
+  # persister writes to Neon (refine_trusted_failover_models). Issue #1093
+  # is retired as a registry and is never written.
+  log "FACTORY_TRUSTED_FAILOVER: source=$failed_source model=$failed_model outcome=$classification scope=$scope"
+}
+select_next_eligible_model() {
+  local next_json next_source next_model next_runtime candidate_status pair provider
+  local -a select_args=(--source "$ORIGINAL_SOURCE" --worker "$WORKER" \
+    --rotation "$GITHUB_RUN_NUMBER" \
+    --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
+    --eligible-sources-file "$RUNNER_TEMP/factory-fleet-sources.json" \
+    --fleet-catalog-cache "$RUNNER_TEMP/factory-fleet-catalogs.json")
+  for pair in "${attempted_pairs[@]}"; do select_args+=(--attempted-pair "$pair"); done
+  for provider in "${blocked_providers[@]}"; do select_args+=(--blocked-provider "$provider"); done
+  while :; do
+    (( $(remaining) > 540 )) || return 1
+    if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" "${select_args[@]}")"; then
+      log "No further currently eligible fleet provider/model candidates"
+      return 1
+    fi
+    next_source="$(jq -er '.source' <<< "$next_json")" || return 1
+    next_model="$(jq -er '.model' <<< "$next_json")" || return 1
+    next_runtime="$(jq -er '.runtime_model' <<< "$next_json")" || return 1
+    pair="$(jq -nc --arg source "$next_source" --arg model "$next_model" '[$source,$model]')"
+    attempted_pairs+=("$pair")
+    select_args+=(--attempted-pair "$pair")
+    if [[ "$next_source" != opencode-free && "$next_source" != openrouter-free && "$next_source" != kilo-auto ]]; then
+      local config_file="$HOME/.config/opencode/opencode.json"
+      local candidate_config="$RUNNER_TEMP/factory-failover-config.json"
+      if ! python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_provider_registry.py" config --source "$next_source" --model "$next_model" > "$candidate_config"; then
+        record_terminal_outcome control_plane_failure "canonical provider configuration failed during failover"
+        return 1
+      fi
+      jq -s '.[0] * .[1]' "$config_file" "$candidate_config" > "$candidate_config.merged" || return 1
+      mv "$candidate_config.merged" "$config_file"
+      chmod 600 "$config_file"
+    fi
+    if [[ "$next_source" != kilo-auto ]]; then
+      candidate_status=0
+      bash "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh" "$next_runtime" || candidate_status=$?
+      if (( candidate_status == 3 )); then
+        record_model_failover_failure "$next_source" "$next_model" model_unavailable model || return 1
+        continue
+      fi
+      if (( candidate_status != 0 )); then
+        record_terminal_outcome control_plane_failure "executable catalog unreadable during failover"
+        return 1
+      fi
+    fi
+    # The trusted FACTORY_FLEET_TRANSITION log marker below (attested from
+    # the completed job log into Neon) is the only transition record.
+    stop_work_checkpoint
+    SOURCE="$next_source"
+    MODEL="$next_model"
+    RUNTIME_MODEL="$next_runtime"
+    DISPLAY="$SOURCE · $MODEL"
+    start_work_checkpoint
+    log "FACTORY_FLEET_TRANSITION: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL target=$MODE/$NUMBER"
+    return 0
+  done
+}
+
 agent_attempt=1
 agent_status=0
 transient_failure=0
+FAST_FAILOVER_SECONDS="${FACTORY_FAST_FAILOVER_SECONDS:-180}"
 while :; do
+  log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
+  : > "/tmp/opencode-factory-${WORKER}.log"
+  attempt_started_at="$SECONDS"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
   set -e
+  attempt_elapsed=$((SECONDS - attempt_started_at))
   log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
+  if (( agent_status == 0 )) && zero_exit_provider_refusal "$attempt_elapsed"; then
+    log "agent exited 0 after a provider account refusal; treating it as a provider failure"
+    agent_status=1
+  fi
 
   if (( agent_status == 0 )); then
+    # Earlier failed candidates must never poison the terminal outcome.
+    rm -f "$TERMINAL_OUTCOME_FILE"
     transient_failure=0
     break
+  fi
+  # The actual inference failed. For model-scoped provider failures, advance
+  # through *all* discovered eligible models, not the same pinned model twice.
+  # Never reassign a claimed issue/PR or discard changes already checkpointed.
+  record_agent_failure_outcome "$agent_status"
+  failure_class="$(cut -f1 "$TERMINAL_OUTCOME_FILE")"
+  # An agent that exits non-zero within the first minutes, edits nothing and
+  # leaves no narrower evidence never started real work: the candidate's
+  # inference call failed. Treat it as a model-scoped provider failure so the
+  # same lease advances to the next eligible pair instead of being released.
+  if [[ "$failure_class" == unknown_failure ]] && (( attempt_elapsed < FAST_FAILOVER_SECONDS )) \
+    && [[ -z "$(git status --porcelain)" ]] && (( agent_status != 124 )); then
+    record_terminal_outcome provider_failure "candidate exited ${agent_status} after ${attempt_elapsed}s without edits or narrower evidence"
+    failure_class=provider_failure
+  fi
+  if [[ "$SOURCE" != omniroute-free && "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
+    case "$failure_class" in
+      provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
+        if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
+          attempted_pairs+=("$(jq -nc --arg source "$SOURCE" --arg model "$MODEL" '[$source,$model]')")
+          failure_scope=model
+          if account_wide_failure; then
+            failure_scope=account
+            blocked_providers+=("$SOURCE")
+          fi
+          if ! record_model_failover_failure "$SOURCE" "$MODEL" "$failure_class" "$failure_scope"; then
+            record_terminal_outcome control_plane_failure "failed to persist exact attempt before failover"
+            break
+          fi
+          if select_next_eligible_model; then
+            agent_attempt=1
+            available="$(remaining)"
+            agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
+            (( agent_timeout >= 300 )) || break
+            continue
+          fi
+        fi
+        break
+        ;;
+    esac
   fi
   if ! is_transient_agent_failure "$agent_status"; then
     transient_failure=0
@@ -522,7 +694,7 @@ while :; do
   fi
 
   transient_failure=1
-  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+  log 'Non-attributable transient interruption; bounded retry of this model only'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break
@@ -540,6 +712,19 @@ while :; do
   agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
   (( agent_timeout >= 300 )) || break
 done
+
+# Flush pending model edits before checks while retaining periodic protection
+# for the optional correction model run inside the persistence helpers. EXIT
+# performs the final synchronous snapshot on all other handoff/failure paths.
+[[ -z "$CHECKPOINT_PID" ]] || kill -USR2 "$CHECKPOINT_PID" 2>/dev/null || true
+
+# Flush synchronously and adopt the saved parent chain before overlap detection.
+# EXPECTED_HEAD stays the initial base so validation covers the entire attempt.
+stop_work_checkpoint
+if ! adopt_persisted_work; then
+  record_terminal_outcome control_plane_failure 'persisted ancestry moved; work retained'
+  exit 2
+fi
 
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
@@ -573,8 +758,8 @@ fi
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
     if ! record_pr_provenance "$pr" "$NUMBER"; then
-      log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
-      gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      log "PR #${pr} provenance needs reconciliation; preserving the work PR"
+      release_target "$pr" factory:changes-requested provenance-incomplete pr || true
       record_terminal_outcome control_plane_failure "PR #${pr} could not prove durable issue assignment provenance"
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
@@ -592,6 +777,9 @@ if [[ "$MODE" == 'issue' ]]; then
     # separate plain-prose handoff as its App (#3135); others post nothing.
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
+    discard_delivered_checkpoint "$pr"
+  elif [[ -n "${CHECKPOINT_REF_FILE:-}" && -s "$CHECKPOINT_REF_FILE" ]]; then
+    record_terminal_outcome work_failure "issue #${NUMBER} work is preserved; final validation/delivery failed"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -627,6 +815,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
+  discard_delivered_checkpoint "$NUMBER"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
@@ -642,6 +831,12 @@ if (( agent_status != 0 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
   record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if [[ -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+  release_pr_and_issue "$NUMBER" "$BRANCH" factory:changes-requested failed-validation
+  record_terminal_outcome work_failure "PR #${NUMBER} failed trusted checks; work retained"
   exit 0
 fi
 
@@ -746,11 +941,9 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
 
   if (( recovery_timeout >= 20 )); then
     log "semantic review needs a verdict or acceptance report; attempting one bounded same-session evidence recovery"
-    set +e
+    recovery_status=0
     factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log" \
-      "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"
-    recovery_status=$?
-    set -e
+      "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission" || recovery_status=$?
 
     current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
     snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"

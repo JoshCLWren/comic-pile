@@ -23,12 +23,13 @@ DEFAULT_OUTPUT = Path("frontend/src/generated/openapi.json")
 # separate checked-in artifact; this exporter merges it into the single client
 # document so the generated TypeScript types cover the real deployed runtime.
 NATIVE_RUNTIME_CONTRACT: Final = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
+NATIVE_SAME_PATH_CONTRACT: Final = ROOT / "native" / "contracts" / "same-path-runtime.openapi.json"
 SCHEMA_REF_PREFIX: Final = "#/components/schemas/"
 
 # Bare ``/api`` domain paths retained in the client-facing schema. Everything
 # else under bare ``/api`` is a legacy compatibility alias or non-client
 # tooling that must not appear in the generated frontend client.
-CLIENT_EXEMPT_BARE_PATHS: Final[frozenset[str]] = frozenset({"/api/ping", "/api/metrics"})
+CLIENT_EXEMPT_BARE_PATHS: Final[frozenset[str]] = frozenset({"/api/metrics"})
 
 
 def is_client_schema_path(path: str) -> bool:
@@ -38,8 +39,8 @@ def is_client_schema_path(path: str) -> bool:
         path: OpenAPI path key such as ``/api/v1/threads/``.
 
     Returns:
-        True for infrastructure paths outside ``/api``, the exempt bare ping and metrics
-        paths, and every canonical ``/api/v1`` route; False for all other bare
+        True for infrastructure paths outside ``/api``, the exempt bare metrics path,
+        and every canonical ``/api/v1`` route; False for all other bare
         ``/api`` legacy aliases and tooling routes.
     """
     if not path.startswith("/api/"):
@@ -227,9 +228,11 @@ def client_openapi_schema() -> dict[str, Any]:
     """Build the single client-facing schema from Python plus native runtime."""
     from app.main import app
 
-    return prune_legacy_bare_paths(
-        merge_native_runtime_contract(app.openapi(), load_native_runtime_contract())
+    native = merge_native_runtime_contract(
+        load_native_runtime_contract(NATIVE_SAME_PATH_CONTRACT),
+        load_native_runtime_contract(),
     )
+    return prune_legacy_bare_paths(merge_native_runtime_contract(app.openapi(), native))
 
 
 def render_openapi_schema(schema: dict[str, Any]) -> str:

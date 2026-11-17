@@ -244,12 +244,12 @@ factory_run_fast_checks() {
 
 
   # Rust-only changes previously bypassed this trusted gate entirely.
-  # Keep the two cargo entrypoints aligned with their separate CI workflows.
+  # Check both native packages through the shared root Cargo workspace.
   # The script fails closed on missing toolchains and failed compilation.
   if (( rust_project )); then
     if ! command -v cargo >/dev/null 2>&1 || ! command -v rustup >/dev/null 2>&1; then
       failures+=('Rust toolchain (cargo/rustup missing)')
-    elif ! _factory_fast_check_run "$log" 'Rust format, service Clippy, root Vercel compilation' \
+    elif ! _factory_fast_check_run "$log" 'Rust workspace format, Clippy, and compilation' \
       bash scripts/check-rust-factory-prepush.sh; then
       failures+=('Rust format/Clippy/native build')
     fi

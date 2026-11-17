@@ -1,8 +1,10 @@
 """Regression tests for deterministic OpenAPI schema generation."""
 
+import json
 from pathlib import Path
 
 from scripts.export_openapi_schema import (
+    client_openapi_schema,
     is_client_schema_path,
     merge_native_runtime_contract,
     prune_legacy_bare_paths,
@@ -55,24 +57,24 @@ def test_check_mode_rejects_missing_or_stale_output(tmp_path: Path) -> None:
     assert output.read_text(encoding="utf-8") == "stale\n"
 
 
-def test_is_client_schema_path_keeps_versioned_client_routes_and_ping() -> None:
-    """Classify infrastructure paths, canonical v1 routes, and ping as client."""
+def test_is_client_schema_path_keeps_versioned_client_routes_and_metrics() -> None:
+    """Classify infrastructure paths, canonical v1/v2 routes, and metrics as client."""
     assert is_client_schema_path("/")
     assert is_client_schema_path("/health")
     assert is_client_schema_path("/{full_path}")
-    assert is_client_schema_path("/api/ping")
     assert is_client_schema_path("/api/v1")
     assert is_client_schema_path("/api/v1/threads/")
     assert is_client_schema_path("/api/v2/reading-boundaries")
     assert is_client_schema_path("/api/v2/reading-boundaries/42")
 
     assert not is_client_schema_path("/api/threads/")
+    assert not is_client_schema_path("/api/ping")
     assert is_client_schema_path("/api/metrics")
     assert not is_client_schema_path("/api/v10/threads")
 
 
 def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
-    """Drop legacy bare aliases while keeping v1 routes, ping, and infra."""
+    """Drop legacy bare aliases while keeping versioned routes and infra."""
     schema = {
         "openapi": "3.1.0",
         "paths": {
@@ -88,7 +90,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
     pruned = prune_legacy_bare_paths(schema)
 
     assert sorted(pruned["paths"]) == [
-        "/api/ping", "/api/v1/threads/", "/api/v2/reading-boundaries", "/health"
+        "/api/v1/threads/", "/api/v2/reading-boundaries", "/health"
     ]
     assert sorted(schema["paths"]) == [
         "/api/debug/log",
@@ -102,7 +104,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
 
 def test_prune_legacy_bare_paths_returns_original_when_fully_client_facing() -> None:
     """Return the input document unchanged when no path requires pruning."""
-    schema = {"paths": {"/api/v1/threads/": {"get": {}}, "/api/ping": {"get": {}}}}
+    schema = {"paths": {"/api/v1/threads/": {"get": {}}, "/api/metrics": {"get": {}}}}
 
     assert prune_legacy_bare_paths(schema) is schema
 
@@ -229,3 +231,49 @@ def test_merge_native_runtime_contract_renames_transitive_references() -> None:
     assert merged["components"]["schemas"]["NativeHolder"]["properties"]["child"] == {
         "$ref": "#/components/schemas/NativeChild"
     }
+
+
+def test_native_same_path_contract_covers_retired_python_operations() -> None:
+    """Every removed handler keeps a Rust-owned client contract at its exact URL."""
+    root = Path(__file__).resolve().parents[1]
+    native = json.loads((root / "native/contracts/same-path-runtime.openapi.json").read_text())
+    retired = json.loads((root / "tests/fixtures/retired-python-handlers.json").read_text())
+    for operation in retired:
+        for method in operation["methods"]:
+            declaration = native["paths"][operation["path"]][method.lower()]
+            assert declaration["operationId"]
+            assert any(code.startswith("2") for code in declaration["responses"])
+
+
+def test_native_same_path_schema_has_no_missing_component_references() -> None:
+    """No contract references a removed Python-only model definition."""
+    root = Path(__file__).resolve().parents[1]
+    native = json.loads((root / "native/contracts/same-path-runtime.openapi.json").read_text())
+    schemas = native["components"]["schemas"]
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/components/schemas/"):
+                assert reference.removeprefix("#/components/schemas/") in schemas
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(native)
+
+
+def test_client_schema_operation_ids_are_unique_across_native_aliases() -> None:
+    """Aliased Rust handlers retain DTOs without duplicate TypeScript operations."""
+    schema = client_openapi_schema()
+    seen: dict[str, tuple[str, str]] = {}
+    for path, item in schema["paths"].items():
+        for method, operation in item.items():
+            if not isinstance(operation, dict):
+                continue
+            operation_id = operation.get("operationId")
+            if isinstance(operation_id, str):
+                assert operation_id not in seen, (operation_id, seen.get(operation_id), (method, path))
+                seen[operation_id] = (method, path)

@@ -2,8 +2,8 @@
 //! The health probe never reads database configuration.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 use axum::{
-    extract::Request,
-    http::{Extensions, HeaderValue, StatusCode},
+    extract::{OriginalUri, Request},
+    http::{Extensions, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
     Json, Router,
@@ -56,13 +56,17 @@ async fn native_demo() -> Response {
 }
 
 /// Serve simple startup metrics without requiring database or auth state.
-async fn native_metrics() -> Response {
+async fn native_metrics(method: Method, OriginalUri(uri): OriginalUri) -> Response {
+    let path = uri.path().to_owned();
     let mut response = comicpile_roll_service::metrics::get_metrics()
         .await
         .into_response();
     response
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    if method == Method::GET {
+        eprintln!("native_roll route={} runtime=rust status=200", path);
+    }
     response
 }
 
@@ -267,11 +271,14 @@ fn app() -> Router {
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
+        .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
+        .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
@@ -780,6 +787,15 @@ mod tests {
                      queue_position_is_manual boolean NOT NULL DEFAULT false,
                      is_blocked boolean NOT NULL DEFAULT false
                  );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY,
+                     thread_id integer NOT NULL,
+                     issue_number varchar NOT NULL,
+                     position integer NOT NULL,
+                     status varchar NOT NULL,
+                     read_at timestamptz,
+                     created_at timestamptz NOT NULL DEFAULT now()
+                 );
                  CREATE TABLE {schema}.events (
                      id serial PRIMARY KEY,
                      type text NOT NULL,
@@ -1063,6 +1079,99 @@ mod tests {
             StatusCode::OK,
             "handlers must receive the invocation's tracked background registrar"
         );
+    }
+
+    #[tokio::test]
+    async fn two_router_thread_issue_list_loads_authenticated_pages_from_rust() {
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("thread-issues-ingress-{}", std::process::id());
+                let (access, _, user_id) = register_session(&username).await;
+                seed_threads(user_id, &[(21, 1)]).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed issues");
+                for (id, position, status) in [
+                    (101_i32, 1_i32, "unread"),
+                    (102_i32, 2_i32, "read"),
+                    (103_i32, 3_i32, "unread"),
+                ] {
+                    let thread_id = 21_i32;
+                    let issue_number = position.to_string();
+                    connection
+                        .execute(
+                            "INSERT INTO issues (id, thread_id, issue_number, position, status) \
+                             VALUES ($1, $2, $3, $4, $5)",
+                            &[&id, &thread_id, &issue_number, &position, &status],
+                        )
+                        .await
+                        .expect("seed issue");
+                }
+                drop(connection);
+
+                let request = |uri: String, token: &str| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .expect("thread issues request")
+                };
+                let (status, first, _, text) = call_app(request(
+                    "/api/v1/threads/21/issues?page_size=2".into(),
+                    &access,
+                ))
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(first["total_count"], 3);
+                assert_eq!(first["page_size"], 2);
+                assert_eq!(first["issues"].as_array().expect("issue rows").len(), 2);
+                assert_eq!(first["issues"][0]["issue_number"], "1");
+                assert_eq!(first["issues"][1]["issue_number"], "2");
+                let cursor = first["next_page_token"]
+                    .as_str()
+                    .expect("pagination cursor");
+                assert_eq!(cursor, "2,102");
+
+                let (status, next, _, text) = call_app(request(
+                    format!("/api/v1/threads/21/issues?page_size=2&page_token={cursor}"),
+                    &access,
+                ))
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(next["total_count"], 3);
+                assert_eq!(next["issues"].as_array().expect("last page").len(), 1);
+                assert_eq!(next["issues"][0]["issue_number"], "3");
+                assert!(next["next_page_token"].is_null());
+
+                let (status, unread, _, text) = call_app(request(
+                    "/api/v1/threads/21/issues?status=unread&page_size=100".into(),
+                    &access,
+                ))
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(unread["total_count"], 2);
+                assert_eq!(unread["issues"].as_array().expect("filtered").len(), 2);
+
+                let (status, missing, _, _) =
+                    call_app(request("/api/v1/threads/999/issues".into(), &access)).await;
+                assert_eq!(status, StatusCode::NOT_FOUND);
+                assert_eq!(missing["detail"], "Thread 999 not found");
+
+                let other_name = format!("thread-issues-foreign-{}", std::process::id());
+                let (other_access, _, _) = register_session(&other_name).await;
+                let (status, _, _, _) =
+                    call_app(request("/api/v1/threads/21/issues".into(), &other_access)).await;
+                assert_eq!(status, StatusCode::NOT_FOUND);
+            })
+            .await;
     }
 
     #[tokio::test]

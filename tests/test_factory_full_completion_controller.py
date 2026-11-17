@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -206,17 +207,14 @@ def _assert_current_demand_caps():
         def load_policy(self):
             return FakePolicy()
 
-        def load_manifest_candidates(self, manifest):
+        def load_manifest_candidates(self, manifest=None):
             return [{"worker": str(worker)} for worker in range(6, 16)]
 
         def owned_worker_ids(self, items):
             return set()
 
-        def registry_comments(self):
-            return []
-
-        def latest_worker_health(self, comments, trusted):
-            return {}
+        def durable_factory_state(self, now_epoch=None):
+            return {}, {}
 
         def capacity_report(self, candidates, health, now_epoch):
             return {"executable_slot_capacity": 10}
@@ -269,17 +267,14 @@ def _assert_current_demand_multi_provider():
         def load_policy(self):
             return FakePolicy()
 
-        def load_manifest_candidates(self, manifest):
+        def load_manifest_candidates(self, manifest=None):
             return [{"worker": str(worker)} for worker in range(6, 16)]
 
         def owned_worker_ids(self, items):
             return set()
 
-        def registry_comments(self):
-            return []
-
-        def latest_worker_health(self, comments, trusted):
-            return {}
+        def durable_factory_state(self, now_epoch=None):
+            return {}, {}
 
         def capacity_report(self, candidates, health, now_epoch):
             return {"executable_slot_capacity": 10}
@@ -294,73 +289,35 @@ def _assert_current_demand_multi_provider():
     assert full.completion_worker_target(measured) == 1
     assert capacity["executable_slot_capacity"] == 10
 
-def _valid_telemetry_anchor():
-    return {
-        "id": full.TELEMETRY_COMMENT_ID,
-        "issue_url": "https://api.github.com/repos/JoshCLWren/comic-pile/issues/1093",
-        "body": full.TELEMETRY_MARKER + "\\nprior content",
-    }
-
-
-def test_no_work_dispatch_signal_makes_zero_telemetry_calls(monkeypatch):
+def test_no_work_dispatch_signal_writes_no_summary(monkeypatch, tmp_path):
+    summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
-    controller = MagicMock()
-    full.persist_funnel_telemetry(controller, {"selected_workers": []})
-    controller.gh_json.assert_not_called()
-    controller.run_gh.assert_not_called()
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    full.persist_funnel_telemetry({"selected_workers": []})
+    assert not summary.exists()
 
 
-def test_scheduled_heartbeat_updates_only_verified_telemetry_comment(monkeypatch):
+def test_scheduled_funnel_goes_to_job_summary_never_github_comments(monkeypatch, tmp_path):
+    """Issue #1093 is retired: the funnel lives in the trusted Actions run."""
+    summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
-    controller = MagicMock()
-    controller.REPO = "JoshCLWren/comic-pile"
-    controller.gh_json.return_value = _valid_telemetry_anchor()
-    full.persist_funnel_telemetry(controller, {"selected_workers": []})
-    endpoint = (
-        f"repos/JoshCLWren/comic-pile/issues/comments/{full.TELEMETRY_COMMENT_ID}"
-    )
-    controller.gh_json.assert_called_once_with(["api", endpoint])
-    controller.run_gh.assert_called_once()
-    args = controller.run_gh.call_args.args[0]
-    assert args[:4] == ["api", "--method", "PATCH", endpoint]
-    assert args[4] == "-f"
-    assert full.TELEMETRY_MARKER in args[5]
-    assert "Updated: " in args[5]
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    full.persist_funnel_telemetry({"selected_workers": ["11"], "completion_target": 1})
+    text = summary.read_text(encoding="utf-8")
+    assert full.TELEMETRY_MARKER in text
+    assert "Workers selected: 1" in text
+    assert "Updated: " in text
+    # The signature has no controller, so it cannot reach the GitHub API.
+    assert list(inspect.signature(full.persist_funnel_telemetry).parameters) == ["result"]
+    assert not hasattr(full, "TELEMETRY_COMMENT_ID")
 
 
-def test_actionable_wakeup_updates_verified_comment_without_pagination(monkeypatch):
-    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
-    controller = MagicMock()
-    controller.REPO = "JoshCLWren/comic-pile"
-    controller.gh_json.return_value = _valid_telemetry_anchor()
-    full.persist_funnel_telemetry(controller, {"selected_workers": ["11"]})
-    assert controller.gh_json.call_count == 1
-    assert "--paginate" not in repr(controller.mock_calls)
-    assert controller.run_gh.call_count == 1
-
-
-def test_mismatched_or_deleted_telemetry_marker_never_overwrites(monkeypatch):
+def test_missing_summary_file_does_not_block_factory(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
-    controller = MagicMock()
-    controller.REPO = "JoshCLWren/comic-pile"
-    for invalid in (
-        None,
-        {"id": full.TELEMETRY_COMMENT_ID, "body": "other reporter"},
-        {**_valid_telemetry_anchor(), "issue_url": "https://api.github.com/repos/elsewhere/repo/issues/1093"},
-        {**_valid_telemetry_anchor(), "id": 123},
-    ):
-        controller.gh_json.return_value = invalid
-        full.persist_funnel_telemetry(controller, {"selected_workers": []})
-    controller.run_gh.assert_not_called()
-
-
-def test_unavailable_telemetry_anchor_does_not_block_factory(monkeypatch):
-    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
-    controller = MagicMock()
-    controller.REPO = "JoshCLWren/comic-pile"
-    controller.gh_json.side_effect = RuntimeError("not found")
-    full.persist_funnel_telemetry(controller, {"selected_workers": []})
-    controller.run_gh.assert_not_called()
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    full.persist_funnel_telemetry({"selected_workers": ["11"]})
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "missing-dir" / "summary.md"))
+    full.persist_funnel_telemetry({"selected_workers": ["11"]})
 
 
 def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
@@ -371,7 +328,7 @@ def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
     work.list_prs.return_value = []
     completion.load_controller.return_value = work
     completion.load_policy.return_value = MagicMock()
-    completion.registry_comments.side_effect = AssertionError("unnecessary health scan")
+    completion.durable_factory_state.side_effect = AssertionError("unnecessary health scan")
     completion.load_manifest_candidates.side_effect = AssertionError("unnecessary manifest")
     completion.owned_worker_ids.side_effect = AssertionError("unnecessary owners")
     work.in_flight_omniroute_free_entries.side_effect = AssertionError("unnecessary inflight scan")
@@ -383,6 +340,6 @@ def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
     assert capacity["capacity_scan_skipped"] is True
     assert capacity["executable_candidates"] == []
     assert full.signal_dispatch(completion, demand, capacity)["selected_workers"] == []
-    completion.registry_comments.assert_not_called()
+    completion.durable_factory_state.assert_not_called()
     completion.owned_worker_ids.assert_not_called()
     work.in_flight_omniroute_free_entries.assert_not_called()

@@ -7,16 +7,20 @@ WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
 WORKER = ROOT / ".github" / "scripts" / "free-model-factory-worker.sh"
 
 
-def test_terminal_step_publishes_normalized_attempt_evidence() -> None:
+def test_terminal_step_summarizes_normalized_attempt_evidence() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "factory-attempt-outcome:v1" in workflow
-    assert "Attempt outcome: %s" in workflow
+    # Issue #1093 is retired: the provisional outcome is a job summary only;
+    # the trusted Entry persister classifies the job log into Neon.
+    assert "factory-attempt-outcome:v1" not in workflow
+    assert "Provisional attempt outcome: `%s`" in workflow
     assert "attempt_outcome='classification_pending'" in workflow
     assert "attempt_outcome='success'" not in workflow
     entry = (ROOT / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert 'verdict="code_delivered"' in entry
-    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert '"repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert '.head.repo.full_name == $repo' in entry
     assert "attempt_outcome='control_plane_failure'" in workflow
     assert "attempt_outcome='unknown_failure'" in workflow
 
@@ -31,11 +35,11 @@ def test_worker_status_is_captured_after_attempt_code_exits() -> None:
     assert "Exit 2 and 3 are reserved for controller invariant/read failures" in worker
 
 
-def test_terminal_step_preserves_newer_attempt_evidence() -> None:
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "existing_run > GITHUB_RUN_ID" in workflow
-    assert "Newer attempt evidence from run" in workflow
+def test_newer_attempt_evidence_is_ordered_by_run_in_neon() -> None:
+    """Run ordering moved from comment bodies to Neon's run-keyed projections."""
+    operations = (ROOT / ".github/scripts/factory_state_operations.py").read_text()
+    assert "last_run_id <= EXCLUDED.last_run_id" in operations
+    assert "existing_run > GITHUB_RUN_ID" not in WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_omniroute_control_plane_requests_retry_transient_tunnel_failures() -> None:

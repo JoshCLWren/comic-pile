@@ -105,10 +105,11 @@ cargo run --example bug_reports_openapi > ../contracts/bug-reports-v1.openapi.js
 ```
 
 It is generated only from `comicpile_roll_service::bug_reports::BugReportsApi`
-and preserves the Python wire contract (201 `issue_url`, 401/422/429/502/503)
-at the exact same method/paths. Python handlers remain until production
-proof; the frontend caller (`frontend/src/services/api-bug-reports.ts`)
-keeps calling `/v1/bug-reports/` unchanged.
+and preserves the retired Python wire contract (201 `issue_url`,
+401/422/429/502/503) at the exact same method/paths; the Python handlers were
+removed in #5162. The frontend caller
+(`frontend/src/services/api-bug-reports.ts`) keeps calling
+`/v1/bug-reports/` unchanged.
 
 `session-detail-v1.openapi.json` is the generated native contract for the
 same-path single-session slice `GET /api/sessions/{session_id}` and
@@ -187,3 +188,16 @@ pytest tests/test_rust_endpoint_oracle.py --no-cov
 This infrastructure does not change ingress. The Python bootstrap handlers and
 read model are removed (#4397, #4350); deleting the native Rust v2 handler
 remains #4299's scope.
+
+## Native operations retaining their original paths
+
+`same-path-runtime.openapi.json` is generated from Rust utoipa declarations and
+actual request/response DTOs for the native v1 and unversioned handlers. The
+Python schema exporter merges it before the canonical v2 document, so retiring
+shadowed Python handlers does not remove TypeScript client contracts.
+
+```bash
+cargo run --manifest-path native/roll-service/Cargo.toml --example same_path_openapi > native/contracts/same-path-runtime.openapi.json
+```
+
+The Rust drift test checks this artifact independently of the v2 contract.

@@ -2,6 +2,10 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Rust-cutover backlog freeze (owner direction, 2026-11-15)
+
+Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See `docs/AUTONOMOUS_FACTORY_POLICY.md` for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+
 ## Engineering objective completion
 
 For Comic Pile local factory delivery in Codex, use
@@ -54,17 +58,16 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 42 (41 native-rust + 1 python orphan).
+- Live v2 operations: 41 (41 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 224 operations (v1 191 + unversioned 33) plus 1 v2 orphan = 225 Python-handler operations; v1 active 117 live Python / 64 migrated (shadowed by Rust); unversioned active 17 live Python / 13 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
-- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); orphan `GET /api/v2/reading-boundaries/{thread_id}` has an explicit Python exception.
-- Full-surface inventory (v2 + v1 + unversioned + catch-all + orphan) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
-- Python orphan: `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi` via `/api/index.py` (owner #4335, no callers).
+- Full Python-handler surface: 145 operations (v1 126 + unversioned 19); v1 active 115 live Python / 1 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
+- Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
 
 Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
-- #4335 (10): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
+- #4335 (9): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
 - #4342 (1): `GET /api/v2/threads -> native-rust`
 - #4348 (1): `GET /api/v2/analytics/metrics -> native-rust`
 - #4443 (2): `POST /api/v2/issues/cards -> native-rust`; `PATCH /api/v2/issues/{issue_id} -> native-rust`
@@ -157,7 +160,7 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
-Leave full backend/frontend suites and aggregate coverage gates to CI. Do not run bare `pytest`,
+Leave full backend/frontend suites to CI. Python coverage thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
 `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
 requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
@@ -196,6 +199,12 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.14, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `pnpm` (frontend)
+
+## Database query efficiency (owner rule, November 15, 2026)
+
+Write efficient PostgreSQL queries by construction. No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, bounded batch requests, indexed filters, predictable pagination, and one coherent transaction where required. Do not materialize whole libraries or introduce screen-level request waterfalls. Preserve ownership checks, authorization, idempotency, locking, and correct snapshot semantics rather than chasing an arbitrary number of statements. If a real slow query or performance regression is demonstrated, profile the actual workload and fix it with a focused test.
+
+**The blanket per-route SQL-budget program is canceled by the owner.** Never require numeric statement ceilings, a `sql_budget` entry, `pg_stat_statements` proof for every endpoint, small/large fixture quotas, or SQL-budget coverage tickets as a prerequisite for a Rust migration. Do not revive, split, or recreate #4737, #4988, or #5146–#5151 without explicit owner direction. Existing focused regressions for known query failures remain valuable; do not strip legitimate performance safeguards outside this discontinued program.
 
 ## CRITICAL: Async PostgreSQL Only in Application Code
 
@@ -401,7 +410,7 @@ make verify-e2e
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 94% coverage threshold.
+API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
 
 **Key Fixtures (from `tests/conftest.py`)**:
 ```python
@@ -543,21 +552,33 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 - **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 
-## Factory roster discovery
+## Factory provider discovery and durable slots
 
-Fixed-model factories read `.github/free-model-factories.tsv`. Model presence is **OpenCode CLI** (`opencode models <provider>`), not OmniRoute and not integrate.api.nvidia.com alone.
+Factory worker IDs are generated from the provider integration registry by
+`.github/scripts/factory_worker_slots.py`. They are stable per provider and
+slot index, independent of the live catalog and model identity. Do not add a
+source-controlled model/worker roster or expected-worker snapshot.
 
-Scheduled workflow: `.github/workflows/factory-model-discovery.yml` (also `workflow_dispatch`). This audits OpenCode Free model availability but no longer creates roster mutations for new or retired OpenCode models. Durable `opencode-free` worker IDs use the live free catalog at dispatch time, including Big Pickle, without duplicate fixed workers. Discovery still opens a reviewed retirement PR when a non-dynamic pin disappears or a sticky NVIDIA `factory-model-retired-410:v1` marker from #1093 identifies a retired model. The workflow requires `PR_REBASE_TOKEN` to trigger normal PR CI, and never replaces an existing review branch. `.github/factory-expected-workers.json` tracks worker identities, not the complete free-model catalog.
+The trusted dispatcher leases work only to credential-eligible providers that
+are not in cooldown and have capacity. The runner discovers the exact upstream
+model ID from the OpenCode CLI, Kilo CLI or the published provider catalog at
+execution time. The selected model must be passed unchanged to OpenCode.
+Catalog listing alone does not establish callability; actual useful execution
+and its trusted outcome are the evidence of a working route. Pricing is not
+an eligibility gate. Credential failures, provider quotas, throttles and
+observed failures produce bounded retries and cooldowns, never permanent
+inventory retirement.
 
-Local plan against a recorded catalog:
+The model selection/regression contract is checked with:
 
 ```bash
-python3 .github/scripts/factory_model_retirement.py plan \
-  --catalog-json tests/fixtures/opencode-catalog/keep-present.json
 python3 .github/scripts/validate-free-model-factories.py
+python3 -m pytest --noconftest -o addopts='' -q tests/test_factory_provider_candidates.py tests/test_factory_worker_slots.py tests/test_factory_runtime_model_select.py
 ```
 
-Secrets for the live CLI path: `OPENCODE_ZEN_API_KEY`, `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, and `PR_REBASE_TOKEN` to open the retirement PR. Details: `docs/AUTONOMOUS_FACTORY_POLICY.md` (Fixed-model roster discovery and retirement).
+Do not resurrect `.github/free-model-factories.tsv`,
+`.github/factory-expected-workers.json`,
+`.github/factory-roster-snapshot.json`, or the removed retirement workflow.
 
 ## GitHub Issue Workflow
 

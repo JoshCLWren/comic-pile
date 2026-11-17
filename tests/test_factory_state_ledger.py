@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -59,23 +58,16 @@ def test_db_error_is_not_silenced_after_configured_claim(monkeypatch, tmp_path):
         ledger.acquire_lease("owner/repo", "42", [5001])
 
 
-def test_trusted_recent_running_heartbeat_is_recorded_once(monkeypatch):
-    import importlib
-    factory_work_policy = importlib.import_module("factory_work_policy")
-    monkeypatch.setattr(factory_work_policy, "comment_is_trusted", lambda c: c.get("trusted") is True)
+def test_trusted_lifecycle_start_is_recorded_once_per_run(monkeypatch):
     found = []
     monkeypatch.setattr(ledger, "record_events", lambda repo, entries: found.extend(entries) or len(entries))
-    now = datetime.now(UTC).isoformat()
-    body = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-42 -->\nOutcome: running\nRun: 43123\n"
-    assert ledger.record_heartbeat_comments("owner/repo", [
-        {"id": 15, "updated_at": now, "body": body, "trusted": True},
-        {"id": 16, "updated_at": now, "body": body, "trusted": False},
-        {"id": 17, "updated_at": (datetime.now(UTC)-timedelta(days=1)).isoformat(),
-         "body": body, "trusted": True},
-    ]) == 1
+    assert ledger.record_lifecycle("owner/repo", "43123", "42", "started") == 1
     assert found[0]["event_type"] == "worker_started"
     assert found[0]["worker"] == "42"
     assert found[0]["run_id"] == "43123"
+    # Idempotency is per run/status in _events, never per comment edit.
+    assert found[0]["event_id"] == "lifecycle:43123:started"
+    assert not hasattr(ledger, "record_heartbeat_comments")
 
 
 def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
@@ -155,15 +147,20 @@ def test_trusted_collector_verifies_code_handoff_before_persistence():
     root = Path(__file__).resolve().parents[1]
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert 'delivery_pr="$(jq -r' in entry
-    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
-    assert "pull-requests: read" in entry
-    assert 'ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}' in entry
-    assert 'Verified delivery: %s' in entry
-    assert 'existing_run > GITHUB_RUN_ID' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert '"repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert '.head.repo.full_name == $repo' in entry
+    assert "pull-requests: write" in entry
+    assert "factory_checkpoint_handoff.py" in entry
+    # The verdict is Neon plus job summary; no #1093 marker is patched.
+    assert "ATTEMPT_COMMENT_ID" not in entry
+    assert "issues/comments" not in entry
+    assert "Neon terminal classification" in entry
     observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
     assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in observer
     assert "pull-requests: read" in observer
-    assert "Verified delivery: %s" in observer
+    assert "Verified delivery:" in observer
+    assert "issues/comments" not in observer
 
 
 def test_only_trusted_collectors_and_observer_use_ledger():
@@ -175,7 +172,12 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert "acquire_lease(REPO, worker, numbers, FIXED_LEASE_TTL_SECONDS)" in controller
     assert "release_lease(REPO, worker, claim_token, 'claim-rollback')" in controller
-    assert "record_heartbeat_comments(REPO, changes)" in collector
+    # Registry heartbeat scraping was replaced by durable runtime projections
+    # (#5238); the completion collector no longer writes the ledger itself.
+    assert "record_heartbeat_comments" not in collector
+    # Issue #1093 read-back was retired; trusted run jobs write lifecycle.
+    assert not (root / ".github/scripts/factory_registry_ingest.py").exists()
+    assert "factory_state_ledger.py lifecycle" in untrusted
     assert "Persist classified worker completion in Neon" in observer
     trusted_cleanup = yaml.safe_load(untrusted)["jobs"]["release_pre_session_lease"]
     model_job = yaml.safe_load(untrusted)["jobs"]["factory"]
@@ -183,7 +185,7 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "NEON_API_KEY" not in str(model_job)
     assert any(step.get("uses") == "./.github/actions/factory-state-cache"
                for step in trusted_cleanup["steps"])
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
@@ -209,10 +211,11 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "factory_state_ledger.py runtime-outcome" in entry
     assert "gh workflow run factory-completion-drain.yml" in entry
     assert "persist_outcome:" not in drain
-    assert "source_run_id" not in drain
+    assert "source_run_id" in drain
+    assert "factory-state-cache" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
     assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
     assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])
@@ -226,9 +229,12 @@ def test_verified_lease_renewal_is_only_called_after_actions_liveness() -> None:
     assert "prior_claims[worker_id] = worker_claim(REPO, worker_id)" in controller
     assert "release_lease(REPO, worker_id, token, 'stale-lease-reconciled')" in controller
     assert "not target_owned_by(number, f'factory:{worker_id}')" in controller
-    assert '"worker_outcome_signal" if status in {"success", "failure"}' in inspect.getsource(
-        ledger.record_heartbeat_comments
-    )
+    assert ledger.LIFECYCLE_STATUSES == {
+        "started": "worker_started",
+        "finished": "worker_outcome_signal",
+        "failure": "worker_outcome_signal",
+    }
+    assert "record_events" in inspect.getsource(ledger.record_lifecycle)
 
 def test_terminal_event_idempotency_spans_classification_outcomes() -> None:
     """A single source run cannot be counted as both success and failure."""
@@ -253,9 +259,9 @@ def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
     """The current gh CLI rejects raw job logs containing ANSI escape codes."""
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    assert 'gh api --allow-escape-sequences \\' in workflow
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences' in workflow
     assert '"repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"' in workflow
-    assert '> "$RUNNER_TEMP/factory-entry.log"' in workflow
+    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in workflow
     assert "factory_state_ledger.py runtime-outcome" in workflow
     # The opt-out is only safe for redirected file output, never terminal output.
     assert "--allow-escape-sequences" not in (
@@ -323,7 +329,7 @@ def test_entry_passes_completed_job_log_into_trusted_ledger():
     root = Path(__file__).resolve().parents[1]
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert '--log "$RUNNER_TEMP/factory-entry.log"' in entry
-    assert entry.index("classify-fixed-model-run.py") < entry.index("factory_state_ledger.py runtime-outcome")
+    assert entry.index("factory_dynamic_outcome.py") < entry.index("factory_state_ledger.py runtime-outcome")
 
 
 
@@ -433,3 +439,23 @@ def test_successful_dynamic_rotation_persists_failed_models_and_real_final_model
         log.replace("crouton-alpha-free has been deprecated", "other-free has been deprecated"),
     ).get("model_failures") is None
     assert ledger.refine_trusted_dynamic_models({**outcome, "source": "nvidia"}, log) == {**outcome, "source": "nvidia"}
+
+
+def test_trusted_terminal_collector_retries_scoped_reads_and_idempotent_writes():
+    """A temporary API or Neon outage must not lose a completed worker outcome."""
+    root = SCRIPTS.parent.parent
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert "retry_gh_api()" in entry
+    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in entry
+    assert 'for attempt in 1 2 3 4; do' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-run-jobs.json"' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log"' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert "if python3 .github/scripts/factory_state_ledger.py runtime-outcome" in entry
+    assert 'Unable to persist Neon terminal outcome after 4 attempts' in entry
+    # Markdown backticks must be quoted so shell does not execute agent_timeout.
+    assert "printf 'Neon terminal classification: `%s`\\n'" in entry
+    assert 'echo "Neon terminal classification: `' not in entry
+    operations = (root / ".github/scripts/factory_state_operations.py").read_text()
+    assert "INSERT INTO public.factory_runtime_event_keys(repo,run_id)" in operations
+    assert "ON CONFLICT DO NOTHING RETURNING run_id" in operations

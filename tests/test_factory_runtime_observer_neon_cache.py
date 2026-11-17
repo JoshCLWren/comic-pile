@@ -18,17 +18,14 @@ def test_only_trusted_workflow_run_publisher_receives_neon_cache() -> None:
     assert "secrets.NEON_API_KEY" in publisher
 
 
-def test_existing_marker_uses_shared_cache_but_live_fallback_guards_new_creates() -> None:
+def test_observer_persists_neon_outcome_without_registry_comments() -> None:
+    """Issue #1093 is retired: the observer's durable record is Neon only."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     publisher = workflow.split("  publish-runtime-outcome:", 1)[1]
-    marker = 'marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-'
-    cache_lookup = 'from factory_completion_controller import registry_comments'
-    miss = 'if [[ -z "$comment_id" ]]; then'
-    full_scan = 'gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"'
-    live_recheck = 'gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"'
-    create = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments"'
-    assert marker in publisher
-    assert publisher.index(cache_lookup) < publisher.index(miss) < publisher.index(full_scan)
-    assert publisher.index(full_scan) < publisher.index(live_recheck) < publisher.index(create)
-    assert "Newer attempt evidence from run" in publisher
-    assert 'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"' in publisher
+    assert "issues/1093" not in publisher
+    assert "issues/comments" not in publisher
+    assert "__attempt_id" not in publisher
+    assert "factory_registry_ingest" not in publisher
+    assert "remember_verified_markers" not in publisher
+    assert "factory_state_ledger.py runtime-outcome" in publisher
+    assert "issues: write" not in workflow

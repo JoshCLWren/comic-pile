@@ -363,7 +363,7 @@ echo "status=$status reason=$FACTORY_PUSH_BLOCKED_REASON"
         assert "status=1 reason=fast-checks-failed" in result.stdout, result.stderr
         assert "git:add" not in result.stderr and "git:commit" not in result.stderr
         assert "PUSH-CREDENTIAL" not in result.stderr
-        assert "git:reset --hard base" in result.stderr
+        assert "git:reset" not in result.stderr
         assert "report:" in result.stderr
 
 
@@ -506,6 +506,7 @@ def test_rust_sources_manifests_and_native_rewrites_select_preflight(tmp_path: P
             "api/native_roll.rs": "fn main() {}\n",
             "native/roll-service/Cargo.toml": "[package]\nname = 'demo'\n",
             "Cargo.lock": "lock\n",
+            "rust-toolchain.toml": "[toolchain]\nchannel = 'stable'\n",
             "vercel.json": "{}\n",
         },
     )
@@ -521,6 +522,7 @@ def test_rust_sources_manifests_and_native_rewrites_select_preflight(tmp_path: P
     assert "rust\tapi/native_roll.rs" in plan
     assert "rust\tnative/roll-service/Cargo.toml" in plan
     assert "rust\tCargo.lock" in plan
+    assert "rust\trust-toolchain.toml" in plan
     assert "ingress\tvercel.json" in plan
     assert "ingress\tapi/native_roll.rs" in plan
 
@@ -542,7 +544,7 @@ def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path
 
 
 def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path) -> None:
-    """The gate covers service Clippy plus root Vercel compilation, including deletes."""
+    """The gate checks the shared workspace, including deletes."""
     repo = repo_with(tmp_path, {"api/native_roll.rs": "fn main() {}\n"})
     rust_fixture(repo)
     git(repo, "add", "-A")
@@ -552,10 +554,9 @@ def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path)
     result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
     assert result.returncode == 0, result.stdout + result.stderr
     cargo = (tmp_path / "cargo.log").read_text()
-    assert "cargo +stable fmt --manifest-path native/roll-service/Cargo.toml -- --check" in cargo
-    assert "cargo +stable clippy --locked --manifest-path native/roll-service/Cargo.toml --all-targets -- -D warnings" in cargo
-    assert "cargo +stable fmt" in cargo
-    assert "cargo +stable check" in cargo
+    assert "cargo +stable fmt --all -- --check" in cargo
+    assert "cargo +stable clippy --workspace --locked --all-targets -- -D warnings" in cargo
+    assert "cargo +stable check --workspace --locked --all-targets" in cargo
 
 
 def test_vercel_rewrite_only_change_runs_routing_tests_not_cargo(tmp_path: Path) -> None:
