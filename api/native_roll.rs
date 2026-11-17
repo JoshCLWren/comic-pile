@@ -777,12 +777,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let seq = SCHEMA_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let schema = format!(
-            "ingress_queue_{}_{}_{}",
-            std::process::id(),
-            nanos,
-            seq
-        );
+        let schema = format!("ingress_queue_{}_{}_{}", std::process::id(), nanos, seq);
         admin
             .batch_execute(&format!(
                 "CREATE SCHEMA {schema};
