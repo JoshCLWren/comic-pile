@@ -587,9 +587,6 @@ impl CreatorLibrary {
         self.issue_index.get(&id).map(|i| &self.issues[*i])
     }
 
-    fn issue_ids(&self) -> impl Iterator<Item = i64> + '_ {
-        self.issues.iter().map(|issue| issue.id)
-    }
 }
 
 fn manual_creator_id(name: &str) -> i64 {
@@ -2624,7 +2621,12 @@ fn build_drilldown(
             }
             let mut sorted = rated_ids.clone();
             sorted.sort_by(|a, b| {
-                library.ratings.get(a).partial_cmp(library.ratings.get(b)).unwrap_or(Ordering::Equal)
+                library
+                    .ratings
+                    .get(a)
+                    .copied()
+                    .partial_cmp(&library.ratings.get(b).copied())
+                    .unwrap_or(Ordering::Equal)
             });
             let count = sorted.len();
             let middle = count / 2;
@@ -2799,9 +2801,9 @@ fn build_drilldown(
             let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some("Read but has no effective rating".to_string()))).collect();
             let excluded: Vec<CreatorMetricIssue> = all_ids
                 .iter()
-                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "unread") || library.ratings.contains_key(id))
+                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "unread") || library.ratings.contains_key(*id))
                 .map(|id| {
-                    let reason = if library.issue(**id).is_some_and(|issue| issue.status == "unread") {
+                    let reason = if library.issue(*id).is_some_and(|issue| issue.status == "unread") {
                         "Issue is unread"
                     } else {
                         "Issue has an effective rating"
