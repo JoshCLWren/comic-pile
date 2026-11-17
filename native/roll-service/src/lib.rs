@@ -7,7 +7,9 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
+pub mod continuity_plans_project_preview;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -23,6 +25,8 @@ pub mod dice_state;
 pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
+pub mod issue_identity_adoption_preview;
+pub mod issue_identity_cbl_reading_graph_preview;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
@@ -482,6 +486,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_series_mapping_preview::preview_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(continuity_plans_project_preview::preview_plan_projection_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
         )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
