@@ -15,6 +15,13 @@ import {
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
 
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
+
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
