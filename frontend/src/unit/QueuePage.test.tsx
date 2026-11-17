@@ -156,12 +156,14 @@ const mockedIssuesApi = vi.mocked(issuesApi) as any
 beforeEach(() => {
   // Completed rows come from the independent Rust collection, never the active Queue response.
   mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 }],
     hasNextPage: false,
     isLoadingMore: false,
     isError: false,
     loadMore: vi.fn(),
     retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
   } as never)
   mockedUseQueueThreads.mockReturnValue({
     data: [
@@ -534,9 +536,11 @@ describe('Keyboard Accessibility', () => {
       }
     })
     mockedUseCompletedThreads.mockReturnValue({
+      // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
       threads: [{ id: 3, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
       hasNextPage: false, isLoadingMore: false, isError: false,
       loadMore: vi.fn(), retry: vi.fn(),
+    // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
     } as never)
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
@@ -597,9 +601,11 @@ describe('Keyboard Accessibility', () => {
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
   mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
     hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
   } as never)
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
@@ -1132,9 +1138,11 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
   mockedUseCompletedThreads.mockReturnValue({
+    // SAFETY: This completed-series fixture contains the fields used by the Queue rendering tests.
     threads: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }],
     hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
+  // SAFETY: The mock intentionally substitutes a partial, owner-scoped completed collection.
   } as never)
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
