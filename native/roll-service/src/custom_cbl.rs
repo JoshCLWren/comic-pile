@@ -27,7 +27,7 @@ use axum::{
 use deadpool_postgres::Transaction;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::types::ToSql;
 
@@ -1822,6 +1822,150 @@ async fn validate_merged_node_ownership(
     Ok(())
 }
 
+/// Mirror Python `editor_nodes_for_plan`: `reading_plan_issues` is the
+/// membership authority and `nodes_json` only supplies annotations for
+/// matching occurrence ids. Legacy plans with no membership rows fall back to
+/// the persisted document. Applying on top of raw `nodes_json` would rebuild
+/// the overlay from a stale superset and silently drop authoritative members.
+async fn editor_nodes_for_plan(
+    tx: &Transaction<'_>,
+    plan_id: i32,
+    nodes_json: &serde_json::Value,
+) -> Result<Vec<serde_json::Value>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT occurrence_id, issue_id, lane_id, display_position, label,
+                    reader_role, reader_optional, is_checkpoint,
+                    source_metadata_json::text
+             FROM reading_plan_issues WHERE plan_id=$1
+             ORDER BY lane_id, display_position",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let stored = nodes_json.as_array().cloned().unwrap_or_default();
+    if rows.is_empty() {
+        return Ok(stored);
+    }
+
+    // ContinuityPlanNode fields; stale JSON keys are dropped like Python's
+    // `model_validate`, while source/reader/checkpoint annotations survive.
+    const ISSUE_FIELDS: &[&str] = &[
+        "id",
+        "node_type",
+        "ref_id",
+        "lane_id",
+        "position",
+        "label",
+        "source_role",
+        "source_confidence",
+        "source_explanation",
+        "source_paths",
+        "source_cbl_placements",
+        "source_story_arc_ids",
+        "source_target_story_arc_id",
+        "reader_role",
+        "reader_optional",
+        "is_checkpoint",
+        "checkpoint_target_ref_id",
+        "checkpoint_target_ref_ids",
+        "convergence_gate",
+    ];
+
+    let mut json_by_id: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut extra_non_issue = Vec::new();
+    for raw in &stored {
+        match raw.get("node_type").and_then(|value| value.as_str()) {
+            Some("issue") => {
+                if let Some(id) = raw
+                    .get("id")
+                    .and_then(|value| value.as_str())
+                    .filter(|id| !id.is_empty())
+                {
+                    json_by_id.insert(id.to_string(), raw.clone());
+                }
+            }
+            Some("crossover") | Some("thread") => extra_non_issue.push(raw.clone()),
+            _ => {}
+        }
+    }
+
+    let mut nodes = Vec::with_capacity(rows.len() + extra_non_issue.len());
+    for row in &rows {
+        let occurrence_id: String = row.get(0);
+        let issue_id: i32 = row.get(1);
+        let lane_id: String = row.get(2);
+        let display_position: i32 = row.get(3);
+        let label: Option<String> = row.get(4);
+        let reader_role: Option<String> = row.get(5);
+        let reader_optional: Option<bool> = row.get(6);
+        let is_checkpoint: bool = row.get(7);
+        let metadata_text: Option<String> = row.get(8);
+
+        let mut node = json_by_id
+            .get(&occurrence_id)
+            .and_then(serde_json::Value::as_object)
+            .map(|object| {
+                object
+                    .iter()
+                    .filter(|(key, _)| ISSUE_FIELDS.contains(&key.as_str()))
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect::<serde_json::Map<String, serde_json::Value>>()
+            })
+            .unwrap_or_default();
+        node.insert("id".into(), serde_json::Value::String(occurrence_id));
+        node.insert("node_type".into(), json!("issue"));
+        node.insert("ref_id".into(), json!(issue_id));
+        node.insert("lane_id".into(), serde_json::Value::String(lane_id));
+        node.insert("position".into(), json!(display_position));
+        node.insert("is_checkpoint".into(), json!(is_checkpoint));
+        if let Some(label) = label {
+            node.insert("label".into(), json!(label));
+        }
+        if let Some(role) = reader_role {
+            node.insert("reader_role".into(), json!(role));
+        }
+        if let Some(optional) = reader_optional {
+            node.insert("reader_optional".into(), json!(optional));
+        }
+        if let Some(text) = metadata_text {
+            if let Ok(serde_json::Value::Object(metadata)) =
+                serde_json::from_str::<serde_json::Value>(&text)
+            {
+                for (key, value) in metadata {
+                    if node.get(&key).map_or(true, |current| current.is_null()) {
+                        node.insert(key, value);
+                    }
+                }
+            }
+        }
+        nodes.push(serde_json::Value::Object(node));
+    }
+    nodes.extend(extra_non_issue);
+    fn node_position(node: &serde_json::Value) -> i64 {
+        node.get("position")
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
+    }
+    fn node_lane(node: &serde_json::Value) -> &str {
+        node.get("lane_id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+    }
+    fn node_id(node: &serde_json::Value) -> &str {
+        node.get("id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+    }
+    nodes.sort_by(|left, right| {
+        node_position(left)
+            .cmp(&node_position(right))
+            .then_with(|| node_lane(left).cmp(node_lane(right)))
+            .then_with(|| node_id(left).cmp(node_id(right)))
+    });
+    Ok(nodes)
+}
+
 /// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
 ///
 /// The Axum router cannot express a parameter sharing a segment with the
@@ -1955,9 +2099,11 @@ pub async fn apply_custom_cbl(
         ));
     }
 
-    // Parse nodes
-    let mut nodes: Vec<serde_json::Value> =
-        serde_json::from_value(nodes_json.clone()).unwrap_or_default();
+    // Read membership-authoritative editor nodes: Python applies on top of
+    // `editor_nodes_for_plan`, where `reading_plan_issues` overrides a stale
+    // `nodes_json` superset. Reading the persisted document directly here
+    // would let `:apply` drop authoritative members during the overlay rebuild.
+    let mut nodes = editor_nodes_for_plan(&tx, plan_id, &nodes_json).await?;
 
     // Load all owned issue IDs for validation
     let owned_issues: BTreeSet<i32> = {

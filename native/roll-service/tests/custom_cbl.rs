@@ -499,3 +499,82 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
     );
     drop(conn);
 }
+
+#[tokio::test]
+async fn apply_preserves_authoritative_plan_membership() {
+    let fixture = setup().await;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+        VALUES (910203, 910101, '8', 'unread', NOW(), 2),
+               (910204, 910101, '9', 'unread', NOW(), 3);
+
+        INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+        VALUES (920002, {}, 'Apply membership target', 'strict_sequential',
+                '[]'::json, '[{{"id":"custom-cbl","name":"Custom CBL","order":0}}]'::json,
+                NOW(), NOW());
+
+        INSERT INTO reading_plan_issues
+           (plan_id, occurrence_id, issue_id, lane_id, display_position, label, is_checkpoint)
+        VALUES (920002, 'authoritative-910204', 910204, 'custom-cbl', 0, 'Authoritative', false);
+        "#,
+        fixture.user_id
+    ))
+    .await
+    .expect("seed plan whose authoritative membership is absent from nodes_json");
+    drop(conn);
+
+    let (status, list) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Apply membership source",
+            "mode": "strict",
+            "issue_ids": [910201, 910203],
+            "checkpoint_issue_ids": [910201]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{list}");
+    let list_id = list["id"].as_i64().unwrap();
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920002:apply"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["added_issue_ids"], json!([910201, 910203]));
+    assert!(
+        body["nodes"]
+            .as_array()
+            .is_some_and(|nodes| nodes.iter().any(|node| node["ref_id"] == json!(910204))),
+        "authoritative member must survive into the merged plan: {body}"
+    );
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let members: Vec<i32> = conn
+        .query(
+            "SELECT issue_id FROM reading_plan_issues
+             WHERE plan_id=920002 ORDER BY display_position",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(
+        members,
+        vec![910204, 910201, 910203],
+        "membership overlay must be derived from authoritative rows, not stale nodes_json"
+    );
+    drop(conn);
+}
