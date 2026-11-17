@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -92,6 +93,24 @@ def _json_catalog(raw_catalog: str) -> list[dict[str, Any]] | None:
     return [item for item in items if isinstance(item, dict)]
 
 
+# Catalogs such as NVIDIA's publish embedding, reranking, retrieval, reward
+# and safety-classifier models beside chat models, with no type metadata.
+# They can never run an OpenCode coding session; every lease that tried one
+# (e.g. nvidia/embed-qa-4 in run 44091809870) burned a failover attempt and
+# only earned a temporary cooldown. Without explicit "language" metadata, a
+# model whose id names one of these non-chat capabilities is not a candidate.
+_NON_CHAT_ID = re.compile(
+    r"(?:^|[/_.-])(?:[a-z0-9]*embed[a-z0-9]*|rerank[a-z0-9]*|[a-z]*retriever|reward|"
+    r"content-safety|safety-guard|[a-z]*guard|clip|nv-ingest|parse|detector|ocr)(?:$|[/_.:-])",
+    re.I,
+)
+
+
+def _non_chat_model(model: str, item: dict[str, Any]) -> bool:
+    """True for a model id naming a non-chat capability, absent type metadata."""
+    return item.get("type") is None and bool(_NON_CHAT_ID.search(model))
+
+
 class OpenAICompatibleAdapter:
     """Discover live provider models, not an approved price/ID roster."""
 
@@ -123,6 +142,8 @@ class OpenAICompatibleAdapter:
             if isinstance(supported, list) and "tools" not in supported:
                 continue
             if item.get("type") not in (None, "language"):
+                continue
+            if _non_chat_model(model, item):
                 continue
             models.add(model)
 
