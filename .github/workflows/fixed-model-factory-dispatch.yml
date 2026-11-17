@@ -615,7 +615,7 @@ jobs:
           export FACTORY_ATTEMPT_HISTORY_CACHE="$history_cache_dir/comments.json"
           dispatch_assigned_worker() {
             local worker="$1"
-            local assignment kind attempt=1
+            local assignment kind reason attempt=1
 
             if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then
               echo "Factory ${worker}: controller assignment failed" >&2
@@ -624,8 +624,17 @@ jobs:
             kind="$(jq -r '.kind // empty' <<< "$assignment" 2>/dev/null || true)"
             case "$kind" in
               none)
-                echo "Factory ${worker}: no executable control-plane assignment"
-                consecutive_idle=$((consecutive_idle + 1))
+                # Only an empty shared pool counts toward the early stop. A
+                # busy (leased), paused or budget-capped worker says nothing
+                # about the pool; counting it starved free workers later in
+                # the roster.
+                reason="$(jq -r '.reason // "no_work"' <<< "$assignment" 2>/dev/null || echo no_work)"
+                if [[ "$reason" == "worker_unavailable" ]]; then
+                  echo "Factory ${worker}: unavailable this tick; trying next worker"
+                else
+                  echo "Factory ${worker}: no executable control-plane assignment"
+                  consecutive_idle=$((consecutive_idle + 1))
+                fi
                 return 0
                 ;;
               issue|pr) ;;
