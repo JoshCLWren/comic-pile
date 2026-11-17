@@ -5,9 +5,12 @@
 //! pagination. This replaces the Python `GET /api/v1/sessions/` endpoint for
 //! the History page to fix the omissions described in issue #4822.
 //!
-//! The response preserves both events for each rate/snooze pair to show
-//! the causal narrative (e.g., d6 roll → snooze to d8 → roll d8 → snooze
-//! to d10 → roll d10 → rated 4.5), while coalescing for display purposes.
+//! The response coalesces the two receipts of one rating action
+//! (`issue_command_key` + `dice_command_key`) into a single display row while
+//! both audit rows stay in the database, and it restores the causal narrative
+//! for snooze/roll pairs whose insertion timestamps cross by milliseconds, so
+//! the timeline reads d6 roll → snooze to d8 → roll d8 → snooze to d10 →
+//! roll d10 → rated 4.5.
 //!
 //! Authentication, token-revocation state, the credential epoch and every
 //! activity projection are folded into one owner-scoped PostgreSQL statement.
@@ -58,6 +61,8 @@ pub struct ActivityEvent {
     pub thread_title: Option<String>,
     /// Issue number (for roll events that selected an issue).
     pub issue_number: Option<String>,
+    /// Exact owned issue id for actionable comic UI, when available.
+    pub issue_id: Option<i32>,
 }
 
 /// Response for the activity endpoint.
@@ -95,6 +100,9 @@ struct ActivityRawRow {
     thread_id: Option<i32>,
     thread_title: Option<String>,
     issue_number: Option<String>,
+    issue_id: Option<i32>,
+    dice_command_key: Option<String>,
+    issue_command_key: Option<String>,
 }
 
 fn internal_error() -> ApiError {
@@ -177,7 +185,10 @@ page_events AS (
            e.rating,
            e.thread_id,
            t.title AS thread_title,
-           e.issue_number
+           e.issue_number,
+           e.issue_id,
+           e.context->>'dice_command_key' AS dice_command_key,
+           e.context->>'issue_command_key' AS issue_command_key
     FROM events e
     LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id) AND t.user_id = (SELECT user_id FROM me)
     CROSS JOIN cursor_bounds
@@ -199,7 +210,10 @@ SELECT jsonb_agg(jsonb_build_object(
         'rating', rating,
         'thread_id', thread_id,
         'thread_title', thread_title,
-        'issue_number', issue_number
+        'issue_number', issue_number,
+        'issue_id', issue_id,
+        'dice_command_key', dice_command_key,
+        'issue_command_key', issue_command_key
     ) FILTER (WHERE event_id IS NOT NULL), '[]')) FROM page_events),
     'has_more', (SELECT COUNT(*) > $4 FROM page_events),
     'last_id', (SELECT event_id FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
@@ -207,6 +221,129 @@ SELECT jsonb_agg(jsonb_build_object(
 FROM page_events
 LIMIT 1;
 "#;
+
+/// Comparable (seconds, microseconds) sort key for one raw row.
+fn timestamp_key(row: &ActivityRawRow) -> (i64, f64) {
+    (row.timestamp_sec as i64, row.timestamp_us.unwrap_or(0.0))
+}
+
+/// True when two adjacent `rate` rows are the two receipts of one user action:
+/// one carries an `issue_command_key` receipt and the other a `dice_command_key`
+/// receipt for the same issue and the same rating.
+///
+/// The pair is never merged when both rows are issue receipts or both are dice
+/// receipts, so unrelated repeated ratings stay distinct.
+fn coalescible_rate_pair(first: &ActivityRawRow, second: &ActivityRawRow) -> bool {
+    if first.event_type != "rate" || second.event_type != "rate" {
+        return false;
+    }
+    let (issue_receipt, dice_receipt) =
+        match (first.issue_command_key.is_some(), second.issue_command_key.is_some()) {
+            (true, false) => (first, second),
+            (false, true) => (second, first),
+            _ => return false,
+        };
+    if dice_receipt.dice_command_key.is_none() {
+        return false;
+    }
+    if issue_receipt.rating != dice_receipt.rating || issue_receipt.rating.is_none() {
+        return false;
+    }
+    match (issue_receipt.issue_id, dice_receipt.issue_id) {
+        (Some(left), Some(right)) => left == right,
+        _ => {
+            issue_receipt.thread_id == dice_receipt.thread_id
+                && issue_receipt.thread_id.is_some()
+                && issue_receipt.issue_number == dice_receipt.issue_number
+        }
+    }
+}
+
+/// Fold one coalesced rate pair into a single display row without erasing either
+/// audit row. The issue receipt owns the display (it carries the new die and the
+/// source roll link); the dice receipt contributes the previous die.
+fn merge_rate_pair(first: ActivityRawRow, second: ActivityRawRow) -> ActivityRawRow {
+    let (mut issue_receipt, dice_receipt) = if first.issue_command_key.is_some() {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    if issue_receipt.die_before.is_none() {
+        issue_receipt.die_before = dice_receipt.die_before;
+    }
+    if issue_receipt.die_after.is_none() {
+        issue_receipt.die_after = dice_receipt.die_after;
+    }
+    if issue_receipt.issue_id.is_none() {
+        issue_receipt.issue_id = dice_receipt.issue_id;
+    }
+    if issue_receipt.thread_id.is_none() {
+        issue_receipt.thread_id = dice_receipt.thread_id;
+    }
+    if issue_receipt.issue_number.is_none() {
+        issue_receipt.issue_number = dice_receipt.issue_number;
+    }
+    if dice_receipt.event_id > issue_receipt.event_id {
+        issue_receipt.event_id = dice_receipt.event_id;
+    }
+    if timestamp_key(&dice_receipt) > timestamp_key(&issue_receipt) {
+        issue_receipt.timestamp_sec = dice_receipt.timestamp_sec;
+        issue_receipt.timestamp_us = dice_receipt.timestamp_us;
+    }
+    issue_receipt
+}
+
+/// Collapse a related `issue_command_key`/`dice_command_key` rate pair into one
+/// reader-visible rating while keeping both underlying audit rows intact in the
+/// database. Rows are consumed newest-first, matching the SQL projection order.
+fn coalesce_rate_pairs(rows: Vec<ActivityRawRow>) -> Vec<ActivityRawRow> {
+    let mut output: Vec<ActivityRawRow> = Vec::with_capacity(rows.len());
+    let mut pending = rows.into_iter().peekable();
+    while let Some(row) = pending.next() {
+        if row.event_type == "rate" {
+            if let Some(next) = pending.peek() {
+                if coalescible_rate_pair(&row, next) {
+                    match pending.next() {
+                        Some(other) => output.push(merge_rate_pair(row, other)),
+                        None => output.push(row),
+                    }
+                    continue;
+                }
+            }
+        }
+        output.push(row);
+    }
+    output
+}
+
+/// Restore the causal narrative for reroll/snooze pairs whose insertion
+/// timestamps cross by milliseconds.
+///
+/// A snooze that steps the die from `before` to `after` is the cause of the very
+/// next roll made on `after`. When that roll's wall-clock timestamp is slightly
+/// earlier than the snooze row (the production defect), naive `timestamp, id`
+/// ordering shows the snooze before the roll it caused. The swap below is the
+/// deterministic fallback for rows that carry no `roll_offer_key`/source link:
+/// it never rewrites timestamps or audit rows, only the reader-visible order.
+fn apply_causal_order(mut rows: Vec<ActivityRawRow>) -> Vec<ActivityRawRow> {
+    let mut index = 0;
+    while index + 1 < rows.len() {
+        let inverted = {
+            let snooze = &rows[index];
+            let roll = &rows[index + 1];
+            snooze.event_type == "snooze"
+                && roll.event_type == "roll"
+                && snooze.die_after.is_some()
+                && snooze.die_after == roll.die_before
+                && timestamp_key(snooze) > timestamp_key(roll)
+        };
+        if inverted {
+            rows.swap(index, index + 1);
+        }
+        index += 1;
+    }
+    rows
+}
 
 /// Read the owner-scoped activity events in one statement.
 pub async fn activity(
@@ -241,8 +378,7 @@ pub async fn activity(
 
     validate_auth(&claims, &payload.auth)?;
 
-    let events = payload
-        .events
+    let events = apply_causal_order(coalesce_rate_pairs(payload.events))
         .into_iter()
         .map(|row| ActivityEvent {
             event_id: row.event_id,
@@ -254,6 +390,7 @@ pub async fn activity(
             thread_id: row.thread_id,
             thread_title: row.thread_title,
             issue_number: row.issue_number,
+            issue_id: row.issue_id,
         })
         .collect();
 
