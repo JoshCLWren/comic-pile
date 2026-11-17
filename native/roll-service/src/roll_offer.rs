@@ -3,8 +3,8 @@
 //! The logical die comes from the owner-scoped dice event history, never from
 //! the legacy session die. Selection is uniform among the highest-ranked `N`
 //! eligible Option E frontiers, where `N` is that die. Pressing Roll while an
-//! offer is pending excludes the previous offer from the pool and immediately
-//! selects a replacement, preserving the die size and avoiding durable backoff.
+//! offer is pending records one snooze event, steps the die up, excludes the
+//! previous offer, and immediately selects again.
 use crate::{
     auth::AuthenticatedUser,
     db,
