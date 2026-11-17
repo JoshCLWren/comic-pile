@@ -262,7 +262,7 @@ pub async fn preview_cbl_reading_graph_handler(
         connection
             .query(
                 "SELECT position, series_name, volume_year, external_issue_identity_id, \
-                        external_series_identity_id
+                        external_series_identity_id, issue_number
                  FROM cbl_source_entries
                  WHERE list_id = $1 AND position = ANY($2::int8[])
                  ORDER BY position",
@@ -304,23 +304,6 @@ pub async fn preview_cbl_reading_graph_handler(
             external_by_id.insert(row.get(0), row.get(1));
         }
     }
-    let unresolved: Vec<i64> = entry_rows
-        .iter()
-        .filter(|row| {
-            row.get::<_, Option<i64>>(3)
-                .and_then(|id| external_by_id.get(&id))
-                .is_none()
-        })
-        .map(|row| row.get::<_, i64>(0))
-        .collect();
-    if !unresolved.is_empty() {
-        return Err(structured_error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "unresolved_source_position",
-            format!("Resolve these source positions before previewing the graph: {unresolved:?}"),
-        ));
-    }
-
     // Resolve reader-owned issues for the selected Comic Vine identities in a
     // single set-based query.
     let external_ids: Vec<String> = external_by_id.values().cloned().collect();
@@ -346,6 +329,26 @@ pub async fn preview_cbl_reading_graph_handler(
         }
     }
 
+    // Python rejects any selected position that does not resolve to an issue
+    // already owned by the reader; the preview never invents a placeholder.
+    let unresolved: Vec<i64> = entry_rows
+        .iter()
+        .filter(|row| {
+            row.get::<_, Option<i64>>(3)
+                .and_then(|id| external_by_id.get(&id))
+                .and_then(|external| owned_by_external.get(external))
+                .is_none()
+        })
+        .map(|row| row.get::<_, i64>(0))
+        .collect();
+    if !unresolved.is_empty() {
+        return Err(structured_error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "unresolved_source_position",
+            format!("Resolve these source positions before previewing the graph: {unresolved:?}"),
+        ));
+    }
+
     let mut series_nodes: Vec<ReadingGraphSeriesNode> = Vec::new();
     let mut issues: Vec<ReadingGraphIssueReference> = Vec::new();
     let mut rollable_issue_ids: Vec<i64> = Vec::new();
@@ -362,6 +365,7 @@ pub async fn preview_cbl_reading_graph_handler(
             .and_then(|id| external_by_id.get(&id))
             .cloned()
             .unwrap_or_default();
+        let issue_number: String = row.get(5);
         let _ = series_identity_id;
         let owned_issue_id = identity_id
             .and_then(|id| external_by_id.get(&id))
@@ -389,9 +393,9 @@ pub async fn preview_cbl_reading_graph_handler(
             });
         let node = &mut series_nodes[index];
         node.unread_count += 1;
-        if owned_issue_id.is_some() {
+        if let Some(issue_id) = owned_issue_id {
             node.rollable_count += 1;
-            rollable_issue_ids.push(position);
+            rollable_issue_ids.push(issue_id);
         } else {
             node.waiting_count += 1;
             waiting_issue_ids.push(position);
@@ -400,7 +404,7 @@ pub async fn preview_cbl_reading_graph_handler(
         issues.push(ReadingGraphIssueReference {
             issue_id: owned_issue_id.unwrap_or(position),
             series_name,
-            issue_number: position.to_string(),
+            issue_number,
             comicvine_volume_id: Some(comicvine_volume_id),
             blockers: Vec::new(),
         });
