@@ -1882,7 +1882,7 @@ pub fn series_issues_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn series_import_status_documentation() {}
+pub fn series_import_status_v2_documentation() {}
 
 #[utoipa::path(
     post,

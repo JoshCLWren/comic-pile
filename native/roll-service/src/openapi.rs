@@ -106,7 +106,7 @@ use utoipa::OpenApi;
         crate::comicvine_v2::search_series_documentation,
         crate::comicvine_v2::resolve_input_documentation,
         crate::comicvine_v2::series_issues_documentation,
-        crate::comicvine_v2::series_import_status_documentation,
+        crate::comicvine_v2::series_import_status_v2_documentation,
         crate::comicvine_v2::import_issue_documentation,
         crate::comicvine_v2::import_series_documentation,
     ),
