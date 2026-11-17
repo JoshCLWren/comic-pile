@@ -50,13 +50,19 @@ describe('useCompletedThreads: finished series are independent of active Queue (
   it('retries the failed continuation cursor rather than restarting at page one', async () => {
     listCompleted
       .mockResolvedValueOnce({
-        threads: [{ id: 1, title: 'Finished A', status: 'completed' } as never],
+        threads: [
+          // SAFETY: the hook reads only id and status from this abbreviated page fixture.
+          { id: 1, title: 'Finished A', status: 'completed' } as never,
+        ],
         next_page_token: 'page-two',
         active_count: 0,
       })
       .mockRejectedValueOnce(new Error('page two temporarily unavailable'))
       .mockResolvedValueOnce({
-        threads: [{ id: 2, title: 'Finished B', status: 'completed' } as never],
+        threads: [
+          // SAFETY: the hook reads only id and status from this abbreviated page fixture.
+          { id: 2, title: 'Finished B', status: 'completed' } as never,
+        ],
         next_page_token: null,
         active_count: 0,
       })
