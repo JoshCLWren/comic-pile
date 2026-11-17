@@ -512,15 +512,13 @@ run_agent() {
   prompt="Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy.  Edit only the assigned target, run focused validation, and use GitHub for review context. Do not commit or push; the wrapper persists changes. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass OmniRoute or request paid or unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules. Run context: Worker: ${WORKER_ID}; source: ${SOURCE}; model: ${MODEL}; runtime: ${RUNTIME_MODEL}; target: ${target}. ${mission}"
 
   if [[ "$SOURCE" == 'kilo-auto' ]]; then
-    set +e
+    # Do not toggle errexit: callers capture this status under `set +e`.
     bash .github/scripts/kilo-auto-factory-run.sh \
       "$timeout_seconds" \
       "ComicPile Factory ${WORKER} · ${DISPLAY}" \
       "$prompt" \
-      "/tmp/opencode-factory-${WORKER}.log"
-    status=$?
-    set -e
-    return "$status"
+      "/tmp/opencode-factory-${WORKER}.log" || status=$?
+    return "${status:-0}"
   fi
 
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \

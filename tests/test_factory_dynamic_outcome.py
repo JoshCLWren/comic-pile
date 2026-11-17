@@ -197,3 +197,76 @@ def test_nvidia_missing_function_is_model_unavailable() -> None:
         "Specified function in account 'generated' is not found",
     ))
     assert result["outcome_class"] == "model_unavailable"
+
+
+_TAGGED = ("agent ", "semantic", "released", "opened")
+
+
+def _review_session(worker: str, source: str, model: str, body: str, kind: str = "pr",
+                    number: int = 5299) -> str:
+    """Real worker order: target checkout precedes the execution-candidate marker."""
+    tag = f"[factory:{worker}][source:{source}][model:{model}] "
+    return (
+        f"Factory {worker} assigned dynamic provider slot: source={source} configured=true\n"
+        f"{tag}executing control-plane assignment: {kind} #{number}; runtime {source}/{model}\n"
+        f"{tag}checked out {kind} #{number} on factory/work at {'a' * 40}\n"
+        f"{tag}automatic persisted work enabled for run 1 (every 45s)\n"
+        f"{tag}FACTORY_EXECUTION_CANDIDATE: source={source} model={model} runtime={source}/{model}\n"
+        + "".join(f"{tag}{line}\n" if line.startswith(_TAGGED) else f"{line}\n"
+                  for line in body.splitlines())
+    )
+
+
+def test_target_checked_out_before_execution_boundary_is_kept() -> None:
+    """#5275 regression: delivery and exact proof survive the candidate boundary."""
+    log = _review_session("10001", "nvidia", "a/b", (
+        "agent exit status 0 for issue #5000\n"
+        "opened/updated PR #5001 for issue #5000\n"
+        "released issue #5000 to factory:unowned at factory:review (handoff)\n"
+        "released pr #5001 to factory:unowned at factory:review (handoff)"
+    ), kind="issue", number=5000)
+    result = module.classify(log)
+    assert result["selected_kind"] == "issue"
+    assert result["selected_number"] == "5000"
+    assert result["exact_model_proven"] is True
+    assert result["delivery_pr"] == "5001"
+
+
+def test_other_workers_target_is_not_borrowed() -> None:
+    log = _review_session("10001", "nvidia", "a/b", "agent exit status 0 for pr #5299")
+    log = log.replace("[factory:10001][source:nvidia][model:a/b] checked out",
+                      "[factory:999][source:nvidia][model:a/b] checked out")
+    assert module.classify(log)["selected_number"] == ""
+
+
+def test_pollinations_credit_refusal_with_zero_exit_is_provider_quota() -> None:
+    """OpenCode exits 0 after Pollinations refuses for credits (run 44016101975)."""
+    log = _review_session("10001", "pollinations", "openai/gpt-5.5", (
+        "> build · openai/gpt-5.5\n"
+        "The account behind this API key doesn't have enough credits. Please top up, then try again.\n"
+        "agent exit status 0 for pr #5299\n"
+        "semantic_review_recovery_failed: review model did not produce an authoritative "
+        "terminal verdict for PR #5299"
+    ))
+    result = module.classify(log)
+    assert result["outcome_class"] == "provider_quota"
+    assert result["selected_kind"] == "pr"
+    assert result["selected_number"] == "5299"
+
+
+def test_review_without_terminal_verdict_is_pr_work_failure() -> None:
+    """A clean review exit with no verdict must reach the exact-head PR backoff."""
+    log = _review_session("10001", "nvidia", "a/b", (
+        "> build · a/b\n"
+        "agent exit status 0 for pr #5299\n"
+        "semantic review needs a verdict or acceptance report; attempting one bounded "
+        "same-session evidence recovery\n"
+        "semantic_review_recovery_failed: same-session recovery exited 124\n"
+        "semantic_review_recovery_failed: review model did not produce an authoritative "
+        "terminal verdict for PR #5299\n"
+        "released pr #5299 to factory:unowned at factory:review (semantic-review-recovery-failed)"
+    ))
+    result = module.classify(log)
+    assert result["outcome_class"] == "work_failure"
+    assert result["selected_kind"] == "pr"
+    assert result["selected_number"] == "5299"

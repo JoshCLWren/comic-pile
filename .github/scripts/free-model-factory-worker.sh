@@ -127,7 +127,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|api key budget (limit )?exceeded|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|api key budget (limit )?exceeded|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)|(does|do)(n.t| not) have enough credits' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
@@ -545,9 +545,19 @@ fi
 ORIGINAL_SOURCE="$SOURCE"
 attempted_pairs=()
 blocked_providers=()
+ACCOUNT_REFUSAL_RE='insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package|(does|do)(n.t| not) have enough credits'
 account_wide_failure() {
-  grep -Eqi 'insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package' \
-    "/tmp/opencode-factory-$WORKER.log"
+  grep -Eqi "$ACCOUNT_REFUSAL_RE" "/tmp/opencode-factory-$WORKER.log"
+}
+# OpenCode prints some provider account refusals (Pollinations "doesn't have
+# enough credits") and still exits 0. A fast, edit-free zero exit whose log
+# carries such a refusal never reached the model: treat it as the provider
+# failure it is so the lease fails over instead of burning a review attempt.
+zero_exit_provider_refusal() {
+  local elapsed="$1"
+  (( elapsed < FAST_FAILOVER_SECONDS )) || return 1
+  [[ -z "$(git status --porcelain)" ]] || return 1
+  account_wide_failure
 }
 record_model_failover_failure() {
   local failed_source="$1" failed_model="$2" classification="$3" scope="$4"
@@ -627,6 +637,10 @@ while :; do
   set -e
   attempt_elapsed=$((SECONDS - attempt_started_at))
   log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
+  if (( agent_status == 0 )) && zero_exit_provider_refusal "$attempt_elapsed"; then
+    log "agent exited 0 after a provider account refusal; treating it as a provider failure"
+    agent_status=1
+  fi
 
   if (( agent_status == 0 )); then
     # Earlier failed candidates must never poison the terminal outcome.
@@ -927,11 +941,9 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
 
   if (( recovery_timeout >= 20 )); then
     log "semantic review needs a verdict or acceptance report; attempting one bounded same-session evidence recovery"
-    set +e
+    recovery_status=0
     factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log" \
-      "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"
-    recovery_status=$?
-    set -e
+      "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission" || recovery_status=$?
 
     current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
     snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"

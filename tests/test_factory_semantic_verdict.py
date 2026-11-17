@@ -353,3 +353,44 @@ def test_worker_checks_full_mission_before_recovered_ready() -> None:
     assert "recovery_timeout=90" in worker
     assert "recovery_timeout=180" in worker
     assert 'if [[ "$RUNTIME_MODEL" == \'openrouter/free\' ]]; then' in worker
+
+
+def test_failed_recovery_does_not_reenable_errexit_in_the_worker(tmp_path: Path) -> None:
+    """Run 44071823893: a 124 recovery exit killed the worker before release.
+
+    The helper used to finish with `set -e`, which re-armed errexit inside the
+    caller's `set +e` window, so the non-zero return terminated the worker.
+    """
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "opencode"
+    fake.write_text("#!/usr/bin/env bash\necho 'partial review'\nexit 124\n")
+    fake.chmod(0o755)
+    recovery_log = tmp_path / "recovery.log"
+    head = "a" * 40
+    script = (
+        f"set -Eeuo pipefail; source {HELPER!s}; export PATH={bindir!s}:$PATH; "
+        "set +e; "
+        f"factory_recover_semantic_verdict model {tmp_path!s} 30 {recovery_log!s} 5299 {head} m; "
+        "rc=$?; set -e; echo \"survived rc=$rc\"; "
+        "rc=0; "
+        f"factory_recover_semantic_verdict model {tmp_path!s} 30 {recovery_log!s} 5299 {head} m "
+        "|| rc=$?; echo \"survived again rc=$rc\""
+    )
+    result = subprocess.run(["bash", "-c", script], cwd=ROOT, text=True,
+                            capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert "survived rc=124" in result.stdout
+    assert "survived again rc=124" in result.stdout
+    assert "partial review" in recovery_log.read_text()
+
+
+def test_worker_fails_over_on_zero_exit_provider_account_refusal() -> None:
+    """Pollinations credit refusals exit 0; the worker must treat them as failures."""
+    text = WORKER.read_text(encoding="utf-8")
+    assert "(does|do)(n.t| not) have enough credits" in text
+    loop = text.split('log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"', 1)[1]
+    guard = loop.split("if (( agent_status == 0 )); then", 1)[0]
+    assert 'zero_exit_provider_refusal "$attempt_elapsed"' in guard
+    assert "agent_status=1" in guard
+    assert "|| recovery_status=$?" in text
