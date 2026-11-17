@@ -28,6 +28,7 @@ permissions:
 concurrency:
   group: factory-only-fast-merge
   cancel-in-progress: false
+  queue: max
 
 jobs:
   fast-merge:

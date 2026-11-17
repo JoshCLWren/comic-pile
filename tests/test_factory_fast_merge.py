@@ -304,6 +304,8 @@ def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> N
     assert "workflow_run:" in workflow
     assert "workflows: [CI]" in workflow
     assert "types: [completed]" in workflow
+    assert "queue: max" in workflow
+    assert "cancel-in-progress: false" in workflow
     assert "github.event.workflow_run.event == 'pull_request'" in workflow
     assert "github.event.workflow_run.conclusion == 'success'" in workflow
     assert "github.event.workflow_run.head_repository.full_name == github.repository" in workflow
