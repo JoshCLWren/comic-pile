@@ -28,13 +28,13 @@ export function useCompletedThreads(
     selectId: (thread) => thread.id,
     enabled,
     retry: false,
-    refetchOnWindowFocus: 'always',
   })
 
   return {
     threads: query.items,
     hasNextPage: query.hasNextPage,
     isLoadingMore: query.isNextPageLoading,
+    isLoading: query.isLoading,
     isError: query.isError,
     loadMore: query.fetchNextPage,
     retry: query.refetch,

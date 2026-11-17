@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LoadingSpinner from '../../components/LoadingSpinner'
 
 interface CompletedThread {
   id: number
@@ -13,6 +14,7 @@ interface CompletedThreadsSectionProps<T extends CompletedThread> {
   hasNextPage?: boolean
   isLoadingMore?: boolean
   isError?: boolean
+  isLoading?: boolean
   onLoadMore?: () => Promise<void> | void
   onRetry?: () => Promise<void> | void
 }
@@ -24,12 +26,36 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
   hasNextPage = false,
   isLoadingMore = false,
   isError = false,
+  isLoading = false,
   onLoadMore,
   onRetry,
 }: CompletedThreadsSectionProps<T>) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  if (threads.length === 0 && !isError) return null
+  if (threads.length === 0 && !isError) {
+    // An empty settled shelf means "no finished series"; an empty in-flight
+    // shelf means "the first page has not landed yet" and must not render as
+    // nothing (the original #5171 disappearance, now guarded at the source).
+    if (isLoading) {
+      return (
+        <section className="space-y-4" aria-labelledby="finished-series-heading">
+          <h2
+            id="finished-series-heading"
+            className="text-lg md:text-xl font-black uppercase text-stone-300"
+          >
+            Finished Series
+          </h2>
+          <div
+            className="flex items-center justify-center px-2 py-8"
+            data-testid="completed-threads-loading"
+          >
+            <LoadingSpinner message="Loading finished series..." />
+          </div>
+        </section>
+      )
+    }
+    return null
+  }
 
   const handleReactivate = (thread: T | null) => {
     setIsExpanded(false)
