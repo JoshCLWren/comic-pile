@@ -478,7 +478,6 @@ mod tests {
         )
         .await
         .expect_err("missing plan is a 404");
-        eprintln!("DEBUG_CONTINUITY_ERROR={error:?}");
         assert_eq!(error.status(), StatusCode::NOT_FOUND);
     }
 
