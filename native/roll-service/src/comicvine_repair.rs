@@ -109,7 +109,6 @@ pub struct DrainReport {
     provider_configured: bool,
 }
 
-#[derive(Debug)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProviderFailure {
     RateLimited(u32),
