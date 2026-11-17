@@ -312,9 +312,12 @@ mod tests {
     fn activity_statement_is_one_bounded_query() {
         assert!(ACTIVITY_SQL.contains("LIMIT $4 + 1"));
         assert!(ACTIVITY_SQL.contains("page_events"));
-        assert!(
-            !ACTIVITY_SQL.contains(";"),
-            "activity SQL must be one statement"
+        // Allow a trailing semicolon (standard SQL), but no semicolons in the middle
+        let semicolon_count = ACTIVITY_SQL.matches(';').count();
+        assert_eq!(
+            semicolon_count, 1,
+            "activity SQL must be one statement (found {} semicolons)",
+            semicolon_count
         );
     }
 }
