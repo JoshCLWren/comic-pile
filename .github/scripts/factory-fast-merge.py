@@ -38,7 +38,13 @@ BLOCKED_LABELS = frozenset(
 )
 TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 # These job names come from .github/workflows/ci.yml, not a provider roster.
-REQUIRED_FAST_CHECKS = frozenset({"Python Lint (ruff)", "Python Type Check (ty)"})
+REQUIRED_FAST_CHECKS = frozenset({
+    "Python Lint (ruff)",
+    "Python Type Check (ty)",
+    "Factory Tests (complete)",
+    "Factory Workflow Syntax (actionlint)",
+    "Factory Shell Scripts (shellcheck)",
+})
 
 
 def factory_path(path: str) -> bool:
@@ -183,8 +189,8 @@ def numbers(repo: str, *, pr: int | None, head: str | None) -> list[int]:
     })
 
 
-def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
-    """Require successful CI lint and type checks for the exact candidate head.
+def required_checks_passed(repo: str, head: str) -> tuple[bool, str]:
+    """Require all exact-head CI syntax, test, lint and type checks.
 
     Missing, pending, failing, stale, or ambiguously paginated check evidence
     fails closed. Never execute PR-authored code in this privileged workflow.
@@ -196,7 +202,7 @@ def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
         or not isinstance(data.get("total_count"), int)
         or data["total_count"] > 100
     ):
-        return False, "Python CI check evidence missing or truncated"
+        return False, "Required CI check evidence missing or truncated"
     checks: dict[str, dict[str, Any]] = {}
     for check in data["check_runs"]:
         if not isinstance(check, dict) or check.get("name") not in REQUIRED_FAST_CHECKS:
@@ -211,11 +217,11 @@ def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
         check = checks.get(name)
         if not check or check.get("status") != "completed" or check.get("conclusion") != "success":
             return False, f"Exact-head {name} has not passed"
-    return True, "Python lint and type checks passed at exact head"
+    return True, "All factory CI checks passed at exact head"
 
 
 def handle(repo: str, number: int) -> tuple[bool, str]:
-    """Attempt one SHA-pinned merge after exact-head Python CI checks pass."""
+    """Attempt one SHA-pinned merge after every exact-head factory CI check passes."""
     pr = gh_api(f"repos/{repo}/pulls/{number}")
     if not isinstance(pr, dict):
         raise RuntimeError("Invalid pull request response")
@@ -227,7 +233,7 @@ def handle(repo: str, number: int) -> tuple[bool, str]:
     # The separate CI workflow runs untrusted PR code without privileged merge
     # credentials. Reuse only its signed GitHub Actions check-run conclusions.
     # An incomplete or failing result is a skip, never a bypass authorization.
-    checks_ok, checks_reason = python_checks_passed(repo, head)
+    checks_ok, checks_reason = required_checks_passed(repo, head)
     if not checks_ok:
         return False, checks_reason
     try:
