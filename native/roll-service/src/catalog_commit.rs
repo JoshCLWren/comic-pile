@@ -2480,7 +2480,7 @@ mod tests {
     #[test]
     fn plan_digest_format() {
         let rows = vec![serde_json::json!({
-            "row_id": "issue:1", "issue_number": "1", "classification": "safe_exact_match",
+            "row_id": "issue:1", "issue_id": 1, "issue_number": "1", "classification": "safe_exact_match",
             "current_mapping_status": null, "provider": "comicvine", "external_id": "99",
             "thread_id": 5, "metadata_refresh_required": false
         })];
@@ -2551,11 +2551,11 @@ mod tests {
     /// `plan_digest_matches_python_with_inventory_rows` vector); the commit
     /// revalidates against a rebuilt plan, so any digest drift fails as
     /// `preview_stale`.
-    const NTT_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "b889befb2648dca8e9fdaef1119701328a8533fa73ce0a7851955859cb8637ca"}"#;
+    const NTT_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "55e0c0bfb4503be9038b790ee31a3e5111af3007dff3b012b6c2fb994afff620"}"#;
 
     /// Same fixture plus an owned "Annual 1" row (issue 1040) that classifies as
     /// `excluded_special`; minted by the production Python implementation.
-    const NTT_WITH_ANNUAL_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "Annual 1"], "classification_digest": "2f3ab052b3edd5cca76a9f3540ebd19c89fe2b72c6bb9bf43061e7b8e82279de", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "f45b7d41bfcaefefc7c6f6ecc1c47c6f927193e66040e089fd070b305378e521"}"#;
+    const NTT_WITH_ANNUAL_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "Annual 1"], "classification_digest": "2f3ab052b3edd5cca76a9f3540ebd19c89fe2b72c6bb9bf43061e7b8e82279de", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "494886e582a5af26e0673ff4006a53b7da5170e6e0d7052bdc37ee1a06309869"}"#;
 
     fn teen_titans_series_info() -> Value {
         serde_json::json!({
@@ -2822,9 +2822,9 @@ mod tests {
 
     #[test]
     fn python_preview_token_verifies_in_rust() {
-        let token = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "b889befb2648dca8e9fdaef1119701328a8533fa73ce0a7851955859cb8637ca"}"#;
+        let token = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "55e0c0bfb4503be9038b790ee31a3e5111af3007dff3b012b6c2fb994afff620"}"#;
         let payload =
-            verify_preview_token("test-preview-secret", token, 1).expect("python-minted token");
+            verify_preview_token("synthetic-native-test", token, 1).expect("python-minted token");
         assert_eq!(payload["scope_key"], "exact:1010:1");
         assert_eq!(payload["scope_mode"], "queue_thread_bootstrap");
         assert_eq!(
@@ -2833,8 +2833,8 @@ mod tests {
         );
         // Tampering invalidates the signature.
         let tampered = token.replace("exact:1010:1", "exact:1010:2");
-        assert!(verify_preview_token("test-preview-secret", &tampered, 1).is_err());
+        assert!(verify_preview_token("synthetic-native-test", &tampered, 1).is_err());
         // A different user cannot replay the preview.
-        assert!(verify_preview_token("test-preview-secret", token, 2).is_err());
+        assert!(verify_preview_token("synthetic-native-test", token, 2).is_err());
     }
 }
