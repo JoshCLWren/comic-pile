@@ -589,7 +589,7 @@ async fn restore_thread_from_state(
             .await
             .map_err(db::query_error)?;
 
-        let existing_issues = if let Some(_pre_loaded) = pre_loaded_thread {
+        let existing_issues = if let Some(pre_loaded) = pre_loaded_thread {
             vec![pre_loaded]
         } else {
             connection

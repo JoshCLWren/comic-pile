@@ -158,12 +158,8 @@ fn event_word(event_type: &str) -> String {
     }
 }
 
-fn deleted_title(title: Option<&str>) -> String {
-    if let Some(t) = title {
-        format!("{} (deleted)", t)
-    } else {
-        "deleted thread".to_string()
-    }
+fn deleted_title(title: &str) -> String {
+    format!("{} (deleted)", title)
 }
 
 fn mode_label(value: &str) -> String {
@@ -314,7 +310,7 @@ pub async fn get_session_details(
                 .and_then(|text| serde_json::from_str(text).ok())
                 .unwrap_or(Value::Null);
             let owned = context;
-            current_die(manual_die, Some((die_after, owned)), start_die)
+            current_die(manual_die, Some((die_after, &owned)), start_die)
         }
         None => current_die(manual_die, None, start_die),
     };
