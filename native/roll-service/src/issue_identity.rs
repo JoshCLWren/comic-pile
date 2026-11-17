@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    auth::middleware::AuthUser,
+    auth::identity::AuthenticatedUser,
     db::checkout,
     ApiError, AppState,
 };
@@ -500,7 +500,7 @@ pub struct CblCandidatesParams {
 #[instrument(skip(state, auth))]
 pub async fn compare_cbl_sources(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Query(params): Query<CompareCblSourcesParams>,
     Json(payload): Json<CompareCblSourcesRequest>,
 ) -> Result<Json<CblSourceComparisonResponse>, ApiError> {
@@ -527,7 +527,7 @@ pub struct CompareCblSourcesRequest {
 #[instrument(skip(state, auth))]
 pub async fn discover_cbl_source_lists(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Query(params): Query<DiscoverCblSourcesParams>,
 ) -> Result<Json<Vec<CblSourceListDiscoveryItem>>, ApiError> {
     let pool = checkout(&state.pool).await?;
@@ -588,7 +588,7 @@ pub async fn discover_cbl_source_lists(
 #[instrument(skip(state, auth))]
 pub async fn get_cbl_source_list(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Query(params): Query<GetCblSourceListParams>,
 ) -> Result<Json<CblSourceListDetail>, ApiError> {
@@ -686,7 +686,7 @@ pub async fn get_cbl_source_list(
 #[instrument(skip(state, auth))]
 pub async fn list_cbl_source_folders(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblFolderListingResponse>, ApiError> {
     let pool = checkout(&state.pool).await?;
@@ -713,7 +713,7 @@ pub async fn list_cbl_source_folders(
 #[instrument(skip(state, auth))]
 pub async fn browse_cbl_source_catalog(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblCatalogBrowseResponse>, ApiError> {
     let pool = checkout(&state.pool).await?;
@@ -741,7 +741,7 @@ pub async fn browse_cbl_source_catalog(
 #[instrument(skip(state, auth))]
 pub async fn find_cbl_sources_by_comicvine_issue(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(comicvine_issue_id): Path<String>,
     Query(params): Query<CblOccurrenceParams>,
 ) -> Result<Json<CblComicvineOccurrencePage>, ApiError> {
@@ -832,7 +832,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
 #[instrument(skip(state, auth))]
 pub async fn find_cbl_candidates_for_reading_list(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Query(params): Query<CblCandidatesParams>,
 ) -> Result<Json<CblReadingListCandidatesResponse>, ApiError> {
@@ -859,7 +859,7 @@ pub async fn find_cbl_candidates_for_reading_list(
 #[instrument(skip(state, auth))]
 pub async fn cbl_adoption_preview(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
     let pool = checkout(&state.pool).await?;
@@ -899,7 +899,7 @@ pub async fn cbl_adoption_preview(
 #[instrument(skip(state, auth))]
 pub async fn cbl_adoption_plan(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
@@ -939,7 +939,7 @@ pub async fn cbl_adoption_plan(
 #[instrument(skip(state, auth))]
 pub async fn cbl_reconciliation(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let pool = checkout(&state.pool).await?;
@@ -974,7 +974,7 @@ pub async fn cbl_reconciliation(
 #[instrument(skip(state, auth))]
 pub async fn get_issue_identity_anomalies(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "anomalies": [] })))
@@ -984,7 +984,7 @@ pub async fn get_issue_identity_anomalies(
 #[instrument(skip(state, auth))]
 pub async fn get_canonical_issue(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(comicvine_issue_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
@@ -995,7 +995,7 @@ pub async fn get_canonical_issue(
 #[instrument(skip(state, auth))]
 pub async fn get_issue_identity_conflicts(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "conflicts": [] })))
@@ -1005,7 +1005,7 @@ pub async fn get_issue_identity_conflicts(
 #[instrument(skip(state, auth))]
 pub async fn consolidate_issue_identity(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
@@ -1016,7 +1016,7 @@ pub async fn consolidate_issue_identity(
 #[instrument(skip(state, auth))]
 pub async fn get_issue_identity_report(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "report": {} })))
@@ -1026,7 +1026,7 @@ pub async fn get_issue_identity_report(
 #[instrument(skip(state, auth))]
 pub async fn cbl_adoption_commit(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<Json<CblAdoptionCommitResponse>, ApiError> {
@@ -1042,7 +1042,7 @@ pub async fn cbl_adoption_commit(
 #[instrument(skip(state, auth))]
 pub async fn cbl_targeted_adoption_commit(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path((list_id, plan_id)): Path<(i32, i32)>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<Json<CblAdoptionCommitResponse>, ApiError> {
@@ -1057,7 +1057,7 @@ pub async fn cbl_targeted_adoption_commit(
 #[instrument(skip(state, auth))]
 pub async fn cbl_reading_graph_preview(
     State(state): State<Arc<AppState>>,
-    auth: AuthUser,
+    auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, ApiError> {
