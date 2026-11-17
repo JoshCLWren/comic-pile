@@ -305,6 +305,13 @@ fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError::NotFound(detail.into())
 }
 
+/// Serialize stored plan JSON, surfacing encoding failures as a 500 rather than
+/// panicking inside a request handler.
+fn serialize_plan_json(value: &[serde_json::Value]) -> Result<String, ApiError> {
+    serde_json::to_string(value)
+        .map_err(|err| ApiError::Internal(format!("Failed to encode plan JSON: {err}")))
+}
+
 // ============================================================================
 // GET /api/v1/continuity-plans/ - List plans
 // ============================================================================
@@ -495,6 +502,8 @@ pub async fn create_continuity_plan(
         .iter()
         .map(|n| serde_json::to_value(n).unwrap_or_default())
         .collect();
+    let lanes_text = serialize_plan_json(&lanes_json)?;
+    let nodes_text = serialize_plan_json(&nodes_json)?;
 
     let row = tx
         .query_one(
@@ -507,8 +516,8 @@ pub async fn create_continuity_plan(
                 &user.id(),
                 &payload.name,
                 &payload.ordering_mode,
-                &serde_json::to_string(&lanes_json).unwrap(),
-                &serde_json::to_string(&nodes_json).unwrap(),
+                &lanes_text,
+                &nodes_text,
             ],
         )
         .await
@@ -691,6 +700,8 @@ pub async fn update_continuity_plan(
         .iter()
         .map(|n| serde_json::to_value(n).unwrap_or_default())
         .collect();
+    let lanes_text = serialize_plan_json(&lanes_json)?;
+    let nodes_text = serialize_plan_json(&nodes_json)?;
 
     tx.execute(
         r#"
@@ -701,8 +712,8 @@ pub async fn update_continuity_plan(
         &[
             &payload.name,
             &payload.ordering_mode,
-            &serde_json::to_string(&lanes_json).unwrap(),
-            &serde_json::to_string(&nodes_json).unwrap(),
+            &lanes_text,
+            &nodes_text,
             &plan_id,
             &user.id(),
         ],
@@ -766,14 +777,13 @@ pub async fn delete_continuity_plan(
         .map_err(db::query_error)?;
 
     // Check plan ownership
-    let plan = tx
-        .query_opt(
-            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    tx.query_opt(
+        "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+        &[&plan_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
     // Get marker for deleting plan rules
     let marker = format!("continuity-plan:{}", plan_id);
@@ -942,9 +952,9 @@ pub async fn adopt_reading_order(
     let lane_name = payload.lane_name.unwrap_or_else(|| "Adopted".to_string());
 
     // Build nodes JSON
-    let mut nodes_val = serde_json::Value::Array(Vec::new());
+    let mut nodes: Vec<serde_json::Value> = Vec::with_capacity(thread_ids.len());
     for (idx, thread_id) in thread_ids.iter().enumerate() {
-        nodes_val.as_array_mut().unwrap().push(serde_json::json!({
+        nodes.push(serde_json::json!({
             "id": format!("ro-{}", order_id * 1000 + thread_id),
             "node_type": "thread",
             "ref_id": thread_id,
@@ -966,15 +976,18 @@ pub async fn adopt_reading_order(
             "convergence_gate": []
         }));
     }
+    let nodes_val = serde_json::Value::Array(nodes);
 
     // Create the plan first to get the plan_id
-    let lanes_json = serde_json::to_string(&serde_json::Value::Array(vec![serde_json::json!({
+    let lanes_value = serde_json::Value::Array(vec![serde_json::json!({
         "id": lane_id,
         "name": lane_name,
         "order": 0
-    })]))
-    .unwrap();
-    let nodes_json = serde_json::to_string(&nodes_val).unwrap();
+    })]);
+    let lanes_json = serde_json::to_string(&lanes_value)
+        .map_err(|err| ApiError::Internal(format!("Failed to encode plan lanes: {err}")))?;
+    let nodes_json = serde_json::to_string(&nodes_val)
+        .map_err(|err| ApiError::Internal(format!("Failed to encode plan nodes: {err}")))?;
 
     let row = tx
         .query_one(
@@ -1173,14 +1186,13 @@ pub async fn link_plan_dependency_edge(
         .map_err(db::query_error)?;
 
     // Check plan ownership
-    let plan = tx
-        .query_opt(
-            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    tx.query_opt(
+        "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+        &[&plan_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
     // Get dependency and check ownership
     let dep_row = tx
@@ -1455,33 +1467,15 @@ pub async fn confirm_plan_projection(
     let mut kept: i32 = 0;
 
     for (pos, thread_id, _node_id) in thread_nodes {
-        let source = if existing_items
+        let existing_position = existing_items
             .iter()
-            .any(|r| r.get::<_, i32>(0) == thread_id)
-        {
-            // Check if position changed
-            for row in &existing_items {
-                if row.get::<_, i32>(0) == thread_id {
-                    let old_pos: i32 = row.get(1);
-                    if old_pos != pos + 1 {
-                        // Position changed, counts as update
-                    }
-                }
-            }
-            if existing_items
-                .iter()
-                .any(|r| r.get::<_, i32>(0) == thread_id && r.get::<_, i32>(1) == pos + 1)
-            {
-                kept += 1;
-                "existing".to_string()
-            } else {
-                updated += 1;
-                "updated".to_string()
-            }
-        } else {
-            added += 1;
-            "added".to_string()
-        };
+            .find(|row| row.get::<_, i32>(0) == thread_id)
+            .map(|row| row.get::<_, i32>(1));
+        match existing_position {
+            None => added += 1,
+            Some(old_pos) if old_pos == pos + 1 => kept += 1,
+            Some(_) => updated += 1,
+        }
 
         let position: i32 = pos + 1;
         tx.execute(
@@ -1537,24 +1531,22 @@ pub async fn create_release_source(
         .map_err(db::query_error)?;
 
     // Check plan ownership
-    let plan = tx
-        .query_opt(
-            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&payload.plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Plan {} not found", payload.plan_id)))?;
+    tx.query_opt(
+        "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+        &[&payload.plan_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| not_found(format!("Plan {} not found", payload.plan_id)))?;
 
     // Check thread ownership
-    let thread = tx
-        .query_opt(
-            "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
-            &[&payload.thread_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Thread {} not found", payload.thread_id)))?;
+    tx.query_opt(
+        "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
+        &[&payload.thread_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| not_found(format!("Thread {} not found", payload.thread_id)))?;
 
     // Verify confirmed ComicVine series mapping
     let mapping = tx
@@ -1580,7 +1572,6 @@ pub async fn create_release_source(
         })?;
 
     let provider: String = mapping.get(1);
-    let entity_type: String = mapping.get(2);
     let provider_volume_id: String = mapping.get(3);
     let metadata_json: Option<serde_json::Value> = mapping.get(4);
 
