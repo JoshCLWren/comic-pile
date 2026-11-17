@@ -11,6 +11,7 @@ pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
+pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
@@ -687,6 +688,47 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
+        // Canonical native v2 ComicVine identity/resolution surface (#4835).
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity",
+            get(comicvine_v2::get_issue_identity).delete(comicvine_v2::remove_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+            post(comicvine_v2::confirm_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+            post(comicvine_v2::replace_identity),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+            get(comicvine_v2::list_corrections),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+            post(comicvine_v2::apply_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+            post(comicvine_v2::revert_correction),
+        )
+        .route(
+            "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+            post(comicvine_v2::refresh_metadata),
+        )
+        .route("/api/v2/comicvine/search/series", get(comicvine_v2::search_series))
+        .route("/api/v2/comicvine/resolve", get(comicvine_v2::resolve_input))
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+            get(comicvine_v2::series_issues),
+        )
+        .route(
+            "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+            get(comicvine_v2::series_import_status),
+        )
+        .route("/api/v2/comicvine/issues:import", post(comicvine_v2::import_issue))
+        .route("/api/v2/comicvine/series:import", post(comicvine_v2::import_series))
         .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),
