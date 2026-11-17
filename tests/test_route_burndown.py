@@ -498,26 +498,24 @@ def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
 
 
 def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
-    """The sessions and undo fragments cut the cutover operations over to Rust.
+    """The sessions and undo fragments cut the supported cutover ops to Rust.
 
-    The current-session twins are cut over too: the native handler implements
-    the same get-or-create semantics, and frontend/src/services/api-sessions.ts
-    calls GET /api/v1/sessions/current/. Unversioned paths have no TypeScript
-    client or FastAPI registry operation; they stay in the fragment only for
-    the Vercel rewrite. GET /api/v1/sessions/correction-examples stays on
-    Python because no browser caller exists.
+    The owner's 2026-11-17 correction on #4839 retired the current-session and
+    restore-session-start twins under #4343 instead of porting them: those
+    legacy lifecycle paths remain on Python and gain no compatibility handler
+    or extra lifecycle semantics. Only the read-only list/details/history and
+    undo operations are cut over to native Rust. Unversioned paths have no
+    TypeScript client or FastAPI registry operation; they stay in the fragment
+    only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
+    on Python because no browser caller exists.
     """
     sessions = _fragment_named("sessions")
     undo = _fragment_named("undo")
     native_ops = {
         ("GET", "/api/sessions/"),
         ("GET", "/api/v1/sessions/"),
-        ("GET", "/api/sessions/current/"),
-        ("GET", "/api/v1/sessions/current/"),
         ("GET", "/api/sessions/{session_id}/details"),
         ("GET", "/api/v1/sessions/{session_id}/details"),
-        ("POST", "/api/sessions/{session_id}/restore-session-start"),
-        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
         ("GET", "/api/undo/{session_id}/snapshots"),
         ("POST", "/api/undo/{session_id}/undo/{snapshot_id}"),
         ("GET", "/api/v1/undo/{session_id}/snapshots"),
@@ -525,6 +523,8 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     }
     python_ops = {
         ("GET", "/api/v1/sessions/correction-examples"),
+        ("GET", "/api/v1/sessions/current/"),
+        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
     }
     declared = {
         (operation["method"], operation["path"]): operation

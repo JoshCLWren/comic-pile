@@ -17747,166 +17747,6 @@
         "title": "SessionBandwidthState",
         "type": "object"
       },
-      "SessionCurrentResponse": {
-        "description": "Full session response (current-session endpoint).",
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              }
-            ]
-          },
-          "bandwidth": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
-              }
-            ]
-          },
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "intent": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
-              }
-            ]
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "manual_die": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pending_thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "skipped_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "snapshot_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "snoozed_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "snoozed_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "snoozed_thread_ids",
-          "snoozed_threads",
-          "skipped_thread_ids",
-          "skipped_threads",
-          "reading_mode_suggested"
-        ],
-        "type": "object"
-      },
       "SessionDetailResponse": {
         "description": "Wire shape of Python `SessionResponse` for `get_session`.",
         "properties": {
@@ -18229,13 +18069,13 @@
           "timestamp": {
             "type": "string"
           },
-          "type_": {
+          "type": {
             "type": "string"
           }
         },
         "required": [
           "id",
-          "type_",
+          "type",
           "timestamp",
           "thread_deleted"
         ],
@@ -18846,166 +18686,6 @@
           "snapshot_count"
         ],
         "title": "SessionResponse",
-        "type": "object"
-      },
-      "SessionRestoreResponse": {
-        "description": "Full session response matching Python SessionResponse.",
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              }
-            ]
-          },
-          "bandwidth": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
-              }
-            ]
-          },
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "intent": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
-              }
-            ]
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "manual_die": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pending_thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "skipped_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "snapshot_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "snoozed_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "snoozed_threads": {
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            },
-            "type": "array"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "snoozed_thread_ids",
-          "snoozed_threads",
-          "skipped_thread_ids",
-          "skipped_threads",
-          "reading_mode_suggested"
-        ],
         "type": "object"
       },
       "SessionSnapshotItem": {
@@ -28450,26 +28130,18 @@
     },
     "/api/v1/sessions/current/": {
       "get": {
-        "operationId": "get_current_session_v1_documentation",
+        "description": "Get current active session with deadlock retry handling.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with current session details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
+        "operationId": "get_current_session_api_v1_sessions_current__get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionCurrentResponse"
+                  "$ref": "#/components/schemas/SessionResponse"
                 }
               }
             },
-            "description": "Current active session"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "description": "Successful Response"
           }
         },
         "security": [
@@ -28477,8 +28149,9 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the versioned current session.",
+        "summary": "Get Current Session",
         "tags": [
+          "session",
           "sessions"
         ]
       }
@@ -28579,15 +28252,15 @@
     },
     "/api/v1/sessions/{session_id}/restore-session-start": {
       "post": {
-        "operationId": "restore_session_start_v1_documentation",
+        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    session_service: Session service for business logic.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
+        "operationId": "restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post",
         "parameters": [
           {
-            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Session Id",
               "type": "integer"
             }
           }
@@ -28597,20 +28270,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionRestoreResponse"
+                  "$ref": "#/components/schemas/SessionResponse"
                 }
               }
             },
-            "description": "Restored session"
+            "description": "Successful Response"
           },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -28618,8 +28292,9 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the versioned restore.",
+        "summary": "Restore Reading Session Start",
         "tags": [
+          "session",
           "sessions"
         ]
       }

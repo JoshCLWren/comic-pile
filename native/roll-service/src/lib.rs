@@ -57,7 +57,6 @@ pub mod session_detail;
 pub mod session_details;
 pub mod session_history;
 pub mod session_list;
-pub mod session_restore;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
@@ -535,17 +534,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
-        // Session list and current session (issue #4839)
+        // Session list (issue #4839)
         .route("/api/sessions/", get(session_list::list_sessions))
         .route("/api/v1/sessions/", get(session_list::list_sessions))
-        .route(
-            "/api/sessions/current/",
-            get(session_list::get_current_session),
-        )
-        .route(
-            "/api/v1/sessions/current/",
-            get(session_list::get_current_session),
-        )
         // Session details (issue #4839)
         .route(
             "/api/sessions/{session_id}/details",
@@ -554,15 +545,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/sessions/{session_id}/details",
             get(session_details::get_session_details),
-        )
-        // Session restore to start (issue #4839)
-        .route(
-            "/api/sessions/{session_id}/restore-session-start",
-            post(session_restore::restore_session_start),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}/restore-session-start",
-            post(session_restore::restore_session_start),
         )
         // Undo snapshots list (issue #4839)
         .route(

@@ -2935,8 +2935,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the versioned current session. */
-        get: operations["get_current_session_v1_documentation"];
+        /**
+         * Get Current Session
+         * @description Get current active session with deadlock retry handling.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SessionResponse with current session details.
+         *
+         *     Raises:
+         *         RuntimeError: If failed after max retries.
+         */
+        get: operations["get_current_session_api_v1_sessions_current__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2988,8 +3002,24 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the versioned restore. */
-        post: operations["restore_session_start_v1_documentation"];
+        /**
+         * Restore Reading Session Start
+         * @description Restore session to its initial state at session start.
+         *
+         *     Args:
+         *         session_id: The session ID to restore.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *         session_service: Session service for business logic.
+         *
+         *     Returns:
+         *         SessionResponse with restored session details.
+         *
+         *     Raises:
+         *         HTTPException: If session or snapshot not found.
+         *         RuntimeError: If failed after max retries.
+         */
+        post: operations["restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12384,41 +12414,6 @@ export interface components {
             /** Source */
             source: ("inferred" | "manual" | "snooze" | "quiz") | null;
         };
-        /** @description Full session response (current-session endpoint). */
-        SessionCurrentResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            /** Format: int32 */
-            pending_thread_id?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            skipped_thread_ids: number[];
-            skipped_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            snapshot_count: number;
-            snoozed_thread_ids: number[];
-            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-            /** Format: int32 */
-            user_id: number;
-        };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
             active_thread?: null | components["schemas"]["SessionActiveThread"];
@@ -12502,7 +12497,7 @@ export interface components {
             thread_deleted: boolean;
             thread_title?: string | null;
             timestamp: string;
-            type_: string;
+            type: string;
         };
         /**
          * SessionHistoryListResponse
@@ -12682,41 +12677,6 @@ export interface components {
             /** Timezone */
             timezone?: string | null;
             /** User Id */
-            user_id: number;
-        };
-        /** @description Full session response matching Python SessionResponse. */
-        SessionRestoreResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            /** Format: int32 */
-            pending_thread_id?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            skipped_thread_ids: number[];
-            skipped_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            snapshot_count: number;
-            snoozed_thread_ids: number[];
-            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-            /** Format: int32 */
             user_id: number;
         };
         SessionSnapshotItem: {
@@ -18262,7 +18222,7 @@ export interface operations {
             };
         };
     };
-    get_current_session_v1_documentation: {
+    get_current_session_api_v1_sessions_current__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -18271,35 +18231,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current active session */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionCurrentResponse"];
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -18391,47 +18330,34 @@ export interface operations {
             };
         };
     };
-    restore_session_start_v1_documentation: {
+    restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Restored session */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionRestoreResponse"];
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

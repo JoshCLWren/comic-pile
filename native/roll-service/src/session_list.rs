@@ -1,19 +1,16 @@
-//! Native same-path session list and current-session reads (#4839, parent #4335).
+//! Native same-path session list reads (#4839, parent #4335).
 //!
 //! Migrates the remaining browser-called session operations to the native
 //! Rust router with identical method/path and wire contract:
 //!
 //! * `GET /api/sessions/` and `GET /api/v1/sessions/` - paginated session history
-//! * `GET /api/sessions/current/` and `GET /api/v1/sessions/current/` - current active session
 //!
-//! Wire parity with Python `list_sessions` and `get_current_session` (`app/api/session.py`):
+//! Wire parity with Python `list_sessions` (`app/api/session.py`):
 //!
 //! * Ownership: all queries scoped to `user_id = $1`
 //! * Pagination: cursor-based on `(started_at DESC, id DESC)` with `page_size` (1..200, default 50) and `page_token` ("started_at,id")
 //! * `ladder_path`: `build_ladder_path` — `start_die` followed by every `die_after` from `rate`/`snooze`/`undo` events in timestamp/id order, joined with `" → "`.
-//! * `current_die`: event-derived die wins (#4352); non-zero `manual_die` fallback, otherwise `start_die`.
 //! * `active_thread`: latest `roll`/`rate`/`snooze`/`rolled_but_skipped` event; pending thread wins; missing pending yields `null` without fall-through. `issues_remaining` counts unread `issues` when thread uses issue tracking, otherwise stored counter. `queue_position` is legacy dense display ordinal.
-//! * `bandwidth` / `intent`: normalization (unknown enum strings and out-of-range confidences become `null`).
 //! * `format` normalization, direct visible tags ordered by scope descending then normalized name, and `next_issue_*` from `next_unread_issue_id` when issue tracking is in use.
 //! * List view (`SessionListItem`) omits `snoozed_*` / `skipped_*` / `pending_thread_id` / `timezone` / `bandwidth` / `intent` / `correction` to reduce payload.
 //! * Timestamps emitted as UTC `...Z` strings (matching session-detail Rust slice).
@@ -23,10 +20,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    auth::AuthenticatedUser,
-    db,
-    reading_session::{self, automatic_die_after, SessionPolicy},
-    ApiError, AppState,
+    auth::AuthenticatedUser, db, reading_session::automatic_die_after, ApiError, AppState,
 };
 use axum::{
     extract::{Query, State},
@@ -79,62 +73,6 @@ pub struct SessionActiveThread {
     pub next_issue_number: Option<String>,
 }
 
-/// Canonical bandwidth state; invalid stored values normalize to `null`.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct SessionBandwidthState {
-    pub predicted_bandwidth: Option<String>,
-    pub active_bandwidth: Option<String>,
-    pub confidence: Option<f64>,
-    pub source: Option<String>,
-    pub mode_version: Option<String>,
-}
-
-/// Canonical intent state; invalid stored values normalize to `null`.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct SessionIntentState {
-    pub predicted_intent: Option<String>,
-    pub active_intent: Option<String>,
-    pub confidence: Option<f64>,
-    pub source: Option<String>,
-    pub mode_version: Option<String>,
-}
-
-/// Compact thread summary used for the snoozed and skipped lists.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct SessionThreadSummary {
-    pub id: i32,
-    pub title: String,
-}
-
-/// Full session response (current-session endpoint).
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct SessionCurrentResponse {
-    pub id: i32,
-    pub started_at: String,
-    pub ended_at: Option<String>,
-    pub start_die: i32,
-    pub manual_die: Option<i32>,
-    pub user_id: i32,
-    pub ladder_path: String,
-    pub active_thread: Option<SessionActiveThread>,
-    pub current_die: i32,
-    pub last_rolled_result: Option<i32>,
-    pub has_restore_point: bool,
-    pub snapshot_count: i32,
-    pub snoozed_thread_ids: Vec<i32>,
-    pub snoozed_threads: Vec<SessionThreadSummary>,
-    pub skipped_thread_ids: Vec<i32>,
-    pub skipped_threads: Vec<SessionThreadSummary>,
-    pub pending_thread_id: Option<i32>,
-    pub timezone: Option<String>,
-    pub reading_bandwidth: Option<String>,
-    pub reading_intent: Option<String>,
-    pub reading_mode_source: Option<String>,
-    pub reading_mode_suggested: bool,
-    pub bandwidth: Option<SessionBandwidthState>,
-    pub intent: Option<SessionIntentState>,
-}
-
 /// List-item session response (history list endpoint).
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct SessionListItemResponse {
@@ -166,30 +104,12 @@ pub struct SessionHistoryListResponse {
 const SESSION_PAGE_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested FROM sessions WHERE user_id = $1 ORDER BY started_at DESC, id DESC LIMIT $2";
 const SESSION_PAGE_WITH_CURSOR_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested FROM sessions WHERE user_id = $1 AND (started_at < $2 OR (started_at = $2 AND id < $3)) ORDER BY started_at DESC, id DESC LIMIT $4";
 const SNAPSHOT_COUNT_SQL: &str = "SELECT session_id, count(*)::int FROM snapshots WHERE session_id = ANY($1) GROUP BY session_id";
-const SNAPSHOT_COUNT_ONE_SQL: &str = "SELECT count(*)::int FROM snapshots WHERE session_id = $1";
 const LADDER_SQL: &str = "SELECT session_id, die_after FROM events WHERE session_id = ANY($1) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY session_id, timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT session_id, die_after, context::text FROM events WHERE session_id = ANY($1) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY session_id, timestamp DESC, id DESC";
 const LATEST_ROLL_SQL: &str = "SELECT session_id, selected_thread_id, result FROM events WHERE session_id = ANY($1) AND type = 'roll' ORDER BY session_id, timestamp DESC, id DESC";
 const RATES_UNDO_SQL: &str = "SELECT session_id, type, issues_read, rating FROM events WHERE session_id = ANY($1) AND type IN ('rate','undo') ORDER BY session_id, timestamp ASC, id ASC";
-const LATEST_ACTION_SQL: &str = "SELECT session_id, type, selected_thread_id, result FROM events WHERE session_id = ANY($1) AND type IN ('roll','rate','snooze','rolled_but_skipped') ORDER BY session_id, timestamp DESC, id DESC";
-const PENDING_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1 AND user_id = $2";
-const ROLLED_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1";
-const UNREAD_COUNT_SQL: &str =
-    "SELECT count(*)::int FROM issues WHERE thread_id = $1 AND status = 'unread'";
-const NEXT_ISSUE_SQL: &str = "SELECT id, issue_number FROM issues WHERE id = $1";
-const TAGS_SQL: &str = "SELECT tag.id, tag.name, tag.normalized_name, tag.scope, tag.owner_user_id, tag.color, to_char(tag.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(tag.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') FROM tag_assignments assignment JOIN tags tag ON tag.id = assignment.tag_id WHERE assignment.target_type = 'Thread' AND assignment.target_id = $1 AND (tag.scope = 'global' OR tag.owner_user_id = $2) ORDER BY tag.scope DESC, tag.normalized_name ASC";
 const TAGS_ANY_SQL: &str = "SELECT tag.id, tag.name, tag.normalized_name, tag.scope, tag.owner_user_id, tag.color, to_char(tag.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(tag.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), assignment.target_id FROM tag_assignments assignment JOIN tags tag ON tag.id = assignment.tag_id WHERE assignment.target_type = 'Thread' AND assignment.target_id = ANY($1) AND (tag.scope = 'global' OR tag.owner_user_id = $2) ORDER BY tag.scope DESC, tag.normalized_name ASC";
-const QUEUE_POSITION_SQL: &str = "SELECT seq::int FROM (SELECT id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS seq FROM threads WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked WHERE id = $2";
 const QUEUE_POSITION_ANY_SQL: &str = "SELECT id, seq::int FROM (SELECT id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS seq FROM threads WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked WHERE id = ANY($2)";
-
-// Windowed current-session resolution matching Python `get_or_create`: an
-// unended session with a pending reading context wins; otherwise the session
-// with the most recent activity (start, pending refresh, or event) within the
-// six-hour default gap window wins. When no active session survives the gap
-// window, `get_current_session` calls the transactional get-or-create so that
-// this same-path GET matches Python's `get_or_create` read behavior (a fresh
-// session is created rather than answering 404).
-const CURRENT_SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested, predicted_bandwidth, active_bandwidth, bandwidth_confidence, bandwidth_source, bandwidth_version, predicted_intent, active_intent, intent_confidence, intent_source, intent_version, snoozed_thread_ids, skipped_thread_ids, recent.pending_issue_id FROM (SELECT s.id, s.started_at, s.ended_at, s.start_die, s.manual_die, s.user_id, s.pending_thread_id, s.pending_issue_id, s.timezone, s.reading_bandwidth, s.reading_intent, s.reading_mode_source, s.reading_mode_suggested, s.predicted_bandwidth, s.active_bandwidth, s.bandwidth_confidence, s.bandwidth_source, s.bandwidth_version, s.predicted_intent, s.active_intent, s.intent_confidence, s.intent_source, s.intent_version, s.snoozed_thread_ids, s.skipped_thread_ids, GREATEST(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL THEN COALESCE(s.pending_thread_updated_at, s.started_at) ELSE s.started_at END, COALESCE((SELECT max(e.timestamp) FROM events e WHERE e.session_id = s.id), s.started_at)) AS activity_at FROM sessions s WHERE s.user_id = $1 AND s.ended_at IS NULL) recent WHERE recent.activity_at >= to_timestamp($2) ORDER BY (recent.pending_thread_id IS NOT NULL OR recent.pending_issue_id IS NOT NULL) DESC, recent.activity_at DESC, recent.started_at DESC, recent.id DESC LIMIT 1";
 
 /// Parse a nullable json thread-id array (Python `snoozed_thread_ids` /
 /// `skipped_thread_ids` columns) into a bounded vector of valid ids.
@@ -201,10 +121,6 @@ pub(crate) fn json_id_list(value: Option<Value>) -> Vec<i32> {
         .filter_map(|item| item.as_i64())
         .filter_map(|id| i32::try_from(id).ok())
         .collect()
-}
-
-fn not_found() -> ApiError {
-    ApiError::with_status(StatusCode::NOT_FOUND, "Session not found".to_string())
 }
 
 fn internal() -> ApiError {
@@ -221,65 +137,6 @@ pub(crate) fn normalize_format(value: &str) -> String {
         "comic" | "comics" => "Comic".to_string(),
         "digital" => "Digital".to_string(),
         _ => stripped.to_string(),
-    }
-}
-
-fn normalize_bandwidth_level(value: Option<&str>) -> Option<String> {
-    match value {
-        Some("light" | "balanced" | "deep") => value.map(str::to_owned),
-        _ => None,
-    }
-}
-
-fn normalize_intent_level(value: Option<&str>) -> Option<String> {
-    match value {
-        Some("balanced" | "momentum" | "familiar" | "explore" | "random") => {
-            value.map(str::to_owned)
-        }
-        _ => None,
-    }
-}
-
-fn normalize_source(value: Option<&str>) -> Option<String> {
-    match value {
-        Some("inferred" | "manual" | "snooze" | "quiz") => value.map(str::to_owned),
-        _ => None,
-    }
-}
-
-fn normalize_confidence(value: Option<f64>) -> Option<f64> {
-    value.filter(|confidence| (0.0..=1.0).contains(confidence))
-}
-
-fn bandwidth_state(
-    predicted: Option<&str>,
-    active: Option<&str>,
-    confidence: Option<f64>,
-    source: Option<&str>,
-    version: Option<&str>,
-) -> SessionBandwidthState {
-    SessionBandwidthState {
-        predicted_bandwidth: normalize_bandwidth_level(predicted),
-        active_bandwidth: normalize_bandwidth_level(active),
-        confidence: normalize_confidence(confidence),
-        source: normalize_source(source),
-        mode_version: version.map(str::to_owned),
-    }
-}
-
-fn intent_state(
-    predicted: Option<&str>,
-    active: Option<&str>,
-    confidence: Option<f64>,
-    source: Option<&str>,
-    version: Option<&str>,
-) -> SessionIntentState {
-    SessionIntentState {
-        predicted_intent: normalize_intent_level(predicted),
-        active_intent: normalize_intent_level(active),
-        confidence: normalize_confidence(confidence),
-        source: normalize_source(source),
-        mode_version: version.map(str::to_owned),
     }
 }
 
@@ -1077,634 +934,6 @@ pub async fn list_sessions(
     }))
 }
 
-/// `GET /api/sessions/current/` and `GET /api/v1/sessions/current/` - current active session.
-pub async fn get_current_session(
-    user: AuthenticatedUser,
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<SessionCurrentResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-
-    // Get or create current session (same logic as Python). Python's
-    // GET /sessions/current/ resolves through `get_or_create`, so a new account
-    // gets a session created on the read. Preserve that same-path behavior here
-    // instead of answering 404: initialize() is the transactional get-or-create
-    // with the same 6h gap policy and session-start snapshot as Python.
-    let gap_cutoff = chrono::Utc::now().timestamp() as f64 - 6.0 * 3600.0;
-    let active_row = connection
-        .query_opt(CURRENT_SESSION_SQL, &[&user.id(), &gap_cutoff])
-        .await
-        .map_err(db::query_error)?;
-    let session_row = match active_row {
-        Some(row) => row,
-        None => {
-            reading_session::initialize(&state, user, None, SessionPolicy::default()).await?;
-            connection
-                .query_opt(CURRENT_SESSION_SQL, &[&user.id(), &gap_cutoff])
-                .await
-                .map_err(db::query_error)?
-                .ok_or_else(not_found)?
-        }
-    };
-
-    let session_id: i32 = session_row.try_get(0).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let started_at: String = session_row.try_get(1).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let ended_at: Option<String> = session_row.try_get(2).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let start_die: i32 = session_row.try_get(3).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let manual_die: Option<i32> = session_row.try_get(4).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let owner_id: i32 = session_row.try_get(5).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let pending_thread_id: Option<i32> = session_row.try_get(6).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let timezone: Option<String> = session_row.try_get(7).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let reading_bandwidth: Option<String> = session_row.try_get(8).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let reading_intent: Option<String> = session_row.try_get(9).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let reading_mode_source: Option<String> = session_row.try_get(10).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let reading_mode_suggested: Option<bool> = session_row.try_get(11).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let predicted_bandwidth: Option<String> = session_row.try_get(12).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let active_bandwidth: Option<String> = session_row.try_get(13).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let bandwidth_confidence: Option<f64> = session_row.try_get(14).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let bandwidth_source: Option<String> = session_row.try_get(15).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let bandwidth_version: Option<String> = session_row.try_get(16).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let predicted_intent: Option<String> = session_row.try_get(17).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let active_intent: Option<String> = session_row.try_get(18).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let intent_confidence: Option<f64> = session_row.try_get(19).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let intent_source: Option<String> = session_row.try_get(20).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-    let intent_version: Option<String> = session_row.try_get(21).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        internal()
-    })?;
-
-    // Snapshot count
-    let snapshot_count: i32 = connection
-        .query_one(SNAPSHOT_COUNT_ONE_SQL, &[&session_id])
-        .await
-        .map_err(db::query_error)?
-        .try_get(0)
-        .map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            internal()
-        })?;
-
-    // Ladder path
-    let ladder_sql = LADDER_SQL.replace("session_id = ANY($1)", "session_id = $1");
-    let ladder_rows = connection
-        .query(&ladder_sql, &[&session_id])
-        .await
-        .map_err(db::query_error)?;
-    let ladder_values: Vec<i32> = ladder_rows
-        .iter()
-        .map(|row| {
-            row.try_get(1).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })
-        })
-        .collect::<Result<_, ApiError>>()?;
-    let ladder = ladder_path(start_die, &ladder_values);
-
-    // Current die (Python resolves die across the reader's events, not just
-    // this session: Rust commands write sessionless die events)
-    let current_die_sql =
-        "SELECT session_id, die_after, context::text FROM events WHERE (user_id = $1 OR session_id = $2) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
-    let die_row = connection
-        .query_opt(current_die_sql, &[&user.id(), &session_id])
-        .await
-        .map_err(db::query_error)?;
-    let resolved_die = match die_row {
-        Some(row) => {
-            let die_after: i32 = row.try_get(1).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?;
-            let context_text: Option<String> = row.try_get(2).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?;
-            let context: Value = context_text
-                .as_deref()
-                .and_then(|text| serde_json::from_str(text).ok())
-                .unwrap_or(Value::Null);
-            let owned = context;
-            current_die(manual_die, Some((die_after, &owned)), start_die)
-        }
-        None => current_die(manual_die, None, start_die),
-    };
-
-    // Latest action event
-    let latest_action_sql =
-        LATEST_ACTION_SQL.replace("session_id = ANY($1)", "session_id = $1") + " LIMIT 1";
-    let action_row = connection
-        .query_opt(&latest_action_sql, &[&session_id])
-        .await
-        .map_err(db::query_error)?;
-    let (action_type, selected_thread_id, roll_result) = match action_row {
-        Some(row) => (
-            row.try_get(1).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?,
-            row.try_get(2).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?,
-            row.try_get(3).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?,
-        ),
-        None => (String::new(), None, None),
-    };
-    let is_roll = action_type == "roll";
-
-    // Active thread
-    let active_candidate: Option<i32> = if pending_thread_id.is_some() {
-        pending_thread_id
-    } else if is_roll {
-        selected_thread_id
-    } else {
-        None
-    };
-    let active_thread = match active_candidate {
-        None => None,
-        Some(thread_id) => {
-            let thread_row = if pending_thread_id.is_some() {
-                connection
-                    .query_opt(PENDING_THREAD_SQL, &[&thread_id, &user.id()])
-                    .await
-                    .map_err(db::query_error)?
-            } else {
-                connection
-                    .query_opt(ROLLED_THREAD_SQL, &[&thread_id])
-                    .await
-                    .map_err(db::query_error)?
-            };
-            match thread_row {
-                None => None,
-                Some(thread_row) => {
-                    let thread_owner: i32 = thread_row.try_get(7).map_err(|e| {
-                        tracing::debug!(
-                            error_kind = crate::error_kind(&e),
-                            "preserved underlying error before mapping"
-                        );
-                        internal()
-                    })?;
-                    if pending_thread_id.is_none() && thread_owner != owner_id {
-                        None
-                    } else {
-                        let thread_id_value: i32 = thread_row.try_get(0).map_err(|e| {
-                            tracing::debug!(
-                                error_kind = crate::error_kind(&e),
-                                "preserved underlying error before mapping"
-                            );
-                            internal()
-                        })?;
-                        let title: String = thread_row.try_get(1).map_err(|e| {
-                            tracing::debug!(
-                                error_kind = crate::error_kind(&e),
-                                "preserved underlying error before mapping"
-                            );
-                            internal()
-                        })?;
-                        let format: String = thread_row.try_get(2).map_err(|e| {
-                            tracing::debug!(
-                                error_kind = crate::error_kind(&e),
-                                "preserved underlying error before mapping"
-                            );
-                            internal()
-                        })?;
-                        let stored_remaining: i32 = thread_row.try_get(3).map_err(|e| {
-                            tracing::debug!(
-                                error_kind = crate::error_kind(&e),
-                                "preserved underlying error before mapping"
-                            );
-                            internal()
-                        })?;
-                        let total_issues: Option<i32> = thread_row.try_get(4).map_err(|e| {
-                            tracing::debug!(
-                                error_kind = crate::error_kind(&e),
-                                "preserved underlying error before mapping"
-                            );
-                            internal()
-                        })?;
-                        let reading_progress: Option<String> =
-                            thread_row.try_get(5).map_err(|e| {
-                                tracing::debug!(
-                                    error_kind = crate::error_kind(&e),
-                                    "preserved underlying error before mapping"
-                                );
-                                internal()
-                            })?;
-                        let next_unread_issue_id: Option<i32> =
-                            thread_row.try_get(6).map_err(|e| {
-                                tracing::debug!(
-                                    error_kind = crate::error_kind(&e),
-                                    "preserved underlying error before mapping"
-                                );
-                                internal()
-                            })?;
-
-                        let issues_remaining = if total_issues.is_some() {
-                            connection
-                                .query_one(UNREAD_COUNT_SQL, &[&thread_id_value])
-                                .await
-                                .map_err(db::query_error)?
-                                .try_get(0)
-                                .map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?
-                        } else {
-                            stored_remaining
-                        };
-
-                        let (next_issue_id, next_issue_number) = match next_unread_issue_id {
-                            Some(issue_id) if total_issues.is_some() => {
-                                let issue_row = connection
-                                    .query_opt(NEXT_ISSUE_SQL, &[&issue_id])
-                                    .await
-                                    .map_err(db::query_error)?;
-                                match issue_row {
-                                    Some(issue_row) => (
-                                        Some(issue_row.try_get(0).map_err(|e| {
-                                            tracing::debug!(
-                                                error_kind = crate::error_kind(&e),
-                                                "preserved underlying error before mapping"
-                                            );
-                                            internal()
-                                        })?),
-                                        issue_row.try_get(1).map_err(|e| {
-                                            tracing::debug!(
-                                                error_kind = crate::error_kind(&e),
-                                                "preserved underlying error before mapping"
-                                            );
-                                            internal()
-                                        })?,
-                                    ),
-                                    None => (None, None),
-                                }
-                            }
-                            _ => (None, None),
-                        };
-
-                        let tag_rows = connection
-                            .query(TAGS_SQL, &[&thread_id_value, &user.id()])
-                            .await
-                            .map_err(db::query_error)?;
-                        let mut tags = Vec::with_capacity(tag_rows.len());
-                        for tag_row in &tag_rows {
-                            tags.push(SessionTag {
-                                id: tag_row.try_get(0).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                name: tag_row.try_get(1).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                normalized_name: tag_row.try_get(2).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                scope: tag_row.try_get(3).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                owner_user_id: tag_row.try_get(4).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                color: tag_row.try_get(5).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                created_at: tag_row.try_get(6).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                                updated_at: tag_row.try_get(7).map_err(|e| {
-                                    tracing::debug!(
-                                        error_kind = crate::error_kind(&e),
-                                        "preserved underlying error before mapping"
-                                    );
-                                    internal()
-                                })?,
-                            });
-                        }
-
-                        let queue_row = connection
-                            .query_opt(QUEUE_POSITION_SQL, &[&user.id(), &thread_id_value])
-                            .await
-                            .map_err(db::query_error)?;
-                        let queue_position: i32 = match queue_row {
-                            Some(row) => row.try_get(0).map_err(|e| {
-                                tracing::debug!(
-                                    error_kind = crate::error_kind(&e),
-                                    "preserved underlying error before mapping"
-                                );
-                                internal()
-                            })?,
-                            None => 0,
-                        };
-                        let safe_result = roll_result.filter(|r| *r > 0);
-
-                        Some(SessionActiveThread {
-                            id: thread_id_value,
-                            title,
-                            format: normalize_format(&format),
-                            issues_remaining,
-                            queue_position,
-                            last_rolled_result: safe_result,
-                            total_issues,
-                            reading_progress,
-                            issues_read: None,
-                            last_rating: None,
-                            tags,
-                            issue_id: next_issue_id,
-                            issue_number: next_issue_number.clone(),
-                            next_issue_id,
-                            next_issue_number,
-                        })
-                    }
-                }
-            }
-        }
-    };
-
-    // Snoozed and skipped threads (json id arrays on the session row)
-    let snoozed_ids = json_id_list(session_row.try_get::<_, Option<Value>>(22).ok().flatten());
-    let skipped_ids = json_id_list(session_row.try_get::<_, Option<Value>>(23).ok().flatten());
-    let all_thread_ids = {
-        let mut ids = snoozed_ids.clone();
-        ids.extend(skipped_ids.iter().copied());
-        ids.sort_unstable();
-        ids.dedup();
-        ids
-    };
-    let mut threads_title_by_id: std::collections::HashMap<i32, String> =
-        std::collections::HashMap::new();
-    if !all_thread_ids.is_empty() {
-        let rows = connection
-            .query(
-                "SELECT id, title FROM threads WHERE id = ANY($1)",
-                &[&all_thread_ids],
-            )
-            .await
-            .map_err(db::query_error)?;
-        for row in &rows {
-            let id: i32 = row.try_get(0).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?;
-            let title: String = row.try_get(1).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })?;
-            threads_title_by_id.insert(id, title);
-        }
-    }
-    let snoozed_threads = snoozed_ids
-        .iter()
-        .filter_map(|id| {
-            threads_title_by_id
-                .get(id)
-                .map(|title| SessionThreadSummary {
-                    id: *id,
-                    title: title.clone(),
-                })
-        })
-        .collect();
-    let skipped_threads = skipped_ids
-        .iter()
-        .filter_map(|id| {
-            threads_title_by_id
-                .get(id)
-                .map(|title| SessionThreadSummary {
-                    id: *id,
-                    title: title.clone(),
-                })
-        })
-        .collect();
-
-    Ok(Json(SessionCurrentResponse {
-        id: session_id,
-        started_at,
-        ended_at,
-        start_die,
-        manual_die,
-        user_id: owner_id,
-        ladder_path: ladder,
-        active_thread: active_thread.clone(),
-        current_die: resolved_die,
-        last_rolled_result: active_thread
-            .as_ref()
-            .and_then(|thread| thread.last_rolled_result),
-        has_restore_point: snapshot_count > 0,
-        snapshot_count,
-        snoozed_thread_ids: snoozed_ids,
-        snoozed_threads,
-        skipped_thread_ids: skipped_ids,
-        skipped_threads,
-        pending_thread_id,
-        timezone,
-        reading_bandwidth,
-        reading_intent,
-        reading_mode_source,
-        reading_mode_suggested: reading_mode_suggested.unwrap_or(false),
-        bandwidth: Some(bandwidth_state(
-            predicted_bandwidth.as_deref(),
-            active_bandwidth.as_deref(),
-            bandwidth_confidence,
-            bandwidth_source.as_deref(),
-            bandwidth_version.as_deref(),
-        )),
-        intent: Some(intent_state(
-            predicted_intent.as_deref(),
-            active_intent.as_deref(),
-            intent_confidence,
-            intent_source.as_deref(),
-            intent_version.as_deref(),
-        )),
-    }))
-}
-
 /// Documentation-only operation for the unversioned list.
 #[utoipa::path(
     get,
@@ -1737,57 +966,19 @@ pub fn list_sessions_documentation() {}
 #[allow(dead_code)]
 pub fn list_sessions_v1_documentation() {}
 
-/// Documentation-only operation for the unversioned current session.
-#[utoipa::path(
-    get,
-    path = "/api/sessions/current/",
-    tag = "sessions",
-    responses(
-        (status = 200, description = "Current active session", body = SessionCurrentResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_current_session_documentation() {}
-
-/// Documentation-only operation for the versioned current session.
-#[utoipa::path(
-    get,
-    path = "/api/v1/sessions/current/",
-    tag = "sessions",
-    responses(
-        (status = 200, description = "Current active session", body = SessionCurrentResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_current_session_v1_documentation() {}
-
-/// OpenAPI document for the session list/current same-path surface.
+/// OpenAPI document for the session list same-path surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
     paths(
         list_sessions_documentation,
-        list_sessions_v1_documentation,
-        get_current_session_documentation,
-        get_current_session_v1_documentation
+        list_sessions_v1_documentation
     ),
     components(schemas(
         SessionListParams,
         SessionTag,
         SessionActiveThread,
-        SessionBandwidthState,
-        SessionIntentState,
-        SessionThreadSummary,
         SessionListItemResponse,
-        SessionHistoryListResponse,
-        SessionCurrentResponse
+        SessionHistoryListResponse
     )),
     modifiers(&SessionListSecurityAddon)
 )]
@@ -1838,21 +1029,13 @@ mod tests {
         let paths = document["paths"].as_object().expect("paths");
         assert!(paths.contains_key("/api/sessions/"));
         assert!(paths.contains_key("/api/v1/sessions/"));
-        assert!(paths.contains_key("/api/sessions/current/"));
-        assert!(paths.contains_key("/api/v1/sessions/current/"));
-        for path in [
-            "/api/sessions/",
-            "/api/v1/sessions/",
-            "/api/sessions/current/",
-            "/api/v1/sessions/current/",
-        ] {
+        for path in ["/api/sessions/", "/api/v1/sessions/"] {
             let operation = &document["paths"][path]["get"];
             assert!(operation["operationId"].is_string());
             assert!(operation["responses"]["200"].as_object().is_some());
             assert!(operation["security"].is_array());
         }
         assert!(document["components"]["schemas"]["SessionHistoryListResponse"].is_object());
-        assert!(document["components"]["schemas"]["SessionCurrentResponse"].is_object());
         assert!(document["components"]["schemas"]["SessionListItemResponse"].is_object());
     }
 
@@ -1964,65 +1147,5 @@ mod tests {
         for session in &response.sessions {
             assert_eq!(session.user_id, 9101);
         }
-    }
-
-    #[tokio::test]
-    async fn get_current_session_returns_owned_projection_to_disposable_postgres() {
-        let (state, user, _guard) = database_fixture().await;
-        let Json(response) = get_current_session(user, State(state.clone()))
-            .await
-            .expect("current session");
-        assert_eq!(response.id, 9301);
-        assert_eq!(response.user_id, 9101);
-        assert_eq!(response.start_die, 6);
-        assert_eq!(response.current_die, 4);
-        assert_eq!(response.ladder_path, "6 → 4");
-        assert_eq!(response.snapshot_count, 0);
-        assert!(!response.has_restore_point);
-        let active = response.active_thread.expect("pending active thread");
-        assert_eq!(active.id, 9201);
-        assert_eq!(active.title, "Owned Comic");
-        assert_eq!(active.format, "Comic");
-        assert_eq!(active.issues_remaining, 3);
-        assert_eq!(active.queue_position, 1);
-        assert_eq!(active.last_rolled_result, None);
-        assert_eq!(active.issues_read, None);
-        assert_eq!(active.last_rating, None);
-    }
-
-    #[tokio::test]
-    async fn get_current_session_creates_session_for_account_with_no_session() {
-        let (state, _user, _guard) = database_fixture().await;
-        let connection = db::checkout(&state).await.expect("fixture connection");
-        connection
-            .execute(
-                "INSERT INTO users (id, username) VALUES (9103, 'new-account-parity')",
-                &[],
-            )
-            .await
-            .expect("seed new account without a session");
-        drop(connection);
-
-        // Python's GET /sessions/current/ uses get_or_create, so a new account
-        // gets a session created on the read instead of a 404.
-        let Json(response) =
-            get_current_session(AuthenticatedUser::for_test(9103), State(state.clone()))
-                .await
-                .expect("current session created on read");
-        assert_eq!(response.user_id, 9103);
-
-        let connection = db::checkout(&state).await.expect("fixture connection");
-        let count: i64 = connection
-            .query_one(
-                "SELECT count(*)::bigint FROM sessions WHERE user_id = 9103",
-                &[],
-            )
-            .await
-            .expect("count created sessions")
-            .get(0);
-        assert_eq!(
-            count, 1,
-            "exactly one session should be created on the read"
-        );
     }
 }

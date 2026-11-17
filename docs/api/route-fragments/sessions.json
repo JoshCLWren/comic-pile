@@ -25,15 +25,6 @@
     {
       "bucket": "unversioned_operations",
       "method": "GET",
-      "path": "/api/sessions/current/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/current/$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
       "path": "/api/sessions/{session_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/sessions/[0-9]+$",
@@ -45,15 +36,6 @@
       "path": "/api/sessions/{session_id}/details",
       "dest": "/api/native_roll.rs",
       "src": "^/api/sessions/[^/]+/details$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "POST",
-      "path": "/api/sessions/{session_id}/restore-session-start",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
       "owning_issue": 4839,
       "exclude_from_inventory": true
     },
@@ -84,9 +66,8 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/sessions/current/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/current/$",
-      "owning_issue": 4839
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/current/$"
     },
     {
       "bucket": "v1_operations",
@@ -108,9 +89,8 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/sessions/{session_id}/restore-session-start",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
-      "owning_issue": 4839
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$"
     },
     {
       "bucket": "v1_operations",
