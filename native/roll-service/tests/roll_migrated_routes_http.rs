@@ -79,10 +79,7 @@ async fn setup_user(
         .get()
         .await
         .unwrap()
-        .query_one(
-            "SELECT id FROM users WHERE username = $1",
-            &[&username],
-        )
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
         .await
         .unwrap()
         .get(0);
@@ -122,10 +119,7 @@ async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, i3
         .get()
         .await
         .unwrap()
-        .query_one(
-            "SELECT id FROM users WHERE username = $1",
-            &[&username],
-        )
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
         .await
         .unwrap()
         .get(0);
@@ -197,7 +191,9 @@ async fn switch_prerequisite_requires_auth() {
             .method("POST")
             .uri("/api/v1/roll/switch-prerequisite")
             .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(json!({"node_type":"issue","node_id":1}).to_string()))
+            .body(Body::from(
+                json!({"node_type":"issue","node_id":1}).to_string(),
+            ))
             .unwrap(),
     )
     .await;
