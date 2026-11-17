@@ -120,13 +120,7 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Val
     )
 }
 
-fn authed(
-    method: &str,
-    path: &str,
-    token: &str,
-    csrf: &str,
-    body: Option<Value>,
-) -> Request<Body> {
+fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
     let builder = Request::builder()
         .method(method)
         .uri(path)
