@@ -7,7 +7,9 @@
 //! selects a replacement, preserving the die size and avoiding durable backoff.
 use crate::{
     auth::AuthenticatedUser,
-    db, dice_state, option_inputs,
+    db,
+    dice_mutation::{self, DiceCommand},
+    dice_state, option_inputs,
     reading_session::{self, SessionPolicy},
     roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
@@ -377,20 +379,26 @@ pub async fn offer(
     // Temporary snoozes are cookie-owned. Legacy session skip/snooze arrays and
     // the durable Fibonacci backoff must not remove candidates from the new
     // offer, or clearing the midnight cookie could not restore them.
-    // Native roll snoozes must NOT record a durable dice mutation that changes
-    // the die size or creates cross-session backoff (#4589).
     let mut excluded: HashSet<i32> = HashSet::new();
     let candidate_ids: Vec<i32> = candidates
         .iter()
         .map(|candidate| candidate.thread_id)
         .collect();
 
-    let die = dice_state::current_die(&tx, user).await?;
+    let mut die = dice_state::current_die(&tx, user).await?;
     let mut snoozed_thread_id = None;
     if let Some(previous) = previous_offer {
-        // Exclude the previous thread from the offer pool so it doesn't get
-        // re-rolled, but do NOT persist a dice mutation that would alter the
-        // die size or create durable backoff.
+        let snooze_key = format!("{}-snooze", request.idempotency_key);
+        let mutation = dice_mutation::persist_in_transaction(
+            &tx,
+            user,
+            &snooze_key,
+            &DiceCommand::Reroll {
+                thread_id: previous,
+            },
+        )
+        .await?;
+        die = mutation.die_after;
         excluded.insert(previous);
         snoozed_thread_id = Some(previous);
     }
