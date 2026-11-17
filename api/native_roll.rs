@@ -366,14 +366,8 @@ fn app() -> Router {
             "/api/v1/continuity-plans/release-sources/{source_id}",
             delete(native_dispatch),
         )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}",
-            put(native_dispatch),
-        )
+        .route("/api/v1/continuity-plans/{plan_id}", get(native_dispatch))
+        .route("/api/v1/continuity-plans/{plan_id}", put(native_dispatch))
         .route(
             "/api/v1/continuity-plans/{plan_id}",
             delete(native_dispatch),
