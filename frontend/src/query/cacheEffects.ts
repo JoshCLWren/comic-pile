@@ -558,20 +558,28 @@ export function applyEditedThreadToQueuePages(
   client: QueryClient,
   updatedThread: Thread,
 ): void {
+  const patchLoadedPages = (old: InfiniteData<ThreadListResponse> | undefined) => {
+    if (!old) return old
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        threads: page.threads.map((t) =>
+          t.id === updatedThread.id ? { ...t, ...updatedThread } : t,
+        ),
+      })),
+    }
+  }
+
   client.setQueriesData<InfiniteData<ThreadListResponse>>(
     { queryKey: queryKeys.queue.pages() },
-    (old) => {
-      if (!old) return old
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          threads: page.threads.map((t) =>
-            t.id === updatedThread.id ? { ...t, ...updatedThread } : t,
-          ),
-        })),
-      }
-    },
+    patchLoadedPages,
+  )
+  // Finished Series has a separate cursor/cache from the active Queue.
+  // Renames and format edits must update already-loaded completed rows too.
+  client.setQueriesData<InfiniteData<ThreadListResponse>>(
+    { queryKey: queryKeys.completed.pages() },
+    patchLoadedPages,
   )
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
