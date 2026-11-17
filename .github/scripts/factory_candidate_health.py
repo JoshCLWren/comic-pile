@@ -308,20 +308,8 @@ def durable_attempt_evidence(
             continue
         evidence[(source, model)] = AttemptEvidence(source, model, classification, updated)
 
-    for row in payload.get("providers", []):
-        if not isinstance(row, Mapping):
-            continue
-        source = str(row.get("source") or "")
-        until = int(row.get("until") or 0)
-        updated = int(row.get("updated") or 0)
-        outcome = str(row.get("outcome") or "")
-        if source and until > now_epoch and updated > 0 and outcome in PROVIDER_FAILURE_OUTCOMES:
-            seconds = (RATE_LIMIT_COOLDOWN_SECONDS if outcome in {
-                "provider_quota", "provider_throttle", "provider_throttled", "provider_unavailable"
-            } else FAILURE_COOLDOWN_SECONDS)
-            evidence[(source, "__provider_budget__")] = AttemptEvidence(
-                source, "__provider_budget__", outcome, max(updated, until - seconds + 1),
-            )
+    # Backoff is per exact model only: provider budget rows never block a
+    # source's other models (owner rule, 2026-11-17).
     return evidence
 
 

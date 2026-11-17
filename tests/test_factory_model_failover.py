@@ -35,7 +35,7 @@ def test_openrouter_free_iterates_every_discovered_free_candidate() -> None:
 def test_cooldown_is_exact_model_and_provider() -> None:
     candidates = [f"sample/model-{i}" for i in range(5)]
     catalog = _catalog(*candidates)
-    excluded = {"nvidia": [candidates[0]], "requesty": [candidates[1]]}
+    excluded = {"nvidia": [candidates[0]], "orcarouter": [candidates[1]]}
     attempted: set[str] = set()
     for _ in range(len(candidates) - 1):
         selected = select_next("nvidia", "567", attempted, excluded, catalog_json=catalog)
@@ -46,7 +46,7 @@ def test_cooldown_is_exact_model_and_provider() -> None:
     with pytest.raises(ExhaustedCandidatesError):
         select_next("nvidia", "567", attempted, excluded, catalog_json=catalog)
     # A source/model failure must not suppress the same model on another source.
-    other = select_next("requesty", "567", set(), excluded, catalog_json=catalog)
+    other = select_next("orcarouter", "567", set(), excluded, catalog_json=catalog)
     assert other["model"] != candidates[1]
     assert other["model"] in candidates
 
@@ -93,13 +93,13 @@ def test_intermediate_model_outcomes_preserve_exact_failure_type() -> None:
     names = [f"generated/model-{i}" for i in range(3)]
     failures = [
         {"source": "nvidia", "model": names[0], "outcome": "provider_quota", "scope": "account"},
-        {"source": "requesty", "model": names[1], "outcome": "provider_throttle", "scope": "model"},
+        {"source": "orcarouter", "model": names[1], "outcome": "provider_throttle", "scope": "model"},
         {"source": "nvidia", "model": names[2], "outcome": "model_unavailable", "scope": "model"},
     ]
     assert validate_intermediate_model_failures(failures, "nvidia") == [
         ("nvidia", names[0], "provider_quota", "model"),
         ("nvidia", names[2], "model_unavailable", "model"),
-        ("requesty", names[1], "provider_throttle", "model"),
+        ("orcarouter", names[1], "provider_throttle", "model"),
     ]
     with pytest.raises(ValueError):
         validate_intermediate_model_failures(
@@ -113,7 +113,7 @@ def test_trusted_failover_log_preserves_all_failed_models() -> None:
     worker = "123456"
     pairs = [
         ("nvidia", "generated/model-a", "provider_quota", "account"),
-        ("requesty", "generated/model-b", "provider_throttle", "model"),
+        ("orcarouter", "generated/model-b", "provider_throttle", "model"),
     ]
     lines = [
         f"2026-11-16T19:00:0{i}Z [factory:{worker}][source:{source}]"
@@ -122,14 +122,14 @@ def test_trusted_failover_log_preserves_all_failed_models() -> None:
         for i, (source, model, kind, scope) in enumerate(pairs)
     ]
     result = refine_trusted_failover_models(
-        {"worker": worker, "source": "requesty", "model": "generated/model-c"},
+        {"worker": worker, "source": "orcarouter", "model": "generated/model-c"},
         "\n".join(lines),
     )
     assert result["model_failures"] == [
         {"source": source, "model": model, "outcome": kind, "scope": scope}
         for source, model, kind, scope in pairs
     ]
-    wrong = lines[0].replace("[source:nvidia]", "[source:requesty]")
+    wrong = lines[0].replace("[source:nvidia]", "[source:orcarouter]")
     assert "model_failures" not in refine_trusted_failover_models(
         {"worker": worker, "source": "nvidia"}, wrong,
     )
@@ -141,7 +141,7 @@ def test_cross_provider_fallback_retains_exact_pair_identity() -> None:
     names = [f"generated/candidate-{i}" for i in range(6)]
     catalogs = {
         "nvidia": _catalog(*names[:2]),
-        "requesty": _catalog(*names[2:4]),
+        "orcarouter": _catalog(*names[2:4]),
         "pollinations": _catalog(*names[4:]),
     }
     attempted: set[tuple[str, str]] = set()
@@ -155,10 +155,14 @@ def test_cross_provider_fallback_retains_exact_pair_identity() -> None:
         assert pair not in attempted
         attempted.add(pair)
         seen.append(pair)
-    assert [source for source, _ in seen] == [
-        "nvidia", "nvidia", "pollinations", "pollinations",
-        "requesty", "requesty",
-    ]
+    sources = [source for source, _ in seen]
+    # The assigned provider is exhausted first; each fallback provider's
+    # models are then tried consecutively (provider order is hash rotation).
+    assert sources[:2] == ["nvidia", "nvidia"]
+    assert sorted(sources[2:4]) == sorted(sources[2:4][:1] * 2)
+    assert sorted(sources[4:6]) == sorted(sources[4:6][:1] * 2)
+    assert set(sources[2:]) == {"orcarouter", "pollinations"}
+    assert set(seen) == {(s, item["id"]) for s in catalogs for item in catalogs[s]["data"]}
     with pytest.raises(ExhaustedCandidatesError):
         select_next_fleet("77", "nvidia", attempted, set(), {}, catalogs, set(catalogs))
 
@@ -167,12 +171,12 @@ def test_account_breaker_skips_all_models_and_rotates_to_other_provider() -> Non
     from factory_model_failover import select_next_fleet
 
     names = [f"generated/candidate-{i}" for i in range(4)]
-    catalogs = {"nvidia": _catalog(*names[:3]), "requesty": _catalog(names[-1])}
+    catalogs = {"nvidia": _catalog(*names[:3]), "orcarouter": _catalog(names[-1])}
     selected = select_next_fleet(
         "77", "nvidia", {("nvidia", names[0])}, {"nvidia"},
         {}, catalogs, set(catalogs),
     )
-    assert (selected["source"], selected["model"]) == ("requesty", names[-1])
+    assert (selected["source"], selected["model"]) == ("orcarouter", names[-1])
 
 
 def test_model_throttle_does_not_block_other_models_on_source() -> None:
@@ -198,7 +202,7 @@ def test_fleet_cannot_choose_unadmitted_provider_even_with_catalog() -> None:
     with pytest.raises(ExhaustedCandidatesError):
         select_next_fleet(
             "77", "nvidia", {("nvidia", "generated/candidate")},
-            set(), {}, {"nvidia": catalog, "requesty": catalog}, {"nvidia"},
+            set(), {}, {"nvidia": catalog, "orcarouter": catalog}, {"nvidia"},
         )
 
 
