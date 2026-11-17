@@ -1092,21 +1092,7 @@ pub async fn import_series(
         .map_err(map_provider_failure)?;
     let series_name = volume_name(&volume)
         .ok_or_else(|| ApiError::ServiceUnavailable("provider_invalid_payload".to_owned()))?;
-    let roster = provider_response(
-        "issue",
-        &format!(
-            "&filter=volume:{volume_id}&limit=100\
-             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
-        ),
-        &key,
-    )
-    .await
-    .map_err(map_provider_failure)?;
-    let rows: Vec<Value> = roster
-        .get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let rows = provider_roster(volume_id, &key).await?;
     if rows.is_empty() {
         return Err(bad_request("ComicVine series has no issues"));
     }
@@ -1482,24 +1468,10 @@ pub async fn series_issues(
             issues: Vec::new(),
         }));
     };
-    let roster = provider_response(
-        "issue",
-        &format!(
-            "&filter=volume:{comicvine_volume_id}&limit=100\
-             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
-        ),
-        &key,
-    )
-    .await
-    .ok();
-    let issues: Vec<ComicVineIssueCandidate> = roster
-        .as_ref()
-        .and_then(|payload| payload.get("results"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(issue_candidate)
-        .collect();
+    let roster = provider_roster(comicvine_volume_id, &key)
+        .await
+        .unwrap_or_default();
+    let issues: Vec<ComicVineIssueCandidate> = roster.iter().filter_map(issue_candidate).collect();
     if series_name.is_empty() {
         series_name = provider_issue_volume(comicvine_volume_id, &key)
             .await
@@ -1510,6 +1482,59 @@ pub async fn series_issues(
         series_name,
         issues,
     }))
+}
+
+/// Fetch the complete, validated issue roster for one volume. ComicVine pages
+/// at 100 rows; follow the reported total with a bounded fan-out and refuse a
+/// response whose rows do not belong to the requested volume (the Python
+/// provider applies the same guard so a bad filter cannot import mixed data).
+const ROSTER_PAGE_SIZE: usize = 100;
+const MAX_ROSTER_PAGES: usize = 10;
+
+async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
+    let fetch_page = |offset: usize| {
+        let extra = format!(
+            "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
+             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
+        );
+        provider_response("issues", &extra, key)
+    };
+    let first = fetch_page(0).await.map_err(map_provider_failure)?;
+    let mut rows: Vec<Value> = first
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let total = coerce_provider_int(first.get("number_of_total_results")).unwrap_or(0);
+    let mut offset = rows.len();
+    while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
+    {
+        let page = fetch_page(offset).await.map_err(map_provider_failure)?;
+        let page_rows: Vec<Value> = page
+            .get("results")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if page_rows.is_empty() {
+            break;
+        }
+        offset += page_rows.len();
+        rows.extend(page_rows);
+    }
+    for row in &rows {
+        if let Some(volume_id_value) = row
+            .get("volume")
+            .and_then(Value::as_object)
+            .and_then(|v| v.get("id"))
+        {
+            if coerce_provider_int(Some(volume_id_value)) != Some(volume_id) {
+                return Err(ApiError::ServiceUnavailable(
+                    "provider_invalid_payload".to_owned(),
+                ));
+            }
+        }
+    }
+    Ok(rows)
 }
 
 /// Fetch a volume's canonical display name. Returns the raw name so callers
@@ -1623,24 +1648,9 @@ pub async fn resolve_input(
             else {
                 return Ok(failure());
             };
-            let roster = provider_response(
-                "issue",
-                &format!(
-                    "&filter=volume:{id}&limit=100\
-                     &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
-                ),
-                &key,
-            )
-            .await
-            .ok();
-            let issues: Vec<ComicVineIssueCandidate> = roster
-                .as_ref()
-                .and_then(|p| p.get("results"))
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(issue_candidate)
-                .collect();
+            let roster = provider_roster(id, &key).await.unwrap_or_default();
+            let issues: Vec<ComicVineIssueCandidate> =
+                roster.iter().filter_map(issue_candidate).collect();
             Ok(Json(ComicVineResolveResponse {
                 input: query.input,
                 kind: "volume".to_owned(),
