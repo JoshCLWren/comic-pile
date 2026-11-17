@@ -21,7 +21,7 @@ from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.models import Event, Issue, ReadingSession, Thread, User
+from app.models import Event, Issue, ReadingSession, RevokedToken, Thread, User
 
 from route_harness import cargo_example_path
 
@@ -217,7 +217,7 @@ async def test_native_activity_is_bounded_owner_scoped_and_one_statement(
             # Test with revoked token
             revoked_jti = f"revoked-{uuid4().hex}"
             db.add(
-                app.models.RevokedToken(
+                RevokedToken(
                     user_id=owner.id,
                     jti=revoked_jti,
                     revoked_at=now,
