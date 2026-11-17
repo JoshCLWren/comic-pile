@@ -80,15 +80,18 @@ pub struct CBLAdoptionSummary {
     pub awaiting_opt_in_positions: Vec<i64>,
 }
 
+/// Row as stored: every identifier and ordinal column here is int4 in the
+/// canonical Alembic schema, so it is read and bound as `i32` and widened only
+/// for the JSON wire shape.
 struct SourceEntry {
-    id: i64,
-    position: i64,
+    id: i32,
+    position: i32,
     series_name: String,
     issue_number: String,
-    volume_year: Option<i64>,
-    publication_year: Option<i64>,
-    issue_identity_id: Option<i64>,
-    series_identity_id: Option<i64>,
+    volume_year: Option<i32>,
+    publication_year: Option<i32>,
+    issue_identity_id: Option<i32>,
+    series_identity_id: Option<i32>,
 }
 
 fn group_id(entry: &SourceEntry, comicvine_series_id: Option<&str>) -> String {
@@ -127,13 +130,17 @@ pub async fn api_cbl_adoption_preview_handler(
     user: AuthenticatedUser,
     Path(list_id): Path<i64>,
 ) -> Result<Json<CBLAdoptionPreviewResponse>, ApiError> {
+    // The CBL source-list key is an int4 column; an int64 path value that
+    // cannot fit is simply a list that cannot exist.
+    let list_key = i32::try_from(list_id)
+        .map_err(|_| source_not_found(list_id))?;
     let connection = db::checkout(&state).await?;
     let list_row = connection
         .query_opt(
             "SELECT l.source_path, l.content_hash, l.revision_sha, s.repository, l.active
              FROM cbl_source_lists l LEFT JOIN cbl_sources s ON s.id = l.source_id
              WHERE l.id = $1",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?
@@ -153,7 +160,7 @@ pub async fn api_cbl_adoption_preview_handler(
             "SELECT id, position, series_name, issue_number, volume_year, publication_year,
                     external_issue_identity_id, external_series_identity_id
              FROM cbl_source_entries WHERE list_id = $1 ORDER BY position",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?;
