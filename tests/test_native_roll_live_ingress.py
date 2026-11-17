@@ -21,7 +21,10 @@ NATIVE_INGRESSES = {
     "/api/native_issue.rs": ROOT / "api/native_issue.rs",
 }
 AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
+# Only a ``/``-prefixed colon token is a Vercel path parameter. A colon inside
+# a segment (``identity:confirm``, ``metadata:revert``) is a literal action
+# suffix in the canonical v2 ComicVine contract and must not be rewritten.
+VERCEL_CAPTURE = re.compile(r"/:([A-Za-z_][A-Za-z0-9_]*)")
 
 # Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
 # no native ingress may ever publish it again.
@@ -96,7 +99,7 @@ def _concrete_path(path: str) -> str:
     # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
     normalized = AXUM_CAPTURE.sub(r":\1", path)
     # Then convert the colon syntax to numeric for concrete path matching
-    concrete = VERCEL_CAPTURE.sub("42", normalized)
+    concrete = VERCEL_CAPTURE.sub("/42", normalized)
     # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete
