@@ -17,6 +17,29 @@ use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use utoipa::ToSchema;
 
+/// Small response error used instead of returning a large Axum `Response` from
+/// helpers (see `clippy::result_large_err`).
+#[derive(Debug)]
+enum PreviewError {
+    Api(ApiError),
+    Json(StatusCode, Value),
+}
+
+impl From<ApiError> for PreviewError {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl IntoResponse for PreviewError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Api(error) => error.into_response(),
+            Self::Json(status, body) => (status, Json(body)).into_response(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ReadingOrderProjectionRequest {
     pub reading_order_id: i64,
@@ -66,12 +89,11 @@ fn not_found(detail: String) -> Response {
     ApiError::NotFound(detail).into_response()
 }
 
-fn conflict_detail(detail: Value) -> Response {
-    (
+fn conflict_detail(detail: Value) -> PreviewError {
+    PreviewError::Json(
         StatusCode::CONFLICT,
-        Json(serde_json::json!({ "detail": detail })),
+        serde_json::json!({ "detail": detail }),
     )
-        .into_response()
 }
 
 fn invalid_request() -> Response {

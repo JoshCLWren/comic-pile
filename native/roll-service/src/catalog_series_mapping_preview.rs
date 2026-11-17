@@ -250,8 +250,7 @@ pub async fn preview_series_mapping_handler(
         &request.provider_series_external_id,
         &request.scope_mode,
     )
-    .await
-    .map_err(ApiError::into_response)?;
+    .await?;
 
     let scope_available = plan
         .get("scope")
@@ -274,7 +273,7 @@ pub async fn preview_series_mapping_handler(
                 issued_at,
                 expires_at.unwrap_or(issued_at),
             )
-            .map_err(ApiError::into_response)?,
+            ?,
         )
     } else {
         None
