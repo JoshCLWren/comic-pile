@@ -22,6 +22,8 @@ static NEXT_CLIENT: AtomicUsize = AtomicUsize::new(1);
 struct Fixture {
     state: Arc<AppState>,
     token: String,
+    csrf: String,
+    user_id: i32,
     _guard: tokio::sync::MutexGuard<'static, ()>,
 }
 
@@ -48,30 +50,42 @@ async fn setup() -> Fixture {
         .unwrap()
         .as_nanos();
     let username = format!("issue-search-{suffix}");
-    let (status, body) = send(
-        &state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/auth/register")
-            .header(
-                "x-forwarded-for",
-                format!(
-                    "2001:db8::{:x}",
-                    NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
-                ),
-            )
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                json!({
-                    "username": username,
-                    "email": format!("{username}@example.com"),
-                    "password": "correct-horse-battery"
-                })
-                .to_string(),
-            ))
-            .unwrap(),
-    )
-    .await;
+    let register_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/register")
+        .header(
+            "x-forwarded-for",
+            format!(
+                "2001:db8::{:x}",
+                NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
+            ),
+        )
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            json!({
+                "username": username,
+                "email": format!("{username}@example.com"),
+                "password": "correct-horse-battery"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = router(state.clone())
+        .oneshot(register_request)
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(|value| value.strip_prefix("csrf_token="))
+        .and_then(|value| value.split(';').next())
+        .unwrap()
+        .to_owned();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     assert_eq!(status, StatusCode::OK, "{body}");
     let token = body["access_token"].as_str().unwrap().to_owned();
 
@@ -104,6 +118,8 @@ async fn setup() -> Fixture {
     Fixture {
         state,
         token,
+        csrf,
+        user_id,
         _guard: guard,
     }
 }
@@ -126,6 +142,28 @@ async fn get(state: &Arc<AppState>, token: &str, uri: &str) -> (StatusCode, Valu
             .uri(uri)
             .header(header::AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+}
+
+async fn post(
+    state: &Arc<AppState>,
+    token: &str,
+    csrf: &str,
+    uri: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    send(
+        state,
+        Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header("x-csrf-token", csrf)
+            .header(header::COOKIE, format!("csrf_token={csrf}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
             .unwrap(),
     )
     .await
@@ -292,4 +330,172 @@ async fn combined_failures_report_all_query_errors() {
         .map(|item| item["type"].as_str().expect("error type"))
         .collect();
     assert_eq!(types, vec!["string_too_long", "greater_than_equal"]);
+}
+
+#[tokio::test]
+async fn structured_error_details_are_json_objects_not_strings() {
+    let fixture = setup().await;
+
+    // A foreign issue must emit Python's structured 422, not a stringified
+    // JSON blob under `detail`.
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({"name": "Foreign", "issue_ids": [910202]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"]["code"], "custom_cbl_issue_not_owned");
+    assert_eq!(body["detail"]["issue_ids"], json!([910202]));
+
+    // An out-of-membership checkpoint target is the same structured shape.
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Bad checkpoint",
+            "issue_ids": [910201],
+            "checkpoint_issue_ids": [910201],
+            "checkpoint_targets": {"910201": [999999]}
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(
+        body["detail"]["code"],
+        "custom_cbl_invalid_checkpoint_targets"
+    );
+}
+
+#[tokio::test]
+async fn strict_list_reports_partial_coverage_warnings() {
+    let fixture = setup().await;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910203, 910101, '8', 'unread', NOW(), 2)",
+        &[],
+    )
+    .await
+    .expect("seed second unread issue in owned thread");
+    drop(conn);
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Strict partial",
+            "mode": "strict",
+            "issue_ids": [910201]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let warnings = body["warnings"].as_array().expect("warnings array");
+    assert!(
+        warnings.iter().any(|value| {
+            value.as_str().is_some_and(|text| {
+                text.contains("Strict list omits 1 unread Issues from Saga")
+                    && text.contains("Saga #8")
+            })
+        }),
+        "expected strict partial-coverage warning: {body}"
+    );
+}
+
+#[tokio::test]
+async fn apply_rebuilds_membership_and_compiled_rules() {
+    let fixture = setup().await;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910203, 910101, '8', 'unread', NOW(), 2)",
+        &[],
+    )
+    .await
+    .expect("seed second issue in owned thread");
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+         VALUES (920001, $1, 'Apply target', 'strict_sequential', '[]'::json, '[]'::json, NOW(), NOW())",
+        &[&fixture.user_id],
+    )
+    .await
+    .expect("seed owned continuity plan");
+    drop(conn);
+
+    let (status, list) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Apply source",
+            "mode": "strict",
+            "issue_ids": [910201, 910203],
+            "checkpoint_issue_ids": [910201]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{list}");
+    let list_id = list["id"].as_i64().unwrap();
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920001:apply"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["added_issue_ids"], json!([910201, 910203]));
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let members: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_issues WHERE plan_id=920001",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        members, 2,
+        "membership overlay must mirror merged plan nodes"
+    );
+
+    let rule = conn
+        .query_one(
+            "SELECT source_id, target_id, checkpoint_issue_id FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920001' AND satisfaction_type='checkpoint'",
+            &[&fixture.user_id],
+        )
+        .await
+        .expect("compiled checkpoint rule");
+    assert_eq!(rule.get::<_, i32>(0), 910201);
+    assert_eq!(rule.get::<_, i32>(1), 910203);
+    assert_eq!(rule.get::<_, Option<i32>>(2), Some(910201));
+
+    let dependencies: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependencies
+             WHERE source_issue_id=910201 AND target_issue_id=910203
+               AND note LIKE 'canonical:rule:%'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        dependencies, 1,
+        "compiled rule must create a canonical edge"
+    );
+    drop(conn);
 }

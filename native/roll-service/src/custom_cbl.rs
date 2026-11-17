@@ -11,7 +11,7 @@ use crate::{
     db, option_inputs, reading_blocker_projection,
     reading_constraints::ValidatedReadingInputs,
     reading_eligibility,
-    reading_graph::cycle_conflict,
+    reading_graph::custom_cbl_cycle_conflict,
     reading_list::{
         ReadingListBlockerExplanation, ReadingListDependency, ReadingListReader,
         ReadingListReaderEntry,
@@ -323,7 +323,10 @@ fn response_from_row(
     }
 }
 
-async fn graph_preflight(tx: &Transaction<'_>, user: &AuthenticatedUser) -> Result<(), ApiError> {
+async fn graph_preflight(
+    tx: &Transaction<'_>,
+    user: &AuthenticatedUser,
+) -> Result<option_inputs::OptionInputs, ApiError> {
     let inputs = option_inputs::load_inputs_in_transaction(tx, *user).await?;
     let names = inputs
         .lists
@@ -331,8 +334,113 @@ async fn graph_preflight(tx: &Transaction<'_>, user: &AuthenticatedUser) -> Resu
         .map(|list| (list.list_id, list.name.clone()))
         .collect();
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| cycle_conflict(error, &inputs))?;
-    Ok(())
+        .map_err(|error| custom_cbl_cycle_conflict(error, &inputs))?;
+    Ok(inputs)
+}
+
+/// Mirror Python `validate_authored_list` strict partial-coverage warnings.
+///
+/// A strict list still represents every placed Thread, so unread, unexcluded,
+/// skipped Issues inside those Threads are reported even though execution
+/// ignores them. The same bounded snapshot feeds the cycle preflight, so no
+/// extra round trip is needed here.
+fn strict_coverage_warnings(
+    inputs: &option_inputs::OptionInputs,
+    entries: &[CustomCBLEntryResponse],
+    mode: &str,
+) -> Vec<String> {
+    if mode != "strict" {
+        return Vec::new();
+    }
+
+    let placed: BTreeSet<i32> = entries.iter().map(|entry| entry.issue_id).collect();
+    let covered: BTreeSet<i32> = entries
+        .iter()
+        .filter(|entry| !entry.skipped)
+        .map(|entry| entry.issue_id)
+        .collect();
+    let represented: BTreeSet<i32> = inputs
+        .core
+        .issues
+        .iter()
+        .filter(|issue| placed.contains(&issue.id))
+        .map(|issue| issue.thread_id)
+        .collect();
+    let titles: BTreeMap<i32, &str> = inputs
+        .core
+        .threads
+        .iter()
+        .map(|thread| (thread.id, thread.title.as_str()))
+        .collect();
+    let names: BTreeMap<i32, String> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| {
+            (
+                issue.id,
+                format!(
+                    "{} #{}",
+                    titles.get(&issue.thread_id).copied().unwrap_or("Series"),
+                    issue.issue_number
+                ),
+            )
+        })
+        .collect();
+
+    let mut omitted_counts: BTreeMap<i32, usize> = BTreeMap::new();
+    let mut samples: BTreeMap<i32, Vec<String>> = BTreeMap::new();
+    for issue in &inputs.core.issues {
+        if represented.contains(&issue.thread_id)
+            && !covered.contains(&issue.id)
+            && issue.status != "read"
+            && !inputs.excluded_issue_ids.contains(&issue.id)
+        {
+            *omitted_counts.entry(issue.thread_id).or_default() += 1;
+            let sample = samples.entry(issue.thread_id).or_default();
+            if sample.len() < 5 {
+                sample.push(
+                    names
+                        .get(&issue.id)
+                        .cloned()
+                        .unwrap_or_default()
+                        .chars()
+                        .take(80)
+                        .collect(),
+                );
+            }
+        }
+    }
+
+    let affected: Vec<&crate::reading_inputs::ReadingThread> = inputs
+        .core
+        .threads
+        .iter()
+        .filter(|thread| omitted_counts.contains_key(&thread.id))
+        .collect();
+    let mut warnings = Vec::new();
+    for thread in affected.iter().take(10) {
+        let count = omitted_counts[&thread.id];
+        let sample = samples.get(&thread.id).cloned().unwrap_or_default();
+        let suffix = if count > sample.len() {
+            format!(", … (+{} more)", count - sample.len())
+        } else {
+            String::new()
+        };
+        let thread_name: String = thread.title.chars().take(80).collect();
+        warnings.push(format!(
+            "Strict list omits {count} unread Issues from {thread_name}: {}{}",
+            sample.join(", "),
+            suffix
+        ));
+    }
+    if affected.len() > 10 {
+        warnings.push(format!(
+            "Partial coverage also affects {} more Threads.",
+            affected.len() - 10
+        ));
+    }
+    warnings
 }
 
 fn stored_requirements(mode: &str, entries: &[CustomCBLEntryResponse]) -> BTreeMap<i32, Vec<i32>> {
@@ -428,9 +536,7 @@ fn normalize_checkpoint_targets(
         .map(|ids| ids.iter().copied().collect())
         .unwrap_or_default();
     if !checkpoint_set.is_subset(&membership) {
-        return Err(ApiError::Unprocessable(
-            json!({"code": "custom_cbl_invalid_checkpoint_targets"}).to_string(),
-        ));
+        return Err(invalid_checkpoint_targets());
     }
 
     let mut targets = if let Some(requested) = checkpoint_targets {
@@ -486,12 +592,17 @@ fn normalize_checkpoint_targets(
             || unique.contains(source)
             || !unique.is_subset(&membership)
         {
-            return Err(ApiError::Unprocessable(
-                json!({"code": "custom_cbl_invalid_checkpoint_targets"}).to_string(),
-            ));
+            return Err(invalid_checkpoint_targets());
         }
     }
     Ok(targets)
+}
+
+fn invalid_checkpoint_targets() -> ApiError {
+    ApiError::structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        json!({"code": "custom_cbl_invalid_checkpoint_targets"}),
+    )
 }
 
 fn issue_not_owned(issue_ids: &[i32], owned: &BTreeSet<i32>) -> ApiError {
@@ -500,8 +611,9 @@ fn issue_not_owned(issue_ids: &[i32], owned: &BTreeSet<i32>) -> ApiError {
         .copied()
         .filter(|issue_id| !owned.contains(issue_id))
         .collect();
-    ApiError::Unprocessable(
-        json!({"code": "custom_cbl_issue_not_owned", "issue_ids": missing}).to_string(),
+    ApiError::structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        json!({"code": "custom_cbl_issue_not_owned", "issue_ids": missing}),
     )
 }
 
@@ -848,7 +960,7 @@ async fn validate_projection(
     }
 
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| cycle_conflict(error, &inputs))?;
+        .map_err(|error| custom_cbl_cycle_conflict(error, &inputs))?;
     Ok(())
 }
 
@@ -862,14 +974,13 @@ fn guard_version(current: &str, expected: Option<&str>) -> Result<(), ApiError> 
             _ => current == expected,
         };
         if !matches {
-            return Err(ApiError::with_status(
+            return Err(ApiError::structured(
                 StatusCode::CONFLICT,
                 json!({
                     "code": "reading_overlap_version_conflict",
                     "message": "The Reading List's overlap decisions changed since they were read",
                     "updated_at": current
-                })
-                .to_string(),
+                }),
             ));
         }
     }
@@ -1007,8 +1118,9 @@ pub async fn create_custom_cbl(
         .map_err(db::query_error)?;
     }
 
-    graph_preflight(&tx, &user).await?;
+    let inputs = graph_preflight(&tx, &user).await?;
     let entries = load_entries(&tx, list_id).await?;
+    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
     let list_row = (
         list_id,
         name.clone(),
@@ -1020,7 +1132,7 @@ pub async fn create_custom_cbl(
     );
     tx.commit().await.map_err(db::query_error)?;
 
-    let response = response_from_row(list_row, user.id(), entries, Vec::new(), Vec::new());
+    let response = response_from_row(list_row, user.id(), entries, Vec::new(), warnings);
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -1372,7 +1484,7 @@ pub async fn update_custom_cbl(
         .map_err(db::query_error)?;
     }
 
-    graph_preflight(&tx, &user).await?;
+    let inputs = graph_preflight(&tx, &user).await?;
     let entries = load_entries(&tx, list_id).await?;
     let new_requirements = stored_requirements(&mode, &entries);
     let labels: BTreeMap<i32, String> = old_entries
@@ -1411,7 +1523,7 @@ pub async fn update_custom_cbl(
             .into_response());
     }
 
-    let warnings = Vec::<String>::new();
+    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
     let list_row = (
         list_id,
         name,
@@ -1633,6 +1745,83 @@ pub async fn read_custom_cbl(
     }))
 }
 
+/// Validate every merged node reference before the plan document is written.
+///
+/// Mirrors Python `validate_node_ownership`: issue refs resolve through the
+/// owning Thread, and thread/crossover refs are checked in bulk so validation
+/// never issues a query per node.
+async fn validate_merged_node_ownership(
+    tx: &Transaction<'_>,
+    user: &AuthenticatedUser,
+    owned_issues: &BTreeSet<i32>,
+    nodes: &[serde_json::Value],
+) -> Result<(), ApiError> {
+    let node_ref = |node: &serde_json::Value| -> Option<i32> {
+        node.get("ref_id")
+            .and_then(|value| value.as_i64())
+            .and_then(|value| i32::try_from(value).ok())
+    };
+    let of_type = |kind: &str| -> Vec<i32> {
+        nodes
+            .iter()
+            .filter(|node| node.get("node_type").and_then(|v| v.as_str()) == Some(kind))
+            .filter_map(node_ref)
+            .collect()
+    };
+    let thread_refs: BTreeSet<i32> = of_type("thread").into_iter().collect();
+    let crossover_refs: BTreeSet<i32> = of_type("crossover").into_iter().collect();
+
+    let owned_threads: BTreeSet<i32> = if thread_refs.is_empty() {
+        BTreeSet::new()
+    } else {
+        let refs: Vec<i32> = thread_refs.iter().copied().collect();
+        tx.query(
+            "SELECT id FROM threads WHERE user_id=$1 AND id=ANY($2)",
+            &[&user.id(), &refs],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| row.get(0))
+        .collect()
+    };
+    let owned_crossovers: BTreeSet<i32> = if crossover_refs.is_empty() {
+        BTreeSet::new()
+    } else {
+        let refs: Vec<i32> = crossover_refs.iter().copied().collect();
+        tx.query(
+            "SELECT id FROM dependency_groups WHERE user_id=$1 AND id=ANY($2)",
+            &[&user.id(), &refs],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| row.get(0))
+        .collect()
+    };
+
+    for node in nodes {
+        let kind = node.get("node_type").and_then(|v| v.as_str()).unwrap_or("");
+        let reference = node_ref(node);
+        let owned = match kind {
+            "issue" => reference.is_some_and(|id| owned_issues.contains(&id)),
+            "thread" => reference.is_some_and(|id| owned_threads.contains(&id)),
+            "crossover" => reference.is_some_and(|id| owned_crossovers.contains(&id)),
+            _ => false,
+        };
+        if !owned {
+            return Err(ApiError::structured(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                json!({
+                    "code": "dangling_plan_reference",
+                    "node_id": node.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                }),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
 ///
 /// The Axum router cannot express a parameter sharing a segment with the
@@ -1693,12 +1882,12 @@ pub async fn apply_custom_cbl(
     // Load CBL entries
     let entries = load_entries(&tx, list_id).await?;
     if entries.is_empty() {
-        return Err(ApiError::Unprocessable(
+        return Err(ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "custom_cbl_empty",
                 "message": "Custom CBL has no issues"
-            })
-            .to_string(),
+            }),
         ));
     }
 
@@ -1718,13 +1907,12 @@ pub async fn apply_custom_cbl(
         match parsed {
             Ok(expected_at) if expected_at == updated_at => {}
             Ok(_) => {
-                return Err(ApiError::with_status(
+                return Err(ApiError::structured(
                     StatusCode::CONFLICT,
                     json!({
                         "code": "plan_version_conflict",
                         "expected_updated_at": updated_at.to_rfc3339()
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
             Err(_) => {
@@ -1758,12 +1946,12 @@ pub async fn apply_custom_cbl(
         .iter()
         .any(|l| l.get("id").and_then(|v| v.as_str()) == Some(&target_lane_id))
     {
-        return Err(ApiError::Unprocessable(
+        return Err(ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "custom_cbl_lane_not_found",
                 "lane_id": target_lane_id
-            })
-            .to_string(),
+            }),
         ));
     }
 
@@ -1822,12 +2010,12 @@ pub async fn apply_custom_cbl(
             let lane_id = node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("");
             if source_issue_set.contains(&ref_id) && lane_id == target_lane_id {
                 if existing_by_issue.contains_key(&ref_id) {
-                    return Err(ApiError::Unprocessable(
+                    return Err(ApiError::structured(
+                        StatusCode::UNPROCESSABLE_ENTITY,
                         json!({
                             "code": "custom_cbl_duplicate_plan_issue",
                             "issue_id": ref_id
-                        })
-                        .to_string(),
+                        }),
                     ));
                 }
                 existing_by_issue.insert(ref_id, idx);
@@ -1932,6 +2120,8 @@ pub async fn apply_custom_cbl(
     let mut new_nodes = other_nodes;
     new_nodes.extend(merged_target);
 
+    validate_merged_node_ownership(&tx, &user, &owned_issues, &new_nodes).await?;
+
     // Graph preflight with new nodes
     let mut inputs = option_inputs::load_inputs_in_transaction(&tx, user).await?;
     let list_names: BTreeMap<i32, String> = inputs
@@ -1981,14 +2171,11 @@ pub async fn apply_custom_cbl(
     }
 
     ValidatedReadingInputs::new(inputs.clone(), &list_names)
-        .map_err(|error| cycle_conflict(error, &inputs))?;
+        .map_err(|error| custom_cbl_cycle_conflict(error, &inputs))?;
 
-    // Update plan. Note: this port does NOT yet recompile ContinuityRule rows
-    // or canonical plan-owned dependency edges the way the Python writer does
-    // (`replace_compiled_rules`), and it reads editor nodes from `nodes_json`
-    // rather than the membership-authoritative `reading_plan_issues` overlay.
-    // Until that compiler is ported, a strict_sequential apply updates the
-    // plan document without rebuilding blocking dependencies.
+    // Persist the merged plan document, then rebuild the membership overlay
+    // and plan-owned compiled rules in the same transaction, matching the
+    // Python writer's `replace_compiled_rules` path.
     let new_lanes_json = serde_json::to_value(&lanes)
         .map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
     let new_nodes_json = serde_json::to_value(&new_nodes)
@@ -2005,6 +2192,15 @@ pub async fn apply_custom_cbl(
         .await
         .map_err(db::query_error)?;
     let new_updated_at: chrono::DateTime<chrono::Utc> = updated_row.get(0);
+
+    crate::plan_rule_compiler::replace_compiled_rules(
+        &tx,
+        user.id(),
+        plan_id,
+        &new_nodes,
+        &ordering_mode,
+    )
+    .await?;
 
     if ordering_mode == "strict_sequential" {
         crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
@@ -2097,31 +2293,31 @@ pub async fn save_overlap_decision(
 
     // Validate volume keys
     let continuing_key = normalized_volume_key(&request.continuing_volume_id).ok_or_else(|| {
-        ApiError::Unprocessable(
+        ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "reading_overlap_invalid_volume",
                 "message": "An overlap decision must name two exact Comic Vine volumes"
-            })
-            .to_string(),
+            }),
         )
     })?;
     let waiting_key = normalized_volume_key(&request.waiting_volume_id).ok_or_else(|| {
-        ApiError::Unprocessable(
+        ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "reading_overlap_invalid_volume",
                 "message": "An overlap decision must name two exact Comic Vine volumes"
-            })
-            .to_string(),
+            }),
         )
     })?;
 
     if continuing_key == waiting_key {
-        return Err(ApiError::Unprocessable(
+        return Err(ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "reading_overlap_same_volume",
                 "message": "An overlap decision must name two distinct volumes"
-            })
-            .to_string(),
+            }),
         ));
     }
 
@@ -2129,21 +2325,21 @@ pub async fn save_overlap_decision(
     let resolved =
         resolve_volume_identity_ids(&tx, &[continuing_key.clone(), waiting_key.clone()]).await?;
     let continuing_identity_id = resolved.get(&continuing_key).ok_or_else(|| {
-        ApiError::Unprocessable(
+        ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "reading_overlap_unknown_volume",
                 "message": "An overlap decision must name two known Comic Vine volumes"
-            })
-            .to_string(),
+            }),
         )
     })?;
     let waiting_identity_id = resolved.get(&waiting_key).ok_or_else(|| {
-        ApiError::Unprocessable(
+        ApiError::structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
             json!({
                 "code": "reading_overlap_unknown_volume",
                 "message": "An overlap decision must name two known Comic Vine volumes"
-            })
-            .to_string(),
+            }),
         )
     })?;
 

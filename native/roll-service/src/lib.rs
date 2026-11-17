@@ -31,6 +31,7 @@ pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
 pub mod reading_blocker_projection;
@@ -242,6 +243,17 @@ pub enum ApiError {
         /// Wire detail message.
         detail: String,
     },
+    /// A FastAPI-style `HTTPException(detail=<object>)` response. Some clients
+    /// decode `detail.code` / `detail.path` / `detail.issue_ids`, so the object
+    /// must be emitted under `detail` rather than stringified into a message.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Text form used for `Display` and secret-free classification.
+        message: String,
+        /// Structured detail emitted verbatim as the `detail` value.
+        detail: serde_json::Value,
+    },
 }
 
 impl ApiError {
@@ -256,6 +268,23 @@ impl ApiError {
         Self::Detail {
             status,
             detail: detail.into(),
+        }
+    }
+
+    /// Structured JSON detail emitted as `{"detail": <value>}`.
+    ///
+    /// The text form is taken from `detail.message` when present so logging and
+    /// `Display` stay meaningful without leaking the whole payload.
+    pub fn structured(status: StatusCode, detail: serde_json::Value) -> Self {
+        let message = detail
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("Structured validation error")
+            .to_string();
+        Self::StructuredDetail {
+            status,
+            message,
+            detail,
         }
     }
 
@@ -275,7 +304,7 @@ impl ApiError {
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
-            ApiError::Detail { status, .. } => *status,
+            ApiError::Detail { status, .. } | ApiError::StructuredDetail { status, .. } => *status,
         }
     }
 
@@ -296,7 +325,16 @@ impl ApiError {
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
+            ApiError::StructuredDetail { message, .. } => message.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
+        }
+    }
+
+    /// Structured detail payload for FastAPI-style object errors, if any.
+    pub fn structured_detail(&self) -> Option<&serde_json::Value> {
+        match self {
+            ApiError::StructuredDetail { detail, .. } => Some(detail),
+            _ => None,
         }
     }
 
@@ -352,14 +390,21 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
-        let detail_owned = self.detail().to_string();
-        let mut response = (
-            status,
-            Json(ErrorBody {
-                detail: &detail_owned,
-            }),
-        )
-            .into_response();
+        let mut response = match self {
+            ApiError::StructuredDetail { detail, .. } => {
+                (status, Json(serde_json::json!({ "detail": detail }))).into_response()
+            }
+            other => {
+                let detail_owned = other.detail().to_string();
+                (
+                    status,
+                    Json(ErrorBody {
+                        detail: &detail_owned,
+                    }),
+                )
+                    .into_response()
+            }
+        };
         if status == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,
