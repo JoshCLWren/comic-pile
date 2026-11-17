@@ -32,6 +32,7 @@ function cargoMetadata(cwd, manifest) {
       cwd,
       encoding: "utf8",
       env: { ...process.env, CARGO_TERM_COLOR: "never" },
+      maxBuffer: 64 * 1024 * 1024,
     },
   );
   if (result.error) {
