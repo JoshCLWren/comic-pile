@@ -57,24 +57,24 @@ def test_check_mode_rejects_missing_or_stale_output(tmp_path: Path) -> None:
     assert output.read_text(encoding="utf-8") == "stale\n"
 
 
-def test_is_client_schema_path_keeps_versioned_client_routes_and_ping() -> None:
-    """Classify infrastructure paths, canonical v1 routes, and ping as client."""
+def test_is_client_schema_path_keeps_versioned_client_routes_and_metrics() -> None:
+    """Classify infrastructure paths, canonical v1/v2 routes, and metrics as client."""
     assert is_client_schema_path("/")
     assert is_client_schema_path("/health")
     assert is_client_schema_path("/{full_path}")
-    assert is_client_schema_path("/api/ping")
     assert is_client_schema_path("/api/v1")
     assert is_client_schema_path("/api/v1/threads/")
     assert is_client_schema_path("/api/v2/reading-boundaries")
     assert is_client_schema_path("/api/v2/reading-boundaries/42")
 
     assert not is_client_schema_path("/api/threads/")
+    assert not is_client_schema_path("/api/ping")
     assert is_client_schema_path("/api/metrics")
     assert not is_client_schema_path("/api/v10/threads")
 
 
 def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
-    """Drop legacy bare aliases while keeping v1 routes, ping, and infra."""
+    """Drop legacy bare aliases while keeping versioned routes and infra."""
     schema = {
         "openapi": "3.1.0",
         "paths": {
@@ -90,7 +90,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
     pruned = prune_legacy_bare_paths(schema)
 
     assert sorted(pruned["paths"]) == [
-        "/api/ping", "/api/v1/threads/", "/api/v2/reading-boundaries", "/health"
+        "/api/v1/threads/", "/api/v2/reading-boundaries", "/health"
     ]
     assert sorted(schema["paths"]) == [
         "/api/debug/log",
@@ -104,7 +104,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
 
 def test_prune_legacy_bare_paths_returns_original_when_fully_client_facing() -> None:
     """Return the input document unchanged when no path requires pruning."""
-    schema = {"paths": {"/api/v1/threads/": {"get": {}}, "/api/ping": {"get": {}}}}
+    schema = {"paths": {"/api/v1/threads/": {"get": {}}, "/api/metrics": {"get": {}}}}
 
     assert prune_legacy_bare_paths(schema) is schema
 
