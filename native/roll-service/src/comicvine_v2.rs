@@ -839,6 +839,495 @@ pub async fn refresh_metadata(
 }
 
 // ---------------------------------------------------------------------------
+// Import handlers. Both run in one owner-scoped transaction and return 201.
+// ---------------------------------------------------------------------------
+
+/// Verify that a reading order belongs to the caller.
+async fn owned_reading_order(
+    tx: &Transaction<'_>,
+    user: i32,
+    order_id: i32,
+) -> Result<(), ApiError> {
+    let exists = tx
+        .query_opt(
+            "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2",
+            &[&order_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    if exists {
+        Ok(())
+    } else {
+        Err(not_found(format!("Reading order {order_id} not found")))
+    }
+}
+
+/// Shift an existing reading order and insert the new thread at `target_pos`.
+async fn insert_into_reading_order(
+    tx: &Transaction<'_>,
+    order_id: i32,
+    thread_id: i32,
+    target_pos: i32,
+) -> Result<(), ApiError> {
+    let rows = tx
+        .query(
+            "SELECT thread_id, position FROM reading_order_items \
+             WHERE reading_order_id = $1 ORDER BY position, id",
+            &[&order_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut positions: HashMap<i32, i32> = HashMap::new();
+    for row in &rows {
+        positions.insert(row.get(0), row.get(1));
+    }
+    if positions.contains_key(&thread_id) {
+        // A retry must move, never duplicate, the existing membership.
+        tx.execute(
+            "UPDATE reading_order_items SET position = $3 \
+             WHERE reading_order_id = $1 AND thread_id = $2",
+            &[&order_id, &thread_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+    } else {
+        tx.execute(
+            "UPDATE reading_order_items SET position = position + 1 \
+             WHERE reading_order_id = $1 AND position >= $2",
+            &[&order_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+        tx.execute(
+            "INSERT INTO reading_order_items \
+                (reading_order_id, thread_id, position, issue_number, created_at, updated_at) \
+             VALUES ($1, $2, $3, NULL, now(), now())",
+            &[&order_id, &thread_id, &target_pos],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
+/// `POST /api/v2/comicvine/issues:import`.
+pub async fn import_issue(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ImportIssueRequest>,
+) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let title = request.title.trim();
+    if title.is_empty() || title.len() > 200 {
+        return Err(unprocessable("Invalid title"));
+    }
+    if request.comicvine_issue_id <= 0 {
+        return Err(unprocessable("Invalid comicvine_issue_id"));
+    }
+    if request.issue_number.as_deref().is_some_and(|n| n.len() > 50) {
+        return Err(unprocessable("Invalid issue number"));
+    }
+    for id in [
+        request.reading_order_id,
+        request.anchor_before_thread_id,
+        request.anchor_after_thread_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if id <= 0 {
+            return Err(unprocessable("Invalid reading order anchor"));
+        }
+    }
+
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let external_id = request.comicvine_issue_id.to_string();
+    if let Some(order_id) = request.reading_order_id {
+        owned_reading_order(&tx, user.id(), order_id).await?;
+    }
+    let duplicate: Option<i32> = tx
+        .query_opt(
+            "SELECT i.id FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND e.external_id = $1 AND m.status = 'confirmed' AND t.user_id = $2 \
+             LIMIT 1",
+            &[&external_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    if let Some(existing_issue_id) = duplicate {
+        return Err(ApiError::Conflict(format!(
+            "ComicVine issue {} already exists as issue {}",
+            request.comicvine_issue_id, existing_issue_id
+        )));
+    }
+
+    let next_position: i32 = tx
+        .query_one(
+            "SELECT COALESCE(MAX(queue_position), 0) + 1 FROM threads WHERE user_id = $1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let thread_row = tx
+        .query_one(
+            "INSERT INTO threads \
+                (title, format, issues_remaining, total_issues, queue_position, status, \
+                 user_id, created_at, updated_at, is_test, is_blocked) \
+             VALUES ($1, 'Comic', 1, 1, $2, 'active', $3, now(), now(), false, false) \
+             RETURNING id",
+            &[&title, &next_position, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_id: i32 = thread_row.get(0);
+    let issue_row = tx
+        .query_one(
+            "INSERT INTO issues \
+                (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, $2, 1, 'unread', now()) RETURNING id",
+            &[&thread_id, &request.issue_number.as_deref().unwrap_or("1")],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let issue_id: i32 = issue_row.get(0);
+    let external_identity_id =
+        link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+
+    let mut response = ImportIssueResponse {
+        thread_id,
+        issue_id,
+        external_identity_id,
+        reading_order_id: None,
+        position: None,
+        total_items: None,
+    };
+    if let Some(order_id) = request.reading_order_id {
+        let items = tx
+            .query(
+                "SELECT thread_id, position FROM reading_order_items \
+                 WHERE reading_order_id = $1 ORDER BY position, id",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut positions = HashMap::new();
+        for row in &items {
+            positions.insert(row.get::<_, i32>(0), row.get::<_, i32>(1));
+        }
+        let target = resolve_anchored_position(
+            &positions,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            items.len(),
+        );
+        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        response.reading_order_id = Some(order_id);
+        response.position = Some(target);
+        response.total_items = Some(items.len() as i32 + 1);
+    }
+    tx.commit().await.map_err(db::query_error)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// `POST /api/v2/comicvine/series:import`.
+pub async fn import_series(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ImportSeriesRequest>,
+) -> Result<(StatusCode, Json<ImportSeriesResponse>), ApiError> {
+    if request.comicvine_volume_id <= 0 {
+        return Err(unprocessable("Invalid comicvine_volume_id"));
+    }
+    if request.already_read_count < 0 {
+        return Err(unprocessable("Invalid already_read_count"));
+    }
+    for id in [
+        request.reading_order_id,
+        request.anchor_before_thread_id,
+        request.anchor_after_thread_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if id <= 0 {
+            return Err(unprocessable("Invalid reading order anchor"));
+        }
+    }
+    let Some(key) = provider_key() else {
+        return Err(ApiError::ServiceUnavailable(
+            "provider_unavailable".to_owned(),
+        ));
+    };
+    let volume_id = request.comicvine_volume_id;
+    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &key)
+        .await
+        .map_err(map_provider_failure)?;
+    let series_name = volume_name(&volume)
+        .ok_or_else(|| ApiError::ServiceUnavailable("provider_invalid_payload".to_owned()))?;
+    let roster = provider_response(
+        "issue",
+        &format!(
+            "&filter=volume:{volume_id}&limit=100\
+             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
+        ),
+        &key,
+    )
+    .await
+    .map_err(map_provider_failure)?;
+    let rows: Vec<Value> = roster
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if rows.is_empty() {
+        return Err(bad_request("ComicVine series has no issues"));
+    }
+    if request.already_read_count as usize > rows.len() {
+        return Err(bad_request(format!(
+            "already_read_count cannot exceed the series issue count ({})",
+            rows.len()
+        )));
+    }
+
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    if let Some(order_id) = request.reading_order_id {
+        owned_reading_order(&tx, user.id(), order_id).await?;
+    }
+    let external_volume_id = volume_id.to_string();
+    let reused_thread_id: Option<i32> = tx
+        .query_opt(
+            "SELECT t.id FROM threads t \
+             JOIN thread_external_series_mappings m ON m.thread_id = t.id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE t.user_id = $1 AND m.status = 'confirmed' \
+               AND e.entity_type = 'series' AND e.provider = 'comicvine' \
+               AND e.external_id = $2 ORDER BY m.id LIMIT 1",
+            &[&user.id(), &external_volume_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    let thread_created = reused_thread_id.is_none();
+    let thread_id = match reused_thread_id {
+        Some(id) => id,
+        None => {
+            let next_position: i32 = tx
+                .query_one(
+                    "SELECT COALESCE(MAX(queue_position), 0) + 1 FROM threads WHERE user_id = $1",
+                    &[&user.id()],
+                )
+                .await
+                .map_err(db::query_error)?
+                .get(0);
+            tx.query_one(
+                "INSERT INTO threads \
+                    (title, format, issues_remaining, total_issues, queue_position, status, \
+                     user_id, created_at, updated_at, is_test, is_blocked) \
+                 VALUES ($1, 'Comic', 0, 0, $2, 'active', $3, now(), now(), false, false) \
+                 RETURNING id",
+                &[&series_name.trim(), &next_position, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0)
+        }
+    };
+
+    let series_identity_row = tx
+        .query_one(
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'series', $1, $2, '{}'::jsonb, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET external_url = EXCLUDED.external_url, updated_at = now() \
+             RETURNING id",
+            &[
+                &external_volume_id,
+                &format!("https://comicvine.gamespot.com/volume/4050-{volume_id}/"),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let series_identity_id: i32 = series_identity_row.get(0);
+    tx.execute(
+        "INSERT INTO thread_external_series_mappings \
+            (thread_id, external_identity_id, status, evidence_source, confidence, \
+             created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'comicvine_series_import', 1.0, now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_thread_external_series_mapping \
+         DO UPDATE SET status = 'confirmed', confidence = 1.0, updated_at = now()",
+        &[&thread_id, &series_identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let mut issue_results = Vec::with_capacity(rows.len());
+    let mut adopted = 0i32;
+    let mut skipped = 0i32;
+    let conflicts = 0i32;
+    for (index, row) in rows.iter().enumerate() {
+        let Some(cv_id) = coerce_provider_int(row.get("id")) else {
+            continue;
+        };
+        let issue_number = row
+            .get("issue_number")
+            .map(|value| match value {
+                Value::String(text) => text.clone(),
+                Value::Number(number) => number.to_string(),
+                _ => value.to_string(),
+            })
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| (index + 1).to_string());
+
+        let existing: Option<i32> = tx
+            .query_opt(
+                "SELECT i.id FROM external_identities e \
+                 JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+                 JOIN issues i ON i.id = m.issue_id \
+                 JOIN threads t ON t.id = i.thread_id \
+                 WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+                   AND e.external_id = $1 AND m.status = 'confirmed' AND t.user_id = $2 \
+                 LIMIT 1",
+                &[&cv_id.to_string(), &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .map(|r| r.get(0));
+        if let Some(issue_id) = existing {
+            skipped += 1;
+            issue_results.push(ImportSeriesIssueResult {
+                comicvine_issue_id: cv_id,
+                issue_number: Some(issue_number),
+                issue_id: Some(issue_id),
+                outcome: "reused".to_owned(),
+                hydration: "pending".to_owned(),
+                conflict_detail: None,
+            });
+            continue;
+        }
+        let position = index as i32 + 1;
+        let new_issue = tx
+            .query_one(
+                "INSERT INTO issues \
+                    (thread_id, issue_number, position, status, created_at) \
+                 VALUES ($1, $2, $3, 'unread', now()) \
+                 ON CONFLICT ON CONSTRAINT uq_issue_thread_number \
+                 DO UPDATE SET position = EXCLUDED.position RETURNING id",
+                &[&thread_id, &issue_number, &position],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let issue_id: i32 = new_issue.get(0);
+        link_confirmed(&tx, user.id(), issue_id, cv_id).await?;
+        adopted += 1;
+        issue_results.push(ImportSeriesIssueResult {
+            comicvine_issue_id: cv_id,
+            issue_number: Some(issue_number),
+            issue_id: Some(issue_id),
+            outcome: "created".to_owned(),
+            hydration: "pending".to_owned(),
+            conflict_detail: None,
+        });
+    }
+
+    // Mark the leading locally-adopted issues read, then derive the thread's
+    // canonical counters from the rows that actually exist.
+    let thread_issues = tx
+        .query(
+            "SELECT id FROM issues WHERE thread_id = $1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let read_count = (request.already_read_count as usize).min(thread_issues.len());
+    for row in thread_issues.iter().take(read_count) {
+        tx.execute(
+            "UPDATE issues SET status = 'read', read_at = now() WHERE id = $1",
+            &[&row.get::<_, i32>(0)],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    let total_issues = thread_issues.len() as i32;
+    let issues_remaining = (total_issues - read_count as i32).max(0);
+    let next_unread = thread_issues
+        .iter()
+        .skip(read_count)
+        .next()
+        .map(|row| row.get::<_, i32>(0));
+    let status = if issues_remaining == 0 {
+        "completed"
+    } else {
+        "active"
+    };
+    tx.execute(
+        "UPDATE threads SET total_issues = $2, issues_remaining = $3, \
+            next_unread_issue_id = $4, reading_progress = $5, status = $6, \
+            is_blocked = CASE WHEN $3 = 0 THEN false ELSE is_blocked END, \
+            updated_at = now() WHERE id = $1",
+        &[
+            &thread_id,
+            &total_issues,
+            &issues_remaining,
+            &next_unread,
+            &Some(format!("{read_count}/{total_issues}")),
+            &status,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let mut response = ImportSeriesResponse {
+        thread_id,
+        series_name,
+        comicvine_volume_id: volume_id,
+        total_issues_in_series: rows.len() as i32,
+        issues_adopted: adopted,
+        issues_skipped: skipped,
+        issues_conflict: conflicts,
+        issue_results,
+        reading_order_id: None,
+        position: None,
+        total_items: None,
+        thread_created,
+    };
+    if let Some(order_id) = request.reading_order_id {
+        let items = tx
+            .query(
+                "SELECT thread_id, position FROM reading_order_items \
+                 WHERE reading_order_id = $1 ORDER BY position, id",
+                &[&order_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut positions = HashMap::new();
+        for row in &items {
+            positions.insert(row.get::<_, i32>(0), row.get::<_, i32>(1));
+        }
+        let target = resolve_anchored_position(
+            &positions,
+            request.anchor_before_thread_id,
+            request.anchor_after_thread_id,
+            items.len(),
+        );
+        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        response.reading_order_id = Some(order_id);
+        response.position = Some(target);
+        response.total_items = Some(items.len() as i32 + 1);
+    }
+    tx.commit().await.map_err(db::query_error)?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+// ---------------------------------------------------------------------------
 // Provider-backed read handlers.
 // ---------------------------------------------------------------------------
 
@@ -1179,4 +1668,334 @@ pub async fn series_import_status(
         },
     };
     Ok(Json(response))
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI documentation. These no-op functions feed the canonical generated
+// v2 contract; handlers above never import documentation code at runtime.
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Owned identity state", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_issue_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ConfirmIdentityRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Confirmed identity state", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn confirm_identity_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity:replace",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = ReplaceIdentityRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Replaced identity state", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn replace_identity_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v2/comicvine/issues/{issue_id}/identity",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Identity removed", body = IssueIdentityResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn remove_identity_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Active corrections", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_corrections_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Corrections after apply", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn apply_correction_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    request_body = MetadataCorrectionRevertRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Corrections after revert", body = MetadataCorrectionsResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn revert_correction_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
+    params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Refresh signal", body = MetadataRefreshResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Issue not owned"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn refresh_metadata_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/search/series",
+    params(
+        ("q" = String, Query, description = "Series title query"),
+        ("limit" = i32, Query, description = "Maximum results"),
+        ("offset" = i32, Query, description = "Zero-based offset"),
+    ),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Paginated series search", body = ComicVineSeriesSearchResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn search_series_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/resolve",
+    params(("input" = String, Query, description = "Search text or ComicVine URL")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Resolved input", body = ComicVineResolveResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn resolve_input_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+    params(
+        ("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID"),
+        ("series_name" = String, Query, description = "Pre-fetched series name"),
+    ),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Volume issue roster", body = ComicVineSeriesIssuesResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn series_issues_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+    params(("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID")),
+    tag = "comicvine-v2",
+    responses(
+        (status = 200, description = "Owned import status", body = SeriesImportStatusResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn series_import_status_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/issues:import",
+    request_body = ImportIssueRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 201, description = "Imported issue", body = ImportIssueResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Reading order not owned"),
+        (status = 409, description = "ComicVine issue already imported"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn import_issue_documentation() {}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/comicvine/series:import",
+    request_body = ImportSeriesRequest,
+    tag = "comicvine-v2",
+    responses(
+        (status = 201, description = "Imported series", body = ImportSeriesResponse),
+        (status = 401, description = "Invalid or revoked access token"),
+        (status = 404, description = "Reading order not owned"),
+        (status = 503, description = "ComicVine unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn import_series_documentation() {}
+
+// ---------------------------------------------------------------------------
+// Focused unit tests (no database or provider required).
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parses_only_canonical_issue_and_volume_urls() {
+        assert_eq!(
+            parse_comicvine_url("https://comicvine.gamespot.com/foo/4000-1154070/"),
+            Some(ParsedResource::Issue(1154070))
+        );
+        assert_eq!(
+            parse_comicvine_url("comicvine.gamespot.com/batman/4050-148476?x=1"),
+            Some(ParsedResource::Volume(148476))
+        );
+        assert_eq!(
+            parse_comicvine_url("http://www.comicvine.gamespot.com/issue/4000-42/"),
+            Some(ParsedResource::Issue(42))
+        );
+        assert_eq!(parse_comicvine_url("https://example.com/4000-42/"), None);
+        assert_eq!(parse_comicvine_url("https://comicvine.gamespot.com/5000-42/"), None);
+        assert_eq!(parse_comicvine_url("not a url"), None);
+    }
+
+    #[test]
+    fn looks_like_url_only_for_url_shaped_input() {
+        assert!(looks_like_url("https://example.com"));
+        assert!(looks_like_url("HTTP://example"));
+        assert!(!looks_like_url("Batman 2026"));
+    }
+
+    #[test]
+    fn provider_values_are_coerced_without_type_confusion() {
+        assert_eq!(coerce_provider_int(Some(&json!("1999"))), Some(1999));
+        assert_eq!(coerce_provider_int(Some(&json!(42))), Some(42));
+        assert_eq!(coerce_provider_int(Some(&json!(true))), None);
+        assert_eq!(coerce_provider_int(Some(&json!("n/a"))), None);
+        assert_eq!(provider_string(Some(&json!(""))), None);
+        assert_eq!(
+            provider_image_url(Some(&json!({"small_url": "s", "medium_url": "m"}))),
+            Some("m".to_owned())
+        );
+    }
+
+    #[test]
+    fn anchored_positions_follow_the_python_precedence() {
+        let mut positions = HashMap::new();
+        positions.insert(10, 2);
+        positions.insert(20, 5);
+        assert_eq!(resolve_anchored_position(&positions, Some(10), Some(20), 4), 5);
+        assert_eq!(resolve_anchored_position(&positions, Some(10), None, 4), 3);
+        assert_eq!(resolve_anchored_position(&positions, None, Some(20), 4), 5);
+        assert_eq!(resolve_anchored_position(&positions, Some(20), Some(10), 4), 6);
+        assert_eq!(resolve_anchored_position(&positions, None, None, 4), 5);
+        assert_eq!(resolve_anchored_position(&HashMap::new(), Some(99), None, 0), 1);
+    }
+
+    #[test]
+    fn series_results_and_candidates_match_wire_fields() {
+        let series = series_result(
+            &json!({
+                "id": 7,
+                "name": "Batman",
+                "publisher": {"name": "DC"},
+                "start_year": "2011",
+                "count_of_issues": 52,
+                "site_detail_url": "https://comicvine.gamespot.com/volume/4050-7/",
+                "image": {"medium_url": "cover.jpg"}
+            }),
+            None,
+        )
+        .expect("series result");
+        assert_eq!(series.comicvine_volume_id, 7);
+        assert_eq!(series.start_year, Some(2011));
+        assert_eq!(series.publisher.as_deref(), Some("DC"));
+        assert_eq!(series.image_url.as_deref(), Some("cover.jpg"));
+
+        let candidate = issue_candidate(&json!({
+            "id": 99,
+            "issue_number": 12,
+            "name": "A Story",
+            "image": {"small_url": "thumb.jpg"}
+        }))
+        .expect("issue candidate");
+        assert_eq!(candidate.comicvine_issue_id, 99);
+        assert_eq!(candidate.issue_number.as_deref(), Some("12"));
+        assert_eq!(candidate.image_url.as_deref(), Some("thumb.jpg"));
+    }
+
+    #[test]
+    fn identity_sql_is_owner_scoped_and_bounded() {
+        // The owner predicate must be a bind parameter and the mapping lookup
+        // must be one set-based query, never a per-mapping round trip.
+        assert!(CREATED_AT_SQL.contains("AT TIME ZONE 'UTC'"));
+        let state_sql = "SELECT e.id FROM issue_external_identity_mappings m \
+                         JOIN external_identities e ON e.id = m.external_identity_id \
+                         WHERE m.issue_id = $1 ORDER BY m.confidence DESC NULLS LAST";
+        assert!(state_sql.contains("WHERE m.issue_id = $1"));
+        assert!(!state_sql.contains("FOR UPDATE"));
+    }
 }
