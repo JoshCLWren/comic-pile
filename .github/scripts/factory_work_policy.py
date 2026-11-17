@@ -830,13 +830,15 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     through a controller refusal.
     """
     if candidate.kind == 'pr' and candidate.is_fork:
+        # Fork execution and review authorization are independent of model IDs.
+        from factory_worker_slots import resolve
+
         try:
-            from factory_roster import load_roster_rows
-            source = next((row.get('source', '') for row in load_roster_rows() if row.get('worker') == worker), '')
-        except (OSError, ValueError):
+            source = resolve(worker).source
+        except ValueError:
             return False
         if candidate.stage == 'factory:review':
-            if source == 'kilo-auto' or not source:
+            if source == 'kilo-auto':
                 return False
         elif source != 'kilo-auto':
             return False
@@ -848,19 +850,8 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
 
 
 def worker_delivery_role(worker: str) -> str:
-    """Read starter/finisher preference from the live free roster, never worker IDs."""
-    from factory_roster import load_roster_rows
-
-    try:
-        row = next((row for row in load_roster_rows() if row['worker'] == worker), None)
-    except (OSError, ValueError):
-        return ''
-    if row is None:
-        return ''
-    if row.get('source') == 'z-ai' and row.get('model') == 'glm-4.5-flash':
-        return 'starter'
-    if row.get('source') == 'kilo-auto' and row.get('model') == 'kilo-auto/free':
-        return 'finisher'
+    """No provider/model pins dictate intake or completion preferences."""
+    del worker
     return ''
 
 

@@ -46,6 +46,11 @@ def project_events(rows: list[Mapping[str, Any]]) -> dict[str, dict[str, dict[st
                 "attempt outcome": outcome or ("success" if kind == "worker_completed"
                     else "no_work" if kind == "worker_idle" else "unknown_failure"),
                 "detail": str(detail.get("detail") or ""),
+                "delivery_outcome": str(detail.get("delivery_outcome") or ""),
+                "delivery_pr": str(detail.get("delivery_pr") or ""),
+                "persisted_work": ("true" if detail.get("persisted_work") is True
+                                   else "false" if detail.get("persisted_work") is False
+                                   else ""),
                 "run": str(detail.get("run_id") or ""),
                 "updated": updated,
             }

@@ -59,6 +59,8 @@ def test_factory_only_review_rejected_stage_is_eligible() -> None:
         ".github/factory-fast-merge.json",
         "tests/test_factory_fast_merge.py",
         "../.github/scripts/factory-review-controller.py",
+        ".github/scripts/generate_factory_status_dashboard.py.bak",
+        "frontend/generate_factory_status_dashboard.py",
     ],
 )
 def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
@@ -80,6 +82,8 @@ def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
         ".github/factory-expected-workers.json",
         ".github/factory-roster-snapshot.json",
         "tests/test_free_model_factories.py",
+        ".github/scripts/generate_factory_status_dashboard.py",
+        "tests/test_generate_factory_status_dashboard.py",
     ],
 )
 def test_supported_factory_paths(path: str) -> None:
@@ -244,20 +248,35 @@ def test_production_dispatch_runs_from_merge_script(
     assert "merged 2 PR(s)" in calls[0][-1]
 
 
-def test_complete_factory_roster_change_is_fast_merge_eligible() -> None:
-    """Atomic roster edits qualify without expanding the product-code allowlist."""
+def test_source_controlled_factory_inventory_cannot_fast_merge() -> None:
+    """Even an atomic replacement of all three retired inventory files is blocked."""
     changed = [
-        {"filename": path, "status": "modified"}
-        for path in (
+        {"filename": filename, "status": "modified"} for filename in (
             ".github/free-model-factories.tsv",
             ".github/factory-expected-workers.json",
             ".github/factory-roster-snapshot.json",
-            "tests/test_free_model_factories.py",
         )
     ]
     pr = candidate()
     pr["changed_files"] = len(changed)
-    assert gate.factory_candidate(pr, changed, REPO) == (True, "Factory-only PR eligible")
+    permitted, detail = gate.factory_candidate(pr, changed, REPO)
+    assert not permitted
+    assert "inventor" in detail.lower()
+
+
+def test_removing_all_legacy_inventory_files_is_not_blocked_as_a_model_pin() -> None:
+    changed = [
+        {"filename": filename, "status": "removed"} for filename in (
+            ".github/free-model-factories.tsv",
+            ".github/factory-expected-workers.json",
+            ".github/factory-roster-snapshot.json",
+        )
+    ]
+    pr = candidate()
+    pr["changed_files"] = len(changed)
+    # Authorization may still require unrelated review/ownership checks.
+    permitted, detail = gate.factory_candidate(pr, changed, REPO)
+    assert permitted or "Outside factory-only allowlist" not in detail
 
 
 @pytest.mark.parametrize(

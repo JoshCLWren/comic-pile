@@ -67,7 +67,6 @@ on:
       - '.github/scripts/factory_provider_candidates.py'
       - '.github/scripts/factory_candidate_health.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
-      - '.github/free-model-factories.tsv'
       - '.github/factory-quota-pauses.json'
       - '.github/scripts/factory_quota_pause.py'
       - '.github/factory-source-budgets.json'
@@ -79,10 +78,11 @@ permissions:
   issues: write
   pull-requests: write
 
-# Coalesce duplicate ingress events for this workflow only. The job-level
-# shared group below serializes every lease writer without canceling other lanes.
+# Coalesce repeated targeted wakeups for the same target and action. Distinct
+# manual actions and measurements stay independent; an in-progress dispatch is
+# never cancelled. The job-level group still serializes every lease writer.
 concurrency:
-  group: ${{ (inputs.target || inputs.measure) && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
+  group: ${{ inputs.target && format('factory-target-{0}-{1}', inputs.target, inputs.action || 'advance') || inputs.measure && format('factory-measure-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
   queue: single
   cancel-in-progress: false
 
@@ -92,6 +92,7 @@ jobs:
     env:
       FACTORY_NEON_LEASE_REQUIRED: 'true'
       FACTORY_DISCOVERY_TARGET: ${{ inputs.target }}
+      FACTORY_READER_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
     concurrency:
       group: fixed-model-factory-dispatch
       queue: max
@@ -198,7 +199,52 @@ jobs:
           cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
+          echo "FACTORY_GH_CALL_LOG=$RUNNER_TEMP/factory-gh-calls.log" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
+
+      # Optional read-only factory App (owner-provisioned secrets
+      # FACTORY_READER_APP_ID / FACTORY_READER_APP_PRIVATE_KEY). Pure reads
+      # then spend that App's own 5000/h installation bucket instead of the
+      # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
+      # token, so no extra workflows are ever triggered. Absent or
+      # under-permissioned Apps are a silent no-op.
+      - name: Mint optional read-only factory App token
+        id: read_token
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
+          private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-checks: read
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Verify and enable read-only factory App token
+        if: ${{ steps.read_token.outputs.token != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          READ_TOKEN: ${{ steps.read_token.outputs.token }}
+        run: |
+          set -Eeuo pipefail
+          minted="$(date +%s)"
+          for endpoint in "issues?per_page=1" "pulls?per_page=1" "actions/runs?per_page=1" \
+            "commits/main/check-runs?per_page=1"; do
+            if ! GH_TOKEN="$READ_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/${endpoint}" >/dev/null 2>&1; then
+              echo "::warning::Read-only factory App cannot read ${endpoint%%\?*}; staying on the workflow token"
+              exit 0
+            fi
+          done
+          {
+            echo "FACTORY_READ_TOKEN=$READ_TOKEN"
+            echo "FACTORY_READ_TOKEN_EXPIRES=$((minted + 3000))"
+          } >> "$GITHUB_ENV"
+          echo "Pure GitHub reads use the read-only factory App installation budget"
 
       - name: Gate factory dispatch on Actions REST quota
         id: api_budget
@@ -258,6 +304,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ inputs.target }}
           ACTION: ${{ inputs.action }}
+          # Keep targeted issue/PR handoffs on the same credential-availability
+          # contract as roster dispatch. These booleans prove configuration;
+          # no provider secret is ever passed to the controller.
+          FACTORY_HAS_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY != '' }}
+          FACTORY_HAS_Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY != '' }}
+          FACTORY_HAS_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY != '' }}
+          FACTORY_HAS_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
+          FACTORY_HAS_ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY != '' }}
+          FACTORY_HAS_REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY != '' }}
+          FACTORY_HAS_POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY != '' }}
+          FACTORY_HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+          FACTORY_HAS_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY != '' }}
+          FACTORY_HAS_AION_API_KEY: ${{ secrets.AION_API_KEY != '' }}
+          FACTORY_HAS_COHERE_API_KEY: ${{ secrets.COHERE_API_KEY != '' }}
+          FACTORY_HAS_TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY != '' }}
+          FACTORY_HAS_AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          FACTORY_HAS_OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+          FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
         run: |
           set -Eeuo pipefail
           if ! [[ "$TARGET" =~ ^(issue|pr):([1-9][0-9]*)$ ]]; then
@@ -529,6 +595,7 @@ jobs:
           FACTORY_HAS_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
           FACTORY_HAS_ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY != '' }}
           FACTORY_HAS_REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY != '' }}
+          FACTORY_HAS_POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY != '' }}
           FACTORY_HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
           FACTORY_HAS_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY != '' }}
           FACTORY_HAS_AION_API_KEY: ${{ secrets.AION_API_KEY != '' }}
@@ -541,7 +608,6 @@ jobs:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
         run: |
           set -Eeuo pipefail
-          manifest='.github/free-model-factories.tsv'
           controller='.github/scripts/factory-work-controller.py'
           # Only retry-history rows are shared. Each assignment still refreshes
           # live claims/heads and changed comments before selecting its lease.
@@ -559,6 +625,7 @@ jobs:
             case "$kind" in
               none)
                 echo "Factory ${worker}: no executable control-plane assignment"
+                consecutive_idle=$((consecutive_idle + 1))
                 return 0
                 ;;
               issue|pr) ;;
@@ -569,6 +636,7 @@ jobs:
                 ;;
             esac
 
+            consecutive_idle=0
             echo "Factory ${worker} assignment: ${assignment}"
             while (( attempt <= 3 )); do
               echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
@@ -591,92 +659,70 @@ jobs:
           # controller deployments. Lease expiry/liveness reconciliation recovers
           # interruptions; a new main SHA is not a worker failure.
 
+          # Worker IDs are derived from provider integration metadata, never
+          # checked-in model pins. Catalog lookup happens inside the runner.
+          slots='.github/scripts/factory_worker_slots.py'
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
-            awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
-            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
+            python3 "$slots" resolve --worker "$DISPATCH_WORKER" >/dev/null
+            workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]' \
+              | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_quota_pause.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
+              | python3 .github/scripts/factory_state_operations.py filter)"
+            if [[ "$workers" == '[]' ]]; then
+              echo "Requested worker ${DISPATCH_WORKER} is not currently dispatchable; no claim"
+              echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+              echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
-            # Scheduled delivery is roughly hourly regardless of the requested
-            # cron cadence. Offer a source-diverse batch and let centralized
-            # assignment lease only work that has real capacity. Cap defaults
-            # to the multi-provider free-entry budget (12) so nvidia-front
-            # roster order cannot starve opencode/openrouter/kilo for an hour.
             max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
             [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
-              echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
+              echo 'MAX_WORKERS_PER_TICK must be positive' >&2
               exit 1
             }
-            roster="$(awk -F '\t' '
-              $0 !~ /^#/ && NF >= 4 {print $1}
-            ' "$manifest")"
-            total="$(wc -l <<<"$roster")"
-            (( total > 0 )) || {
-              echo "Factory manifest contains no scheduled workers" >&2
-              exit 1
-            }
-            offer_count="$max_per_tick"
-            (( offer_count <= total )) || offer_count="$total"
-            offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"
-            # Seed one worker per source (rotated), then fill from the rotating
-            # roster so every tick can prove nvidia/opencode/openrouter/kilo.
-            source_seed="$(awk -F '\t' -v tick="$GITHUB_RUN_NUMBER" '
-              $0 !~ /^#/ && NF >= 3 {
-                source=$2
-                workers[source]=workers[source] " " $1
-                if (!(source in seen_source)) {
-                  seen_source[source]=1
-                  sources[++source_count]=source
-                }
-                counts[source]++
-              }
-              END {
-                for (i = 1; i <= source_count; i++) {
-                  source=sources[i]
-                  n=split(substr(workers[source], 2), ids, " ")
-                  pick=ids[((tick - 1) % n) + 1]
-                  print pick
-                }
-              }
-            ' "$manifest")"
-            fill="$(printf '%s\n%s\n' "$roster" "$roster" \
-              | tail -n +"$((offset + 1))" | head -n "$total")"
-            workers="$(printf '%s\n%s\n' "$source_seed" "$fill" \
-              | awk 'NF && !seen[$0]++ {print}' \
-              | jq -Rsc 'split("\n") | map(select(length > 0))' \
+            # The source-diverse offer is generated, not frozen in a TSV.
+            # Credential, quota and health checks run before the dispatch cap.
+            workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
               | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
               | python3 .github/scripts/factory_quota_pause.py filter \
               | python3 .github/scripts/factory_source_budget.py filter \
               | python3 .github/scripts/factory_state_operations.py filter \
               | python3 .github/scripts/factory_state_operations.py rank \
-              | jq -c --argjson cap "$offer_count" '.[:$cap]')"
-            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total}, source-diverse seed)"
+              | jq -c --argjson cap "$max_per_tick" '.[:$cap]')"
+            echo "Source-diverse dispatch: $(jq -r length <<< "$workers") eligible workers"
           else
-            # A control-plane change should smoke one current lane per provider.
-            # Resolve these from the manifest so retired workers cannot remain
-            # embedded in dispatcher behavior.
-            workers="$(awk -F '\t' '
-              $0 !~ /^#/ && NF >= 3 && !seen[$2]++ {print $1}
-            ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            source_count="$(python3 "$slots" sources | jq -r length)"
+            workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
+              | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_quota_pause.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
+              | python3 .github/scripts/factory_state_operations.py filter \
+              | python3 .github/scripts/factory_state_operations.py rank \
+              | jq -c --argjson cap "$source_count" '.[:$cap]')"
+            echo "Smoke/control-plane batch: $(jq -r length <<< "$workers") eligible workers"
           fi
 
-          [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
-
-          # Credential presence is evaluated before claiming any lease. The model
-          # remains rostered and becomes eligible automatically if configured.
-          workers="$(python3 .github/scripts/factory_dispatch_credential_filter.py filter <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
-            echo 'No configured workers in this batch; preserving the fleet without dispatch'
-            echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
-            echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            # A nonempty roster can legitimately have zero executable workers:
+            # every free provider may be cooling, out of daily budget, or
+            # missing credentials. This is idle capacity, not a controller
+            # failure, and must not trigger an unnecessary successor chain.
+            if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
+              echo 'No executable workers in this roster tick; cooldowns, quota and credentials remain authoritative'
+              echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+              echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # An explicit smoke run should never have an empty provider roster.
+            echo 'Dispatcher resolved no workers for smoke run' >&2
+            exit 1
           fi
 
-          # Quota-paused workers stay on the roster but must not consume batch
-          # or capacity slots until their provider quota resets. Scheduled
-          # batches are already filtered before the offer cap so paused lanes
-          # never displace eligible ones; this pass covers the smoke branch.
-          workers="$(python3 .github/scripts/factory_quota_pause.py filter <<< "$workers")"
+          # All dispatch paths are filtered for credentials, quota, budget and
+          # runtime health before any worker is offered a lease.
           if [[ "$workers" == '[]' ]]; then
-            echo 'Every resolved worker is quota-paused; nothing to dispatch'
+            echo 'No eligible provider slots; retaining cooldown and lease safeguards'
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
             echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -684,20 +730,6 @@ jobs:
 
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
-
-          # Metered free sources (OrcaRouter, Requesty) have small per-account
-          # daily request limits; drop their workers once today's cap is used.
-          # Scheduled batches were already budget-filtered before the offer
-          # cap; this pass covers the smoke branch and races with refills.
-          workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
-          workers="$(python3 .github/scripts/factory_state_operations.py filter <<< "$workers")"
-          workers="$(python3 .github/scripts/factory_state_operations.py rank <<< "$workers")"
-          if [[ "$workers" == '[]' ]]; then
-            echo 'Every resolved worker is over its source daily dispatch budget; nothing to dispatch'
-            echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
-            echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           capacity="$(python3 "$controller" capacity)"
           echo "OmniRoute free-entry capacity: ${capacity}"
@@ -736,6 +768,12 @@ jobs:
           echo "Dispatching workers through centralized assignment: $workers"
           dispatched_count=0
           dispatch_failures=0
+          # Each `assign` re-evaluates the whole executable pool (~20 GitHub
+          # reads). Once several differently-sourced workers in a row find
+          # nothing, the shared pool is empty for this tick; stop instead of
+          # repeating the same reads for every remaining slot.
+          consecutive_idle=0
+          idle_stop="${FACTORY_IDLE_ASSIGN_STOP:-3}"
           budget_deferred=false
           budget_unreadable=false
           while IFS= read -r worker; do
@@ -754,6 +792,10 @@ jobs:
             if (( remaining_core < 450 )); then
               echo "::warning::REST quota reached worker reserve; deferring remaining workers"
               budget_deferred=true
+              break
+            fi
+            if (( consecutive_idle >= idle_stop )); then
+              echo "${consecutive_idle} consecutive workers found no executable work; ending this tick's batch"
               break
             fi
             dispatch_assigned_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))
@@ -830,6 +872,16 @@ jobs:
           echo "Dispatching automatic local Ollama review of PR #${pr}"
           gh workflow run local-ollama-review.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f "pr=${pr}"
+
+      - name: Report GitHub CLI request usage
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        env:
+          USAGE_LABEL: dispatch ${{ inputs.target || inputs.mode || github.event_name }}
+        run: |
+          python3 .github/scripts/factory_gh_usage.py "${FACTORY_GH_CALL_LOG:-/dev/null}" \
+            --label "$USAGE_LABEL" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Report factory query measurements
         if: always() && inputs.measure

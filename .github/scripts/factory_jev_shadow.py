@@ -831,11 +831,14 @@ def choose_worker_order(
         return workers, report
     if not api_key:
         return workers, {**report, "reason": "missing dedicated key"}
+    from factory_worker_slots import resolve
+
     roster = {}
-    for line in Path(".github/free-model-factories.tsv").read_text(encoding="utf-8").splitlines():
-        fields = line.split("\t")
-        if len(fields) >= 3 and not line.startswith("#"):
-            roster[fields[0]] = (fields[1], fields[2])
+    for worker in window:
+        try:
+            roster[worker] = (resolve(worker).source, "")
+        except ValueError:
+            roster[worker] = ("unknown", "")
     metrics = {}
     for row in health.get("workers", []):
         if isinstance(row, dict) and str(row.get("worker")) in window:
@@ -843,8 +846,10 @@ def choose_worker_order(
             metrics.setdefault(worker, []).append(row)
     evidence = {}
     for worker in window:
-        source, model = roster.get(worker, ("unknown", "unknown"))
+        source, _ = roster.get(worker, ("unknown", ""))
         rows = metrics.get(worker, [])
+        # Model identity is observed from execution records, never a source pin.
+        model = next((str(row.get("model")) for row in rows if row.get("model")), "")
         evidence[worker] = {
             "source": source, "model": model,
             "attempts": sum(int(row.get("attempts") or 0) for row in rows),
@@ -888,7 +893,7 @@ def main() -> int:
     """Run from the dispatcher using read-only GitHub candidate snapshots."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--issues", type=Path)
-    parser.add_argument("--prs", type=Path, required=True)
+    parser.add_argument("--prs", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--factory-health", type=Path, help="Trusted Neon worker and provider health snapshot")
     parser.add_argument("--workers", type=Path, help="Eligible worker ID array")

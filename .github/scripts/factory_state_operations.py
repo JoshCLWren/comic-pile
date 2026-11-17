@@ -38,8 +38,19 @@ HEAD_RE = re.compile(r"^[a-f0-9]{40}$")
 TRANSIENT = {"provider_failure": 900, "provider_throttle": 1800, "provider_quota": 1800}
 MODEL_COOLDOWNS = {"model_unavailable": 21600, "model_policy_violation": 21600,
                    "model_retired_410": 21600}
-# Independent OmniRoute routes do not share a provider-wide throttle.
+# A failing model must never cool another model on the same platform.
+# Keep the old OmniRoute constant for compatibility with existing tests.
 MODEL_SCOPED_SOURCES = {"omniroute-free", "omniroute-opencode"}
+
+
+def model_scoped_transient(source: str, outcome: str) -> bool:
+    return outcome in TRANSIENT
+
+
+def provider_scoped_transient(source: str, outcome: str) -> bool:
+    # Compatibility for legacy reconciliation callers; quota, throttle and
+    # failures are always tracked by their exact (source, model) identity.
+    return False
 
 
 def enabled() -> bool:
@@ -47,13 +58,10 @@ def enabled() -> bool:
 
 
 def _roster() -> dict[str, tuple[str, str]]:
-    path = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    result: dict[str, tuple[str, str]] = {}
-    for row in path.read_text(encoding="utf-8").splitlines():
-        fields = row.split("\t")
-        if len(fields) >= 3 and fields[0].isdigit():
-            result[fields[0]] = (fields[1], fields[2])
-    return result
+    """Resolve current provider-derived worker identities, not a pin roster."""
+    from factory_worker_slots import slots
+
+    return {item.worker: (item.source, "") for item in slots()}
 
 
 async def ensure_schema(conn: Any) -> None:
@@ -116,7 +124,6 @@ WORKER_RETRY_CLASSES = frozenset({
     "model_unavailable", "model_policy_violation", "environment_failure",
     "control_plane_failure", "unknown_failure", "work_failure",
 })
-WORKER_SUSPEND_AFTER = 14
 
 
 def fibonacci_worker_delay(streak: int) -> int:
@@ -139,12 +146,21 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     state = payload[0] if isinstance(payload, list) and payload else {}
     if not isinstance(state, dict):
         return None
-    # Changing the pin unblocks its lane without deleting history.
-    if state.get("source") and (state["source"], state.get("model")) != (source, model):
+    # A catalog-backed slot can execute a different published model each
+    # session. Do not erase its worker-level Fibonacci backoff simply because
+    # the TSV no longer contains a permanently pinned model ID.
+    if state.get("source") and state["source"] != source:
         return None
-    if state.get("suspended") is True:
-        return "suspended after repeated failures (new pin or TTL will reenable)"
+    # Dynamic slots are not permanently assigned to a model. A known model
+    # failure must not suppress the entire slot's alternate model capacity.
+    if not model and state.get("outcome") in MODEL_RETRY_CLASSES:
+        return None
+    if model and model != "@catalog" and state.get("model") != model:
+        return None
     retry_at = state.get("next_retry_at")
+    # Legacy suspended rows without a not-before timestamp must not gate for 90 days.
+    if retry_at is None and "suspended" in state:
+        return None
     if retry_at is not None:
         try:
             if datetime.fromisoformat(str(retry_at)) > now:
@@ -163,6 +179,42 @@ MODEL_RETRY_CLASSES = frozenset({
 })
 
 
+def validate_intermediate_model_failures(
+    raw: Any, source: str,
+) -> list[tuple[str, str, str, str]]:
+    """Normalize only attested exact (source, model, outcome, scope) events."""
+    from factory_provider_candidates import ADAPTERS
+
+    if not raw:
+        return []
+    if not isinstance(raw, list) or len(raw) > 1000:
+        raise ValueError("invalid trusted intermediate model failures")
+    accepted = MODEL_RETRY_CLASSES | {"model_retired_410"}
+    seen: dict[tuple[str, str], tuple[str, str]] = {}
+    for entry in raw:
+        if isinstance(entry, str) and source == "opencode-free":
+            failure_source, model, classification, scope = source, entry, "model_unavailable", "model"
+        elif isinstance(entry, dict):
+            failure_source = entry.get("source", source)
+            model, classification = entry.get("model"), entry.get("outcome")
+            scope = entry.get("scope", "model")
+        else:
+            raise ValueError("invalid trusted intermediate model failure entry")
+        if (not isinstance(failure_source, str) or failure_source not in ADAPTERS
+                or not isinstance(model, str)
+                or not re.fullmatch(r"[\w./:-]{1,180}", model)
+                or classification not in accepted
+                or scope not in {"account", "model"}
+                or (scope == "account" and classification not in {"provider_quota", "provider_failure"})):
+            raise ValueError("invalid trusted intermediate model failure identity")
+        # Old account-labelled credit refusals must not suppress healthy peers.
+        seen[(failure_source, model)] = (classification, "model")
+    return [
+        (s, model, *seen[(s, model)]) for s, model in sorted(seen)
+    ]
+
+
+
 def attributable_model_failure(classification: str, proven: bool) -> bool:
     """Only blame the shared source/model when inference was attempted."""
     return classification in MODEL_RETRY_CLASSES or (
@@ -171,7 +223,8 @@ def attributable_model_failure(classification: str, proven: bool) -> bool:
 
 
 def historical_failure_streak(
-    rows: list[Any], run_id: int, source: str, model: str, *, model_only: bool,
+    rows: list[Any], run_id: int, source: str, model: str, *,
+    model_only: bool, model_independent: bool = False,
 ) -> int:
     """Recover a consecutive streak from trusted terminal Neon events.
 
@@ -189,10 +242,10 @@ def historical_failure_streak(
         previous_run = int(detail.get("run_id") or 0)
         if previous_run == 0 or previous_run >= run_id:
             continue
-        if detail.get("source") != source or detail.get("model") != model:
-            # The worker was repinned. Its older model should not carry a
-            # failure streak into this pin, even if it used the same model
-            # before the intervening assignment.
+        if (detail.get("source") != source or
+                (detail.get("model") != model and not model_independent)):
+            # Fixed pins reset their streak when repinned. Catalog-backed
+            # slots retain worker streak across real upstream model rotation.
             if not model_only:
                 break
             continue
@@ -210,35 +263,42 @@ def historical_failure_streak(
             # Old unconfigured workers were incorrectly classified this way.
             continue
         streak += 1
-        if streak >= WORKER_SUSPEND_AFTER:
-            break
     return streak
 
 
 async def _recent_streak(
     conn: Any, run_id: int, source: str, model: str, *,
-    worker: str | None = None,
+    repo: str, worker: str | None = None, model_independent: bool = False,
 ) -> int:
-    """Only query history once, while a new durable retry row is initialized."""
+    """Read prior attempts after the latest manual health reset in one query."""
     if worker is None:
         rows = await conn.fetch(
             """SELECT event_type,detail FROM public.factory_state_events
                WHERE subject_type='worker'
                  AND event_type IN ('worker_failed','worker_completed')
                  AND detail->>'source'=$1 AND detail->>'model'=$2
-                 AND created_at>now()-interval '7 days'
-               ORDER BY id DESC LIMIT 64""", source, model,
+                 AND created_at>GREATEST(
+                     now()-interval '7 days',
+                     COALESCE((SELECT updated_at FROM public.factory_state_kv
+                               WHERE cache_key=$3), '-infinity'::timestamptz))
+               ORDER BY id DESC LIMIT 64""",
+            source, model, f"factory-model-health-reset-v1:{repo}",
         )
     else:
         rows = await conn.fetch(
             """SELECT event_type,detail FROM public.factory_state_events
                WHERE subject_type='worker' AND subject_number=$1::bigint
                  AND event_type IN ('worker_failed','worker_completed')
-                 AND created_at>now()-interval '7 days'
-               ORDER BY id DESC LIMIT 64""", int(worker),
+                 AND created_at>GREATEST(
+                     now()-interval '7 days',
+                     COALESCE((SELECT updated_at FROM public.factory_state_kv
+                               WHERE cache_key=$2), '-infinity'::timestamptz))
+               ORDER BY id DESC LIMIT 64""",
+            int(worker), f"factory-model-health-reset-v1:{repo}",
         )
     return historical_failure_streak(
         rows, run_id, source, model, model_only=worker is None,
+        model_independent=model_independent,
     )
 
 
@@ -251,7 +311,12 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     source, _ = roster[worker]
     reported_source = str(outcome.get("source") or "")
     if reported_source and reported_source != source:
-        raise ValueError("runtime source disagrees with the trusted roster")
+        if outcome.get("trusted_source_switch") is not True:
+            raise ValueError("runtime source changed without trusted worker transition")
+        from factory_provider_candidates import ADAPTERS
+        if reported_source not in ADAPTERS:
+            raise ValueError("runtime source is not an integrated provider")
+        source = reported_source
     # Pre-session failures cannot attest a provider/model. Track the worker
     # event without attributing faults to an arbitrary configured model.
     attributed = bool(reported_source and outcome.get("model"))
@@ -269,13 +334,16 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     observed = datetime.now(timezone.utc)
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
-    model_failures = outcome.get("model_failures") or []
-    if model_failures and (source != "opencode-free" or not isinstance(model_failures, list)
-            or len(model_failures) > 5 or any(
-                not isinstance(m, str) or not re.fullmatch(r"[\w./:-]{1,180}", m)
-                for m in model_failures
-            )):
-        raise ValueError("invalid trusted intermediate model failures")
+    model_failures = validate_intermediate_model_failures(outcome.get("model_failures"), source)
+    terminal_account_scope = any(
+        failure_source == source and failure_model == model and scope == "account"
+        for failure_source, failure_model, _, scope in model_failures
+    )
+    account_failures = {
+        failure_source: failure_outcome
+        for failure_source, _, failure_outcome, scope in model_failures
+        if scope == "account"
+    }
     async with conn.transaction():
         inserted = await conn.fetchval(
             """INSERT INTO public.factory_runtime_event_keys(repo,run_id)
@@ -299,13 +367,13 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             status, until = "retired", None
         elif classification in MODEL_COOLDOWNS:
             status, until = "unavailable", observed + timedelta(seconds=MODEL_COOLDOWNS[classification])
-        elif classification in TRANSIENT and source in MODEL_SCOPED_SOURCES:
-            status, until = "cooling", _provider_cooldown(source, classification, observed)
+        elif model_scoped_transient(source, classification):
+            status, until = "cooling", observed + timedelta(seconds=fibonacci_worker_delay(1))
         elif proven:
             status, until = "healthy", None
         else:
             status, until = "unknown", None
-        if attributed and (classification in MODEL_COOLDOWNS or (classification in TRANSIENT and source in MODEL_SCOPED_SOURCES) or proven):
+        if attributed and not terminal_account_scope and (classification in MODEL_COOLDOWNS or model_scoped_transient(source, classification) or proven):
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_verified_at,last_run_id)
@@ -318,10 +386,10 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
-        if attributed and classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
+        for account_source, account_classification in sorted(account_failures.items()):
             # Reservation bookkeeping updates budget.updated_at independently,
             # so a provider failure streak must have its OWN durable timestamp.
-            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{source}"
+            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{account_source}"
             previous = await conn.fetchrow(
                 """SELECT payload FROM public.factory_state_kv
                    WHERE cache_key=$1 FOR UPDATE""", backoff_key)
@@ -335,10 +403,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 age = (observed - observed_prior).total_seconds()
             except (KeyError, TypeError, ValueError):
                 age = float("inf")
-            delay = exponential_provider_delay(
-                classification, prior.get("outcome"),
-                float(prior.get("delay_seconds") or 0), age)
-            until = _provider_cooldown(source, classification, observed, delay)
+            streak = int(prior.get("streak") or 0) + 1 if age < 12 * 3600 else 1
+            delay = fibonacci_worker_delay(streak)
+            until = _provider_cooldown(account_source, account_classification, observed, delay)
             if previous_run <= run_id:
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
@@ -348,8 +415,13 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
                     backoff_key, json.dumps([{
-                        "run_id": run_id, "outcome": classification,
-                        "delay_seconds": delay, "observed_at": observed.isoformat()
+                        # Eligibility honours only account-scoped outcomes, so
+                        # record the proven account class, not this run's
+                        # terminal class (which may belong to a later model).
+                        # The streak must persist for Fibonacci growth.
+                        "run_id": run_id, "outcome": account_classification,
+                        "streak": streak, "delay_seconds": delay,
+                        "observed_at": observed.isoformat(),
                     }]), until)
             await conn.execute(
                 """INSERT INTO public.factory_provider_budget
@@ -362,24 +434,71 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      last_outcome=EXCLUDED.last_outcome,last_run_id=EXCLUDED.last_run_id,
                      updated_at=now()
                    WHERE factory_provider_budget.last_run_id<=EXCLUDED.last_run_id""",
-                repo, source, until, until if classification=="provider_quota" else None, classification,run_id)
-        # Record each intermediate unavailable model even if the final smoke
-        # rotated successfully. The run_id uniqueness key above prevents
-        # duplicate or out-of-order application of this run.
-        for failed_model in set(model_failures):
+                repo, account_source, until, until if account_classification=="provider_quota" else None, account_classification,run_id)
+        # Record every failed candidate independently even if another model
+        # eventually completed the same leased task. No provider-wide breaker.
+        for failed_source, failed_model, failed_outcome, scope in model_failures:
+            if scope == "account":
+                continue
+            failed_status = (
+                "retired" if failed_outcome == "model_retired_410"
+                else "unavailable" if failed_outcome in MODEL_COOLDOWNS
+                else "cooling"
+            )
+            failed_until = (
+                None if failed_status == "retired"
+                else observed + timedelta(seconds=MODEL_COOLDOWNS[failed_outcome])
+                if failed_outcome in MODEL_COOLDOWNS
+                else observed + timedelta(seconds=fibonacci_worker_delay(1))
+            )
             await conn.execute(
                 """INSERT INTO public.factory_model_health
-                     (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
-                   VALUES($1,$2,$3,'unavailable','model_unavailable',
-                          now()+interval '6 hours',$4)
+                   (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
+                   VALUES($1,$2,$3,$4,$5,$6,$7)
                    ON CONFLICT(repo,source,model) DO UPDATE SET
                      status=EXCLUDED.status,last_outcome=EXCLUDED.last_outcome,
                      cooldown_until=EXCLUDED.cooldown_until,
                      last_run_id=EXCLUDED.last_run_id,updated_at=now()
-                   WHERE factory_model_health.status!='retired'
-                     AND factory_model_health.last_run_id <= EXCLUDED.last_run_id""",
-                repo, source, failed_model, run_id,
+                   WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
+                     AND (factory_model_health.status!='retired'
+                          OR EXCLUDED.status='retired')""",
+                repo, failed_source, failed_model, failed_status, failed_outcome,
+                failed_until, run_id,
             )
+            # Apply the same source/model Fibonacci persistence used by the
+            # terminal candidate. A later successful candidate cannot erase it.
+            failed_key = f"factory-model-backoff-v1:{repo}:source:{failed_source}:model:{failed_model}"
+            await conn.fetchval(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", failed_key,
+            )
+            previous = await conn.fetchrow(
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 FOR UPDATE",
+                failed_key,
+            )
+            prior_payload = previous["payload"] if previous else None
+            if isinstance(prior_payload, str):
+                prior_payload = json.loads(prior_payload)
+            prior_state = prior_payload[0] if isinstance(prior_payload, list) and prior_payload else {}
+            prior_run = int(prior_state.get("run_id") or 0) if isinstance(prior_state, dict) else 0
+            if prior_run <= run_id:
+                streak = (int(prior_state.get("streak") or 0) if previous
+                          else await _recent_streak(conn, run_id, failed_source, failed_model, repo=repo)) + 1
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                await conn.execute(
+                    """INSERT INTO public.factory_state_kv
+                       (cache_key,payload,fetched_at,expires_at,updated_at)
+                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
+                       ON CONFLICT(cache_key) DO UPDATE SET
+                         payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                         expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+                    failed_key, json.dumps([{
+                        "source": failed_source, "model": failed_model,
+                        "outcome": failed_outcome, "streak": streak,
+                        "run_id": run_id, "suspended": suspended,
+                        "next_retry_at": retry_at,
+                    }]),
+                )
         # Provider success clears a transient breaker only if no later breaker
         # was recorded. Another concurrent worker may still have hit a limit.
         if attributed and proven and classification not in TRANSIENT and classification != "no_work":
@@ -409,14 +528,17 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 old = {}
             prior_run = int(old.get("run_id") or 0)
             if prior_run <= run_id:
-                same_pin = old.get("source") == source and old.get("model") == model
-                streak = (int(old.get("streak") or 0) if same_pin else
-                          await _recent_streak(conn, run_id, source, model, worker=worker)) + 1
-                suspended = streak >= WORKER_SUSPEND_AFTER
-                retry_at = (
-                    None if suspended else
-                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                catalog_slot = roster[worker][1] == "" or roster[worker][1] == "@catalog"
+                same_pin = old.get("source") == source and (
+                    catalog_slot or old.get("model") == model
                 )
+                streak = (int(old.get("streak") or 0) if same_pin else
+                          await _recent_streak(
+                              conn, run_id, source, model, repo=repo, worker=worker,
+                              model_independent=catalog_slot,
+                          )) + 1
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -441,7 +563,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
         # only when the exact model actually ran. Never blame the model for
         # checkout, credential, or controller failures.
         model_key = f"factory-model-backoff-v1:{repo}:source:{source}:model:{model}"
-        if attributed and not delivered and attributable_model_failure(classification, proven):
+        if (attributed and not terminal_account_scope and not delivered
+                and attributable_model_failure(classification, proven)):
             # Serialize first updates too, when no KV row exists to lock yet.
             await conn.fetchval(
                 "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", model_key,
@@ -460,14 +583,11 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             if prior_model_run <= run_id:
                 prior_streak = (
                     int(model_old.get("streak") or 0) if previous_model else
-                    await _recent_streak(conn, run_id, source, model)
+                    await _recent_streak(conn, run_id, source, model, repo=repo)
                 )
                 streak = prior_streak + 1
-                suspended = streak >= WORKER_SUSPEND_AFTER
-                retry_at = (
-                    None if suspended else
-                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
-                )
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -545,6 +665,24 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
                WHERE cache_key LIKE $1 AND expires_at>now()""",
             f"factory-worker-backoff-v1:{repo}:worker:%")
     }
+    # Only a proven account-scoped failure can stop a provider's other models.
+    # Historical model-only quota records in provider_budget are insufficient.
+    provider_backoffs: dict[str, Any] = {}
+    for row in await conn.fetch(
+        """SELECT cache_key,payload,expires_at FROM public.factory_state_kv
+           WHERE cache_key LIKE $1 AND expires_at>now()""",
+        f"factory-provider-backoff-v1:{repo}:source:%"
+    ):
+        key = str(row["cache_key"])
+        prefix = f"factory-provider-backoff-v1:{repo}:source:"
+        if not key.startswith(prefix):
+            continue
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        state = payload[0] if isinstance(payload, list) and payload else {}
+        if isinstance(state, dict) and state.get("outcome") in {"provider_quota", "provider_failure"}:
+            provider_backoffs[key.removeprefix(prefix)] = state
     model_backoffs = {}
     for row in await conn.fetch(
         """SELECT cache_key,payload,expires_at FROM public.factory_state_kv
@@ -566,16 +704,28 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         source,model = pair
         m,b = models.get(pair),budgets.get(source)
         retry_reason = worker_backoff_reason(backoffs.get(worker), source, model, now)
+        # Inference cooldown lives on the exact source/model or provider account.
+        # Older worker-scoped retry records must not suppress other fleet models.
+        worker_record = backoffs.get(worker)
+        if worker_record:
+            raw = worker_record["payload"]
+            if isinstance(raw, str):
+                raw = json.loads(raw)
+            worker_state = raw[0] if isinstance(raw, list) and raw else {}
+            if isinstance(worker_state, dict) and worker_state.get("outcome") in (
+                MODEL_RETRY_CLASSES | {"model_retired_410"}
+            ):
+                retry_reason = None
         model_retry = worker_backoff_reason(model_backoffs.get(pair), source, model, now)
-        if retry_reason:
+        if source in provider_backoffs:
+            rejected.append(f"{worker}: provider account {source} cooling")
+        elif retry_reason:
             rejected.append(f"{worker}: {retry_reason}")
         elif model_retry:
             rejected.append(f"{worker}: source/model {model} {model_retry}")
         elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
-        elif b and b["cooldown_until"] and b["cooldown_until"]>now:
-            rejected.append(f"{worker}: provider {source} cooling")
         elif b and b["concurrency_limit"] is not None and counts.get(source,0)>=b["concurrency_limit"]:
             rejected.append(f"{worker}: provider {source} full")
         elif b and b["daily_limit"] is not None and b["usage_day"]==now.date() and b["daily_used"]>=b["daily_limit"]:
@@ -757,58 +907,6 @@ async def _stats(conn:Any,repo:str)->dict[str,Any]:
 
 
 
-async def _sync_registry(conn: Any, repo: str, comments: list[dict[str,Any]]) -> int:
-    # Convert only trusted #1093 evidence; never trust model-agent content.
-    from factory_candidate_health import latest_attempt_evidence
-    evidence=latest_attempt_evidence(comments)
-    inserted=0
-    for (source,model),item in evidence.items():
-        if not source or not model or item.outcome in {"unknown_failure","control_plane_failure","environment_failure"}:
-            continue
-        if item.outcome == "model_retired_410":
-            status,until="retired",None
-        elif item.outcome in MODEL_COOLDOWNS:
-            status,until="unavailable",datetime.fromtimestamp(item.updated+MODEL_COOLDOWNS[item.outcome],timezone.utc)
-        elif item.outcome in TRANSIENT and source in MODEL_SCOPED_SOURCES:
-            status,until="cooling",datetime.fromtimestamp(item.updated+TRANSIENT[item.outcome],timezone.utc)
-        elif item.outcome in TRANSIENT:
-            status,until="unknown",None
-        elif item.outcome in {"success","no_work","work_failure"}:
-            status,until="healthy",None
-        else:
-            continue
-        result=await conn.fetchval(
-            """INSERT INTO public.factory_model_health
-                (repo,source,model,status,last_outcome,cooldown_until,last_verified_at)
-               VALUES($1,$2,$3,$4,$5,$6,$7)
-               ON CONFLICT DO NOTHING RETURNING model""",
-            repo,source,model,status,item.outcome,until,
-            datetime.fromtimestamp(item.updated,timezone.utc) if status=="healthy" else None)
-        inserted+=int(result is not None)
-        if item.outcome in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
-            observed=datetime.fromtimestamp(item.updated,timezone.utc)
-            until=_provider_cooldown(source,item.outcome,observed)
-            if until and until>datetime.now(timezone.utc):
-                await conn.execute(
-                    """INSERT INTO public.factory_provider_budget
-                         (repo,source,cooldown_until,quota_reset_at,last_outcome)
-                       VALUES($1,$2,$3,$4,$5)
-                       ON CONFLICT(repo,source) DO UPDATE SET
-                         cooldown_until=greatest(factory_provider_budget.cooldown_until,
-                                                 EXCLUDED.cooldown_until),
-                         quota_reset_at=EXCLUDED.quota_reset_at,last_outcome=EXCLUDED.last_outcome,
-                         updated_at=now()
-                       WHERE factory_provider_budget.last_run_id=0""",
-                    repo,source,until,until if item.outcome=="provider_quota" else None,item.outcome)
-    return inserted
-
-
-def sync_registry(repo: str, comments: list[dict[str,Any]]) -> int:
-    if not enabled():
-        return 0
-    return _run(_sync_registry,repo,comments)
-
-
 async def _sync_catalog(conn:Any,repo:str,report:dict[str,Any])->int:
     """Record trusted catalog absence without editing the checked-in roster."""
     count=0
@@ -904,33 +1002,35 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
-    # Comment locators are compact, verified GitHub IDs, not a body cache.
-    # Read durable coordination first. The legacy registry body is consulted
-    # only once when a trusted marker has not yet been migrated.
-    if worker:
-        if not worker.isdecimal() or worker not in _roster():
-            raise ValueError("invalid trusted worker for registry ID lookup")
-        kinds = {"__heartbeat_id": "heartbeat", "__attempt_id": "attempt"}
-        scopes = {
-            key: f"registry-comment-id-v1:{kind}:worker:{worker}"
-            for key, kind in kinds.items()
-        }
-        recorded = await conn.fetch(
-            """SELECT scope,checkpoint FROM public.factory_reconciliation_cursor
-                WHERE repo=$1 AND scope=ANY($2::text[])""",
-            repo, list(scopes.values()),
-        )
-        known = {
-            str(row["scope"]): str(row["checkpoint"] or "")
-            for row in recorded
-        }
-        missing = {
-            key: scope for key, scope in scopes.items()
-            if not known.get(scope, "").isdecimal() or int(known[scope]) <= 0
-        }
-        for key, scope in scopes.items():
-            if key not in missing:
-                excluded[key] = [known[scope]]
+    # Durable source/model Fibonacci backoffs outlive the shorter model
+    # health cooldowns. Export them as candidate exclusions for catalog slots.
+    backoffs = await conn.fetch(
+        """SELECT payload FROM public.factory_state_kv
+           WHERE cache_key LIKE $1""",
+        f"factory-model-backoff-v1:{repo}:source:%"
+    )
+    now = datetime.now(timezone.utc)
+    for row in backoffs:
+        record = row["payload"]
+        if isinstance(record, str):
+            record = json.loads(record)
+        state = record[0] if isinstance(record, list) and record else {}
+        if not isinstance(state, dict):
+            continue
+        source, model = state.get("source"), state.get("model")
+        if not isinstance(source, str) or not isinstance(model, str) or not model:
+            continue
+        try:
+            retry_at = datetime.fromisoformat(str(state.get("next_retry_at")))
+        except (ValueError, TypeError):
+            retry_at = None
+        if retry_at is not None and retry_at > now:
+            if model not in excluded.setdefault(source, []):
+                excluded[source].append(model)
+    # The worker identity is validated for the trusted caller; issue #1093
+    # comment locators are retired and never exported to the runner.
+    if worker and (not worker.isdecimal() or worker not in _roster()):
+        raise ValueError("invalid trusted worker for model exclusions")
     return excluded
 
 
@@ -971,60 +1071,133 @@ async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
     }
 
 
+
+async def _export_dashboard_retry(conn: Any, repo: str) -> dict[str, Any]:
+    """Bounded, read-only factory retry and capacity evidence for public status.
+
+    Never export credentials, raw comments, private agent prompts, or lease
+    tokens. These observations do not grant dispatch or merge authority.
+    """
+    rows = await conn.fetch(
+        """SELECT cache_key,payload,expires_at,updated_at
+           FROM public.factory_state_kv
+           WHERE cache_key LIKE $1 OR cache_key LIKE $2 OR cache_key LIKE $3
+           ORDER BY updated_at DESC LIMIT 750""",
+        f"factory-worker-backoff-v1:{repo}:%",
+        f"factory-model-backoff-v1:{repo}:%",
+        f"factory-provider-backoff-v1:{repo}:%",
+    )
+    backoffs = []
+    for row in rows:
+        key = str(row["cache_key"])
+        kind = ("worker" if key.startswith("factory-worker-backoff-v1:")
+                else "model" if key.startswith("factory-model-backoff-v1:")
+                else "provider")
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        record = payload[0] if isinstance(payload, list) and payload else {}
+        if not isinstance(record, dict):
+            continue
+        backoffs.append({
+            "kind": kind,
+            "worker": key.rsplit(":", 1)[-1] if kind == "worker" else "",
+            "source": str(record.get("source") or
+                          (key.rsplit(":", 1)[-1] if kind == "provider" else "")),
+            "model": str(record.get("model") or ""),
+            "outcome": str(record.get("outcome") or ""),
+            "streak": int(record.get("streak") or 0),
+            "delay_seconds": int(record.get("delay_seconds") or 0),
+            "suspended": record.get("suspended") is True,
+            "next_retry_at": record.get("next_retry_at"),
+            "until": row["expires_at"].isoformat() if kind == "provider" else None,
+            "run_id": int(record.get("run_id") or 0),
+            "updated_at": row["updated_at"].isoformat(),
+        })
+    reservations = await conn.fetch(
+        """SELECT worker,source,expires_at FROM public.factory_provider_reservation
+           WHERE repo=$1 AND expires_at>now() ORDER BY expires_at LIMIT 300""",
+        repo,
+    )
+    retries = await conn.fetch(
+        """SELECT pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id
+           FROM public.factory_pr_stage_retry
+           WHERE repo=$1 AND retry_after>now()
+           ORDER BY retry_after LIMIT 150""",
+        repo,
+    )
+    return {
+        "backoffs": backoffs,
+        "reservations": [
+            {"worker": r["worker"], "source": r["source"],
+             "expires_at": r["expires_at"].isoformat()} for r in reservations
+        ],
+        "pr_retries": [
+            {"pr": r["pr_number"], "head": r["head_sha"], "stage": r["stage"],
+             "attempts": r["attempts"], "outcome": r["outcome"],
+             "retry_after": r["retry_after"].isoformat(), "run_id": r["last_run_id"]}
+            for r in retries
+        ],
+    }
+
+
+def export_dashboard_retry(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Factory retry evidence is not connected")
+    return _run(_export_dashboard_retry, repo)
+
+
 def export_candidate_health(repo: str) -> dict[str, Any]:
     if not enabled():
         raise RuntimeError("Neon health unavailable; cannot prove executable candidates")
     return _run(_export_candidate_health, repo)
 
 
-async def _remember_verified_markers(
-    conn: Any, repo: str, entries: list[dict[str, str]],
-) -> int:
-    """Persist only trusted, canonical registry comment IDs in scoped cursors."""
+async def _export_fleet_failover_sources(conn: Any, repo: str, worker: str) -> list[str]:
+    """Admit sources that cannot bypass a configured provider capacity limit.
+
+    The assigned source already owns capacity under the target's exclusive
+    claim. Other sources without concurrency/daily limits may be used without
+    taking a second reservation. Capped sources require an atomic transfer
+    before they can become candidates, so they are excluded here.
+    """
+    from factory_provider_registry import PROVIDERS
+    from factory_source_budget import load_budgets
+
     roster = _roster()
-    count = 0
-    for item in entries:
-        worker, kind, comment_id = (
-            str(item.get("worker") or ""), str(item.get("kind") or ""),
-            str(item.get("id") or ""),
+    if worker not in roster:
+        raise ValueError("unknown leased worker")
+    assigned = roster[worker][0]
+    now = datetime.now(timezone.utc)
+    budgets = {
+        r["source"]: r for r in await conn.fetch(
+            "SELECT source,concurrency_limit,daily_limit,cooldown_until,quota_reset_at "
+            "FROM public.factory_provider_budget WHERE repo=$1", repo,
         )
-        if worker not in roster or kind not in {"heartbeat", "attempt"}:
+    }
+    caps = load_budgets()
+    sources = set(PROVIDERS) | {"opencode-free", "openrouter-free", "kilo-auto"}
+    selected = {assigned}
+    for source in sources - {assigned}:
+        budget = budgets.get(source)
+        if source in caps:
             continue
-        if not comment_id.isdecimal() or int(comment_id) <= 0:
-            continue
-        scope = f"registry-comment-id-v1:{kind}:worker:{worker}"
-        result = await conn.fetchval(
-            """INSERT INTO public.factory_reconciliation_cursor
-                 (repo,scope,checkpoint,checked_at)
-               VALUES($1,$2,$3,now())
-               ON CONFLICT(repo,scope) DO UPDATE SET
-                 checkpoint=EXCLUDED.checkpoint,checked_at=now()
-               WHERE factory_reconciliation_cursor.checkpoint IS NULL
-                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
-                  OR factory_reconciliation_cursor.checkpoint::bigint
-                       < EXCLUDED.checkpoint::bigint
-               RETURNING 1""",
-            repo, scope, comment_id,
-        )
-        count += bool(result)
-    return count
+        if budget is not None:
+            if budget["concurrency_limit"] is not None or budget["daily_limit"] is not None:
+                continue
+            if (budget["cooldown_until"] and budget["cooldown_until"] > now) or (
+                budget["quota_reset_at"] and budget["quota_reset_at"] > now
+            ):
+                continue
+        selected.add(source)
+    return sorted(selected)
 
 
-def remember_verified_markers(repo: str, entries: list[dict[str, str]]) -> int:
+def export_fleet_failover_sources(repo: str, worker: str) -> list[str]:
     if not enabled():
-        raise RuntimeError("marker coordination needs trusted Neon connection")
-    return _run(_remember_verified_markers, repo, entries)
+        raise RuntimeError("Neon capacity read required for fleet failover")
+    return _run(_export_fleet_failover_sources, repo, worker)
 
-
-async def _registry_ingest_checkpoint(conn: Any, repo: str) -> str | None:
-    return await conn.fetchval(
-        """SELECT checkpoint FROM public.factory_reconciliation_cursor
-           WHERE repo=$1 AND scope='registry-event-ingest-v2'""", repo,
-    )
-
-
-def registry_ingest_checkpoint(repo: str) -> str | None:
-    return _run(_registry_ingest_checkpoint, repo) if enabled() else None
 
 
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
@@ -1033,22 +1206,65 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
     return _run(_export_model_exclusions, repo, worker)
 
 
+async def _reset_model_health(conn: Any, repo: str, include_retired: bool = False) -> dict[str, int]:
+    """Clear learned failure/cooldown state; retain delivery, lease and budget usage."""
+    if not REPO_RE.fullmatch(repo):
+        raise ValueError("invalid repository")
+    async with conn.transaction():
+        health = await conn.fetchval(
+            """WITH deleted AS (DELETE FROM public.factory_model_health
+                 WHERE repo=$1 AND ($2::boolean OR status != 'retired') RETURNING 1)
+               SELECT count(*) FROM deleted""", repo, include_retired)
+        backoffs = await conn.fetchval(
+            """WITH deleted AS (DELETE FROM public.factory_state_kv
+                 WHERE starts_with(cache_key,$1) OR starts_with(cache_key,$2)
+                    OR starts_with(cache_key,$3) RETURNING 1)
+               SELECT count(*) FROM deleted""",
+            f"factory-model-backoff-v1:{repo}:",
+            f"factory-worker-backoff-v1:{repo}:",
+            f"factory-provider-backoff-v1:{repo}:")
+        providers = await conn.fetchval(
+            """WITH cleared AS (UPDATE public.factory_provider_budget
+                 SET cooldown_until=NULL,quota_reset_at=NULL,updated_at=now()
+                 WHERE repo=$1 AND (cooldown_until IS NOT NULL OR quota_reset_at IS NOT NULL)
+                 RETURNING 1)
+               SELECT count(*) FROM cleared""", repo)
+        # Preserve the event ledger but never rehydrate failures from before reset.
+        await conn.execute(
+            """INSERT INTO public.factory_state_kv
+                 (cache_key,payload,fetched_at,expires_at,updated_at)
+                 VALUES($1,'[]'::jsonb,now(),now()+interval '30 days',now())
+                 ON CONFLICT(cache_key) DO UPDATE SET
+                   payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                   expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+            f"factory-model-health-reset-v1:{repo}")
+    return {"model_health_rows": int(health or 0), "backoff_rows": int(backoffs or 0),
+            "provider_cooldowns": int(providers or 0)}
+
+
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","export-model-exclusions","export-candidate-health","export-fleet-failover-sources","reset-model-health"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
     parser.add_argument("--worker",default="")
     parser.add_argument("--cursor",default="")
+    parser.add_argument("--include-retired",action="store_true")
     args=parser.parse_args()
     if not REPO_RE.fullmatch(args.repo):
         parser.error("invalid repo")
-    if args.command=="bootstrap":
+    if args.command=="reset-model-health":
+        if not enabled():
+            raise SystemExit("Neon is required for model health reset")
+        print(json.dumps(_run(_reset_model_health,args.repo,args.include_retired),sort_keys=True))
+    elif args.command=="bootstrap":
         if not enabled():
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))
         print("[factory-operations] schema ready")
+    elif args.command=="export-fleet-failover-sources":
+        print(json.dumps(export_fleet_failover_sources(args.repo,args.worker),separators=(",",":")))
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
     elif args.command=="export-candidate-health":
@@ -1066,10 +1282,6 @@ def main() -> int:
         if args.file is None:
             parser.error("--file required")
         print(json.dumps({"missing_models":sync_catalog(args.repo,json.loads(args.file.read_text()))}))
-    elif args.command=="sync-registry":
-        if args.file is None:
-            parser.error("--file required")
-        print(json.dumps({"backfilled":sync_registry(args.repo,json.loads(args.file.read_text()))}))
     elif args.command=="stats":
         print(json.dumps(_run(_stats,args.repo),default=str))
     elif args.command=="ingest-check":

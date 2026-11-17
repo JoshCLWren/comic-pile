@@ -1,6 +1,7 @@
 {
   "generated_by": "scripts/generate_route_burndown.py",
   "source_fragments": [
+    "activity",
     "bug-reports",
     "catalog",
     "comicvine",
@@ -10,17 +11,20 @@
     "custom-cbl",
     "demo",
     "dependencies",
+    "issue-identity-cbl-catalog",
     "issues",
     "metrics",
     "preferences",
     "reading-mode",
     "reading-orders",
+    "reading-plan-sync",
     "releases",
     "roll",
     "sessions",
     "tags",
     "taste-discoveries",
-    "threads"
+    "threads",
+    "undo"
   ],
   "routes": [
     {
@@ -162,6 +166,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issues/[0-9]+$",
       "methods": [
         "GET"
@@ -198,6 +216,20 @@
     },
     {
       "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/status$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/sync$",
       "methods": [
         "POST"
       ],
@@ -370,6 +402,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/taste/discoveries$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "methods": [
         "POST"
@@ -430,6 +469,13 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "methods": [
         "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/activity$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -512,111 +558,6 @@
         "POST"
       ],
       "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/sessions/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+/details$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/current/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+$",
-      "methods": [
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+/set\\-pending$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+/test\\-backdate$",
-      "methods": [
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+:migrateToIssues$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+:migrateToIssuesSimple$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/[^/]+:setCurrentIssue$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/reactivate$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/stale$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
     },
     {
       "src": "^/api/v1/catalog/series\\-mappings/preview$",
@@ -962,7 +903,6 @@
     {
       "src": "^/api/v1/taste/discoveries$",
       "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1148,6 +1088,30 @@
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/undo/[^/]+/snapshots$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[^/]+$",
+      "methods": [
+        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

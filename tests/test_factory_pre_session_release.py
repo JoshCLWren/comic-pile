@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from typing import cast
 
 import pytest
 import yaml
@@ -12,6 +13,28 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/free-model-factory-run.yml"
+SCRIPTS = ROOT / ".github/scripts"
+
+
+def _generated_slot_ids(count: int = 3) -> list[str]:
+    """Real provider-derived worker identities (the TSV roster was removed)."""
+    import sys
+
+    sys.path.insert(0, str(SCRIPTS))
+    import factory_worker_slots
+
+    return sorted(slot.worker for slot in factory_worker_slots.slots())[:count]
+
+
+def _stage_release_scripts(tmp_path: Path) -> Path:
+    """Copy the real slot resolver and a controller stand-in into a sandbox."""
+    scripts = tmp_path / ".github/scripts"
+    scripts.mkdir(parents=True)
+    for name in ("factory_worker_slots.py", "factory_provider_registry.py"):
+        (scripts / name).write_text((SCRIPTS / name).read_text())
+    controller = scripts / "factory-work-controller.py"
+    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    return controller
 
 
 def test_cleanup_waits_for_factory_and_excludes_started_sessions() -> None:
@@ -66,19 +89,18 @@ def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> No
     """Run the real job command with a stand-in controller and restricted DSN."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     release = workflow["jobs"]["release_post_session_lease"]["steps"][3]
-    controller = tmp_path / ".github/scripts/factory-work-controller.py"
-    controller.parent.mkdir(parents=True)
-    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    _stage_release_scripts(tmp_path)
+    worker = _generated_slot_ids(1)[0]
     dsn = tmp_path / "restricted-dsn"
     dsn.write_text("test-only-connection")
     result = subprocess.run(
         ["bash", "-c", release["run"]], cwd=tmp_path,
-        env={**os.environ, "FACTORY_WORKER": "45", "GITHUB_RUN_ID": "43455638659",
+        env={**os.environ, "FACTORY_WORKER": worker, "GITHUB_RUN_ID": "43455638659",
              "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"test-claim"}'},
         capture_output=True, text=True, check=True,
     )
     assert json.loads(result.stdout) == [
-        "release", "--worker", "45", "--claim-id", "test-claim", "--reason",
+        "release", "--worker", worker, "--claim-id", "test-claim", "--reason",
         "post-session-exit-run-43455638659",
     ]
 
@@ -120,16 +142,14 @@ def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     assert workflow["permissions"]["pull-requests"] == "write"
 
 
-@pytest.mark.parametrize("worker", ["1", "58", "99", "100", "104", "107"])
+@pytest.mark.parametrize("worker", _generated_slot_ids())
 def test_cleanup_calls_existing_controller_with_run_provenance(
     tmp_path: Path, worker: str,
 ) -> None:
     """Execute the workflow shell against a controller stand-in, without GitHub writes."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     release = workflow["jobs"]["release_pre_session_lease"]["steps"][3]
-    controller = tmp_path / ".github/scripts/factory-work-controller.py"
-    controller.parent.mkdir(parents=True)
-    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    _stage_release_scripts(tmp_path)
     dsn = tmp_path / "restricted-dsn"
     dsn.write_text("not-a-real-connection")
     result = subprocess.run(
@@ -143,7 +163,7 @@ def test_cleanup_calls_existing_controller_with_run_provenance(
     ]
 
 
-@pytest.mark.parametrize("worker", ["", "0", "00", "0104", "1000", "local", "104; echo injected"])
+@pytest.mark.parametrize("worker", ["", "0", "00", "0104", "local", "104; echo injected"])
 def test_cleanup_rejects_invalid_worker_before_invoking_controller(
     tmp_path: Path, worker: str,
 ) -> None:
@@ -158,6 +178,27 @@ def test_cleanup_rejects_invalid_worker_before_invoking_controller(
     assert result.returncode == 1
     assert result.stdout == ""
     assert result.stderr == "Invalid worker ID; refusing lease recovery\n"
+
+def test_cleanup_rejects_unknown_decimal_worker_before_invoking_controller(
+    tmp_path: Path,
+) -> None:
+    """A well-formed but unprovisioned ID is refused by the real slot resolver."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    release = workflow["jobs"]["release_pre_session_lease"]["steps"][3]
+    controller = _stage_release_scripts(tmp_path)
+    controller.write_text("raise AssertionError('controller must not run')\n")
+    dsn = tmp_path / "restricted-dsn"
+    dsn.write_text("test-only-connection")
+    result = subprocess.run(
+        ["bash", "-c", release["run"]], cwd=tmp_path,
+        env={**os.environ, "FACTORY_WORKER": "1000", "GITHUB_RUN_ID": "41323597249",
+             "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"c"}'},
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode != 0
+    assert "unknown or inactive worker slot" in result.stderr
+    assert "controller must not run" not in result.stderr
+
 
 def test_cleanup_refuses_label_release_without_neon_connection(tmp_path: Path) -> None:
     """Neon outage must not release GitHub labels while retaining the DB claim."""
@@ -180,13 +221,24 @@ def test_cleanup_refuses_label_release_without_neon_connection(tmp_path: Path) -
 def _load_controller_release(helpers: dict[str, object]):
     """Exercise the real release function without importing its GitHub CLI."""
     source = (ROOT / ".github/scripts/factory-work-controller.py").read_text()
-    method = next(
+    wanted = {"release_worker", "_retry_transient_github", "TRANSIENT_GITHUB_RE",
+              "GITHUB_RETRY_DELAYS"}
+    nodes = [
         node for node in ast.parse(source).body
-        if isinstance(node, ast.FunctionDef) and node.name == "release_worker"
-    )
-    module = ast.Module(body=[method], type_ignores=[])
+        if (isinstance(node, ast.FunctionDef) and node.name in wanted)
+        or (isinstance(node, (ast.Assign, ast.AnnAssign)) and any(
+            isinstance(t, ast.Name) and t.id in wanted
+            for t in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        ))
+    ]
+    module = ast.Module(body=nodes, type_ignores=[])
+    sleeps = cast(list[float], helpers.pop("sleeps", []))
     namespace: dict[str, object] = {
         "REPO": "owner/repo",
+        "Any": object,
+        "Callable": __import__("collections.abc").abc.Callable,
+        "re": __import__("re"),
+        "time": type("FakeTime", (), {"sleep": staticmethod(sleeps.append)}),
         "sys": __import__("sys"),
         "list_issues": lambda: [],
         "list_prs": lambda: [],
@@ -326,9 +378,129 @@ def test_trusted_exit_reports_live_github_errors_instead_of_silent_success() -> 
     release = _load_controller_release({
         "worker_claim": lambda *args: ("claim", [5055]),
         "target_json": lambda *_: (_ for _ in ()).throw(RuntimeError("github unavailable")),
-        "release_lease": lambda *_: (_ for _ in ()).throw(AssertionError("must not release")),
+        "release_lease": lambda *_: True,
     })
     summary = {}
     assert release("21", "post-session-exit-run-43604078425", expected_claim="claim", details=summary) == []
-    assert summary["status"] == "failed"
+    # Owner direction (2026-11-17): the exited worker's exact Neon claim is
+    # discharged even when GitHub fails, but the failure is never silent.
+    assert summary["status"] == "labels_pending"
     assert summary["failed"] == ["5055:RuntimeError"]
+    assert summary["labels_pending"] == [5055]
+
+
+RATE_LIMITED = RuntimeError(
+    "gh api repos/o/r/issues/5298 failed (1): gh: API rate limit exceeded for installation ID 1 (HTTP 403)"
+)
+
+
+def _owned_claim_targets(numbers: list[int], owner: str) -> dict[int, str]:
+    return dict.fromkeys(numbers, owner)
+
+
+def test_post_session_release_retries_installation_rate_limit() -> None:
+    """Runs 44031401652/44032359658: a rate-limited label write stranded the lease."""
+    labels = _owned_claim_targets([4843, 5298], "factory:7")
+    failures = {"target_json": 2, "replace": 1}
+    sleeps: list[float] = []
+    released: list[tuple[object, ...]] = []
+
+    def target(number: int) -> dict:
+        if failures["target_json"]:
+            failures["target_json"] -= 1
+            raise RATE_LIMITED
+        return {"labels": [{"name": labels[number]}],
+                **({"pull_request": {}} if number == 5298 else {})}
+
+    def update(number: int, owner: str, *, expected_owner: str) -> bool:
+        if failures["replace"]:
+            failures["replace"] -= 1
+            raise RuntimeError("gh api failed (1): HTTP 502 Bad Gateway")
+        labels[number] = owner
+        return True
+
+    release = _load_controller_release({
+        "sleeps": sleeps,
+        "worker_claim": lambda *args: ("claim-7", [4843, 5298]),
+        "target_json": target,
+        "replace_factory_labels": update,
+        "target_owned_by": lambda number, owner: labels[number] == owner,
+        "record_claim_released": lambda *args: None,
+        "release_lease": lambda *args: released.append(args) or True,
+    })
+    summary: dict = {}
+    assert release("7", "post-session-exit-run-44031401652", expected_claim="claim-7",
+                   details=summary) == [4843, 5298]
+    assert summary["status"] == "released" and summary["claim_released"]
+    assert summary["failed"] == [] and summary["labels_pending"] == []
+    assert sleeps == [2.0, 5.0, 2.0]
+    assert released == [("owner/repo", "7", "claim-7", "post-session-exit-run-44031401652")]
+
+
+def test_persistent_rate_limit_still_discharges_the_exact_neon_claim() -> None:
+    """GitHub stays limited past the bounded backoff: free the claim, report labels."""
+    sleeps: list[float] = []
+    released: list[tuple[object, ...]] = []
+
+    def target(number: int) -> dict:
+        raise RATE_LIMITED
+
+    release = _load_controller_release({
+        "sleeps": sleeps,
+        "worker_claim": lambda *args: ("claim-7", [4843, 5298]),
+        "target_json": target,
+        "release_lease": lambda *args: released.append(args) or True,
+    })
+    summary: dict = {}
+    assert release("7", "post-session-exit-run-44032359658", expected_claim="claim-7",
+                   details=summary) == []
+    assert summary["status"] == "labels_pending"
+    assert summary["claim_released"] is True
+    assert summary["labels_pending"] == [4843, 5298]
+    assert summary["failed"] == ["4843:RuntimeError", "5298:RuntimeError"]
+    assert released == [("owner/repo", "7", "claim-7", "post-session-exit-run-44032359658")]
+    assert sleeps == [2.0, 5.0, 15.0, 2.0, 5.0, 15.0]
+
+
+def test_non_transient_github_errors_are_not_retried() -> None:
+    sleeps: list[float] = []
+
+    def target(number: int) -> dict:
+        raise RuntimeError("gh api failed (1): HTTP 404 Not Found")
+
+    release = _load_controller_release({
+        "sleeps": sleeps,
+        "worker_claim": lambda *args: ("claim-7", [4843]),
+        "target_json": target,
+        "release_lease": lambda *args: True,
+    })
+    summary: dict = {}
+    release("7", "post-session-exit-run-1", expected_claim="claim-7", details=summary)
+    assert sleeps == []
+    assert summary["failed"] == ["4843:RuntimeError"]
+
+
+def test_retried_label_write_that_already_landed_counts_as_released() -> None:
+    labels = {4843: "factory:7"}
+    sleeps: list[float] = []
+
+    def update(number: int, owner: str, *, expected_owner: str) -> bool:
+        if labels[number] != expected_owner:
+            return False
+        labels[number] = owner
+        raise RuntimeError("gh api failed (1): HTTP 503 Service Unavailable")
+
+    released: list[tuple[object, ...]] = []
+    release = _load_controller_release({
+        "sleeps": sleeps,
+        "worker_claim": lambda *args: ("claim-7", [4843]),
+        "target_json": lambda number: {"labels": [{"name": labels[number]}]},
+        "replace_factory_labels": update,
+        "target_owned_by": lambda number, owner: labels[number] == owner,
+        "release_lease": lambda *args: released.append(args) or True,
+    })
+    summary: dict = {}
+    release("7", "post-session-exit-run-1", expected_claim="claim-7", details=summary)
+    assert summary["already_released"] == [4843]
+    assert summary["status"] == "released"
+    assert released

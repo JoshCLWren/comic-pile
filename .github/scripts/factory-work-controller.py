@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -81,12 +82,21 @@ def list_issues() -> list[dict[str, Any]]:
     if re.fullmatch(r'(issue|pr):[1-9][0-9]*', hint):
         kind, raw_number = hint.split(':')
         number = int(raw_number)
+        rows: list[dict[str, Any]] = []
         if kind == 'pr':
             pr = list_prs()[0]
             number = linked_issue_from_pr(pr)
-            if number is None:
-                return []
-        return [canonical_target('issue', target_json(number))]
+        if number is not None:
+            rows.append(canonical_target('issue', target_json(number)))
+        # Target-scoped snapshots must retain the live Rust cutover gate.
+        # Without the epic, build_candidates mistakenly interprets the narrow
+        # candidate view as proof #4335 is closed and admits deferred work.
+        epic_number = eligibility.RUST_CUTOVER_EPIC
+        if not any(int(row['number']) == epic_number for row in rows):
+            epic = target_json(epic_number)
+            if str(epic.get('state') or '').lower() == 'open':
+                rows.append(canonical_target('issue', epic))
+        return rows
     return discover(REPO, 'issue', lambda: cast(list[dict[str, Any]], gh_json([
         'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
         '--json', 'number,title,body,labels,createdAt,updatedAt',
@@ -749,14 +759,19 @@ def latest_lease_activity_epoch(number: int) -> int | None:
     return latest
 
 
-def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
-    """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
+def recent_factory_comments(
+    now_epoch: int, *, target_pr: int | None = None,
+) -> list[dict[str, Any]]:
+    """Read retry history; a targeted PR only needs its own comments."""
+    if target_pr is not None and target_pr <= 0:
+        raise ValueError("target_pr must be a positive PR number")
     def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
         # Round *down* to share the same Neon GET key across near-simultaneous
         # dispatchers. The extra comments are a safe superset; retry-window
         # filtering still uses the original now_epoch.
         since = datetime.fromtimestamp(since_epoch - since_epoch % 60, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
-        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
+        path = f'issues/{target_pr}/comments' if target_pr is not None else 'issues/comments'
+        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/{path}?since={since}&per_page=100'])
         if (
             not isinstance(pages, list) or not pages
             or not all(isinstance(page, list) for page in pages)
@@ -768,14 +783,21 @@ def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     cache = os.environ.get('FACTORY_ATTEMPT_HISTORY_CACHE', '')
     return read_comment_history(
         now_epoch=now_epoch, reset_seconds=FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
-        scope=REPO, cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
+        scope=f'{REPO}:pr:{target_pr}' if target_pr is not None else REPO,
+        cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
     )
 
 
-def load_no_diff_attempt_records(now_epoch: int | None=None) -> list[NoDiffAttempt]:
-    """Load durable no-diff attempts still inside the rolling retry window."""
+def load_no_diff_attempt_records(
+    now_epoch: int | None = None, *, target_pr: int | None = None,
+) -> list[NoDiffAttempt]:
+    """Load durable retry history; isolate a targeted PR's own records."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    return parse_no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
+    comments = recent_factory_comments(now_epoch, target_pr=target_pr)
+    attempts = parse_no_diff_attempts_from_comments(comments, now_epoch=now_epoch)
+    if target_pr is not None:
+        return [attempt for attempt in attempts if attempt.kind == 'pr' and attempt.number == target_pr]
+    return attempts
 
 
 def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
@@ -1352,6 +1374,24 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     if runtime_pause is not None:
         print(f'[factory-controller] {runtime_pause}; skipping dispatch', file=sys.stderr)
         return None
+    try:
+        sources = worker_sources()
+        source = sources.get(str(worker), "")
+        from factory_dispatch_credential_filter import ANONYMOUS, TRUTHY, source_requirements
+        needs = source_requirements(source)
+        if source not in ANONYMOUS and needs is not None:
+            env = dict(os.environ)
+            if not all(env.get(key, "").lower() in TRUTHY for key in needs):
+                print(f'[factory-controller] Factory {worker} missing provider credentials; skipping dispatch', file=sys.stderr)
+                return None
+        elif source and source not in ANONYMOUS and needs is None:
+            # Unknown non-anonymous source: cannot prove credentials/configuration.
+            print(f'[factory-controller] Factory {worker} has unknown provider configuration; skipping dispatch', file=sys.stderr)
+            return None
+    except Exception as exc:
+        # Never lease an unproven worker when credential eligibility cannot be evaluated.
+        print(f'[factory-controller] credential eligibility unavailable for Factory {worker} ({type(exc).__name__}); skipping dispatch', file=sys.stderr)
+        return None
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
         return None
@@ -1375,8 +1415,29 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
+    # Resolve an issue wakeup to its canonical open PR *before* loading retry
+    # history or asking Rotisserie to rank fresh issues. Otherwise every
+    # worker candidate reads the entire retry window and authorizes issue
+    # intake even though only the existing PR can be advanced.
+    if target is not None and target[0] == 'issue':
+        issue_number = target[1]
+        linked_prs = [
+            pr for pr in prs
+            if linked_issue_from_pr(pr) == issue_number
+            and pr_suppresses_issue_candidate(pr, {})
+        ]
+        if len(linked_prs) > 1:
+            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
+        if linked_prs:
+            target = ('pr', int(linked_prs[0]['number']))
     try:
-        attempt_records: list[NoDiffAttempt] | None = load_no_diff_attempt_records()
+        # Targeted PR wakeups require only that PR's retry evidence.
+        # A full roster pass still needs the whole issue/PR retry window.
+        attempt_records: list[NoDiffAttempt] | None = (
+            load_no_diff_attempt_records(target_pr=target[1])
+            if target is not None and target[0] == 'pr'
+            else load_no_diff_attempt_records()
+        )
     except RuntimeError as exc:
         attempt_records = None
         print(f'[factory-controller] no-diff retry history unavailable; holding fresh issue intake: {exc}', file=sys.stderr)
@@ -1392,28 +1453,23 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
-    authorized_issues = rotisserie_issue_intake(issues, prs)
-    if authorized_issues is not None:
-        candidates = [
-            candidate
-            for candidate in candidates
-            if candidate.kind != "issue" or candidate.number in authorized_issues
-        ]
+    # A PR-only target never leases new issue work; issue-intake authorization
+    # is unnecessary and can fail closed or consume remote calls on every
+    # targeted repair/review wakeup.
+    if target is None or target[0] == 'issue':
+        authorized_issues = rotisserie_issue_intake(issues, prs)
+        if authorized_issues is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate.kind != "issue" or candidate.number in authorized_issues
+            ]
     if kinds is not None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     if target is not None:
         kind, number = target
-        linked_prs = [
-            pr for pr in prs
-            if kind == 'issue' and linked_issue_from_pr(pr) == number
-            and pr_suppresses_issue_candidate(pr, {})
-        ]
-        if len(linked_prs) > 1:
-            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
-        if linked_prs:
-            kind, number = 'pr', int(linked_prs[0]['number'])
         candidates = [
             candidate for candidate in candidates
             if (candidate.kind, candidate.number) == (kind, number)
@@ -1735,6 +1791,30 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
+# GitHub installation rate limits and 5xx responses are transient. Trusted
+# exit cleanup retries them with a bounded backoff (about 22s in total, well
+# inside the 5-minute release job) instead of stranding the lease until TTL.
+TRANSIENT_GITHUB_RE = re.compile(
+    r"rate limit|abuse detection|HTTP (?:429|50[0-9])|\b(?:502|503|504)\b|"
+    r"timed out|connection reset|unexpected EOF|temporarily unavailable",
+    re.I,
+)
+GITHUB_RETRY_DELAYS: tuple[float, ...] = (2.0, 5.0, 15.0)
+
+
+def _retry_transient_github[T](operation: Callable[[], T]) -> T:
+    """Run one GitHub read/write, retrying only transient rate-limit/5xx errors."""
+    for delay in (*GITHUB_RETRY_DELAYS, None):
+        try:
+            return operation()
+        except RuntimeError as exc:
+            if delay is None or not TRANSIENT_GITHUB_RE.search(str(exc)):
+                raise
+            print(f'[factory-controller] transient GitHub failure; retrying in {delay:g}s', file=sys.stderr)
+            time.sleep(delay)
+    raise AssertionError('unreachable')
+
+
 def release_worker(worker: str, reason: str = 'controller-release', *, details=None, expected_claim: str = '') -> list[int]:
     """Release an exiting worker's exact Neon claim, never a later assignment.
 
@@ -1769,12 +1849,14 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
         already_released: list[int] = []
         deferred: list[int] = []
         failed: list[str] = []
+        labels_pending: list[int] = []
         claim_released = False
         if original_claim is not None:
             token, claim_numbers = original_claim
             for number in sorted(set(claim_numbers)):
                 try:
-                    current = target_json(number)  # authoritative GitHub, not Neon discovery
+                    # authoritative GitHub, not Neon discovery
+                    current = _retry_transient_github(lambda n=number: target_json(n))
                     active_owners = {
                         label['name'] for label in current.get('labels', [])
                         if OWNER_RE.fullmatch(label.get('name', ''))
@@ -1793,10 +1875,15 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         continue
                     # This call itself re-reads live labels with expected_owner,
                     # just before the single atomic GitHub label-set mutation.
-                    if not replace_factory_labels(
-                        number, 'factory:unowned', expected_owner=owner
-                    ):
-                        deferred.append(number)
+                    if not _retry_transient_github(lambda n=number: replace_factory_labels(
+                        n, 'factory:unowned', expected_owner=owner
+                    )):
+                        # A retried write may have landed before its response
+                        # was lost; then the owner guard refuses the repeat.
+                        if not _retry_transient_github(lambda n=number: target_owned_by(n, owner)):
+                            already_released.append(number)
+                        else:
+                            deferred.append(number)
                         continue
                     released.append(number)
                     kind = 'pr' if 'pull_request' in current else 'issue'
@@ -1808,11 +1895,30 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         print(f'[factory-controller] release marker #{number} unavailable ({type(exc).__name__})', file=sys.stderr)
                 except Exception as exc:
                     failed.append(f'{number}:{type(exc).__name__}')
+            labels_pending = [
+                int(item.split(':', 1)[0]) for item in failed
+                if item.split(':', 1)[0].isdigit()
+            ]
+            if labels_pending and not deferred and len(labels_pending) == len(failed):
+                # GitHub stayed unavailable after bounded retries. The worker
+                # has exited, so discharge its exact Neon claim anyway rather
+                # than holding capacity until the TTL. Labels left on these
+                # targets keep the worker busy for dispatch (GitHub ownership
+                # is checked separately) until stale-lease reconciliation runs.
+                try:
+                    claim_released = release_lease(REPO, worker, token, reason)
+                    if not claim_released and worker_claim(REPO, worker) is None:
+                        claim_released = True
+                except Exception as exc:
+                    failed.append(f'neon_release:{type(exc).__name__}')
             if not deferred and not failed:
                 try:
                     # Only discharge the exact original UUID when ALL its
                     # linked GitHub labels are verified no longer owned.
-                    if all(not target_owned_by(number, owner) for number in claim_numbers):
+                    if all(
+                        not _retry_transient_github(lambda n=number: target_owned_by(n, owner))
+                        for number in claim_numbers
+                    ):
                         claim_released = release_lease(REPO, worker, token, reason)
                         if not claim_released:
                             later = worker_claim(REPO, worker)
@@ -1835,6 +1941,8 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
             'released' if claim_released else
             'already_released'
         )
+        if status == 'failed' and claim_released:
+            status = 'labels_pending'
         summary = {
             'status': status,
             'claim_id': original_claim[0] if original_claim else None,
@@ -1843,6 +1951,7 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
             'already_released': already_released,
             'deferred': sorted(set(deferred)),
             'failed': failed,
+            'labels_pending': labels_pending,
         }
         if details is not None:
             details.update(summary)
@@ -2214,7 +2323,12 @@ def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
 
 
 def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
-    """Allocate one worker to the selected target through the normal lease policy."""
+    """Allocate one worker to the selected target through the normal lease policy.
+
+    Targets that are currently ineligible or waiting on checks are deferred, not
+    treated as fatal dispatcher errors. This keeps CI-aware/manual dispatch from
+    crashing when the selected PR is simply not actionable yet.
+    """
     from factory_completion_controller import (
         capacity_report,
         durable_factory_state,
@@ -2224,19 +2338,31 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     if number <= 0:
         raise ValueError('Select a positive issue or PR number.')
     _view, health = durable_factory_state()
-    manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
-    capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
+    capacity = capacity_report(load_manifest_candidates(), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])
     preferred_role = 'starter' if kind == 'issue' else (
         'finisher' if action in {'review-findings', 'ci-repair'} else ''
     )
     from factory_work_policy import worker_delivery_role
 
+    last_defer_reason: str | None = None
     for worker in sorted(
         {row['worker'] for row in workers},
         key=lambda worker: (worker_delivery_role(worker) != preferred_role, int(worker)),
     ):
-        candidate = assign(worker, target=(kind, number), requested_action=action)
+        try:
+            candidate = assign(worker, target=(kind, number), requested_action=action)
+        except RuntimeError as exc:
+            reason = str(exc)
+            if (
+                'blocked or still waiting on checks' in reason
+                or 'No eligible work on this target' in reason
+                or 'Requested action is unavailable' in reason
+                or 'not currently executable' in reason.lower()
+            ):
+                last_defer_reason = reason
+                break
+            raise
         if candidate is None:
             continue
         selected = (
@@ -2252,11 +2378,32 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
             # so another manual request cannot start duplicate work.
             raise RuntimeError('Could not confirm worker dispatch. Check Actions before retrying.') from None
         return {
-            'action': selected if action == 'advance' else action,
             'kind': candidate.kind,
             'number': candidate.number,
+            'action': selected if action == 'advance' else action,
+            'status': 'dispatched',
+            'worker': worker,
         }
-    raise RuntimeError('No eligible action or available independent worker. Check current stage, leases, and factory capacity.')
+    if last_defer_reason is not None:
+        print(f'[factory-controller] deferring {kind}:{number}: {last_defer_reason}', file=sys.stderr)
+        return {
+            'kind': kind,
+            'number': number,
+            'action': action,
+            'status': 'deferred',
+            'reason': last_defer_reason,
+        }
+    print(
+        f'[factory-controller] deferring {kind}:{number}: no eligible action or available independent worker',
+        file=sys.stderr,
+    )
+    return {
+        'kind': kind,
+        'number': number,
+        'action': action,
+        'status': 'deferred',
+        'reason': 'No eligible action or available independent worker. Check current stage, leases, and factory capacity.',
+    }
 
 
 
@@ -2348,7 +2495,9 @@ def main() -> int:
     released = release_worker(args.worker, reason=args.reason, details=outcome, expected_claim=args.claim_id)
     print(json.dumps(outcome if outcome else {'released': released}))
     # A live, actionable claim must never make a cleanup job green.
-    return 1 if outcome.get('status') in ('failed', 'deferred', 'missing_claim') else 0
+    # labels_pending: the Neon claim is discharged but GitHub labels still need
+    # stale-lease reconciliation; keep the job red so the gap stays visible.
+    return 1 if outcome.get('status') in ('failed', 'deferred', 'missing_claim', 'labels_pending') else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())

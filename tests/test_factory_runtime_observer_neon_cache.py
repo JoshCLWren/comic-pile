@@ -18,13 +18,14 @@ def test_only_trusted_workflow_run_publisher_receives_neon_cache() -> None:
     assert "secrets.NEON_API_KEY" in publisher
 
 
-def test_observer_uses_compact_verified_marker_ids_and_cold_start_fallback() -> None:
+def test_observer_persists_neon_outcome_without_registry_comments() -> None:
+    """Issue #1093 is retired: the observer's durable record is Neon only."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     publisher = workflow.split("  publish-runtime-outcome:", 1)[1]
-    assert 'export-model-exclusions' in publisher
-    assert '.__attempt_id[0]' in publisher
-    assert 'from factory_registry_ingest import marker_ids' in publisher
-    assert 'remember_verified_markers' in publisher
-    assert 'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in publisher
-    assert 'from factory_completion_controller import registry_comments' not in publisher
-    assert "Newer attempt evidence from run" in publisher
+    assert "issues/1093" not in publisher
+    assert "issues/comments" not in publisher
+    assert "__attempt_id" not in publisher
+    assert "factory_registry_ingest" not in publisher
+    assert "remember_verified_markers" not in publisher
+    assert "factory_state_ledger.py runtime-outcome" in publisher
+    assert "issues: write" not in workflow

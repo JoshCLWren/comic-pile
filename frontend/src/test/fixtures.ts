@@ -182,7 +182,7 @@ async function createThreadsForUser(
     const maxAttempts = 7;
 
     while (!success && attempts < maxAttempts) {
-      const response = await request.post('/api/threads/', {
+      const response = await request.post('/api/v1/threads/', {
         headers,
         data: {
           title: `Test Thread ${i + 1}`,

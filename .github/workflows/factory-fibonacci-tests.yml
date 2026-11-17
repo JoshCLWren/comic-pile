@@ -19,13 +19,9 @@ on:
       - 'tests/test_factory_dispatch_credential_filter.py'
       - '.github/workflows/factory-fibonacci-tests.yml'
       - '.github/scripts/factory_runtime_view.py'
-      - '.github/scripts/factory_registry_ingest.py'
-      - '.github/scripts/factory_registry_verify.py'
       - '.github/scripts/factory_completion_controller.py'
       - '.github/scripts/generate_factory_status_dashboard.py'
       - 'tests/test_factory_runtime_view.py'
-      - 'tests/test_factory_registry_ingest.py'
-      - 'tests/test_factory_registry_verify.py'
   workflow_dispatch:
 
 permissions:
@@ -53,8 +49,6 @@ jobs:
             tests/test_factory_dispatch_credential_filter.py \
             tests/test_factory_durable_candidate_health.py \
             tests/test_factory_runtime_view.py \
-            tests/test_factory_registry_ingest.py \
-            tests/test_factory_registry_verify.py \
             tests/test_factory_revocation_fence_maintenance.py \
             tests/test_factory_full_completion_controller.py \
             tests/test_factory_state_cache.py \

@@ -187,23 +187,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--comments", type=Path)
     parser.add_argument("--view", type=Path)
-    parser.add_argument("--roster", type=Path, default=Path(".github/factory-expected-workers.json"))
+    parser.add_argument("--roster", type=Path, help="Optional historical test fixture")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
     args = parser.parse_args()
     if (args.comments is None) == (args.view is None):
         parser.error("provide exactly one of --comments or --view")
+    if args.roster:
+        projection = json.loads(args.roster.read_text())
+    else:
+        from factory_worker_slots import slots
+
+        projection = {
+            "expected_workers": [int(slot.worker) for slot in slots()],
+            "retired_workers": [],
+            "paused_workers": [],
+        }
     if args.view:
         report = heartbeat_health_from_view(
             json.loads(args.view.read_text()),
-            json.loads(args.roster.read_text()), now=datetime.now(UTC),
+            projection, now=datetime.now(UTC),
         )
     else:
         pages = json.loads(args.comments.read_text())
         comments = [comment for page in pages for comment in page]
         report = heartbeat_health(
             [comment for comment in comments if comment_is_trusted(comment)],
-            json.loads(args.roster.read_text()), now=datetime.now(UTC),
+            projection, now=datetime.now(UTC),
         )
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     diagnostics = markdown_report(report)
