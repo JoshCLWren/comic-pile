@@ -578,3 +578,249 @@ async fn apply_preserves_authoritative_plan_membership() {
     );
     drop(conn);
 }
+
+#[tokio::test]
+async fn apply_does_not_duplicate_cross_lane_source_issues() {
+    let fixture = setup().await;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910203, 910101, '8', 'unread', NOW(), 2)",
+        &[],
+    )
+    .await
+    .expect("seed second issue in owned thread");
+    drop(conn);
+
+    let (status, list) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Cross-lane source",
+            "mode": "strict",
+            "issue_ids": [910201, 910203]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{list}");
+    let list_id = list["id"].as_i64().unwrap();
+    let source_path = format!("custom-cbl:{list_id}");
+
+    // Plan 920003 already holds issue 910201 in another lane, carrying
+    // provenance from this same CBL.
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+         VALUES (920003, {user_id}, 'Cross-lane target', 'strict_sequential',
+                 '[{{"id":"occ-910201","node_type":"issue","ref_id":910201,"lane_id":"other","position":0,"label":"Saga #7","is_checkpoint":false,"checkpoint_target_ref_id":null,"checkpoint_target_ref_ids":[],"convergence_gate":[],"source_paths":["{source_path}","reading-list:55"],"source_cbl_placements":[{{"source_path":"{source_path}","position":0}}],"source_explanation":"Added from custom CBL ''Cross-lane source''."}}]'::json,
+                 '[{{"id":"custom-cbl","name":"Custom CBL","order":0}},
+                   {{"id":"other","name":"Other","order":1}}]'::json,
+                 NOW(), NOW());
+        INSERT INTO reading_plan_issues
+           (plan_id, occurrence_id, issue_id, lane_id, display_position, label, is_checkpoint)
+         VALUES (920003, 'occ-910201', 910201, 'other', 0, 'Saga #7', false);
+        "#,
+        user_id = fixture.user_id,
+    ))
+    .await
+    .expect("seed plan with a cross-lane source issue");
+    drop(conn);
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920003:apply"),
+        json!({"lane_id": "custom-cbl"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["added_issue_ids"], json!([910203]));
+    assert_eq!(body["skipped_existing_issue_ids"], json!([910201]));
+
+    let nodes = body["nodes"].as_array().expect("nodes array");
+    let cross_lane: Vec<&Value> = nodes
+        .iter()
+        .filter(|node| node["ref_id"] == json!(910201))
+        .collect();
+    assert_eq!(
+        cross_lane.len(),
+        1,
+        "cross-lane source issue must not be duplicated into the target lane: {body}"
+    );
+    assert_eq!(cross_lane[0]["lane_id"], json!("other"));
+    assert!(
+        cross_lane[0]["source_paths"]
+            .as_array()
+            .is_some_and(|paths| paths
+                .iter()
+                .any(|p| p.as_str() == Some(source_path.as_str()))),
+        "cross-lane node provenance must stay untouched: {body}"
+    );
+    assert_eq!(
+        cross_lane[0]["source_explanation"],
+        json!("Added from custom CBL 'Cross-lane source'.")
+    );
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node["ref_id"] == json!(910203) && node["lane_id"] == json!("custom-cbl")),
+        "the new source issue lands in the target lane: {body}"
+    );
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let rows = conn
+        .query(
+            "SELECT lane_id FROM reading_plan_issues WHERE plan_id=920003 AND issue_id=910201",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1, "membership keeps exactly one row: {body}");
+    assert_eq!(rows[0].get::<_, String>(0), "other");
+    let target_members: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_issues WHERE plan_id=920003 AND lane_id='custom-cbl'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(target_members, 1);
+    drop(conn);
+}
+
+#[tokio::test]
+async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
+    let fixture = setup().await;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910203, 910101, '8', 'unread', NOW(), 2),
+                (910204, 910101, '9', 'unread', NOW(), 3)",
+        &[],
+    )
+    .await
+    .expect("seed issues in owned thread");
+    drop(conn);
+
+    let (status, list) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({
+            "name": "Checkpoint reuse",
+            "mode": "strict",
+            "issue_ids": [910201, 910203],
+            "checkpoint_issue_ids": [910201],
+            "checkpoint_targets": {"910201": [910203]}
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{list}");
+    let list_id = list["id"].as_i64().unwrap();
+    let source_path = format!("custom-cbl:{list_id}");
+
+    // Plan 920004 already holds 910201 in the target lane with a stale legacy
+    // singular checkpoint target pointing at 910204.
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+         VALUES (920004, {user_id}, 'Checkpoint reuse target', 'strict_sequential',
+                 '[{{"id":"occ-910201","node_type":"issue","ref_id":910201,"lane_id":"custom-cbl","position":0,"label":"Saga #7","is_checkpoint":false,"checkpoint_target_ref_id":910204,"checkpoint_target_ref_ids":[],"convergence_gate":[],"source_paths":["{source_path}"]}}]'::json,
+                 '[{{"id":"custom-cbl","name":"Custom CBL","order":0}}]'::json,
+                 NOW(), NOW());
+        INSERT INTO reading_plan_issues
+           (plan_id, occurrence_id, issue_id, lane_id, display_position, label, is_checkpoint)
+         VALUES (920004, 'occ-910201', 910201, 'custom-cbl', 0, 'Saga #7', false);
+        "#,
+        user_id = fixture.user_id,
+    ))
+    .await
+    .expect("seed plan with a stale checkpoint target");
+    drop(conn);
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920004:apply"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["skipped_existing_issue_ids"], json!([910201]));
+    assert_eq!(body["added_issue_ids"], json!([910203]));
+
+    let nodes = body["nodes"].as_array().expect("nodes array");
+    let reused = nodes
+        .iter()
+        .find(|node| node["ref_id"] == json!(910201))
+        .expect("reused node present");
+    assert_eq!(
+        reused["checkpoint_target_ref_id"],
+        Value::Null,
+        "stale singular checkpoint target must be cleared on reuse: {body}"
+    );
+    assert_eq!(reused["checkpoint_target_ref_ids"], json!([910203]));
+    assert_eq!(reused["is_checkpoint"], json!(true));
+    assert_eq!(reused["lane_id"], json!("custom-cbl"));
+    assert!(
+        reused["source_paths"].as_array().is_some_and(|paths| paths
+            .iter()
+            .any(|p| p.as_str() == Some(source_path.as_str()))),
+        "reused node keeps fresh CBL provenance: {body}"
+    );
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let nodes_json: Value = conn
+        .query_one(
+            "SELECT nodes_json FROM continuity_plans WHERE id=920004",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let persisted = nodes_json
+        .as_array()
+        .expect("persisted nodes array")
+        .iter()
+        .find(|node| node["ref_id"] == json!(910201))
+        .expect("persisted reused node");
+    assert_eq!(
+        persisted["checkpoint_target_ref_id"],
+        Value::Null,
+        "persisted document must carry the cleared field"
+    );
+
+    let stale_edges: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependencies
+             WHERE source_issue_id=910201 AND target_issue_id=910204",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        stale_edges, 0,
+        "stale singular checkpoint target must not compile into an edge"
+    );
+    let rule = conn
+        .query_one(
+            "SELECT target_id FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920004' AND satisfaction_type='checkpoint'",
+            &[&fixture.user_id],
+        )
+        .await
+        .expect("compiled checkpoint rule");
+    assert_eq!(rule.get::<_, i32>(0), 910203);
+    drop(conn);
+}

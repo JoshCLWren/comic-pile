@@ -1966,6 +1966,52 @@ async fn editor_nodes_for_plan(
     Ok(nodes)
 }
 
+/// Re-attach current custom-CBL provenance to a reused or newly created plan
+/// node, mirroring Python `_with_source_provenance`: existing source paths keep
+/// their order with this source appended once, placements for this source are
+/// replaced by the fresh one, and the explanation defaults when unset.
+fn attach_source_provenance(
+    node: &mut serde_json::Value,
+    source_path: &str,
+    source_position: i32,
+    list_name: &str,
+) {
+    let mut paths: Vec<serde_json::Value> = node
+        .get("source_paths")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let path_value = serde_json::Value::String(source_path.to_string());
+    if !paths.contains(&path_value) {
+        paths.push(path_value);
+    }
+    node["source_paths"] = serde_json::Value::Array(paths);
+
+    let mut placements: Vec<serde_json::Value> = node
+        .get("source_cbl_placements")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    placements.retain(|p| p.get("source_path").and_then(|v| v.as_str()) != Some(source_path));
+    placements.push(json!({
+        "source_path": source_path,
+        "position": source_position,
+    }));
+    node["source_cbl_placements"] = serde_json::Value::Array(placements);
+
+    let explanation_absent = node
+        .get("source_explanation")
+        .and_then(|v| v.as_str())
+        .is_none_or(|text| text.is_empty());
+    if explanation_absent {
+        node["source_explanation"] = json!(format!("Added from custom CBL '{list_name}'."));
+    }
+}
+
+fn node_lane(node: &serde_json::Value) -> &str {
+    node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("")
+}
+
 /// `POST /api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply`
 ///
 /// The Axum router cannot express a parameter sharing a segment with the
@@ -2122,51 +2168,71 @@ pub async fn apply_custom_cbl(
     let source_issue_ids: Vec<i32> = entries.iter().map(|e| e.issue_id).collect();
     let source_issue_set: BTreeSet<i32> = source_issue_ids.iter().copied().collect();
 
-    // Clean existing source provenance from this CBL
+    let is_issue_node =
+        |node: &serde_json::Value| node.get("node_type").and_then(|v| v.as_str()) == Some("issue");
+    let node_ref_id =
+        |node: &serde_json::Value| node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    // Clean this CBL's stale provenance from every node except cross-lane
+    // source issues, which stay untouched: Python leaves them in their own
+    // lane and reports them as reused, so applying a CBL never moves or
+    // duplicates an issue across lanes.
     for node in nodes.iter_mut() {
-        if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
-            let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            if source_issue_set.contains(&ref_id) {
-                // Remove this source path
-                if let Some(paths) = node.get_mut("source_paths").and_then(|v| v.as_array_mut()) {
-                    paths.retain(|p| p.as_str() != Some(&source_path));
-                }
-                if let Some(placements) = node
-                    .get_mut("source_cbl_placements")
-                    .and_then(|v| v.as_array_mut())
-                {
-                    placements.retain(|p| {
-                        p.get("source_path").and_then(|v| v.as_str()) != Some(&source_path)
-                    });
-                }
-                if let Some(explanation) = node.get("source_explanation").and_then(|v| v.as_str()) {
-                    if explanation.starts_with("Added from custom CBL '") {
-                        node["source_explanation"] = serde_json::Value::Null;
-                    }
-                }
+        let is_cross_lane_source = is_issue_node(node)
+            && source_issue_set.contains(&node_ref_id(node))
+            && node_lane(node) != target_lane_id;
+        if is_cross_lane_source {
+            continue;
+        }
+        let mut clear_paths = false;
+        if let Some(paths) = node.get_mut("source_paths").and_then(|v| v.as_array_mut()) {
+            paths.retain(|p| p.as_str() != Some(source_path.as_str()));
+            clear_paths = paths.is_empty();
+        }
+        if clear_paths {
+            node["source_paths"] = serde_json::Value::Null;
+        }
+        let mut clear_placements = false;
+        if let Some(placements) = node
+            .get_mut("source_cbl_placements")
+            .and_then(|v| v.as_array_mut())
+        {
+            placements.retain(|p| {
+                p.get("source_path").and_then(|v| v.as_str()) != Some(source_path.as_str())
+            });
+            clear_placements = placements.is_empty();
+        }
+        if clear_placements {
+            node["source_cbl_placements"] = serde_json::Value::Null;
+        }
+        if let Some(explanation) = node.get("source_explanation").and_then(|v| v.as_str()) {
+            if explanation.starts_with("Added from custom CBL '") {
+                node["source_explanation"] = serde_json::Value::Null;
             }
         }
     }
 
-    // Find existing nodes in target lane for these issues
+    // Index existing source issues across every lane; a source issue appearing
+    // twice anywhere in the plan is a 422, matching Python's
+    // `custom_cbl_duplicate_plan_issue` guard.
     let mut existing_by_issue: BTreeMap<i32, usize> = BTreeMap::new();
     for (idx, node) in nodes.iter().enumerate() {
-        if node.get("node_type").and_then(|v| v.as_str()) == Some("issue") {
-            let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let lane_id = node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("");
-            if source_issue_set.contains(&ref_id) && lane_id == target_lane_id {
-                if existing_by_issue.contains_key(&ref_id) {
-                    return Err(ApiError::structured(
-                        StatusCode::UNPROCESSABLE_ENTITY,
-                        json!({
-                            "code": "custom_cbl_duplicate_plan_issue",
-                            "issue_id": ref_id
-                        }),
-                    ));
-                }
-                existing_by_issue.insert(ref_id, idx);
-            }
+        if !is_issue_node(node) {
+            continue;
         }
+        let ref_id = node_ref_id(node);
+        if !source_issue_set.contains(&ref_id) {
+            continue;
+        }
+        if existing_by_issue.contains_key(&ref_id) {
+            return Err(ApiError::structured(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                json!({
+                    "code": "custom_cbl_duplicate_plan_issue",
+                    "issue_id": ref_id
+                }),
+            ));
+        }
+        existing_by_issue.insert(ref_id, idx);
     }
 
     // Build ordered source nodes
@@ -2175,36 +2241,46 @@ pub async fn apply_custom_cbl(
     let mut skipped_existing_issue_ids = Vec::new();
 
     for entry in entries.iter() {
-        if let Some(&existing_idx) = existing_by_issue.get(&entry.issue_id) {
-            let node = &mut nodes[existing_idx];
-            node["is_checkpoint"] = serde_json::json!(entry.is_checkpoint);
-            node["checkpoint_target_ref_ids"] =
-                serde_json::json!(entry.checkpoint_target_issue_ids);
-            skipped_existing_issue_ids.push(entry.issue_id);
-            ordered_source_nodes.push(node.clone());
-        } else {
-            if !owned_issues.contains(&entry.issue_id) {
-                return Err(ApiError::NotFound("Issue not found".to_string()));
+        match existing_by_issue.get(&entry.issue_id) {
+            Some(&existing_idx) => {
+                if node_lane(&nodes[existing_idx]) != target_lane_id {
+                    // Cross-lane source issue: leave the other lane untouched
+                    // and report it as reused instead of duplicating it into
+                    // the target lane.
+                    skipped_existing_issue_ids.push(entry.issue_id);
+                    continue;
+                }
+                let node = &mut nodes[existing_idx];
+                node["is_checkpoint"] = serde_json::json!(entry.is_checkpoint);
+                // Clear the legacy singular target so a reused node cannot
+                // keep a stale checkpoint reference.
+                node["checkpoint_target_ref_id"] = serde_json::Value::Null;
+                node["checkpoint_target_ref_ids"] =
+                    serde_json::json!(entry.checkpoint_target_issue_ids);
+                attach_source_provenance(node, &source_path, entry.position, &list_name);
+                skipped_existing_issue_ids.push(entry.issue_id);
+                ordered_source_nodes.push(node.clone());
             }
-            let node = json!({
-                "id": format!("custom-cbl-{}-{}", list_id, entry.id),
-                "node_type": "issue",
-                "ref_id": entry.issue_id,
-                "lane_id": target_lane_id,
-                "position": 0,
-                "label": format!("{} #{}", entry.series_name, entry.issue_number),
-                "is_checkpoint": entry.is_checkpoint,
-                "checkpoint_target_ref_ids": entry.checkpoint_target_issue_ids,
-                "convergence_gate": [],
-                "source_paths": [source_path.clone()],
-                "source_cbl_placements": [{
-                    "source_path": source_path.clone(),
-                    "position": entry.position
-                }],
-                "source_explanation": format!("Added from custom CBL '{}'.", list_name)
-            });
-            added_issue_ids.push(entry.issue_id);
-            ordered_source_nodes.push(node);
+            None => {
+                if !owned_issues.contains(&entry.issue_id) {
+                    return Err(ApiError::NotFound("Issue not found".to_string()));
+                }
+                let mut node = json!({
+                    "id": format!("custom-cbl-{}-{}", list_id, entry.id),
+                    "node_type": "issue",
+                    "ref_id": entry.issue_id,
+                    "lane_id": target_lane_id,
+                    "position": 0,
+                    "label": format!("{} #{}", entry.series_name, entry.issue_number),
+                    "is_checkpoint": entry.is_checkpoint,
+                    "checkpoint_target_ref_id": null,
+                    "checkpoint_target_ref_ids": entry.checkpoint_target_issue_ids,
+                    "convergence_gate": [],
+                });
+                attach_source_provenance(&mut node, &source_path, entry.position, &list_name);
+                added_issue_ids.push(entry.issue_id);
+                ordered_source_nodes.push(node);
+            }
         }
     }
 
