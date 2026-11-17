@@ -810,7 +810,7 @@ pub async fn list_sessions(
                                 Some(issue_id) if total_issues.is_some() => {
                                     next_issue_map
                                         .get(&issue_id)
-                                        .map(|(id, num)| (*id, num.clone()))
+                                        .map(|(id, num)| (Some(*id), num.clone()))
                                         .unwrap_or((None, None))
                                 }
                                 _ => (None, None),
@@ -1293,7 +1293,7 @@ pub async fn get_current_session(
                 .and_then(|text| serde_json::from_str(text).ok())
                 .unwrap_or(Value::Null);
             let owned = context;
-            current_die(manual_die, Some((die_after, owned)), start_die)
+            current_die(manual_die, Some((die_after, &owned)), start_die)
         }
         None => current_die(manual_die, None, start_die),
     };

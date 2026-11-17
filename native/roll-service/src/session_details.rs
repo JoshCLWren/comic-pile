@@ -422,7 +422,7 @@ pub async fn get_session_details(
             "rate" => {
                 let mut parts = vec!["Rated".to_string()];
                 if let Some(tt) = thread_title {
-                    parts.push(if thread_deleted { deleted_title(Some(tt)) } else { tt.to_string() });
+                    parts.push(if thread_deleted { deleted_title(tt) } else { tt.to_string() });
                 } else if thread_deleted {
                     parts.push("deleted thread".to_string());
                 }
