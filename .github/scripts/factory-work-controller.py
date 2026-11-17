@@ -82,12 +82,21 @@ def list_issues() -> list[dict[str, Any]]:
     if re.fullmatch(r'(issue|pr):[1-9][0-9]*', hint):
         kind, raw_number = hint.split(':')
         number = int(raw_number)
+        rows: list[dict[str, Any]] = []
         if kind == 'pr':
             pr = list_prs()[0]
             number = linked_issue_from_pr(pr)
-            if number is None:
-                return []
-        return [canonical_target('issue', target_json(number))]
+        if number is not None:
+            rows.append(canonical_target('issue', target_json(number)))
+        # Target-scoped snapshots must retain the live Rust cutover gate.
+        # Without the epic, build_candidates mistakenly interprets the narrow
+        # candidate view as proof #4335 is closed and admits deferred work.
+        epic_number = eligibility.RUST_CUTOVER_EPIC
+        if not any(int(row['number']) == epic_number for row in rows):
+            epic = target_json(epic_number)
+            if str(epic.get('state') or '').lower() == 'open':
+                rows.append(canonical_target('issue', epic))
+        return rows
     return discover(REPO, 'issue', lambda: cast(list[dict[str, Any]], gh_json([
         'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
         '--json', 'number,title,body,labels,createdAt,updatedAt',

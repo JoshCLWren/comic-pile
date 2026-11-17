@@ -54,21 +54,42 @@ def controller():
     return module
 
 
-def test_pr_event_reads_only_pr_and_its_linked_issue(controller, monkeypatch, tmp_path):
+def test_pr_event_reads_only_pr_linked_issue_and_cutover_gate(controller, monkeypatch, tmp_path):
     monkeypatch.setenv('FACTORY_DISCOVERY_TARGET', 'pr:42')
     monkeypatch.setenv('FACTORY_DISCOVERY_DIR', str(tmp_path))
     calls = []
+    epic = controller.eligibility.RUST_CUTOVER_EPIC
     def pr(number):
         calls.append(('pr', number))
         return {'number': number, 'body': 'Closes #41', 'title': 'Fix issue',
                 'head': {'sha': 'a' * 40, 'ref': 'local/repair', 'repo': {'full_name': 'owner/repo'}},
                 'base': {'repo': {'full_name': 'owner/repo'}}, 'labels': []}
     monkeypatch.setattr(controller, 'live_pr_state', pr)
-    monkeypatch.setattr(controller, 'target_json', lambda number: calls.append(('issue', number)) or {'number': number})
+    monkeypatch.setattr(controller, 'target_json', lambda number: calls.append(('issue', number)) or {'number': number, 'state': 'open'})
     monkeypatch.setattr(controller, 'gh_json', lambda *_: pytest.fail('global inventory discovery'))
     assert controller.list_prs()[0]['number'] == 42
-    assert controller.list_issues()[0]['number'] == 41
-    assert calls == [('pr', 42), ('issue', 41)]
+    assert [row['number'] for row in controller.list_issues()] == [41, epic]
+    assert calls == [('pr', 42), ('issue', 41), ('issue', epic)]
+
+
+def test_targeted_issue_snapshot_retains_rust_freeze(controller, monkeypatch):
+    epic = controller.eligibility.RUST_CUTOVER_EPIC
+    issue_number = epic + 1
+    monkeypatch.setenv('FACTORY_DISCOVERY_TARGET', f'issue:{issue_number}')
+    rows = {
+        issue_number: {'number': issue_number, 'state': 'open',
+                       'body': 'Product fix', 'labels': [{'name': 'factory:unowned'}]},
+        epic: {'number': epic, 'state': 'open', 'body': 'Tracking epic',
+               'labels': [{'name': 'epic'}]},
+    }
+    monkeypatch.setattr(controller, 'target_json', lambda n: rows[n])
+    monkeypatch.setattr(controller, 'gh_json', lambda *_: pytest.fail('global inventory discovery'))
+    selected = controller.list_issues()
+    assert [row['number'] for row in selected] == [issue_number, epic]
+    assert controller.build_candidates(selected, []) == []
+    rows[issue_number]['labels'].append({'name': 'rust'})
+    rust_candidates = controller.build_candidates(controller.list_issues(), [])
+    assert [(candidate.kind, candidate.number) for candidate in rust_candidates] == [('issue', issue_number)]
 
 
 def test_worker_ownership_check_is_independent_of_narrow_candidate_view(controller, monkeypatch):
