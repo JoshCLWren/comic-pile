@@ -439,6 +439,23 @@ async fn catch_panic(request: Request, next: Next) -> Response {
     .await
 }
 
+/// Emit truthful runtime identity on every response from this native process.
+///
+/// This is the shared response boundary for both the standalone service and the
+/// Vercel ingress. The value is `rust` because this process is the Rust
+/// implementation; it is never derived from the API version or request path.
+/// Inserting at the outermost layer covers handler responses as well as
+/// authentication/CSRF rejections, timeouts, panics and 404/405 fallbacks
+/// (#5121).
+async fn runtime_identity(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        axum::http::HeaderValue::from_static("rust"),
+    );
+    response
+}
+
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
@@ -825,6 +842,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
         .layer(axum::middleware::from_fn(catch_panic))
+        .layer(axum::middleware::from_fn(runtime_identity))
         .with_state(state)
 }
 
@@ -1082,6 +1100,89 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Not Found"}"#
         );
+    }
+
+    /// Build the real production router without touching a database. None of
+    /// these probes needs a live connection: success, auth rejection and the
+    /// fallback are all resolved before any handler checks out a socket.
+    fn standalone_app() -> Router {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        router(Arc::new(AppState::new(config).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_success() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_not_found() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/no-such-route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_auth_rejection() {
+        // No Authorization header: the AuthenticatedUser extractor rejects the
+        // request with 401 before any database lookup.
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/auth/me")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn runtime_identity_covers_rejections_from_inner_layers() {
+        // A rejection produced by an inner middleware must still carry the
+        // identity because the header is inserted at the outermost boundary.
+        async fn reject() -> Response {
+            ApiError::Forbidden("denied".to_string()).into_response()
+        }
+        let app = Router::new()
+            .route("/protected", get(reject))
+            .layer(axum::middleware::from_fn(runtime_identity));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
     }
 
     #[test]
