@@ -993,10 +993,8 @@ pub async fn series_issues(
         .filter_map(issue_candidate)
         .collect();
     if series_name.is_empty() {
-        let volume = provider_issue_volume(comicvine_volume_id, &key).await.ok();
-        series_name = volume
-            .as_deref()
-            .and_then(|name| volume_name(&json!({ "results": { "name": name } })))
+        series_name = provider_issue_volume(comicvine_volume_id, &key)
+            .await
             .unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
     }
     Ok(Json(ComicVineSeriesIssuesResponse {
@@ -1115,7 +1113,7 @@ pub async fn resolve_input(
                 return Ok(failure());
             };
             let roster = provider_response(
-                "issue/",
+                "issue",
                 &format!(
                     "&filter=volume:{id}&limit=100\
                      &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
