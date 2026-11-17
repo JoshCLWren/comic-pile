@@ -151,19 +151,42 @@ def test_unsupported_or_incomplete_file_listing_is_blocked() -> None:
     assert not gate.factory_candidate(pr, files(), REPO)[0]
 
 
-def test_immediate_merge_never_reads_ci_or_review(
+def check(name: str, *, head: str = HEAD, result: str = "success", app: str = "github-actions", id: int = 10) -> dict:
+    """Simulate one GitHub-issued Python CI check for an exact commit head."""
+    return {
+        "id": id,
+        "name": name,
+        "head_sha": head,
+        "status": "completed" if result != "pending" else "in_progress",
+        "conclusion": None if result == "pending" else result,
+        "app": {"slug": app},
+    }
+
+
+def python_ci_rows(*, missing: str = "", fail: str = "", head: str = HEAD, app: str = "github-actions") -> dict:
+    """Supply completed, trusted Python CI checks without executing PR code."""
+    rows = [
+        check(name, result="failure" if name == fail else "success", head=head, app=app, id=index)
+        for index, name in enumerate(sorted(gate.REQUIRED_FAST_CHECKS), start=1)
+        if name != missing
+    ]
+    return {"total_count": len(rows), "check_runs": rows}
+
+
+def test_factory_merge_requires_successful_exact_head_python_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The trusted fast lane submits one exact-SHA merge immediately."""
+    """The fast lane merges only after reading trusted Ruff and ty evidence."""
     calls: list[tuple[str, str, dict | None]] = []
 
     def fake_api(
         endpoint: str, *, method: str = "GET", fields: dict | None = None,
     ) -> dict:
         calls.append((endpoint, method, fields))
-        if method == "GET":
-            assert endpoint == f"repos/{REPO}/pulls/123"
+        if endpoint == f"repos/{REPO}/pulls/123":
             return candidate()
+        if endpoint == f"repos/{REPO}/commits/{HEAD}/check-runs?per_page=100":
+            return python_ci_rows()
         assert method == "PUT"
         return {"merged": True, "sha": "b" * 40}
 
@@ -172,26 +195,75 @@ def test_immediate_merge_never_reads_ci_or_review(
     did_merge, commit = gate.handle(REPO, 123)
     assert did_merge
     assert commit == "b" * 40
-    assert len(calls) == 2
-    assert calls[1][0] == f"repos/{REPO}/pulls/123/merge"
-    merge_fields = calls[1][2]
+    assert [entry[1] for entry in calls] == ["GET", "GET", "PUT"]
+    merge_fields = calls[2][2]
     assert merge_fields is not None
     assert merge_fields["sha"] == HEAD
     assert merge_fields["merge_method"] == "squash"
-    assert all("check-runs" not in call[0] and "/actions/" not in call[0]
-               for call in calls)
+
+
+@pytest.mark.parametrize("rows", [
+    {"check_runs": [], "total_count": 0},
+    python_ci_rows(missing="Python Lint (ruff)"),
+    python_ci_rows(missing="Python Type Check (ty)"),
+    python_ci_rows(fail="Python Lint (ruff)"),
+    python_ci_rows(fail="Python Type Check (ty)"),
+    python_ci_rows(head="b" * 40),
+    python_ci_rows(app="untrusted-app"),
+    {"check_runs": [], "total_count": 101},
+])
+def test_missing_or_failing_ci_prevents_fast_merge(
+    monkeypatch: pytest.MonkeyPatch, rows: dict,
+) -> None:
+    """Pending, red, stale, untrusted or truncated CI never authorizes a merge."""
+    calls: list[str] = []
+
+    def fake_api(endpoint: str, *, method: str = "GET", fields: dict | None = None) -> dict:
+        calls.append(endpoint)
+        if endpoint.endswith("/pulls/123"):
+            return candidate()
+        if endpoint.endswith("/check-runs?per_page=100"):
+            return rows
+        pytest.fail("Factory fast merge attempted a write without green CI")
+
+    monkeypatch.setattr(gate, "gh_api", fake_api)
+    monkeypatch.setattr(gate, "pages", lambda *_args: files())
+    did_merge, reason = gate.handle(REPO, 123)
+    assert not did_merge
+    assert "not passed" in reason or "missing or truncated" in reason
+    assert len(calls) == 2
+
+
+def test_rerun_failure_does_not_let_older_success_authorize_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later failed rerun supersedes prior passing check runs."""
+    rows = python_ci_rows()
+    rows["check_runs"].append(check("Python Lint (ruff)", id=100, result="failure"))
+    rows["total_count"] = 3
+    monkeypatch.setattr(
+        gate, "gh_api",
+        lambda endpoint, **_kwargs: candidate() if endpoint.endswith("/pulls/123") else rows,
+    )
+    monkeypatch.setattr(gate, "pages", lambda *_args: files())
+    allowed, _ = gate.handle(REPO, 123)
+    assert not allowed
 
 
 def test_branch_protection_refusal_is_a_truthful_skip(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A blocked API merge is not disguised as success or circumvented."""
+    """After passing CI, GitHub still owns the final ruleset merge decision."""
     def fake_api(
         endpoint: str, *, method: str = "GET", fields: dict | None = None,
     ) -> dict:
-        if method == "GET":
+        if method == "PUT":
+            raise RuntimeError("required status check CI Summary is expected")
+        if endpoint.endswith("/pulls/123"):
             return candidate()
-        raise RuntimeError("required status check CI Summary is expected")
+        if endpoint.endswith("/check-runs?per_page=100"):
+            return python_ci_rows()
+        pytest.fail("Unexpected GitHub read")
 
     monkeypatch.setattr(gate, "gh_api", fake_api)
     monkeypatch.setattr(gate, "pages", lambda *_args: files())
@@ -199,7 +271,6 @@ def test_branch_protection_refusal_is_a_truthful_skip(
     assert not did_merge
     assert "CI Summary" in reason
     assert "rejected immediate merge" in reason
-
 
 def test_switch_defaults_off_and_explicit_true_enables(tmp_path: Path) -> None:
     """The owner switch fails closed for malformed or absent config."""
@@ -218,13 +289,20 @@ def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> N
     workflow = (ROOT / ".github/workflows/factory-fast-merge.yml").read_text()
     script = SCRIPT.read_text()
     assert "pull_request_target:" in workflow
+    assert "workflow_job:" not in workflow
     assert "workflow_run:" not in workflow
-    assert "workflows: [CI]" not in workflow
+    ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "factory-fast-merge-wakeup:" in ci_workflow
+    assert "needs: [python-lint, python-typecheck]" in ci_workflow
+    assert "needs.python-lint.result == 'success'" in ci_workflow
+    assert "needs.python-typecheck.result == 'success'" in ci_workflow
+    assert "gh workflow run factory-fast-merge.yml" in ci_workflow
     assert "secrets.PR_REBASE_TOKEN" in workflow
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "factory-fast-merge.py" in workflow
     assert '"sha": head' in script
+    assert 'python_checks_passed(repo, head)' in script
     assert "factory_dispatch_production_deploy" in script
     assert "dispatch_production(len(merged))" in script
     assert "factory_post_merge_closure.py --sweep" in workflow

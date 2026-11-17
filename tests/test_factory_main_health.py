@@ -176,3 +176,35 @@ def test_merge_drain_can_approve_and_dispatch_workflow_recovery() -> None:
     assert "actions: write" in permissions
     assert 'GH_TOKEN="$FALLBACK_GH_TOKEN" gh workflow run' in drain
     assert "Dispatch errors for PR #${pr}" in drain
+
+
+def test_held_run_recovery_covers_every_factory_stage() -> None:
+    """Changes-requested PRs whose CI is held must still get CI approved.
+
+    The work controller treats missing required checks as "waiting", so a
+    bot-opened PR moved to changes-requested before approval would deadlock.
+    """
+    import json
+    import re
+    import subprocess
+
+    drain = (WORKFLOWS / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    step = drain.split("Recover held or missing workflow runs on factory PR heads", 1)[1]
+    match = re.search(r'pulls\?state=open&per_page=100" \\\s*--jq \'([^\']+)\'', step)
+    assert match is not None
+    pulls = [
+        {"number": n, "head": {"sha": f"sha{n}", "ref": f"b{n}"},
+         "labels": [{"name": name} for name in labels]}
+        for n, labels in [
+            (1, ["factory", "factory:changes-requested"]),
+            (2, ["factory", "factory:review"]),
+            (3, ["factory", "factory:ci"]),
+            (4, ["bug"]),
+            (5, ["factory:ready"]),
+        ]
+    ]
+    result = subprocess.run(
+        ["jq", "-r", match.group(1)], input=json.dumps(pulls),
+        text=True, capture_output=True, check=True,
+    )
+    assert [line.split("\t")[1] for line in result.stdout.splitlines()] == ["1", "2", "3"]
