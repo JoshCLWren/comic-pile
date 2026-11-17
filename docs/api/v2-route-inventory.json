@@ -993,14 +993,14 @@
       "v1_shadowed_by_rust": 1,
       "v1_live_python": 115,
       "v1_orphaned": 7,
-      "unversioned_total": 20,
+      "unversioned_total": 19,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 17,
-      "unversioned_orphaned": 2,
-      "total_python_surface": 146,
+      "unversioned_orphaned": 1,
+      "total_python_surface": 145,
       "total_shadowed_by_rust": 1,
       "total_live_python": 132,
-      "total_orphaned": 9
+      "total_orphaned": 8
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
@@ -2860,17 +2860,6 @@
         },
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/ping",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
