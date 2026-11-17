@@ -70,8 +70,6 @@ async fn native_metrics(method: Method, OriginalUri(uri): OriginalUri) -> Respon
     response
 }
 
-
-
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
 
 #[cfg(test)]
