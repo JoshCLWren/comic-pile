@@ -39,7 +39,12 @@ jobs:
           echo "time used remaining delta | active runs (sampled every 30s)"
           while (( $(date +%s) < end )); do
             now="$(date -u +%H:%M:%S)"
-            read -r used remaining < <(gh api rate_limit --jq '.resources.core | "\(.used) \(.remaining)"')
+            # /rate_limit stays readable at 0 remaining; tolerate transient errors.
+            if ! sample="$(gh api rate_limit --jq '.resources.core | "\(.used) \(.remaining)"' 2>/dev/null)"; then
+              sleep 5
+              continue
+            fi
+            read -r used remaining <<< "$sample"
             delta=0
             [[ -z "$previous" ]] || delta=$(( used - previous ))
             (( delta >= 0 )) || delta="reset"
@@ -47,7 +52,8 @@ jobs:
             if (( $(date +%s) - last_runs >= 30 )); then
               last_runs=$(date +%s)
               active="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=in_progress&per_page=50" \
-                --jq '[.workflow_runs[] | .name] | group_by(.) | map("\(.[0])×\(length)") | join(", ")')"
+                --jq '[.workflow_runs[] | .name] | group_by(.) | map("\(.[0])×\(length)") | join(", ")' \
+                2>/dev/null || echo 'run list unavailable (quota exhausted)')"
             fi
             echo "${now} ${used} ${remaining} ${delta} | ${active}"
             previous="$used"
