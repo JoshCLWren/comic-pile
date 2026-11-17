@@ -415,7 +415,7 @@ export interface ReleasesReconcileRequest {
   }
 }
 
-export type ReleasesReconcileResponse = components['schemas']['NativeReleaseSourceResponse']
+export type ReleasesReconcileResponse = components['schemas']['ReleaseSourceResponse']
 
 export interface ReleasesRetractRequest {
   path: {
