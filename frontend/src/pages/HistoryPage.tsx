@@ -58,9 +58,8 @@ function formatDiceProgression(dieBefore: number | null, dieAfter: number | null
 function getDisplayValue(event: ActivityEvent): string | null {
   switch (event.type) {
     case 'roll':
-      if (event.result != null && event.result > 0) {
-        return `Rolled ${event.result}`
-      }
+      // Roll events show dice progression, not a specific result
+      // The roll result is not included in the activity API projection
       return null
     case 'rate':
       if (event.rating != null) {
@@ -70,9 +69,9 @@ function getDisplayValue(event: ActivityEvent): string | null {
     case 'snooze':
       return `Snoozed to d${event.die_after ?? event.die_before}`
     case 'unsnooze':
-      return `Unsnoozed`
+      return 'Unsnoozed'
     case 'dismiss':
-      return `Dismissed`
+      return 'Dismissed'
     case 'session_mode':
       return 'Session mode changed'
     default:

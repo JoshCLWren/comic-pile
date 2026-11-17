@@ -146,7 +146,6 @@ it('renders a rolled event with correct details', () => {
         thread_id: 1,
         thread_title: 'Hulk',
         issue_number: '5',
-        result: 4,
       },
     ],
     isPending: false,
@@ -163,7 +162,7 @@ it('renders a rolled event with correct details', () => {
 
   expect(screen.getByText('Hulk')).toBeInTheDocument()
   expect(screen.getByText('#5')).toBeInTheDocument()
-  expect(screen.getByText('Rolled 4')).toBeInTheDocument()
+  // Roll events show dice progression, not rolled result (result not in activity API)
   expect(screen.getByText('d20 → d8')).toBeInTheDocument()
 })
 
