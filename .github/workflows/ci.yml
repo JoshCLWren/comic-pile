@@ -304,10 +304,6 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ripgrep
-      # Preserve the stable, seeded worker-App bootstrap name contract in
-      # these regression tests without modifying the runtime dependency lock.
-      - name: Restore bootstrap-compatible Faker for factory tests
-        run: uv pip install --python .venv/bin/python --no-deps Faker==40.40.0
       - name: Run every factory and controller Python test
         run: uv run --no-sync pytest -o addopts='' tests/test_factory_*.py .github/scripts/test_*.py
       - name: Run every factory controller JavaScript test
