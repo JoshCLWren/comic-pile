@@ -135,9 +135,8 @@ fn build_timestamp(sec: f64, us: Option<f64>) -> String {
     // Include microseconds if present and non-zero
     match us {
         Some(us_val) if us_val > 0.0 => {
-            let us = us_val.fract() * 1_000_000.0;
-            if us > 0.0 {
-                let us_u32 = us as u32;
+            let us_u32 = us_val as u32;
+            if us_u32 > 0 {
                 let iso = datetime.format("%Y-%m-%dT%H:%M:%S");
                 format!("{iso}.{us_u32:06}Z")
             } else {
