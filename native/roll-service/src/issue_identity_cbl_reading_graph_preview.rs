@@ -21,9 +21,19 @@ use utoipa::ToSchema;
 /// Small response error used instead of returning a large Axum `Response` from
 /// helpers (see `clippy::result_large_err`).
 #[derive(Debug)]
-enum PreviewError {
+pub enum PreviewError {
     Api(ApiError),
     Json(StatusCode, Value),
+}
+
+impl PreviewError {
+    #[cfg(test)]
+    fn status(&self) -> StatusCode {
+        match self {
+            Self::Api(error) => error.status(),
+            Self::Json(status, _) => *status,
+        }
+    }
 }
 
 impl From<ApiError> for PreviewError {
