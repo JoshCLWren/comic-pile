@@ -19558,7 +19558,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid status or page size */
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;

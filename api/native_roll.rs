@@ -1209,6 +1209,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn two_router_thread_issue_list_validation_matches_python_contract() {
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("thread-issues-validation-{}", std::process::id());
+                let (access, _, user_id) = register_session(&username).await;
+                seed_threads(user_id, &[(21, 1)]).await;
+
+                let assert_validation_422 =
+                    |status: StatusCode,
+                     headers: &axum::http::HeaderMap,
+                     body: Value,
+                     text: &str,
+                     uri: &str| {
+                        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri}: {text}");
+                        assert_eq!(
+                            headers
+                                .get(header::CONTENT_TYPE)
+                                .and_then(|v| v.to_str().ok()),
+                            Some("application/json"),
+                            "{uri}: {text}"
+                        );
+                        assert_eq!(body["detail"], "Validation failed", "{uri}: {text}");
+                    };
+
+                let mut router = app();
+                for uri in [
+                    "/api/v1/threads/not-an-int/issues",
+                    "/api/v1/threads/21/issues?page_size=abc",
+                    "/api/v1/threads/21/issues?page_size=99999999999999999999",
+                    "/api/v1/threads/21/issues?page_size=0",
+                    "/api/v1/threads/21/issues?page_size=101",
+                    "/api/v1/threads/21/issues?status=invalid",
+                    // Invalid-UTF-8 path extraction must also use the 422 envelope.
+                    "/api/v1/threads/%FF/issues",
+                ] {
+                    let request = Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("validation request");
+                    let response = router.call(request).await.expect("response");
+                    let status = response.status();
+                    let headers = response.headers().clone();
+                    let body = to_bytes(response.into_body(), 8192).await.expect("body");
+                    let text = String::from_utf8_lossy(&body).into_owned();
+                    let json: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+                    assert_validation_422(status, &headers, json, &text, uri);
+                    router = app();
+                }
+
+                let (status, body, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/threads/21/issues?page_token=bad")
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("bad token request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::BAD_REQUEST, "{text}");
+                assert_eq!(body["detail"], "Invalid page_token format", "{text}");
+
+                // Encoded-but-valid query values are form-decoded before
+                // validation: `2%2C102` is the cursor `2,102` and `%72ead`
+                // is `read`. Neither may fall into the 400/422 paths (#5318).
+                for uri in [
+                    "/api/v1/threads/21/issues?page_token=2%2C102",
+                    "/api/v1/threads/21/issues?status=%72ead",
+                ] {
+                    let (status, body, _, text) = call_app(
+                        Request::builder()
+                            .method("GET")
+                            .uri(uri)
+                            .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                            .body(Body::empty())
+                            .expect("encoded query request"),
+                    )
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{uri}: {text}");
+                    assert_eq!(body["total_count"], 0, "{uri}: {text}");
+                }
+            })
+            .await;
+    }
+
+    #[tokio::test]
     async fn two_router_queue_entry_stack_repositions_without_path_extraction_500() {
         let url = disposable_schema_url().await;
         let state = test_state(&url);

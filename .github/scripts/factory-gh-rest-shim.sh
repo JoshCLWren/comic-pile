@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# FACTORY_GH_SHIM_MARKER: factory gh shims must never be resolved as the real gh.
 
 REAL_GH="${FACTORY_REAL_GH:-/usr/bin/gh}"
 [[ -x "$REAL_GH" ]] || {
@@ -15,6 +16,7 @@ if [[ -f "$METER" ]]; then
   source "$METER"
   factory_gh_meter_record "$@"
 else
+  # shellcheck disable=SC2329  # invoked below and copied via declare -f
   factory_gh_real() { "$REAL_GH" "$@"; }
   factory_gh_is_read() { return 1; }
 fi
@@ -100,6 +102,7 @@ emit_with_optional_jq() {
   fi
 }
 
+# shellcheck disable=SC2034  # namerefs write the caller's variables
 parse_list_args() {
   local -n out_repo=$1 out_state=$2 out_limit=$3 out_jq=$4 out_labels=$5
   shift 5
@@ -222,6 +225,7 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
   exit 0
 fi
 
+# shellcheck disable=SC2034  # namerefs write the caller's variables
 parse_view_args() {
   local -n out_number=$1 out_repo=$2 out_jq=$3
   shift 3

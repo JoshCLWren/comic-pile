@@ -61,16 +61,47 @@ factory_gh_is_read() {
   esac
 }
 
+# A stacked shim that re-resolved `command -v gh` once handed FACTORY_REAL_GH
+# back to this meter: every gh call recursed until the hosted VM ran out of
+# processes. Never accept one of the factory gh shims as the real CLI.
+# FACTORY_GH_SHIM_MARKER (this line, and the REST shim, carry the marker).
+factory_gh_is_factory_shim() {
+  local magic=''
+  IFS= read -r -n 2 magic < "$1" 2>/dev/null || true
+  # Only scripts can be shims; skip scanning the compiled gh binary.
+  [[ "$magic" == '#!' ]] && grep -q 'FACTORY_GH_SHIM_MARKER' "$1" 2>/dev/null
+}
+
+factory_gh_resolve_real() {
+  local candidate
+  for candidate in "${FACTORY_REAL_GH:-}" $(type -ap gh 2>/dev/null) /usr/bin/gh; do
+    [[ -n "$candidate" && -x "$candidate" ]] || continue
+    factory_gh_is_factory_shim "$candidate" && continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
+}
+
 # Run the real gh, using the read-only token for pure reads when configured.
 factory_gh_real() {
-  local real="${FACTORY_REAL_GH:-/usr/bin/gh}"
+  local real depth="${FACTORY_GH_SHIM_DEPTH:-0}"
+  # Fail loudly instead of fork-bombing if any future shim stacking loops.
+  if (( depth > 4 )); then
+    echo 'factory gh shim: recursion detected; refusing to re-enter gh' >&2
+    return 125
+  fi
+  real="$(factory_gh_resolve_real)" || {
+    echo 'factory gh shim: real gh executable not found' >&2
+    return 127
+  }
   # Installation tokens expire after an hour; long sessions fall back.
   if [[ -n "${FACTORY_READ_TOKEN:-}" ]] \
     && (( $(date +%s) < ${FACTORY_READ_TOKEN_EXPIRES:-0} )) \
     && factory_gh_is_read "$@"; then
-    GH_TOKEN="$FACTORY_READ_TOKEN" "$real" "$@"
+    FACTORY_GH_SHIM_DEPTH=$((depth + 1)) GH_TOKEN="$FACTORY_READ_TOKEN" "$real" "$@"
   else
-    "$real" "$@"
+    FACTORY_GH_SHIM_DEPTH=$((depth + 1)) "$real" "$@"
   fi
 }
 

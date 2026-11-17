@@ -265,6 +265,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "deadpool-postgres",
+ "form_urlencoded",
  "hmac 0.12.1",
  "html-escape",
  "http",
