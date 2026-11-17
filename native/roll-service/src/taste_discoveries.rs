@@ -301,7 +301,8 @@ pub async fn list_taste_discoveries(
     query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
     claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let Query(query) = query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
+    let Query(query) =
+        query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let user = auth::authenticate_claims(&state, &claims).await?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
@@ -927,12 +928,7 @@ mod tests {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid limit {limit} must return 422 through the service router"
             );
-            let body = response
-                .into_body()
-                .collect()
-                .await
-                .unwrap()
-                .to_bytes();
+            let body = response.into_body().collect().await.unwrap().to_bytes();
             let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(
                 payload,
