@@ -59,6 +59,8 @@ def test_factory_only_review_rejected_stage_is_eligible() -> None:
         ".github/factory-fast-merge.json",
         "tests/test_factory_fast_merge.py",
         "../.github/scripts/factory-review-controller.py",
+        ".github/scripts/generate_factory_status_dashboard.py.bak",
+        "frontend/generate_factory_status_dashboard.py",
     ],
 )
 def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
@@ -80,6 +82,8 @@ def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
         ".github/factory-expected-workers.json",
         ".github/factory-roster-snapshot.json",
         "tests/test_free_model_factories.py",
+        ".github/scripts/generate_factory_status_dashboard.py",
+        "tests/test_generate_factory_status_dashboard.py",
     ],
 )
 def test_supported_factory_paths(path: str) -> None:
