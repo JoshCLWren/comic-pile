@@ -14,7 +14,9 @@
 //!   1..=200 chars, `description` 1..=2000 chars, optional `diagnostics`
 //!   with camelCase aliases `userAgent`/`pixelRatio`/`domContentLoaded`/
 //!   `loadComplete`) is validated before any configuration or database work.
-//!   Whitespace-only title/description after stripping returns 422 with the
+//!   Pydantic-level failures (malformed JSON, missing fields, wrong types and
+//!   length limits) return the FastAPI `{"detail": [ ... ]}` 422 shape, while
+//!   whitespace-only title/description after stripping keeps the handler's
 //!   exact Python detail `"Title and description must not be blank"`.
 //! * Unconfigured GitHub settings return 503 `"GitHub integration not
 //!   configured"` before claiming the rate-limit slot, matching Python order.
@@ -1016,7 +1018,10 @@ mod tests {
         ] {
             let error = validate_create(&request).expect_err("blank must fail");
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(error.detail(), "Title and description must not be blank");
+            assert_eq!(
+                error.detail_json(),
+                serde_json::Value::String("Title and description must not be blank".to_string())
+            );
         }
     }
 
@@ -1049,6 +1054,83 @@ mod tests {
             diagnostics: None,
         };
         assert!(validate_create(&valid).is_ok());
+    }
+
+    /// The retired Pydantic schema rejected these bodies before the handler
+    /// ran, so the native port must emit the same `detail` array shape.
+    #[test]
+    fn parse_request_preserves_pydantic_validation_error_shapes() {
+        let cases: Vec<(&str, &[u8], Vec<serde_json::Value>)> = vec![
+            (
+                "malformed JSON",
+                b"{not json".as_slice(),
+                vec![validation_json_invalid()],
+            ),
+            (
+                "non-object body",
+                br#"[]"#.as_slice(),
+                vec![validation_model_type("input", &serde_json::json!([]))],
+            ),
+            (
+                "missing required fields",
+                br#"{}"#.as_slice(),
+                vec![validation_missing("title"), validation_missing("description")],
+            ),
+            (
+                "empty title",
+                br#"{"title":"","description":"details"}"#.as_slice(),
+                vec![validation_string_too_short(
+                    "title",
+                    &serde_json::Value::String(String::new()),
+                    1,
+                )],
+            ),
+            (
+                "overlong description",
+                format!(r#"{{"title":"title","description":"{}"}}"#, "d".repeat(2001))
+                    .as_bytes()
+                    .to_vec()
+                    .leak(),
+                vec![validation_string_too_long(
+                    "description",
+                    &serde_json::Value::String("d".repeat(2001)),
+                    MAX_DESCRIPTION_CHARS,
+                )],
+            ),
+            (
+                "non-string title",
+                br#"{"title":3,"description":"details"}"#.as_slice(),
+                vec![validation_string_type("title", &serde_json::json!(3))],
+            ),
+            (
+                "invalid report type",
+                br#"{"title":"title","description":"details","report_type":"other"}"#.as_slice(),
+                vec![validation_literal_error(&serde_json::json!("other"))],
+            ),
+            (
+                "non-object diagnostics",
+                br#"{"title":"title","description":"details","diagnostics":"broken"}"#.as_slice(),
+                vec![validation_model_type(
+                    "diagnostics",
+                    &serde_json::json!("broken"),
+                )],
+            ),
+        ];
+
+        for (name, body, expected) in cases {
+            let error = parse_request(body).expect_err(name);
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
+            assert_eq!(error.detail_json(), serde_json::json!({"detail": expected}), "{name}");
+        }
+    }
+
+    #[test]
+    fn parse_request_accepts_valid_wire_body_with_camel_case_diagnostics() {
+        let body = br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":390,"height":844,"pixelRatio":3},"viewport":{"width":390,"height":664},"scroll":{"x":0,"y":1},"performance":{},"errors":[]}}"#;
+        let request = parse_request(body).expect("valid body");
+        assert_eq!(request.report_type, ReportType::Bug);
+        assert_eq!(request.title, "Bug");
+        assert!(request.diagnostics.is_some());
     }
 
     #[test]
