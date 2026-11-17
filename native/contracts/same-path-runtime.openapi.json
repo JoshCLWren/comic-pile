@@ -1356,7 +1356,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Case-insensitive title or issue-number filter",
+            "description": "Case-insensitive title or issue-number filter, max 200 characters",
             "required": false,
             "schema": {
               "type": "string"
@@ -1389,6 +1389,16 @@
           },
           "401": {
             "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -6685,8 +6695,7 @@
       "CustomCBLWrite": {
         "type": "object",
         "required": [
-          "name",
-          "issue_ids"
+          "name"
         ],
         "properties": {
           "checkpoint_issue_ids": {

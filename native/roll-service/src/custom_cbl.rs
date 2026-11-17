@@ -7,6 +7,7 @@
 
 use crate::{
     auth::AuthenticatedUser,
+    cbl_catalog::{ValidationErrorItem, ValidationErrorResponse},
     db, option_inputs, reading_blocker_projection,
     reading_constraints::ValidatedReadingInputs,
     reading_eligibility,
@@ -1028,55 +1029,185 @@ pub async fn search_custom_cbl_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Query(params): Query<CustomCBLSearchParams>,
-) -> Result<Json<Vec<CustomCBLIssueSearchResult>>, ApiError> {
-    let conn = db::checkout(&state).await?;
-    let user_id = user.id();
-    let normalized = params.q.trim();
-    let mut query = String::from(
-        "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
-         FROM issues i
-         JOIN threads t ON t.id=i.thread_id
-         WHERE t.user_id=$1",
-    );
-    let pattern;
-    let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user_id];
-    if !normalized.is_empty() {
-        query.push_str(" AND (t.title ILIKE $2 OR i.issue_number ILIKE $2 OR (t.title || ' #' || i.issue_number) ILIKE $2)");
-        pattern = format!("%{}%", normalized);
-        params_vec.push(&pattern);
-    }
-    query.push_str(" ORDER BY t.title ASC, i.position ASC, i.id ASC");
-    query.push_str(" LIMIT $");
-    query.push_str(&(params_vec.len() + 1).to_string());
-    params_vec.push(&params.limit);
+) -> Response {
+    async fn inner(
+        state: Arc<AppState>,
+        user_id: i32,
+        params: CustomCBLSearchParams,
+    ) -> Result<Json<Vec<CustomCBLIssueSearchResult>>, SearchError> {
+        let raw_q = params.q.unwrap_or_default();
+        let mut validation_errors = Vec::new();
+        if raw_q.chars().count() > MAX_SEARCH_Q_LENGTH {
+            validation_errors.push(validation_string_too_long("q", &raw_q, MAX_SEARCH_Q_LENGTH));
+        }
+        let limit = parse_search_limit(params.limit.as_deref(), &mut validation_errors);
+        let Some(limit) = limit else {
+            return Err(SearchError::ValidationItems(validation_errors));
+        };
+        if !validation_errors.is_empty() {
+            return Err(SearchError::ValidationItems(validation_errors));
+        }
 
-    let rows = conn
-        .query(&query, &params_vec)
-        .await
-        .map_err(db::query_error)?;
-    Ok(Json(
-        rows.iter()
-            .map(|row| CustomCBLIssueSearchResult {
-                issue_id: row.get(0),
-                thread_id: row.get(1),
-                series_name: row.get(2),
-                issue_number: row.get(3),
-                status: row.get(4),
-            })
-            .collect(),
-    ))
+        let conn = db::checkout(&state).await?;
+        let normalized = raw_q.trim();
+        let mut query = String::from(
+            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
+             FROM issues i
+             JOIN threads t ON t.id=i.thread_id
+             WHERE t.user_id=$1",
+        );
+        let pattern;
+        let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user_id];
+        if !normalized.is_empty() {
+            query.push_str(" AND (t.title ILIKE $2 OR i.issue_number ILIKE $2 OR (t.title || ' #' || i.issue_number) ILIKE $2)");
+            pattern = format!("%{}%", normalized);
+            params_vec.push(&pattern);
+        }
+        query.push_str(" ORDER BY t.title ASC, i.position ASC, i.id ASC");
+        query.push_str(" LIMIT $");
+        query.push_str(&(params_vec.len() + 1).to_string());
+        params_vec.push(&limit);
+
+        let rows = conn
+            .query(&query, &params_vec)
+            .await
+            .map_err(db::query_error)?;
+        Ok(Json(
+            rows.iter()
+                .map(|row| CustomCBLIssueSearchResult {
+                    issue_id: row.get(0),
+                    thread_id: row.get(1),
+                    series_name: row.get(2),
+                    issue_number: row.get(3),
+                    status: row.get(4),
+                })
+                .collect(),
+        ))
+    }
+
+    match inner(state, user.id(), params).await {
+        Ok(response) => response.into_response(),
+        Err(error) => error.into_response(),
+    }
 }
 
-#[derive(Deserialize)]
+const MAX_SEARCH_Q_LENGTH: usize = 200;
+const MAX_SEARCH_LIMIT: i64 = 100;
+const DEFAULT_SEARCH_LIMIT: i64 = 30;
+
+/// Query params for custom CBL issue search. Parsed as raw strings so malformed
+/// values can be rejected with the Python/FastAPI 422 contract at the handler boundary.
+#[derive(Debug, Default, Deserialize)]
 pub struct CustomCBLSearchParams {
     #[serde(default)]
-    pub q: String,
-    #[serde(default = "default_limit")]
-    pub limit: i32,
+    pub q: Option<String>,
+    #[serde(default)]
+    pub limit: Option<String>,
 }
 
-fn default_limit() -> i32 {
-    30
+#[derive(Debug)]
+enum SearchError {
+    /// One or more `limit`/`q` values failed Python/FastAPI validation.
+    ValidationItems(Vec<ValidationErrorItem>),
+    Database(ApiError),
+}
+
+impl From<ApiError> for SearchError {
+    fn from(error: ApiError) -> Self {
+        Self::Database(error)
+    }
+}
+
+impl IntoResponse for SearchError {
+    fn into_response(self) -> Response {
+        match self {
+            SearchError::ValidationItems(items) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ValidationErrorResponse { detail: items }),
+            )
+                .into_response(),
+            SearchError::Database(error) => error.into_response(),
+        }
+    }
+}
+
+fn validation_string_too_long(field: &str, input: &str, max_length: usize) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "string_too_long".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: format!("String should have at most {max_length} characters"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"max_length": max_length})),
+    }
+}
+
+fn validation_int_parsing(field: &str, input: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "int_parsing".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: "Input should be a valid integer, unable to parse string as an integer".to_string(),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: None,
+    }
+}
+
+fn validation_greater_than_equal(field: &str, input: &str, ge: i64) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "greater_than_equal".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: format!("Input should be greater than or equal to {ge}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"ge": ge})),
+    }
+}
+
+fn validation_less_than_equal(field: &str, input: &str, le: i64) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "less_than_equal".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: format!("Input should be less than or equal to {le}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"le": le})),
+    }
+}
+
+fn parse_search_limit(
+    raw: Option<&str>,
+    validation_errors: &mut Vec<ValidationErrorItem>,
+) -> Option<i64> {
+    let Some(value) = raw else {
+        return Some(DEFAULT_SEARCH_LIMIT);
+    };
+    match value.parse::<i64>() {
+        Ok(parsed) => {
+            if parsed < 1 {
+                validation_errors.push(validation_greater_than_equal("limit", value, 1));
+                None
+            } else if parsed > MAX_SEARCH_LIMIT {
+                validation_errors.push(validation_less_than_equal(
+                    "limit",
+                    value,
+                    MAX_SEARCH_LIMIT,
+                ));
+                None
+            } else {
+                Some(parsed)
+            }
+        }
+        Err(_) => {
+            if !value.is_empty() && value.chars().all(|c| c.is_ascii_digit()) {
+                // Python `Query(le=100)` reports values above the i64 range as less_than_equal.
+                validation_errors.push(validation_less_than_equal(
+                    "limit",
+                    value,
+                    MAX_SEARCH_LIMIT,
+                ));
+            } else {
+                validation_errors.push(validation_int_parsing("limit", value));
+            }
+            None
+        }
+    }
 }
 
 /// `GET /api/v1/custom-cbls/{list_id}`
@@ -2265,12 +2396,13 @@ pub fn create_custom_cbl_documentation() {}
     path = "/api/v1/custom-cbls/issue-search",
     tag = "custom-cbls",
     params(
-        ("q" = Option<String>, Query, description = "Case-insensitive title or issue-number filter"),
+        ("q" = Option<String>, Query, description = "Case-insensitive title or issue-number filter, max 200 characters"),
         ("limit" = Option<i32>, Query, description = "Maximum results, 1-100 (default 30)")
     ),
     responses(
         (status = 200, description = "Matching owned issues", body = Vec<CustomCBLIssueSearchResult>),
         (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Query failed validation", body = ValidationErrorResponse),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))

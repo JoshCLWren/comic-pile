@@ -10059,7 +10059,7 @@ export interface components {
             entry_intents?: {
                 [key: string]: components["schemas"]["CustomCBLEntryIntent"];
             } | null;
-            issue_ids: number[];
+            issue_ids?: number[];
             mode?: string | null;
             name: string;
         };
@@ -15717,7 +15717,7 @@ export interface operations {
     search_custom_cbl_issues_documentation: {
         parameters: {
             query?: {
-                /** @description Case-insensitive title or issue-number filter */
+                /** @description Case-insensitive title or issue-number filter, max 200 characters */
                 q?: string;
                 /** @description Maximum results, 1-100 (default 30) */
                 limit?: number;
@@ -15743,6 +15743,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
             };
             /** @description Database temporarily unavailable */
             503: {

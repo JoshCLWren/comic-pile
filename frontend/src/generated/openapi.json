@@ -11636,8 +11636,7 @@
           }
         },
         "required": [
-          "name",
-          "issue_ids"
+          "name"
         ],
         "type": "object"
       },
@@ -24471,7 +24470,7 @@
         "operationId": "search_custom_cbl_issues_documentation",
         "parameters": [
           {
-            "description": "Case-insensitive title or issue-number filter",
+            "description": "Case-insensitive title or issue-number filter, max 200 characters",
             "in": "query",
             "name": "q",
             "required": false,
@@ -24506,6 +24505,16 @@
           },
           "401": {
             "description": "Not authenticated"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            },
+            "description": "Query failed validation"
           },
           "503": {
             "description": "Database temporarily unavailable"
