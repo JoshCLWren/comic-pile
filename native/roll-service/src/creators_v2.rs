@@ -1589,3 +1589,627 @@ fn build_series_issues(
             .then(|| (offset + limit).to_string()),
     })
 }
+
+// ---------------------------------------------------------------------------
+// List, summaries and comparison
+// ---------------------------------------------------------------------------
+
+fn creator_headline_ratings(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    issue_ids: &BTreeSet<i64>,
+) -> Vec<f64> {
+    issue_ids
+        .iter()
+        .copied()
+        .filter(|id| {
+            library.ratings.contains_key(id)
+                && library
+                    .credits
+                    .get(id)
+                    .into_iter()
+                    .flatten()
+                    .any(|credit| credit.external_id == creator_id && has_headline_role(credit))
+        })
+        .filter_map(|id| library.ratings.get(&id).copied())
+        .collect()
+}
+
+fn summary_item(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    creator_key: &str,
+    attribution: &Attribution,
+) -> CreatorSummaryItem {
+    let ratings = creator_headline_ratings(library, creator_id, &attribution.issue_ids);
+    let read_unrated = attribution
+        .issue_ids
+        .iter()
+        .filter(|id| {
+            library.issue(**id).map(|issue| issue.status == "read").unwrap_or(false)
+                && !library.ratings.contains_key(id)
+        })
+        .count() as i64;
+    let upcoming = attribution
+        .issue_ids
+        .iter()
+        .filter(|id| library.issue(**id).map(|issue| issue.status == "unread").unwrap_or(false))
+        .count() as i64;
+    CreatorSummaryItem {
+        canonical_creator_key: creator_key.to_string(),
+        display_name: attribution.display_name.clone(),
+        normalized_roles: attribution.roles.iter().cloned().collect(),
+        average_rating: (!ratings.is_empty()).then(|| round2(mean(&ratings))),
+        ratings_count: ratings.len() as i64,
+        read_unrated_count: read_unrated,
+        upcoming_count: upcoming,
+    }
+}
+
+fn all_creator_ids(library: &CreatorLibrary) -> BTreeSet<i64> {
+    library
+        .credits
+        .values()
+        .flatten()
+        .map(|credit| credit.external_id)
+        .collect()
+}
+
+fn build_list(
+    library: &CreatorLibrary,
+    search: Option<&str>,
+    sort: &str,
+    limit: usize,
+    offset: usize,
+    min_ratings: usize,
+) -> CreatorListResponse {
+    let mut items: Vec<CreatorListItem> = Vec::new();
+    for creator_id in all_creator_ids(library) {
+        let Some(attribution) = attribution(library, creator_id) else {
+            continue;
+        };
+        let ratings = creator_headline_ratings(library, creator_id, &attribution.issue_ids);
+        if ratings.is_empty() || ratings.len() < min_ratings {
+            continue;
+        }
+        let display_name = attribution.display_name.clone();
+        if let Some(needle) = search {
+            if !display_name.to_lowercase().contains(&needle.to_lowercase()) {
+                continue;
+            }
+        }
+        items.push(CreatorListItem {
+            canonical_creator_key: format!("creator:{creator_id}"),
+            display_name,
+            normalized_roles: attribution.roles.iter().cloned().collect(),
+            average_rating: Some(round2(mean(&ratings))),
+            ratings_count: ratings.len() as i64,
+        });
+    }
+    match sort {
+        "ratings_count" => items.sort_by(|a, b| {
+            b.ratings_count
+                .cmp(&a.ratings_count)
+                .then(a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()))
+                .then(a.canonical_creator_key.cmp(&b.canonical_creator_key))
+        }),
+        "average_rating" => items.sort_by(|a, b| {
+            let an = a.average_rating.is_none();
+            let bn = b.average_rating.is_none();
+            an.cmp(&bn)
+                .then_with(|| {
+                    b.average_rating
+                        .unwrap_or(0.0)
+                        .partial_cmp(&a.average_rating.unwrap_or(0.0))
+                        .unwrap_or(Ordering::Equal)
+                })
+                .then_with(|| b.ratings_count.cmp(&a.ratings_count))
+                .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()))
+                .then_with(|| a.canonical_creator_key.cmp(&b.canonical_creator_key))
+        }),
+        _ => items.sort_by(|a, b| {
+            a.display_name
+                .to_lowercase()
+                .cmp(&b.display_name.to_lowercase())
+                .then(a.canonical_creator_key.cmp(&b.canonical_creator_key))
+        }),
+    }
+    let total = items.len();
+    let paged = if offset >= items.len() {
+        vec![]
+    } else {
+        items[offset..(offset + limit).min(items.len())].to_vec()
+    };
+    CreatorListResponse {
+        items: paged,
+        total: total as i64,
+        limit: limit as i64,
+        offset: offset as i64,
+        coverage: coverage(library),
+    }
+}
+
+fn build_summaries(
+    library: &CreatorLibrary,
+    keys: &[String],
+) -> CreatorSummariesResponse {
+    let mut summaries = BTreeMap::new();
+    for key in keys {
+        let Some(creator_id) = parse_creator_key(key) else {
+            continue;
+        };
+        let Some(attribution) = attribution(library, creator_id) else {
+            continue;
+        };
+        summaries.insert(key.clone(), summary_item(library, creator_id, key, &attribution));
+    }
+    CreatorSummariesResponse {
+        summaries,
+        coverage: coverage(library),
+    }
+}
+
+fn distribution_key(rating: f64) -> String {
+    if rating == (rating as i64) as f64 {
+        (rating as i64).to_string()
+    } else {
+        rating.to_string()
+    }
+}
+
+fn issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<CreatorComparisonIssueRef> {
+    let mut entries: Vec<(bool, String, String, i64, i64, CreatorComparisonIssueRef)> = issue_ids
+        .iter()
+        .copied()
+        .filter_map(|id| library.issue(id).map(|issue| (id, issue)))
+        .map(|(id, issue)| {
+            (
+                false,
+                issue.thread_title.to_lowercase(),
+                issue.thread_title.clone(),
+                issue.thread_id,
+                id,
+                CreatorComparisonIssueRef {
+                    issue_id: id,
+                    thread_id: issue.thread_id,
+                    thread_title: issue.thread_title.clone(),
+                    issue_number: issue.issue_number.clone(),
+                    status: issue.status.clone(),
+                },
+            )
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)).then(a.4.cmp(&b.4)));
+    entries.into_iter().take(MAX_ISSUE_REFS).map(|entry| entry.5).collect()
+}
+
+fn build_comparison(
+    library: &CreatorLibrary,
+    requested_keys: &[String],
+) -> CreatorComparisonResponse {
+    let mut comparisons = BTreeMap::new();
+    let mut insufficient_data_keys = Vec::new();
+    for key in requested_keys {
+        let Some(creator_id) = parse_creator_key(key) else {
+            continue;
+        };
+        let Some(attribution) = attribution(library, creator_id) else {
+            continue;
+        };
+        let ratings = creator_headline_ratings(library, creator_id, &attribution.issue_ids);
+        let average = (!ratings.is_empty()).then(|| round2(mean(&ratings)));
+        let median_value = (!ratings.is_empty()).then(|| round2(median(&ratings)));
+        let mut distribution: BTreeMap<String, i64> = BTreeMap::new();
+        for rating in &ratings {
+            *distribution.entry(distribution_key(*rating)).or_default() += 1;
+        }
+        let top_rating_rate = (!ratings.is_empty()).then(|| {
+            round3(ratings.iter().filter(|rating| **rating >= 5.0).count() as f64 / ratings.len() as f64)
+        });
+        let role_stats: Vec<CreatorComparisonRoleStat> = attribution
+            .roles
+            .iter()
+            .map(|role| {
+                let ids: Vec<i64> = attribution
+                    .issue_ids
+                    .iter()
+                    .copied()
+                    .filter(|id| {
+                        library
+                            .credits
+                            .get(id)
+                            .into_iter()
+                            .flatten()
+                            .any(|credit| credit.external_id == creator_id && credit.roles.contains(role))
+                    })
+                    .collect();
+                let role_ratings: Vec<f64> = ids
+                    .iter()
+                    .filter_map(|id| library.ratings.get(id).copied())
+                    .collect();
+                CreatorComparisonRoleStat {
+                    role: role.clone(),
+                    issue_count: ids.len() as i64,
+                    rated_issue_count: role_ratings.len() as i64,
+                    average_rating: (!role_ratings.is_empty()).then(|| round2(mean(&role_ratings))),
+                }
+            })
+            .collect();
+
+        let aggregates = aggregate_series(library, creator_id, &attribution);
+        let mut ranked: Vec<&SeriesAggregate> = aggregates
+            .iter()
+            .filter(|aggregate| aggregate.rated_issue_count() >= MIN_RATED_FOR_RELIABLE as i64)
+            .collect();
+        ranked.sort_by(|a, b| {
+            b.average_rating()
+                .unwrap_or(0.0)
+                .partial_cmp(&a.average_rating().unwrap_or(0.0))
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| b.attributed_issue_count.cmp(&a.attributed_issue_count))
+                .then_with(|| a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+                .then_with(|| a.thread_title.cmp(&b.thread_title))
+                .then_with(|| a.thread_id.cmp(&b.thread_id))
+        });
+        let strongest_series: Vec<CreatorComparisonSeriesAggregate> = ranked
+            .into_iter()
+            .take(MAX_SERIES_AGGREGATES)
+            .map(|aggregate| CreatorComparisonSeriesAggregate {
+                thread_id: aggregate.thread_id,
+                thread_title: aggregate.thread_title.clone(),
+                issue_count: aggregate.attributed_issue_count,
+                rated_issue_count: aggregate.rated_issue_count(),
+                average_rating: aggregate.average_rating().unwrap_or(0.0),
+            })
+            .collect();
+
+        let unread_ids: BTreeSet<i64> = attribution
+            .issue_ids
+            .iter()
+            .copied()
+            .filter(|id| library.issue(*id).map(|issue| issue.status == "unread").unwrap_or(false))
+            .collect();
+        let read_unrated_ids: BTreeSet<i64> = attribution
+            .issue_ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                library.issue(*id).map(|issue| issue.status == "read").unwrap_or(false)
+                    && !library.ratings.contains_key(id)
+            })
+            .collect();
+        let insufficient_data = ratings.len() < MIN_RATED_FOR_RELIABLE;
+        if insufficient_data {
+            insufficient_data_keys.push(key.clone());
+        }
+        comparisons.insert(
+            format!("creator:{creator_id}"),
+            CreatorComparisonItem {
+                canonical_creator_key: format!("creator:{creator_id}"),
+                display_name: attribution.display_name.clone(),
+                normalized_roles: attribution.roles.iter().cloned().collect(),
+                average_rating: average,
+                median_rating: median_value,
+                ratings_count: ratings.len() as i64,
+                rating_distribution: distribution,
+                top_rating_rate,
+                role_stats,
+                strongest_series,
+                min_rated_issues_per_series: MIN_RATED_FOR_RELIABLE as i64,
+                unread_upcoming_count: unread_ids.len() as i64,
+                read_unrated_count: read_unrated_ids.len() as i64,
+                unread_issue_refs: issue_refs(library, &unread_ids),
+                read_unrated_issue_refs: issue_refs(library, &read_unrated_ids),
+                max_issue_refs_per_group: MAX_ISSUE_REFS as i64,
+                insufficient_data,
+            },
+        );
+    }
+    let library_coverage = coverage(library);
+    CreatorComparisonResponse {
+        comparisons,
+        coverage: CreatorComparisonCoverage {
+            rated_issues_total: library_coverage.rated_issues_total,
+            rated_issues_with_creator_metadata: library_coverage.rated_issues_with_creator_metadata,
+            ratings_complete: library_coverage.ratings_complete,
+            read_unrated_issues_total: library_coverage.read_unrated_issues_total,
+            read_unrated_issues_with_creator_metadata: library_coverage.read_unrated_issues_with_creator_metadata,
+            read_unrated_complete: library_coverage.read_unrated_complete,
+            unread_issues_total: library_coverage.unread_issues_total,
+            unread_issues_with_creator_metadata: library_coverage.unread_issues_with_creator_metadata,
+            upcoming_complete: library_coverage.upcoming_complete,
+        },
+        insufficient_data_keys,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Discovery views
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct DiscoveryProfile {
+    key: String,
+    display_name: String,
+    roles: Vec<String>,
+    rated_issue_count: i64,
+    average_rating: Option<f64>,
+    median_rating: Option<f64>,
+    rating_stddev: Option<f64>,
+    rating_spread: Option<f64>,
+    min_rating: Option<f64>,
+    max_rating: Option<f64>,
+    top_rating_rate: Option<f64>,
+    top_rating_count: i64,
+    unread_issue_count: i64,
+    read_unrated_issue_count: i64,
+    trend_points: Vec<(DateTime<Utc>, i64, f64)>,
+}
+
+fn discovery_profile(library: &CreatorLibrary, creator_id: i64) -> Option<DiscoveryProfile> {
+    let attribution = attribution(library, creator_id)?;
+    let ratings = creator_headline_ratings(library, creator_id, &attribution.issue_ids);
+    let (average, median, stddev, spread, min, max, top_rate, top_count) = if ratings.is_empty() {
+        (None, None, None, None, None, None, None, 0)
+    } else {
+        let min = ratings.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = ratings.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let top_count = ratings.iter().filter(|rating| **rating >= 5.0).count() as i64;
+        (
+            Some(round2(mean(&ratings))),
+            Some(round2(median(&ratings))),
+            Some(round2(pstdev(&ratings))),
+            Some(round2(max - min)),
+            Some(min),
+            Some(max),
+            Some(round3(top_count as f64 / ratings.len() as f64)),
+            top_count,
+        )
+    };
+    let unread_issue_count = attribution
+        .issue_ids
+        .iter()
+        .filter(|id| library.issue(**id).map(|issue| issue.status == "unread").unwrap_or(false))
+        .count() as i64;
+    let read_unrated_issue_count = attribution
+        .issue_ids
+        .iter()
+        .filter(|id| {
+            library.issue(**id).map(|issue| issue.status == "read").unwrap_or(false)
+                && !library.ratings.contains_key(id)
+        })
+        .count() as i64;
+    let mut trend_points: Vec<(DateTime<Utc>, i64, f64)> = attribution
+        .issue_ids
+        .iter()
+        .copied()
+        .filter_map(|id| {
+            let rating = *library.ratings.get(&id)?;
+            let timestamp = *library.rating_timestamps.get(&id)?;
+            Some((timestamp, id, rating))
+        })
+        .collect();
+    trend_points.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    Some(DiscoveryProfile {
+        key: format!("creator:{creator_id}"),
+        display_name: attribution.display_name,
+        roles: attribution.roles.into_iter().collect(),
+        rated_issue_count: ratings.len() as i64,
+        average_rating: average,
+        median_rating: median,
+        rating_stddev: stddev,
+        rating_spread: spread,
+        min_rating: min,
+        max_rating: max,
+        top_rating_rate: top_rate,
+        top_rating_count: top_count,
+        unread_issue_count,
+        read_unrated_issue_count,
+        trend_points,
+    })
+}
+
+fn reason(metric: &str, label: &str, value: f64, threshold: f64, comparison: &str) -> CreatorDiscoveryReason {
+    CreatorDiscoveryReason {
+        metric: metric.to_string(),
+        label: label.to_string(),
+        value: round3(value),
+        threshold: round3(threshold),
+        comparison: comparison.to_string(),
+    }
+}
+
+fn discovery_entry(profile: &DiscoveryProfile, reasons: Vec<CreatorDiscoveryReason>) -> CreatorDiscoveryEntry {
+    CreatorDiscoveryEntry {
+        canonical_creator_key: profile.key.clone(),
+        display_name: profile.display_name.clone(),
+        normalized_roles: profile.roles.clone(),
+        rated_issue_count: profile.rated_issue_count,
+        average_rating: profile.average_rating,
+        median_rating: profile.median_rating,
+        rating_stddev: profile.rating_stddev,
+        rating_spread: profile.rating_spread,
+        min_rating: profile.min_rating,
+        max_rating: profile.max_rating,
+        top_rating_rate: profile.top_rating_rate,
+        top_rating_count: profile.top_rating_count,
+        unread_issue_count: profile.unread_issue_count,
+        read_unrated_issue_count: profile.read_unrated_issue_count,
+        trend_direction: None,
+        earlier_average_rating: None,
+        recent_average_rating: None,
+        trend_delta: None,
+        trend_sample_count: 0,
+        reasons,
+    }
+}
+
+fn discovery_view(mode: &str, title: &str, description: &str, min_sample: i64, mut entries: Vec<CreatorDiscoveryEntry>) -> CreatorDiscoveryView {
+    let total = entries.len() as i64;
+    let truncated = entries.len() > MAX_DISCOVERY_ENTRIES;
+    entries.truncate(MAX_DISCOVERY_ENTRIES);
+    CreatorDiscoveryView {
+        mode: mode.to_string(),
+        title: title.to_string(),
+        description: description.to_string(),
+        min_sample,
+        total,
+        truncated,
+        max_entries: MAX_DISCOVERY_ENTRIES as i64,
+        entries,
+    }
+}
+
+fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
+    let profiles: Vec<DiscoveryProfile> = all_creator_ids(library)
+        .into_iter()
+        .filter_map(|creator_id| discovery_profile(library, creator_id))
+        .collect();
+
+    let mut consistently_loved: Vec<(f64, f64, i64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut polarizing: Vec<(f64, f64, i64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut most_read: Vec<(i64, f64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut top_rate: Vec<(f64, i64, f64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut small_sample: Vec<(f64, i64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut loved_unread: Vec<(i64, f64, i64, String, CreatorDiscoveryEntry)> = Vec::new();
+    let mut trend: Vec<(f64, usize, String, CreatorDiscoveryEntry)> = Vec::new();
+
+    for profile in &profiles {
+        let average = profile.average_rating.unwrap_or(0.0);
+        let stddev = profile.rating_stddev.unwrap_or(0.0);
+        let spread = profile.rating_spread.unwrap_or(0.0);
+        let top = profile.top_rating_rate.unwrap_or(0.0);
+        let count = profile.rated_issue_count;
+
+        if count >= MIN_RATED_FOR_RELIABLE as i64 && average >= 4.0 && stddev <= 0.5 {
+            let entry = discovery_entry(
+                profile,
+                vec![
+                    reason("average_rating", "average rating", average, 4.0, "gte"),
+                    reason("rating_stddev", "rating standard deviation", stddev, 0.5, "lte"),
+                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                ],
+            );
+            consistently_loved.push((-average, stddev, -count, profile.key.clone(), entry));
+        }
+        if count >= MIN_RATED_FOR_RELIABLE as i64 && spread >= 2.0 {
+            let entry = discovery_entry(
+                profile,
+                vec![
+                    reason("rating_spread", "rating spread", spread, 2.0, "gte"),
+                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                ],
+            );
+            polarizing.push((-stddev, -spread, -count, profile.key.clone(), entry));
+        }
+        if count >= 1 {
+            let entry = discovery_entry(
+                profile,
+                vec![reason("rated_issue_count", "rated issues", count as f64, 1.0, "gte")],
+            );
+            most_read.push((-count, -average, profile.key.clone(), entry));
+        }
+        if count >= MIN_RATED_FOR_RELIABLE as i64 && top >= 0.6 {
+            let entry = discovery_entry(
+                profile,
+                vec![
+                    reason("top_rating_rate", "top-rating rate", top, 0.6, "gte"),
+                    reason("rated_issue_count", "rated issues", count as f64, 5.0, "gte"),
+                ],
+            );
+            top_rate.push((-top, -count, -average, profile.key.clone(), entry));
+        }
+        if (1..=(MIN_RATED_FOR_RELIABLE - 1) as i64).contains(&count) && average >= 4.0 {
+            let entry = discovery_entry(
+                profile,
+                vec![
+                    reason("average_rating", "average rating", average, 4.0, "gte"),
+                    reason("rated_issue_count", "rated issues", count as f64, 4.0, "lte"),
+                ],
+            );
+            small_sample.push((-average, -count, profile.key.clone(), entry));
+        }
+        if count >= 1 && profile.unread_issue_count >= 1 && average >= 4.0 {
+            let entry = discovery_entry(
+                profile,
+                vec![
+                    reason("average_rating", "average rating", average, 4.0, "gte"),
+                    reason("unread_issue_count", "unread issues", profile.unread_issue_count as f64, 1.0, "gte"),
+                ],
+            );
+            loved_unread.push((-profile.unread_issue_count, -average, -count, profile.key.clone(), entry));
+        }
+        if profile.trend_points.len() >= TREND_MIN_SAMPLE {
+            let midpoint = profile.trend_points.len() / 2;
+            let earlier: Vec<f64> = profile.trend_points[..midpoint].iter().map(|point| point.2).collect();
+            let recent: Vec<f64> = profile.trend_points[midpoint..].iter().map(|point| point.2).collect();
+            let earlier_average = round2(mean(&earlier));
+            let recent_average = round2(mean(&recent));
+            let delta = round2(recent_average - earlier_average);
+            if delta.abs() >= TREND_MIN_DELTA {
+                let mut entry = discovery_entry(
+                    profile,
+                    vec![
+                        reason("trend_delta", "change in average", delta.abs(), TREND_MIN_DELTA, "gte"),
+                        reason("trend_sample_count", "dated rated issues", profile.trend_points.len() as f64, TREND_MIN_SAMPLE as f64, "gte"),
+                    ],
+                );
+                entry.trend_direction = Some(if delta > 0.0 { "warmed" } else { "cooled" }.to_string());
+                entry.earlier_average_rating = Some(earlier_average);
+                entry.recent_average_rating = Some(recent_average);
+                entry.trend_delta = Some(delta);
+                entry.trend_sample_count = profile.trend_points.len() as i64;
+                trend.push((-delta.abs(), profile.trend_points.len(), profile.key.clone(), entry));
+            }
+        }
+    }
+
+    let finish4 = |mut rows: Vec<(f64, f64, i64, String, CreatorDiscoveryEntry)>| {
+        rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
+        rows.into_iter().map(|row| row.4).collect::<Vec<_>>()
+    };
+    let consistently_loved = finish4(consistently_loved);
+    let polarizing = finish4(polarizing);
+
+    let mut most_read = most_read;
+    most_read.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)));
+    let most_read: Vec<CreatorDiscoveryEntry> = most_read.into_iter().map(|row| row.3).collect();
+
+    let mut top_rate = top_rate;
+    top_rate.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.partial_cmp(&b.2).unwrap_or(Ordering::Equal)).then(a.3.cmp(&b.3)));
+    let top_rate: Vec<CreatorDiscoveryEntry> = top_rate.into_iter().map(|row| row.4).collect();
+
+    let mut small_sample = small_sample;
+    small_sample.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    let small_sample: Vec<CreatorDiscoveryEntry> = small_sample.into_iter().map(|row| row.3).collect();
+
+    let mut loved_unread = loved_unread;
+    loved_unread.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
+    let loved_unread: Vec<CreatorDiscoveryEntry> = loved_unread.into_iter().map(|row| row.4).collect();
+
+    let mut trend = trend;
+    trend.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+    let trend: Vec<CreatorDiscoveryEntry> = trend.into_iter().map(|row| row.3).collect();
+
+    let rated_ids: HashSet<i64> = library.ratings.keys().copied().collect();
+    let with_metadata = rated_ids.iter().filter(|id| library.metadata_issues.contains(id)).count() as i64;
+
+    CreatorDiscoveryResponse {
+        views: vec![
+            discovery_view("consistently_loved", "Most consistently loved", "High personal average with at least 5 rated issues and a standard deviation of 0.5 or less.", 5, consistently_loved),
+            discovery_view("polarizing", "Most polarizing", "At least 5 rated issues with a spread of 2.0 or more between the lowest and highest rating.", 5, polarizing),
+            discovery_view("most_read", "Most read", "Creators with the largest rated sample in your library.", 1, most_read),
+            discovery_view("highest_top_rating_rate", "Highest top-rating rate", "At least 5 rated issues with 60% or more at the top of your scale.", 5, top_rate),
+            discovery_view("great_average_small_sample", "Great average, small sample", "An average of 4.0 or more from 4 rated issues or fewer — promising, but not yet proven.", 1, small_sample),
+            discovery_view("loved_with_unread", "Loved creators with unread work", "An average of 4.0 or more with unread issues still in your pile.", 1, loved_unread),
+            discovery_view("moved_over_time", "Warmed to / cooled on", "At least 6 dated ratings where the recent half averages 0.5 or more away from the earlier half.", 6, trend),
+        ],
+        coverage: CreatorDiscoveryCoverage {
+            rated_issues_total: rated_ids.len() as i64,
+            rated_issues_with_creator_metadata: with_metadata,
+            ratings_complete: with_metadata >= rated_ids.len() as i64,
+        },
+        minimum_reliable_sample: MIN_RATED_FOR_RELIABLE as i64,
+        max_entries_per_view: MAX_DISCOVERY_ENTRIES as i64,
+    }
+}
