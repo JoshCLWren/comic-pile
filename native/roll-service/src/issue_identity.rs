@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    auth::identity::AuthenticatedUser,
+    auth::AuthenticatedUser,
     db::checkout,
     ApiError, AppState,
 };
@@ -504,7 +504,7 @@ pub async fn compare_cbl_sources(
     Query(params): Query<CompareCblSourcesParams>,
     Json(payload): Json<CompareCblSourcesRequest>,
 ) -> Result<Json<CblSourceComparisonResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // This is a placeholder - full implementation requires the comparison logic
     // from cbl_comicvine_lookup_service.py
@@ -530,7 +530,7 @@ pub async fn discover_cbl_source_lists(
     auth: AuthenticatedUser,
     Query(params): Query<DiscoverCblSourcesParams>,
 ) -> Result<Json<Vec<CblSourceListDiscoveryItem>>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - needs full implementation from cbl_source_service.py
     let mut query = String::from(
@@ -592,7 +592,7 @@ pub async fn get_cbl_source_list(
     Path(list_id): Path<i32>,
     Query(params): Query<GetCblSourceListParams>,
 ) -> Result<Json<CblSourceListDetail>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Load source list
     let list_row = pool.query_opt(
@@ -689,7 +689,7 @@ pub async fn list_cbl_source_folders(
     auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblFolderListingResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Validate folder path
     let folder = params.folder.trim();
@@ -716,7 +716,7 @@ pub async fn browse_cbl_source_catalog(
     auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblCatalogBrowseResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - needs full implementation from cbl_catalog.py
     let response = CblCatalogBrowseResponse {
@@ -745,7 +745,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
     Path(comicvine_issue_id): Path<String>,
     Query(params): Query<CblOccurrenceParams>,
 ) -> Result<Json<CblComicvineOccurrencePage>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     if comicvine_issue_id.trim().is_empty() {
         return Err(ApiError::BadRequest("Comic Vine issue ID must not be blank".to_string()));
@@ -836,7 +836,7 @@ pub async fn find_cbl_candidates_for_reading_list(
     Path(list_id): Path<i32>,
     Query(params): Query<CblCandidatesParams>,
 ) -> Result<Json<CblReadingListCandidatesResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - needs full implementation from cbl_comicvine_lookup_service.py
     let response = CblReadingListCandidatesResponse {
@@ -862,7 +862,7 @@ pub async fn cbl_adoption_preview(
     auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - needs full implementation from cbl_reconciliation.py
     // This requires reconcile_cbl_source_list + calculate_cbl_adoption_plan
@@ -903,7 +903,7 @@ pub async fn cbl_adoption_plan(
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - needs full implementation from cbl_reconciliation.py
     let response = CblAdoptionPreviewResponse {
@@ -942,7 +942,7 @@ pub async fn cbl_reconciliation(
     auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let pool = checkout(&state.pool).await?;
+    let pool = checkout(&state).await?;
     
     // Placeholder - returns basic reconciliation report
     let response = serde_json::json!({
