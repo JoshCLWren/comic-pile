@@ -157,8 +157,200 @@ pub struct BugReportResponse {
     pub issue_url: String,
 }
 
+/// Error for the bug-report handler.
+///
+/// The retired FastAPI handler had two distinct 422 shapes: Pydantic request
+/// validation produced `{"detail": [ ... ]}`, while the handler's own
+/// whitespace check raised `HTTPException(422, detail="...")`. Both are kept
+/// distinct here so the wire contract survives the same-path cutover.
+#[derive(Debug)]
+pub enum BugReportError {
+    /// Shared API error (401/503/502 and the handler's blank-field 422).
+    Api(ApiError),
+    /// FastAPI/Pydantic-style 422 validation error items.
+    Validation(Vec<serde_json::Value>),
+}
+
+impl BugReportError {
+    /// HTTP status for this error, independent of its message.
+    pub fn status(&self) -> StatusCode {
+        match self {
+            Self::Api(error) => error.status(),
+            Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
+        }
+    }
+
+    /// Wire `detail` value, used by focused tests to pin both 422 shapes.
+    pub fn detail_json(&self) -> serde_json::Value {
+        match self {
+            Self::Api(error) => serde_json::Value::String(error.detail().to_string()),
+            Self::Validation(items) => serde_json::json!({"detail": items}),
+        }
+    }
+}
+
+impl From<ApiError> for BugReportError {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl IntoResponse for BugReportError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Api(error) => error.into_response(),
+            Self::Validation(items) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({"detail": items})),
+            )
+                .into_response(),
+        }
+    }
+}
+
 fn unprocessable(detail: String) -> ApiError {
     ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail)
+}
+
+/// FastAPI/Pydantic `missing` validation item.
+fn validation_missing(field: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "missing",
+        "loc": ["body", field],
+        "msg": "Field required",
+        "input": null,
+    })
+}
+
+/// FastAPI/Pydantic `string_type` validation item.
+fn validation_string_type(field: &str, input: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "string_type",
+        "loc": ["body", field],
+        "msg": "Input should be a valid string",
+        "input": input,
+    })
+}
+
+/// FastAPI/Pydantic `string_too_short` validation item.
+fn validation_string_too_short(
+    field: &str,
+    input: &serde_json::Value,
+    min_length: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "string_too_short",
+        "loc": ["body", field],
+        "msg": format!("String should have at least {min_length} characters"),
+        "input": input,
+        "ctx": {"min_length": min_length},
+    })
+}
+
+/// FastAPI/Pydantic `string_too_long` validation item.
+fn validation_string_too_long(
+    field: &str,
+    input: &serde_json::Value,
+    max_length: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "string_too_long",
+        "loc": ["body", field],
+        "msg": format!("String should have at most {max_length} characters"),
+        "input": input,
+        "ctx": {"max_length": max_length},
+    })
+}
+
+/// FastAPI/Pydantic `json_invalid` validation item.
+fn validation_json_invalid() -> serde_json::Value {
+    serde_json::json!({
+        "type": "json_invalid",
+        "loc": ["body"],
+        "msg": "JSON decode error",
+        "input": null,
+    })
+}
+
+/// FastAPI/Pydantic `model_type` validation item.
+fn validation_model_type(loc: &str, input: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "model_type",
+        "loc": ["body", loc],
+        "msg": "Input should be a valid dictionary",
+        "input": input,
+    })
+}
+
+/// FastAPI/Pydantic `literal_error` validation item for `report_type`.
+fn validation_literal_error(input: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "literal_error",
+        "loc": ["body", "report_type"],
+        "msg": "Input should be 'bug' or 'feature'",
+        "input": input,
+        "ctx": {"expected": "'bug' or 'feature'"},
+    })
+}
+
+/// Validate the raw wire body with the retired Pydantic schema's shape.
+///
+/// `BugReportCreate` carried `min_length`/`max_length` constraints, so FastAPI
+/// rejected malformed bodies before the handler ran with a `detail` array.
+/// The native service must produce the same shape even though serde has no
+/// field-level length constraints.
+fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
+    let value: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|_| BugReportError::Validation(vec![validation_json_invalid()]))?;
+    let Some(object) = value.as_object() else {
+        return Err(BugReportError::Validation(vec![validation_model_type(
+            "input", &value,
+        )]));
+    };
+
+    let mut items: Vec<serde_json::Value> = Vec::new();
+    for (field, max_length) in [
+        ("title", MAX_TITLE_CHARS),
+        ("description", MAX_DESCRIPTION_CHARS),
+    ] {
+        match object.get(field) {
+            None => items.push(validation_missing(field)),
+            Some(input) => match input.as_str() {
+                None => items.push(validation_string_type(field, input)),
+                Some(text) => {
+                    let length = text.chars().count();
+                    if length < 1 {
+                        items.push(validation_string_too_short(field, input, 1));
+                    }
+                    if length > max_length {
+                        items.push(validation_string_too_long(field, input, max_length));
+                    }
+                }
+            },
+        }
+    }
+    if let Some(input) = object.get("report_type") {
+        if !matches!(input.as_str(), Some("bug") | Some("feature")) {
+            items.push(validation_literal_error(input));
+        }
+    }
+    if let Some(input) = object.get("diagnostics") {
+        if !input.is_null() && !input.is_object() {
+            items.push(validation_model_type("diagnostics", input));
+        }
+    }
+    if !items.is_empty() {
+        return Err(BugReportError::Validation(items));
+    }
+
+    serde_json::from_value(value).map_err(|error| {
+        BugReportError::Validation(vec![serde_json::json!({
+            "type": "value_error",
+            "loc": ["body"],
+            "msg": error.to_string(),
+            "input": null,
+        })])
+    })
 }
 
 fn not_configured() -> ApiError {
@@ -520,25 +712,43 @@ async fn load_user(state: &AppState, user_id: i32) -> Result<(String, bool), Api
     Ok((row.get(0), row.get(1)))
 }
 
-fn validate_create(request: &BugReportCreate) -> Result<(String, String), ApiError> {
+fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugReportError> {
     let title_chars = request.title.chars().count();
-    if title_chars == 0 || title_chars > MAX_TITLE_CHARS {
-        return Err(unprocessable(
-            "title length must be between 1 and 200 characters".to_string(),
-        ));
+    if title_chars < 1 {
+        return Err(BugReportError::Validation(vec![validation_string_too_short(
+            "title",
+            &serde_json::Value::String(request.title.clone()),
+            1,
+        )]));
+    }
+    if title_chars > MAX_TITLE_CHARS {
+        return Err(BugReportError::Validation(vec![validation_string_too_long(
+            "title",
+            &serde_json::Value::String(request.title.clone()),
+            MAX_TITLE_CHARS,
+        )]));
     }
     let description_chars = request.description.chars().count();
-    if description_chars == 0 || description_chars > MAX_DESCRIPTION_CHARS {
-        return Err(unprocessable(
-            "description length must be between 1 and 2000 characters".to_string(),
-        ));
+    if description_chars < 1 {
+        return Err(BugReportError::Validation(vec![validation_string_too_short(
+            "description",
+            &serde_json::Value::String(request.description.clone()),
+            1,
+        )]));
+    }
+    if description_chars > MAX_DESCRIPTION_CHARS {
+        return Err(BugReportError::Validation(vec![validation_string_too_long(
+            "description",
+            &serde_json::Value::String(request.description.clone()),
+            MAX_DESCRIPTION_CHARS,
+        )]));
     }
     let title = request.title.trim().to_string();
     let description = request.description.trim().to_string();
     if title.is_empty() || description.is_empty() {
-        return Err(unprocessable(
+        return Err(BugReportError::Api(unprocessable(
             "Title and description must not be blank".to_string(),
-        ));
+        )));
     }
     Ok((title, description))
 }
