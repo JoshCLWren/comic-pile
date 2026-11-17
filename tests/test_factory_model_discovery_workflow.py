@@ -28,7 +28,7 @@ def test_runner_discovers_catalogs_at_execution_time() -> None:
     selector = runner.split("- name: Select execution candidate at dispatch time", 1)[1]
     selector = selector.split("- name:", 1)[0]
     assert "bash scripts/opencode-model-catalog.sh opencode verbose refresh" in selector
-    assert "kilo models kilo-auto --refresh" in selector
+    assert "kilo models kilo --refresh" in selector
     assert "factory_runtime_model_select.py" in selector
     assert "Nothing\n          # uses a checked-in model ID" in selector
 

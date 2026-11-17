@@ -368,7 +368,7 @@ jobs:
           case "$SOURCE" in
             kilo-auto)
               catalog="$RUNNER_TEMP/factory-kilo-catalog"
-              if kilo models kilo-auto --refresh > "$catalog"; then
+              if kilo models kilo --refresh > "$catalog"; then
                 selection="$(python3 .github/scripts/factory_kilo_catalog.py \
                   --catalog "$catalog" --worker "$WORKER" \
                   --exclusions-file "$exclusions_file")" \

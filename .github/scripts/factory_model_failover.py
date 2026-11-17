@@ -222,7 +222,7 @@ def discover_fleet_catalogs(
             if not shutil.which("kilo"):
                 raise ValueError("Kilo CLI missing")
             run = subprocess.run(
-                ["kilo", "models", "kilo-auto", "--refresh"],
+                ["kilo", "models", "kilo", "--refresh"],
                 check=True, capture_output=True, text=True, timeout=35,
             )
             return source, run.stdout
