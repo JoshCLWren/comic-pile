@@ -43,7 +43,7 @@ describe('development API routing', () => {
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
     expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
-    expect(resolve('POST', '/api/v1/catalog/series-mappings/preview')).toBe('python')
+    expect(resolve('POST', '/api/v1/issues:bulkMarkRead')).toBe('python')
     expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('python')
     expect(resolve('GET', '/api/not-a-route')).toBe('native')
     const ordered = createApiDestinationResolver([
@@ -77,7 +77,7 @@ describe('development API routing', () => {
     try {
       const base = await listen(gateway)
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
-        const path = index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'
+        const path = index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/issues:bulkMarkRead'
         const response = await fetch(`${base}${path}?request=${index}`, {
           method: 'POST', body: JSON.stringify({ request: index }),
           headers: { 'Content-Type': 'application/json' },
@@ -88,7 +88,7 @@ describe('development API routing', () => {
         expect(result).toEqual({
           runtime: index % 2 === 0 ? 'native' : 'python',
           method: 'POST',
-          url: `${index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'}?request=${index}`,
+          url: `${index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/issues:bulkMarkRead'}?request=${index}`,
           body: JSON.stringify({ request: index }),
         })
       })
