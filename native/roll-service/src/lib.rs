@@ -377,7 +377,10 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
+    let cron_path = request.uri().path();
+    let timeout = if cron_path == "/api/v2/maintenance/comicvine-metadata-repairs"
+        || cron_path == "/api/v1/cron/release-sync"
+    {
         Duration::from_secs(50)
     } else {
         state.request_timeout
@@ -544,6 +547,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
+        )
+        .route(
+            "/api/v1/cron/release-sync",
+            get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
             "/api/v1/reading-plan-sync/status",
