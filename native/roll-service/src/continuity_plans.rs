@@ -2063,7 +2063,7 @@ pub async fn adopt_reading_order(
         .await
         .map_err(db::query_error)?;
 
-    // Load the reading order
+    // Load the reading order (owned by the authenticated user).
     let order = tx
         .query_opt(
             "SELECT id, name FROM reading_orders WHERE id = $1 AND user_id = $2",
@@ -2081,87 +2081,90 @@ pub async fn adopt_reading_order(
     let order_id: i32 = order.get(0);
     let order_name: String = order.get(1);
 
-    // Get items from the reading order
+    // Reading order items in canonical order (position, id), preserving item id
+    // for node ids (Python: `ro-{item.id}`).
     let items = tx
         .query(
-            "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position, id",
+            "SELECT id, thread_id, position FROM reading_order_items \
+             WHERE reading_order_id = $1 ORDER BY position, id",
             &[&order_id],
         )
         .await
         .map_err(db::query_error)?;
 
-    // Check for duplicate threads
+    // Reject duplicate threads before mutation (409 duplicate_thread).
     let mut seen_threads = std::collections::HashSet::new();
-    let mut duplicates = Vec::new();
+    let mut duplicates: Vec<i32> = Vec::new();
     for item in &items {
-        let thread_id: i32 = item.get(0);
-        if seen_threads.contains(&thread_id) {
+        let thread_id: i32 = item.get(1);
+        if !seen_threads.insert(thread_id) && !duplicates.contains(&thread_id) {
             duplicates.push(thread_id);
-        } else {
-            seen_threads.insert(thread_id);
         }
     }
-
     if !duplicates.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        let detail = serde_json::json!({
+        duplicates.sort_unstable();
+        return Err(domain_conflict(serde_json::json!({
             "code": "duplicate_thread",
             "reading_order_id": order_id,
             "duplicate_thread_ids": duplicates,
-            "message": "Reading order contains duplicate threads; deduplicate before adoption."
-        });
-        return Err(ApiError::Conflict(detail.to_string()));
+            "message": "Reading order contains duplicate threads; deduplicate before adoption.",
+        })));
     }
 
-    // Check thread ownership for nodes
-    let thread_ids: Vec<i32> = seen_threads.iter().copied().collect();
-    if !thread_ids.is_empty() {
-        let count: i64 = tx
-            .query_one(
-                "SELECT COUNT(*) FROM threads WHERE id = ANY($1::int[]) AND user_id = $2",
+    // Dangling/non-owned thread references are rejected with 422
+    // dangling_plan_reference naming the first offending node id (ro-{item.id}).
+    if !items.is_empty() {
+        let thread_ids: Vec<i32> = items.iter().map(|item| item.get(1)).collect();
+        let owned_rows = tx
+            .query(
+                "SELECT id FROM threads WHERE id = ANY($1::int[]) AND user_id = $2",
                 &[&thread_ids, &user.id()],
             )
             .await
-            .map_err(db::query_error)?
-            .get(0);
-
-        if count as usize != thread_ids.len() {
+            .map_err(db::query_error)?;
+        let owned: std::collections::HashSet<i32> =
+            owned_rows.iter().map(|row| row.get::<_, i32>(0)).collect();
+        if let Some(first) = items.iter().find(|item| !owned.contains(&item.get::<_, i32>(1))) {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(bad_request("Some threads are not owned by the user"));
+            let item_id: i32 = first.get(0);
+            return Err(dangling_node(&format!("ro-{item_id}")));
         }
     }
 
-    // Determine plan name
-    let plan_name = payload
+    let resolved_name = payload
         .plan_name
-        .as_ref()
-        .and_then(|n| {
-            if n.trim().is_empty() {
-                None
-            } else {
-                Some(n.trim().to_string())
-            }
-        })
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
         .unwrap_or_else(|| {
-            if order_name.trim().is_empty() {
-                format!("From reading order {}", order_id)
+            let trimmed = order_name.trim();
+            if trimmed.is_empty() {
+                format!("From reading order {order_id}")
             } else {
-                order_name.trim().to_string()
+                trimmed.to_string()
             }
         });
 
-    let lane_id = payload.lane_id.unwrap_or_else(|| "adopted".to_string());
-    let lane_name = payload.lane_name.unwrap_or_else(|| "Adopted".to_string());
+    let lane_id = payload.lane_id.as_deref().unwrap_or("adopted").to_string();
+    let lane_name = payload
+        .lane_name
+        .as_deref()
+        .unwrap_or("Adopted")
+        .to_string();
 
-    // Build nodes JSON
-    let mut nodes: Vec<serde_json::Value> = Vec::with_capacity(thread_ids.len());
-    for (idx, thread_id) in thread_ids.iter().enumerate() {
+    // Build thread nodes matching Python adoption (ro-{reading_order_item.id}).
+    let mut nodes: Vec<serde_json::Value> = Vec::with_capacity(items.len());
+    for (idx, item) in items.iter().enumerate() {
+        let item_id: i32 = item.get(0);
+        let thread_id: i32 = item.get(1);
         nodes.push(serde_json::json!({
-            "id": format!("ro-{}", order_id * 1000 + thread_id),
+            "id": format!("ro-{item_id}"),
             "node_type": "thread",
             "ref_id": thread_id,
             "lane_id": lane_id,
-            "position": idx,
+            "position": idx as i32,
             "label": null,
             "source_role": null,
             "source_confidence": null,
@@ -2178,14 +2181,13 @@ pub async fn adopt_reading_order(
             "convergence_gate": []
         }));
     }
-    let nodes_val = serde_json::Value::Array(nodes);
-
-    // Create the plan first to get the plan_id
     let lanes_value = serde_json::Value::Array(vec![serde_json::json!({
         "id": lane_id,
         "name": lane_name,
         "order": 0
     })]);
+    let nodes_value = serde_json::Value::Array(nodes);
+
     let row = tx
         .query_one(
             r#"
@@ -2193,45 +2195,15 @@ pub async fn adopt_reading_order(
             VALUES ($1, $2, 'informational', $3, $4, NOW(), NOW())
             RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
             "#,
-            &[&user.id(), &plan_name, &lanes_value, &nodes_val],
+            &[&user.id(), &resolved_name, &lanes_value, &nodes_value],
         )
         .await
         .map_err(db::query_error)?;
-
-    let plan_id: i32 = row.get(0);
-
-    // Insert continuity plan membership with the correct plan_id. The
-    // canonical table has no `node_id` column; occurrence_id carries the
-    // stable per-plan identifier.
-    for (idx, thread_id) in thread_ids.iter().enumerate() {
-        tx.execute(
-            "INSERT INTO reading_plan_issues
-             (plan_id, occurrence_id, issue_id, lane_id, display_position)
-             VALUES ($1, $2, $3, $4, $5)",
-            &[
-                &plan_id,
-                &format!("ro-{order_id}-{thread_id}"),
-                thread_id,
-                &lane_id,
-                &(idx as i32),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-
-    // Mark as adopted from reading order
-    tx.execute(
-        "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at) VALUES ($1, $2, NOW())",
-        &[&plan_id, &format!("reading-order:{}", order_id)],
-    )
-    .await
-    .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
 
     let result = ContinuityPlanResponse {
-        id: plan_id,
+        id: row.get(0),
         user_id: row.get(1),
         name: row.get(2),
         ordering_mode: row.get(3),
