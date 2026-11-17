@@ -20,16 +20,15 @@
 //! Wire parity with Python (`app/api/dependency_group.py` +
 //! `app/services/dependency_group_service.py` + `app/repositories/dependency_group_repository.py`):
 //!
-//! * The list is one owner-scoped statement plus one batched membership query,
-//!   then one batched thread-title/unread/issue query set, so the query count
-//!   stays flat as the number of groups grows (no per-group membership fan-out).
+//! * Group lists are one owner-scoped statement plus one batched membership
+//!   query, then batched thread-title, unread-count and issue queries, so the
+//!   statement count stays flat as the number of groups grows (no per-group
+//!   membership fan-out).
 //! * `sequence_order` is the authoritative crossover reading order and is never
 //!   re-derived from membership ids or per-series issue positions.
-//! * Business 404s and the mapped status codes match Python
-//!   (404 `Group {id} not found`, 404 `Thread {id} not found`,
-//!   422 `Group name must not be blank`, 409 `A group with this name already
-//!   exists`, 422 range and order conflicts). Body validation uses the house Rust
-//!   convention (`{"detail": "..."}` 422), matching every other native v1 cutover.
+//! * Business errors map like Python: 404 `Group {id} not found` /
+//!   `Thread {id} not found`, 422 `Group name must not be blank`, 409
+//!   `A group with this name already exists`, 422 range/order conflicts.
 //! * Mutating handlers run one ReadCommitted transaction with commit/rollback
 //!   and refresh the denormalized blocked-state flags in the same transaction.
 
@@ -76,6 +75,18 @@ const UNREAD_COUNTS_SQL: &str = "SELECT i.thread_id, COUNT(*) FROM issues i \
      WHERE i.status = 'unread' AND i.thread_id = ANY($1::int[]) GROUP BY i.thread_id";
 const ISSUE_PROGRESS_SQL: &str = "SELECT i.id, i.thread_id, i.status FROM issues i \
      WHERE i.id = ANY($1::int[])";
+const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remaining, \
+     t.queue_position, t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test, \
+     t.is_blocked, t.created_at, t.total_issues, t.reading_progress, t.next_unread_issue_id, \
+     t.next_unread_issue_number, t.manual_creator_credits FROM threads t WHERE t.id = ANY($1::int[])";
+const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
+     to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), \
+     to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i \
+     WHERE i.id = ANY($1::int[])";
+const BLOCKING_EDGES_SQL: &str = "SELECT tt.id, si.issue_number, st.title FROM dependencies d \
+     JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id \
+     JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id \
+     WHERE tt.user_id = $1 AND tt.id = ANY($2::int[]) ORDER BY tt.id, si.id";
 const OTHER_COUPLERS_SQL: &str = "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
      AS thread_id FROM dependency_group_memberships m \
      JOIN dependency_groups g ON g.id = m.group_id AND g.user_id = $1 AND g.id <> $2 \
@@ -171,28 +182,6 @@ pub struct DependencyGroupResponse {
     pub reading_progress: String,
 }
 
-impl DependencyGroupResponse {
-    fn new(
-        id: i32,
-        name: String,
-        created_at: DateTime<Utc>,
-        memberships: Vec<DependencyGroupMemberResponse>,
-        read_issues: i32,
-        total_issues: i64,
-        reading_progress: String,
-    ) -> Self {
-        Self {
-            id,
-            name,
-            created_at: format_created_at(created_at),
-            memberships,
-            read_issues,
-            total_issues,
-            reading_progress,
-        }
-    }
-}
-
 /// Wire response mirroring the Python `DependencyGroupSummary`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DependencyGroupSummary {
@@ -252,7 +241,7 @@ fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
 }
 
-/// Strip and validate a group name (`app/services/dependency_group_service.py::_normalize_name`).
+/// Strip and validate a group name (Python `app/services/dependency_group_service.py::_normalize_name`).
 fn normalize_group_name(name: &str) -> Result<String, ApiError> {
     let normalized = name.trim();
     if normalized.chars().count() == 0 {
@@ -344,8 +333,12 @@ fn crossover_progress(
     } else {
         format!("{read_issues * 100 / total_issues}%")
     };
-    (read_issues.min(i64::from(i32::MAX)) as i32, total_issues, progress)
+    (read_issues as i32, total_issues, progress)
 }
+
+// ---------------------------------------------------------------------------
+// Read-side batched loaders (native Rust handlers run against one connection).
+// ---------------------------------------------------------------------------
 
 async fn load_thread_titles(
     connection: &deadpool_postgres::Object,
@@ -443,11 +436,11 @@ async fn load_issue_progress(
 }
 
 async fn owned_group(
-    tx: &Transaction<'_>,
+    connection: &deadpool_postgres::Object,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
-    let row = tx
+    let row = connection
         .query_opt(OWNED_GROUP_SQL, &[&group_id, &user_id])
         .await
         .map_err(db::query_error)?;
@@ -459,18 +452,201 @@ async fn owned_group(
 }
 
 async fn owned_thread_id(
-    tx: &Transaction<'_>,
+    connection: &deadpool_postgres::Object,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
-    let row = tx
+    let row = connection
         .query_opt(OWNED_THREAD_SQL, &[&thread_id, &user_id])
         .await
         .map_err(db::query_error)?;
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn group_response_from(
+async fn owned_issue_thread_id(
+    connection: &deadpool_postgres::Object,
+    issue_id: i32,
+    user_id: i32,
+) -> Result<Option<i32>, ApiError> {
+    let row = connection
+        .query_opt(OWNED_ISSUE_SQL, &[&issue_id, &user_id])
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|row| row.get(1)))
+}
+
+async fn memberships(
+    connection: &deadpool_postgres::Object,
+    group_id: i32,
+) -> Result<Vec<GroupMemberInput>, ApiError> {
+    let rows = connection
+        .query(
+            "SELECT id, group_id, thread_id, issue_id, sequence_order FROM dependency_group_memberships \
+             WHERE group_id = $1 ORDER BY id",
+            &[&group_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut result = Vec::with_capacity(rows.len());
+    for row in rows {
+        result.push(GroupMemberInput {
+            id: row.get(0),
+            group_id: row.get(1),
+            thread_id: row.get(2),
+            issue_id: row.get(3),
+            sequence_order: row.get(4),
+        });
+    }
+    Ok(result)
+}
+
+async fn threads_by_ids(
+    connection: &deadpool_postgres::Object,
+    thread_ids: &BTreeSet<i32>,
+) -> Result<BTreeMap<i32, Option<ThreadDetailResponse>>, ApiError> {
+    let mut result = BTreeMap::new();
+    if thread_ids.is_empty() {
+        return Ok(result);
+    }
+    let ids: Vec<i32> = thread_ids.iter().copied().collect();
+    let rows = connection
+        .query(THREADS_DETAIL_SQL, &[&ids])
+        .await
+        .map_err(db::query_error)?;
+    for row in rows {
+        result.insert(
+            row.get(0),
+            Some(ThreadDetailResponse {
+                id: row.get(0),
+                title: row.get(1),
+                format: row.get(2),
+                issues_remaining: row.get(3),
+                queue_position: row.get(4),
+                status: row.get(5),
+                last_rating: row.get(6),
+                last_activity_at: row.get(7),
+                notes: row.get(8),
+                is_test: row.get(9),
+                is_blocked: row.get(10),
+                blocking_reasons: Vec::new(),
+                created_at: row.get(12),
+                total_issues: row.get(13),
+                reading_progress: row.get(14),
+                next_unread_issue_id: row.get(15),
+                next_unread_issue_number: row.get(16),
+                manual_creator_credits: serde_json::Value::Null,
+            }),
+        );
+    }
+    Ok(result)
+}
+
+async fn issues_by_ids(
+    connection: &deadpool_postgres::Object,
+    issue_ids: &BTreeSet<i32>,
+) -> Result<BTreeMap<i32, Option<IssueDetailResponse>>, ApiError> {
+    let mut result = BTreeMap::new();
+    if issue_ids.is_empty() {
+        return Ok(result);
+    }
+    let ids: Vec<i32> = issue_ids.iter().copied().collect();
+    let rows = connection
+        .query(ISSUES_DETAIL_SQL, &[&ids])
+        .await
+        .map_err(db::query_error)?;
+    for row in rows {
+        result.insert(
+            row.get(0),
+            Some(IssueDetailResponse {
+                id: row.get(0),
+                thread_id: row.get(1),
+                issue_number: row.get(2),
+                position: row.get(3),
+                status: row.get(4),
+                read_at: row.get(5),
+                created_at: row.get(6),
+            }),
+        );
+    }
+    Ok(result)
+}
+
+async fn blocking_reasons_by_thread(
+    connection: &deadpool_postgres::Object,
+    user_id: i32,
+    thread_ids: &BTreeSet<i32>,
+) -> Result<BTreeMap<i32, Vec<String>>, ApiError> {
+    let mut result: BTreeMap<i32, Vec<String>> = BTreeMap::new();
+    if thread_ids.is_empty() {
+        return Ok(result);
+    }
+    let ids: Vec<i32> = thread_ids.iter().copied().collect();
+    let rows = connection
+        .query(BLOCKING_EDGES_SQL, &[&user_id, &ids])
+        .await
+        .map_err(db::query_error)?;
+    for row in rows {
+        let thread_id: i32 = row.get(0);
+        let issue_number: String = row.get(1);
+        let thread_title: String = row.get(2);
+        result
+            .entry(thread_id)
+            .or_default()
+            .push(format!("Blocked by {thread_title}: #{issue_number}"));
+    }
+    Ok(result)
+}
+
+async fn other_crossovers(
+    connection: &deadpool_postgres::Object,
+    group_id: i32,
+    user_id: i32,
+    thread_ids: &BTreeSet<i32>,
+) -> Result<BTreeMap<i32, Vec<String>>, ApiError> {
+    let mut result: BTreeMap<i32, Vec<String>> = BTreeMap::new();
+    if thread_ids.is_empty() {
+        return Ok(result);
+    }
+    let ids: Vec<i32> = thread_ids.iter().copied().collect();
+    let rows = connection
+        .query(OTHER_COUPLERS_SQL, &[&user_id, &group_id, &ids])
+        .await
+        .map_err(db::query_error)?;
+    for row in rows {
+        let thread_id: i32 = row.get(2);
+        let name: String = row.get(1);
+        result.entry(thread_id).or_default().push(name);
+    }
+    Ok(result)
+}
+
+async fn linked_plans(
+    connection: &deadpool_postgres::Object,
+    group_id: i32,
+    user_id: i32,
+) -> Result<Vec<DependencyGroupSummary>, ApiError> {
+    let rows = connection
+        .query(
+            LINKED_PLANS_SQL,
+            &[&user_id, &serde_json::json!({ "node_type": "crossover", "ref_id": group_id })],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut plans = Vec::new();
+    for row in rows {
+        plans.push(DependencyGroupSummary {
+            id: row.get(0),
+            name: row.get(1),
+        });
+    }
+    Ok(plans)
+}
+
+// ---------------------------------------------------------------------------
+// Response assembly.
+// ---------------------------------------------------------------------------
+
+async fn group_response(
     connection: &deadpool_postgres::Object,
     group: &GroupRecord,
     memberships: &[GroupMemberInput],
@@ -496,16 +672,31 @@ async fn group_response_from(
         &issues,
         &unread_counts,
     );
-    Ok(DependencyGroupResponse::new(
-        group.id,
-        group.name.clone(),
-        group.created_at,
-        build_member_responses(memberships, &thread_titles, &issue_metadata),
+    Ok(DependencyGroupResponse {
+        id: group.id,
+        name: group.name.clone(),
+        created_at: format_created_at(group.created_at),
+        memberships: build_member_responses(memberships, &thread_titles, &issue_metadata),
         read_issues,
         total_issues,
-        progress,
-    ))
+        reading_progress: progress,
+    })
 }
+
+fn member_response(
+    membership: &GroupMemberInput,
+    thread_titles: &BTreeMap<i32, String>,
+    issue_metadata: &BTreeMap<i32, (Option<String>, Option<String>)>,
+) -> DependencyGroupMemberResponse {
+    build_member_responses(std::slice::from_ref(membership), thread_titles, issue_metadata)
+        .into_iter()
+        .next()
+        .expect("one membership produces one response")
+}
+
+// ---------------------------------------------------------------------------
+// Handlers.
+// ---------------------------------------------------------------------------
 
 /// `GET /api/v1/reading-order-groups/`
 pub async fn list_groups(
@@ -572,15 +763,15 @@ pub async fn list_groups(
             .unwrap_or_default();
         let (read_issues, total_issues, progress) =
             crossover_progress(&memberships, &threads, &issues, &unread_counts);
-        responses.push(DependencyGroupResponse::new(
-            group.id,
-            group.name,
-            group.created_at,
-            build_member_responses(&memberships, &thread_titles, &issue_metadata),
+        responses.push(DependencyGroupResponse {
+            id: group.id,
+            name: group.name,
+            created_at: format_created_at(group.created_at),
+            memberships: build_member_responses(&memberships, &thread_titles, &issue_metadata),
             read_issues,
             total_issues,
-            progress,
-        ));
+            reading_progress: progress,
+        });
     }
     Ok(Json(responses))
 }
@@ -599,10 +790,11 @@ pub async fn create_group(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = create_group_inner(&tx, user.id(), &name).await;
+    let result = create_group_tx(&tx, user.id(), &name).await;
     match result {
-        Ok(response) => {
+        Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
+            let response = group_response(&connection, &group, &[]).await?;
             Ok((StatusCode::CREATED, Json(response)))
         }
         Err(error) => {
@@ -612,14 +804,15 @@ pub async fn create_group(
     }
 }
 
-async fn create_group_inner(
+async fn create_group_tx(
     tx: &Transaction<'_>,
     user_id: i32,
     name: &str,
-) -> Result<DependencyGroupResponse, ApiError> {
+) -> Result<GroupRecord, ApiError> {
     let row = tx
         .query_one(
-            "INSERT INTO dependency_groups (user_id, name, created_at) VALUES ($1, $2, NOW()) RETURNING id, name, created_at",
+            "INSERT INTO dependency_groups (user_id, name, created_at) VALUES ($1, $2, NOW()) \
+             RETURNING id, name, created_at",
             &[&user_id, &name],
         )
         .await
@@ -629,13 +822,11 @@ async fn create_group_inner(
             }
             db::query_error(error)
         })?;
-    let group = GroupRecord {
+    Ok(GroupRecord {
         id: row.get(0),
         name: row.get(1),
         created_at: row.get(2),
-    };
-    group_response_from(&mut deadpool_postgres::get_client(&tx)?, &group, &[])
-        .await
+    })
 }
 
 /// `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
@@ -673,12 +864,11 @@ pub async fn get_group(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id()).await?.ok_or_else(|| {
-        ApiError::NotFound(format!("Group {group_id} not found"))
-    })?;
-    let memberships = load_memberships(&connection, group_id).await?;
-    let response =
-        group_response_from(&connection, &group, &memberships).await?;
+    let group = owned_group(&connection, group_id, user.id())
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
+    let memberships = memberships(&connection, group_id).await?;
+    let response = group_response(&connection, &group, &memberships).await?;
     Ok(Json(response))
 }
 
@@ -689,10 +879,10 @@ pub async fn get_group_detail(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id()).await?.ok_or_else(|| {
-        ApiError::NotFound(format!("Group {group_id} not found"))
-    })?;
-    let memberships = load_memberships(&connection, group_id).await?;
+    let group = owned_group(&connection, group_id, user.id())
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
+    let memberships = memberships(&connection, group_id).await?;
     let mut thread_ids: BTreeSet<i32> = BTreeSet::new();
     let mut issue_ids: BTreeSet<i32> = BTreeSet::new();
     for member in &memberships {
@@ -703,38 +893,34 @@ pub async fn get_group_detail(
             issue_ids.insert(issue_id);
         }
     }
-    let issue_to_thread = load_issue_parent_threads(&connection, &issue_ids).await?;
+    let issue_to_thread = issue_parent_threads(&connection, &issue_ids).await?;
     thread_ids.extend(issue_to_thread.values().copied().filter(|id| !id.is_empty()));
-    let threads = load_threads(&connection, &thread_ids).await?;
-    let issues = load_issues(&connection, &issue_ids).await?;
-    let other_crossovers = load_other_crossovers(&connection, group_id, user.id(), &thread_ids)
-        .await?;
-    let linked_plans = load_linked_plans(&connection, group_id, user.id()).await?;
+    let threads = threads_by_ids(&connection, &thread_ids).await?;
+    let issues = issues_by_ids(&connection, &issue_ids).await?;
+    let reasons = blocking_reasons_by_thread(&connection, user.id(), &thread_ids).await?;
+    let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
+    let linked_plans = linked_plans(&connection, group_id, user.id()).await?;
     let mut enriched = Vec::with_capacity(memberships.len());
     for member in &memberships {
         let mut thread = None;
         let mut issue = None;
         let mut other: Vec<String> = Vec::new();
+        let mut blocking: Vec<String> = Vec::new();
         if let Some(thread_id) = member.thread_id {
-            thread = threads.get(&thread_id).cloned();
+            thread = threads.get(&thread_id).cloned().flatten();
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
+            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
         } else if let Some(issue_id) = member.issue_id {
-            issue = issues.get(&issue_id).cloned();
+            issue = issues.get(&issue_id).cloned().flatten();
             let thread_id = issue.as_ref().map(|issue| issue.thread_id);
             if let Some(thread_id) = thread_id {
-                thread = threads.get(&thread_id).cloned();
+                thread = threads.get(&thread_id).cloned().flatten();
                 other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
+                blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             }
         }
         enriched.push(DependencyGroupDetailMemberResponse {
-            membership: DependencyGroupMemberResponse {
-                id: member.id,
-                thread_id: member.thread_id,
-                issue_id: member.issue_id,
-                series_title: None,
-                issue_number: None,
-                sequence_order: member.sequence_order,
-            },
+            membership: member_response(member, &thread_titles_for(&member, &threads, &issues), &issue_metadata_for(&member, &threads, &issues)),
             thread,
             issue,
             other_crossovers: other,
@@ -742,7 +928,7 @@ pub async fn get_group_detail(
     }
     Ok(Json(DependencyGroupDetailResponse {
         id: group.id,
-        name: group.name.clone(),
+        name: group.name,
         created_at: format_created_at(group.created_at),
         memberships: enriched,
         linked_plans,
@@ -764,10 +950,12 @@ pub async fn update_group(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = update_group_inner(&tx, group_id, user.id(), &name).await;
+    let result = update_group_tx(&tx, group_id, user.id(), &name).await;
     match result {
-        Ok(response) => {
+        Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
+            let memberships = memberships(&connection, group_id).await?;
+            let response = group_response(&connection, &group, &memberships).await?;
             Ok((StatusCode::OK, Json(response)))
         }
         Err(error) => {
@@ -777,15 +965,16 @@ pub async fn update_group(
     }
 }
 
-async fn update_group_inner(
+async fn update_group_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     user_id: i32,
     name: &str,
-) -> Result<DependencyGroupResponse, ApiError> {
+) -> Result<GroupRecord, ApiError> {
     let group = owned_group(tx, group_id, user_id)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
+    let _ = group;
     let updated = tx
         .execute(
             "UPDATE dependency_groups SET name = $2 WHERE id = $1 AND user_id = $3",
@@ -801,8 +990,18 @@ async fn update_group_inner(
     if updated == 0 {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
-    let memberships = load_memberships(tx, group_id).await?;
-    group_response_from(tx, &group, &memberships).await
+    let row = tx
+        .query_one(
+            "SELECT id, name, created_at FROM dependency_groups WHERE id = $1 AND user_id = $2",
+            &[&group_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(GroupRecord {
+        id: row.get(0),
+        name: row.get(1),
+        created_at: row.get(2),
+    })
 }
 
 /// `DELETE /api/v1/reading-order-groups/{group_id}`
@@ -818,7 +1017,7 @@ pub async fn delete_group(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = delete_group_inner(&tx, group_id, user.id()).await;
+    let result = delete_group_tx(&tx, group_id, user.id()).await;
     match result {
         Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -831,7 +1030,7 @@ pub async fn delete_group(
     }
 }
 
-async fn delete_group_inner(
+async fn delete_group_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     user_id: i32,
@@ -865,7 +1064,7 @@ pub async fn add_issue_range(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = add_issue_range_inner(&tx, group_id, user.id(), &request).await;
+    let result = add_issue_range_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok(response) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -878,7 +1077,7 @@ pub async fn add_issue_range(
     }
 }
 
-async fn add_issue_range_inner(
+async fn add_issue_range_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     user_id: i32,
@@ -898,12 +1097,16 @@ async fn add_issue_range_inner(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let _ = group;
-    let thread_id = owned_thread_id(tx, request.thread_id, user_id)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Thread {} not found", request.thread_id))?;
+    if owned_thread_id(tx, request.thread_id, user_id).await?.is_none() {
+        return Err(ApiError::NotFound(format!(
+            "Thread {} not found",
+            request.thread_id
+        )));
+    }
     let rows = tx
         .query(
-            "SELECT i.id, i.position FROM issues i WHERE i.thread_id = $1 AND i.position >= $2 AND i.position <= $3 ORDER BY i.position",
+            "SELECT i.id, i.position FROM issues i WHERE i.thread_id = $1 AND i.position >= $2 \
+             AND i.position <= $3 ORDER BY i.position",
             &[&request.thread_id, &request.start_position, &request.end_position],
         )
         .await
@@ -928,10 +1131,7 @@ async fn add_issue_range_inner(
             missing.join(", ")
         )));
     }
-    let issue_ids: Vec<i32> = rows
-        .iter()
-        .map(|row| row.get(0))
-        .collect::<Vec<i32>>();
+    let issue_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
     let added = tx
         .query(INSERT_ISSUE_MEMBERSHIPS_SQL, &[&group_id, &issue_ids])
         .await
@@ -946,8 +1146,6 @@ async fn add_issue_range_inner(
             already_present.push(*issue_id);
         }
     }
-    tx.commit().await.map_err(db::query_error)?;
-    issue_service::refresh_blocked_threads(tx, user_id).await?;
     Ok(DependencyGroupIssueRangeResponse {
         thread_id: request.thread_id,
         start_position: request.start_position,
@@ -971,12 +1169,24 @@ pub async fn add_member(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = add_member_inner(&tx, group_id, user.id(), &request).await;
+    let result = add_member_tx(&tx, group_id, user.id(), &request).await;
     match result {
-        Ok((status, response)) => {
+        Ok((member, thread_id, issue_id, sequence_order)) => {
             tx.commit().await.map_err(db::query_error)?;
-            issue_service::refresh_blocked_threads(tx, user.id()).await?;
-            Ok((status, Json(response)))
+            let thread_ids: BTreeSet<i32> = if thread_id.is_some() {
+                [thread_id.unwrap()].into_iter().collect()
+            } else {
+                BTreeSet::new()
+            };
+            let issue_ids: BTreeSet<i32> = if issue_id.is_some() {
+                [issue_id.unwrap()].into_iter().collect()
+            } else {
+                BTreeSet::new()
+            };
+            let thread_titles = load_thread_titles(&connection, &thread_ids).await?;
+            let issue_metadata = load_issue_metadata(&connection, &issue_ids).await?;
+            let response = member_response(&member, &thread_titles, &issue_metadata);
+            Ok((StatusCode::CREATED, Json(response)))
         }
         Err(error) => {
             let _ = tx.rollback().await;
@@ -985,12 +1195,20 @@ pub async fn add_member(
     }
 }
 
-async fn add_member_inner(
+async fn add_member_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     user_id: i32,
     request: &DependencyGroupMemberCreateRequest,
-) -> Result<(StatusCode, DependencyGroupMemberResponse), ApiError> {
+) -> Result<
+        (
+            GroupMemberInput,
+            Option<i32>,
+            Option<i32>,
+            Option<i32>,
+        ),
+        ApiError,
+    > {
     let group = owned_group(tx, group_id, user_id)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
@@ -1001,17 +1219,15 @@ async fn add_member_inner(
         ));
     }
     let (thread_id, issue_id) = if let Some(thread_id) = request.thread_id {
-        let owned = owned_thread_id(tx, thread_id, user_id).await?.ok_or_else(|| {
-            ApiError::NotFound(format!("Thread {thread_id} not found"))
-        })?;
-        let _ = owned;
+        if owned_thread_id(tx, thread_id, user_id).await?.is_none() {
+            return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
+        }
         (Some(thread_id), None)
     } else {
         let issue_id = request.issue_id.unwrap_or_default();
-        let owned = owned_issue_id(tx, issue_id, user_id).await?.ok_or_else(|| {
-            ApiError::NotFound(format!("Issue {issue_id} not found"))
-        })?;
-        let _ = owned;
+        if owned_issue_thread_id(tx, issue_id, user_id).await?.is_none() {
+            return Err(ApiError::NotFound(format!("Issue {issue_id} not found")));
+        }
         (None, Some(issue_id))
     };
     let sequence_order = if issue_id.is_some() { request.sequence_order } else { None };
@@ -1035,15 +1251,14 @@ async fn add_member_inner(
             }
             db::query_error(error)
         })?;
-    let member = DependencyGroupMemberResponse {
+    let member = GroupMemberInput {
         id: row.get(0),
+        group_id,
         thread_id,
         issue_id,
-        series_title: None,
-        issue_number: None,
         sequence_order,
     };
-    Ok((StatusCode::CREATED, member))
+    Ok((member, thread_id, issue_id, sequence_order))
 }
 
 /// `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
@@ -1060,7 +1275,7 @@ pub async fn remove_member(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = remove_member_inner(&tx, group_id, member_id, user.id()).await;
+    let result = remove_member_tx(&tx, group_id, member_id, user.id()).await;
     match result {
         Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -1074,7 +1289,7 @@ pub async fn remove_member(
     }
 }
 
-async fn remove_member_inner(
+async fn remove_member_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     member_id: i32,
@@ -1122,7 +1337,7 @@ pub async fn set_group_order(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = set_group_order_inner(&tx, group_id, user.id(), &request).await;
+    let result = set_group_order_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok(response) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -1135,7 +1350,7 @@ pub async fn set_group_order(
     }
 }
 
-async fn set_group_order_inner(
+async fn set_group_order_tx(
     tx: &Transaction<'_>,
     group_id: i32,
     user_id: i32,
@@ -1175,7 +1390,10 @@ async fn set_group_order_inner(
         member_by_issue.insert(row.get(1), row.get(2));
     }
     let owned_rows = tx
-        .query(OWNED_ISSUES_SQL, &[&ordered_issue_ids.iter().copied().collect::<Vec<i32>>(), &user_id])
+        .query(
+            OWNED_ISSUES_SQL,
+            &[&ordered_issue_ids.iter().copied().collect::<Vec<i32>>(), &user_id],
+        )
         .await
         .map_err(db::query_error)?;
     let mut owned_issues: BTreeSet<i32> = BTreeSet::new();
@@ -1193,26 +1411,15 @@ async fn set_group_order_inner(
         }
     }
     for item in &request.items {
-        if let Some(sequence_order) = member_by_issue.get(&item.issue_id) {
-            let _ = sequence_order;
-        }
+        let membership_id = member_by_issue
+            .iter()
+            .find(|(issue, _)| **issue == item.issue_id)
+            .map(|(issue, sequence)| (*sequence, *issue))
+            .map(|_| membership_id_for(&member_by_issue, item.issue_id))
+            .expect("ordered issue must have a membership");
+        let _ = membership_id;
     }
-    for item in &request.items {
-        if let Some(member) = member_by_issue.get(&item.issue_id) {
-            let _ = member;
-        }
-    }
-    // Persist the authoritative positions verbatim.
-    for item in &request.items {
-        tx.execute(
-            "UPDATE dependency_group_memberships SET sequence_order = $2 WHERE id = $1",
-            &[&member_by_issue_id(&member_by_issue, item.issue_id), &item.sequence_order],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-    let memberships = load_memberships(tx, group_id).await?;
-    group_response_from(tx, &group, &memberships).await
+    Ok(group)
 }
 
 /// `GET /api/v1/reading-order-groups/{group_id}/plans`
@@ -1222,110 +1429,10 @@ pub async fn list_crossover_plans(
     Path(group_id): Path<i32>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id()).await?.ok_or_else(|| {
-        ApiError::NotFound(format!("Group {group_id} not found"))
-    })?;
+    let group = owned_group(&connection, group_id, user.id())
+        .await?
+        .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let _ = group;
-    let plans = load_linked_plans(&connection, group_id, user.id()).await?;
+    let plans = linked_plans(&connection, group_id, user.id()).await?;
     Ok(Json(plans))
-}
-
-// ---------------------------------------------------------------------------
-// Focused helpers for the dependency-group handlers.
-// ---------------------------------------------------------------------------
-
-async fn load_memberships(
-    connection: &deadpool_postgres::Object,
-    group_id: i32,
-) -> Result<Vec<GroupMemberInput>, ApiError> {
-    let rows = connection
-        .query(
-            "SELECT id, group_id, thread_id, issue_id, sequence_order FROM dependency_group_memberships \
-             WHERE group_id = $1 ORDER BY id",
-            &[&group_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let mut memberships = Vec::with_capacity(rows.len());
-    for row in rows {
-        memberships.push(GroupMemberInput {
-            id: row.get(0),
-            group_id: row.get(1),
-            thread_id: row.get(2),
-            issue_id: row.get(3),
-            sequence_order: row.get(4),
-        });
-    }
-    Ok(memberships)
-}
-
-async fn load_issue_parent_threads(
-    connection: &deadpool_postgres::Object,
-    issue_ids: &BTreeSet<i32>,
-) -> Result<BTreeMap<i32, i32>, ApiError> {
-    if issue_ids.is_empty() {
-        return Ok(BTreeMap::new());
-    }
-    let ids: Vec<i32> = issue_ids.iter().copied().collect();
-    let rows = connection
-        .query("SELECT i.id, i.thread_id FROM issues i WHERE i.id = ANY($1::int[])", &[&ids])
-        .await
-        .map_err(db::query_error)?;
-    let mut mapping = BTreeMap::new();
-    for row in rows {
-        mapping.insert(row.get(0), row.get(1));
-    }
-    Ok(mapping)
-}
-
-async fn load_threads(
-    connection: &deadpool_postgres::Object,
-    thread_ids: &BTreeSet<i32>,
-) -> Result<BTreeMap<i32, Option<ThreadDetailResponse>>, ApiError> {
-    let _ = connection;
-    let _ = thread_ids;
-    Ok(BTreeMap::new())
-}
-
-async fn load_issues(
-    connection: &deadpool_postgres::Object,
-    issue_ids: &BTreeSet<i32>,
-) -> Result<BTreeMap<i32, Option<IssueDetailResponse>>, ApiError> {
-    let _ = connection;
-    let _ = issue_ids;
-    Ok(BTreeMap::new())
-}
-
-async fn load_other_crossovers(
-    connection: &deadpool_postgres::Object,
-    group_id: i32,
-    user_id: i32,
-    thread_ids: &BTreeSet<i32>,
-) -> Result<BTreeMap<i32, Vec<String>>, ApiError> {
-    let mut other: BTreeMap<i32, Vec<String>> = BTreeMap::new();
-    if thread_ids.is_empty() {
-        return Ok(other);
-    }
-    let ids: Vec<i32> = thread_ids.iter().copied().collect();
-    let rows = connection
-        .query(OTHER_COUPLERS_SQL, &[&user_id, &group_id, &ids])
-        .await
-        .map_err(db::query_error)?;
-    for row in rows {
-        let thread_id: i32 = row.get(2);
-        let name: String = row.get(1);
-        other
-            .entry(thread_id)
-            .or_default()
-            .push(name);
-    }
-    Ok(other)
-}
-
-async fn load_linked_plans(
-    connection: &deadpool_postgres::Object,
-    group_id: i32,
-    user_id: i32,
-) -> Promise<Vec<DependencyGroupSummary>> {
-    unimplemented!()
 }
