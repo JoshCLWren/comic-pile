@@ -202,7 +202,7 @@ pub async fn preview_cbl_reading_graph_handler(
     Json(request): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, Response> {
     validate_request(&request)?;
-    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state).await.map_err(|error| ApiError::into_response(db::query_error(error)))?;
 
     let list_row = connection
         .query_opt(
@@ -210,7 +210,7 @@ pub async fn preview_cbl_reading_graph_handler(
             &[&list_id],
         )
         .await
-        .map_err(ApiError::into_response)?
+        .map_err(|error| ApiError::into_response(db::query_error(error)))?
         .filter(|row| row.get::<_, bool>(2))
         .ok_or_else(|| {
             structured_error(
@@ -241,7 +241,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&list_id, &selected_positions],
             )
             .await
-            .map_err(ApiError::into_response)?
+            .map_err(|error| ApiError::into_response(db::query_error(error)))?
     };
     let known_positions: std::collections::HashSet<i64> =
         entry_rows.iter().map(|row| row.get::<_, i64>(0)).collect();
@@ -271,7 +271,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&identity_ids],
             )
             .await
-            .map_err(ApiError::into_response)?
+            .map_err(|error| ApiError::into_response(db::query_error(error)))?
         {
             external_by_id.insert(row.get(0), row.get(1));
         }
@@ -310,7 +310,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&user.id(), &external_ids],
             )
             .await
-            .map_err(ApiError::into_response)?
+            .map_err(|error| ApiError::into_response(db::query_error(error)))?
         {
             owned_by_external.entry(row.get(0)).or_insert_with(|| row.get::<_, i64>(1));
         }

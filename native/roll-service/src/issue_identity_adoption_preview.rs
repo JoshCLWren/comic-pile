@@ -9,12 +9,9 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    response::IntoResponse,
     Json,
 };
-use chrono::{DateTime, Utc};
 use serde::Serialize;
-use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use utoipa::ToSchema;
 
@@ -62,7 +59,7 @@ pub struct CBLAdoptionEntry {
     pub resolved_issue_id: Option<i64>,
     pub canonical_issue_id: Option<i64>,
     pub read_status: Option<String>,
-    pub read_at: Option<DateTime<Utc>>,
+    pub read_at: Option<String>,
     pub resolution_status: String,
     pub is_duplicate_identity: bool,
 }
@@ -314,7 +311,7 @@ pub async fn api_cbl_adoption_preview_handler(
             comicvine_issue_id,
             comicvine_series_id,
             series_provider: series_info.map(|(provider, _)| provider.clone()),
-            series_external_id: comicvine_series_id,
+            series_external_id: comicvine_series_id.clone(),
             resolved_issue_id,
             canonical_issue_id: resolved_issue_id,
             read_status: None,

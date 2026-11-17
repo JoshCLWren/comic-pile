@@ -24,7 +24,7 @@ const PREVIEW_TOKEN_TTL_SECONDS: f64 = 600.0;
 /// Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SeriesMappingPreviewRequest {
-    pub origin_issue_id: i64,
+    pub origin_issue_id: i32,
     pub provider: String,
     pub provider_series_external_id: String,
     #[serde(default = "default_scope_mode")]
@@ -50,7 +50,7 @@ pub struct SeriesMappingPreviewResponse {
 pub struct SeriesMappingPreviewScope {
     pub status: String,
     pub scope_key: Option<String>,
-    pub origin_issue_id: i64,
+    pub origin_issue_id: i32,
     pub series_label: Option<String>,
     pub basis: Option<String>,
 }
@@ -105,7 +105,7 @@ fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Respons
     } else if request.provider != "comicvine" {
         items.push(validation_item(
             "provider",
-            "Value error, unsupported provider: ".to_owned() + &request.provider,
+            &format!("Value error, unsupported provider: {}", request.provider),
             Value::String(request.provider.clone()),
             "value_error",
         ));
@@ -124,7 +124,7 @@ fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Respons
     ) {
         items.push(validation_item(
             "scope_mode",
-            "Value error, unsupported scope_mode: ".to_owned() + &request.scope_mode,
+            &format!("Value error, unsupported scope_mode: {}", request.scope_mode),
             Value::String(request.scope_mode.clone()),
             "value_error",
         ));
@@ -246,7 +246,8 @@ pub async fn preview_series_mapping_handler(
             &plan,
             issued_at,
             expires_at.unwrap_or(issued_at),
-        )?)
+        )
+        .map_err(ApiError::into_response)?)
     } else {
         None
     };
