@@ -14,6 +14,7 @@ pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
+pub mod cron_auth;
 pub mod db;
 pub mod demo;
 pub mod dependencies;

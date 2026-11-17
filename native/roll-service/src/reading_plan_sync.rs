@@ -1677,10 +1677,12 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 
 /// Fail-closed Vercel Cron secret gate, matching `require_cron_secret`: a
 /// deployment without a usable secret returns 503, a missing or incorrect
-/// bearer returns 401. Credentials are never logged. The `Bearer` scheme is
-/// matched case-insensitively (RFC 6750), like Python's `scheme.lower()`.
+/// bearer returns 401. Missing, empty and placeholder values are rejected as
+/// unconfigured by [`crate::cron_auth::usable_cron_secret`]. Credentials are
+/// never logged. The `Bearer` scheme is matched case-insensitively (RFC 6750),
+/// like Python's `scheme.lower()`.
 fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
-    let Some(secret) = expected.map(str::trim).filter(|value| !value.is_empty()) else {
+    let Some(secret) = crate::cron_auth::usable_cron_secret(expected) else {
         return Err(ApiError::ServiceUnavailable(
             "Cron endpoint is not configured".to_string(),
         ));
@@ -1923,6 +1925,48 @@ mod tests {
             cron_authorize(&headers, Some("a-very-secret-value"))
                 .expect("case-insensitive bearer scheme");
         }
+    }
+
+    #[test]
+    fn cron_authorize_rejects_placeholder_secrets_as_unconfigured() {
+        // Parity with Python `usable_cron_secret`: every placeholder (and its
+        // case / whitespace variants) is "not configured" -> 503, never a
+        // bearer rejection. See `app/config.py::_usable_secret`.
+        for placeholder in [
+            "",
+            "   ",
+            "[SENSITIVE]",
+            "  [SENSITIVE]  ",
+            "<redacted>",
+            "<REDACTED>",
+            "redacted",
+            "REDACTED",
+            "undefined",
+            "UNDEFINED",
+            "null",
+            "NULL",
+        ] {
+            let headers = cron_headers("a-very-secret-value");
+            assert_eq!(
+                cron_authorize(&headers, Some(placeholder))
+                    .expect_err("placeholder secret must be treated as unconfigured")
+                    .status(),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "placeholder: {placeholder:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cron_authorize_accepts_valid_secret_and_rejects_wrong_bearer() {
+        let secret = "a-very-secret-value";
+        cron_authorize(&cron_headers(secret), Some(secret)).expect("valid bearer");
+        assert_eq!(
+            cron_authorize(&cron_headers("not-the-secret"), Some(secret))
+                .expect_err("wrong bearer")
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     async fn seed_cron_owner(connection: &deadpool_postgres::Client, user_id: i32) {

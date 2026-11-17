@@ -118,9 +118,12 @@ enum ProviderFailure {
 }
 
 fn allowed(headers: &HeaderMap, expected: Option<&str>) -> bool {
-    let Some(secret) = expected.filter(|s| s.len() >= 16) else {
+    let Some(secret) = crate::cron_auth::usable_cron_secret(expected) else {
         return false;
     };
+    if secret.len() < 16 {
+        return false;
+    }
     let Some(header) = headers.get("authorization").and_then(|h| h.to_str().ok()) else {
         return false;
     };
@@ -1057,6 +1060,26 @@ mod tests {
         assert!(!allowed(&headers, Some("1234567890123457")));
         assert!(!allowed(&headers, Some("short")));
         assert!(!allowed(&headers, None));
+    }
+
+    #[test]
+    fn cron_auth_rejects_placeholder_secrets() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer 1234567890123456".parse().unwrap());
+        for placeholder in [
+            "",
+            "[SENSITIVE]",
+            "<redacted>",
+            "<REDACTED>",
+            "redacted",
+            "undefined",
+            "null",
+        ] {
+            assert!(
+                !allowed(&headers, Some(placeholder)),
+                "placeholder: {placeholder:?}"
+            );
+        }
     }
     #[test]
     fn only_verified_singular_issue_payload_completes() {
