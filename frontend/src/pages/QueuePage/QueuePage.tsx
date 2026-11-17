@@ -227,6 +227,7 @@ export default function QueuePage() {
           hasNextPage={completed.hasNextPage}
           isLoadingMore={completed.isLoadingMore}
           isError={completed.isError}
+          isLoading={completed.isLoading}
           onLoadMore={completed.loadMore}
           onRetry={completed.retry}
           onReactivate={modals.openReactivateModal}

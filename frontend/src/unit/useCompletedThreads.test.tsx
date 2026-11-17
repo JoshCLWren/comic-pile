@@ -35,6 +35,18 @@ describe('useCompletedThreads: finished series are independent of active Queue (
     expect(result.current.hasNextPage).toBe(false)
   })
 
+  it('exposes the first-page loading state before the bounded page lands', async () => {
+    const { result } = renderHook(() => useCompletedThreads(true, api), {
+      wrapper: createWrapper(),
+    })
+
+    // While the dedicated collection is in flight the shelf must read as
+    // loading, not as settled-empty (the original #5171 disappearance).
+    await waitFor(() => expect(result.current.isLoading).toBe(true))
+    await waitFor(() => expect(result.current.threads).toEqual([]))
+    expect(result.current.isLoading).toBe(false)
+  })
+
   it('separately paginates finished rows and leaves active rows out', async () => {
     listCompleted
       .mockResolvedValueOnce({

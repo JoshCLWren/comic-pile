@@ -124,4 +124,19 @@ describe('CompletedThreadsSection', () => {
 
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('renders a loading state instead of an empty shelf while the first page loads', () => {
+    const { container } = render(
+      <CompletedThreadsSection
+        threads={[]}
+        isLoading
+        onReactivate={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Finished Series' })).toBeInTheDocument()
+    expect(screen.getByText('Loading finished series...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add back to queue/i })).not.toBeInTheDocument()
+    expect(container).not.toBeEmptyDOMElement()
+  })
 })
