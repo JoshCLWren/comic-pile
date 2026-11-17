@@ -18,6 +18,29 @@ use serde_json::Value;
 use std::sync::Arc;
 use utoipa::ToSchema;
 
+/// Small response error used instead of returning a large Axum `Response` from
+/// helpers (see `clippy::result_large_err`).
+#[derive(Debug)]
+enum PreviewError {
+    Api(ApiError),
+    Json(StatusCode, Value),
+}
+
+impl From<ApiError> for PreviewError {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl IntoResponse for PreviewError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Api(error) => error.into_response(),
+            Self::Json(status, body) => (status, Json(body)).into_response(),
+        }
+    }
+}
+
 const SCOPE_MODE_CONFIRMED_ORIGIN: &str = "confirmed_origin";
 const PREVIEW_TOKEN_TTL_SECONDS: f64 = 600.0;
 
@@ -85,7 +108,7 @@ fn validation_item(field: &str, msg: &str, input: Value, error_type: &str) -> Va
 
 /// Validate the request against the Python Pydantic constraints, emitting the
 /// FastAPI 422 `{"detail": [...]}` body for every rejected field.
-fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Response> {
+fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), PreviewError> {
     let mut items = Vec::new();
     if request.origin_issue_id < 1 {
         items.push(validation_item(
@@ -135,11 +158,10 @@ fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Respons
     if items.is_empty() {
         Ok(())
     } else {
-        Err((
+        Err(PreviewError::Json(
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({ "detail": items })),
-        )
-            .into_response())
+            serde_json::json!({ "detail": items }),
+        ))
     }
 }
 
@@ -217,11 +239,9 @@ pub async fn preview_series_mapping_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(request): Json<SeriesMappingPreviewRequest>,
-) -> Result<Json<SeriesMappingPreviewResponse>, Response> {
+) -> Result<Json<SeriesMappingPreviewResponse>, PreviewError> {
     validate_request(&request)?;
-    let connection = db::checkout(&state)
-        .await
-        .map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state).await?;
     let plan = catalog_commit::build_plan_for_commit(
         &connection,
         user.id(),
