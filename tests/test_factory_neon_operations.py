@@ -687,22 +687,19 @@ def test_fleet_admission_does_not_double_book_capped_provider() -> None:
     assert "cloudflare-workers-ai" not in allowed
 
 
-def test_account_backoff_records_account_class_and_grows_fibonacci(monkeypatch):
-    """A Z.AI-style account refusal must block its provider across dispatches.
-
-    The terminal candidate of the same run may be a different provider with a
-    different class. The account record must keep the proven account class so
-    dispatcher eligibility honours it, and its streak must grow.
-    """
+def test_legacy_account_refusal_only_backs_off_the_exact_model(monkeypatch):
+    """Old account-labelled records are downgraded to exact-model Fibonacci."""
     monkeypatch.setenv("FACTORY_SLOTS_PER_PROVIDER", "1")
     monkeypatch.delenv("FACTORY_SLOT_PROVIDER_SOURCES", raising=False)
     roster = operations._roster()
     worker, (terminal_source, _) = sorted(roster.items())[0]
     from factory_provider_candidates import ADAPTERS
 
-    account_source = next(s for s in sorted(ADAPTERS) if s != terminal_source)
+    refused_source = next(s for s in sorted(ADAPTERS) if s != terminal_source)
+    refused_model = "generated/refused-model"
+    model_key = f"factory-model-backoff-v1:{REPO}:source:{refused_source}:model:{refused_model}"
+    provider_key = f"factory-provider-backoff-v1:{REPO}:source:{refused_source}"
     conn = RuntimeConn()
-    key = f"factory-provider-backoff-v1:{REPO}:source:{account_source}"
 
     def outcome(run_id: int) -> dict:
         return {
@@ -710,34 +707,33 @@ def test_account_backoff_records_account_class_and_grows_fibonacci(monkeypatch):
             "outcome_class": "provider_throttle", "exact_model_proven": True,
             "persisted_work": False, "configured": True,
             "model_failures": [{
-                "source": account_source, "model": f"generated/account-{run_id}",
+                "source": refused_source, "model": refused_model,
                 "outcome": "provider_quota", "scope": "account",
             }],
         }
 
-    assert run(operations.project_runtime(conn, REPO, 2001, outcome(2001))) is True
-    first = conn.kv[key][0]
-    assert first["outcome"] == "provider_quota"
-    assert first["streak"] == 1
-    assert run(operations.project_runtime(conn, REPO, 2002, outcome(2002))) is True
-    second = conn.kv[key][0]
-    assert second["streak"] == 2
-    assert run(operations.project_runtime(conn, REPO, 2003, outcome(2003))) is True
-    third = conn.kv[key][0]
-    assert third["streak"] == 3
-    assert third["delay_seconds"] > second["delay_seconds"]
+    for run_id, expected_streak in [(2001, 1), (2002, 2), (2003, 3)]:
+        assert run(operations.project_runtime(conn, REPO, run_id, outcome(run_id))) is True
+        record = conn.kv[model_key][0]
+        assert record["outcome"] == "provider_quota"
+        assert record["streak"] == expected_streak
+        assert record["suspended"] is False
+        assert record["next_retry_at"] is not None
+        assert provider_key not in conn.kv
 
-    # The persisted record is exactly what dispatcher eligibility consumes.
-    db = FakeConnection(backoffs=[{
-        "cache_key": key, "payload": conn.kv[key],
+    # The cooled model is excluded, but the provider's other models and slots remain available.
+    model_row = {
+        "cache_key": model_key, "payload": conn.kv[model_key],
         "expires_at": datetime.now(UTC) + timedelta(hours=1),
-    }])
+    }
+    db = FakeConnection(model_backoffs=[model_row])
+    exclusions = run(operations._export_model_exclusions(db, REPO))
+    assert exclusions == {refused_source: [refused_model]}
     with patch.object(operations, "_roster", return_value={
-        "41": (account_source, "@catalog"), "42": (terminal_source, "@catalog"),
+        "41": (refused_source, "@catalog"), "42": (terminal_source, "@catalog"),
     }):
         kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
-    assert kept == ["42"]
-    assert any(account_source in reason for reason in rejected)
+    assert kept == ["41", "42"] and not rejected
 
 
 def test_legacy_account_failure_is_now_model_scoped():
