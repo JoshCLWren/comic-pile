@@ -6,6 +6,7 @@ import QueuePage from '../pages/QueuePage'
 import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
+import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
@@ -48,6 +49,12 @@ const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The finished shelf is fetched separately from the active Queue response.
+  vi.mocked(useCompletedThreads).mockReturnValue({
+    threads: [completed] as never,
+    hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  } as never)
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
      // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
