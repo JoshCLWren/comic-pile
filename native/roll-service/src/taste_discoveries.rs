@@ -301,14 +301,11 @@ pub async fn list_taste_discoveries(
     query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
     claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let Query(query) =
-        query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
+    let Query(query) = query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
     let user = auth::authenticate_claims(&state, &claims).await?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
-        return Err(ApiError::Unprocessable(
-            "limit must be between 1 and 3".to_string(),
-        ));
+        return Err(ApiError::Unprocessable("Validation failed".to_string()));
     }
 
     let now = Utc::now();
@@ -867,7 +864,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_limit_returns_json_422_through_service_router() {
+    async fn invalid_limit_returns_validation_envelope_through_service_router() {
         use crate::{config::Config, router, AppState};
         use axum::{
             body::Body,
@@ -912,33 +909,36 @@ mod tests {
         )
         .unwrap();
 
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/v1/taste/discoveries?limit=abc")
-                    .header("authorization", format!("Bearer {token}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        for limit in ["abc", "0", "4"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/api/v1/taste/discoveries?limit={limit}"))
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
 
-        assert_eq!(
-            response.status(),
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "malformed limit must return 422 through the service router"
-        );
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .unwrap()
-            .to_bytes();
-        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            payload,
-            json!({"detail": "limit must be between 1 and 3"}),
-            "malformed limit must preserve the JSON validation response"
-        );
+            assert_eq!(
+                response.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid limit {limit} must return 422 through the service router"
+            );
+            let body = response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                payload,
+                json!({"detail": "Validation failed"}),
+                "invalid limit {limit} must preserve the FastAPI validation envelope"
+            );
+        }
     }
 }
