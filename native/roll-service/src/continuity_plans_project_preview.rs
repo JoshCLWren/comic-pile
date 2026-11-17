@@ -85,8 +85,8 @@ struct Node {
     position: i64,
 }
 
-fn not_found(detail: String) -> Response {
-    ApiError::NotFound(detail).into_response()
+fn not_found(detail: String) -> PreviewError {
+    PreviewError::Api(ApiError::NotFound(detail))
 }
 
 fn conflict_detail(detail: Value) -> PreviewError {
@@ -96,54 +96,43 @@ fn conflict_detail(detail: Value) -> PreviewError {
     )
 }
 
-fn invalid_request() -> Response {
-    (
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Json(serde_json::json!({
-            "detail": [{
-                "type": "greater_than",
-                "loc": ["body", "reading_order_id"],
-                "msg": "Input should be greater than 0",
-                "input": 0,
-                "ctx": { "gt": 0 }
-            }]
-        })),
-    )
-        .into_response()
-}
-
 /// Parse persisted nodes with the Pydantic field constraints used by Python.
-fn parse_nodes(nodes: &Value, plan_id: i64) -> Result<Vec<Node>, Response> {
+fn parse_nodes(nodes: &Value, plan_id: i64) -> Result<Vec<Node>, PreviewError> {
+    let malformed = |reason: &str| {
+        conflict_detail(serde_json::json!({
+            "code": "malformed_plan", "plan_id": plan_id, "reason": reason
+        }))
+    };
     let Some(items) = nodes.as_array() else {
-        return Err(conflict_detail(serde_json::json!({
-            "code": "malformed_plan", "plan_id": plan_id, "reason": "nodes_json is not an array"
-        })));
+        return Err(malformed("nodes_json is not an array"));
     };
     let mut parsed = Vec::with_capacity(items.len());
     for item in items {
-        let id = item.get("id").and_then(Value::as_str);
-        let node_type = item.get("node_type").and_then(Value::as_str);
-        let ref_id = item.get("ref_id").and_then(Value::as_i64);
-        let lane_id = item.get("lane_id").and_then(Value::as_str);
-        let position = item.get("position").and_then(Value::as_i64);
-        let valid = matches!(id, Some(id) if !id.is_empty() && id.len() <= 80)
-            && matches!(node_type, Some(t) if !t.is_empty())
-            && matches!(ref_id, Some(id) if id > 0)
-            && matches!(lane_id, Some(id) if !id.is_empty() && id.len() <= 80)
-            && matches!(position, Some(p) if p >= 0);
-        if !valid {
-            return Err(conflict_detail(serde_json::json!({
-                "code": "malformed_plan",
-                "plan_id": plan_id,
-                "reason": "node failed ContinuityPlanNode validation"
-            })));
+        let (Some(id), Some(node_type), Some(ref_id), Some(lane_id), Some(position)) = (
+            item.get("id").and_then(Value::as_str),
+            item.get("node_type").and_then(Value::as_str),
+            item.get("ref_id").and_then(Value::as_i64),
+            item.get("lane_id").and_then(Value::as_str),
+            item.get("position").and_then(Value::as_i64),
+        ) else {
+            return Err(malformed("node failed ContinuityPlanNode validation"));
+        };
+        if id.is_empty()
+            || id.len() > 80
+            || node_type.is_empty()
+            || ref_id < 1
+            || lane_id.is_empty()
+            || lane_id.len() > 80
+            || position < 0
+        {
+            return Err(malformed("node failed ContinuityPlanNode validation"));
         }
         parsed.push(Node {
-            id: id.expect("validated").to_string(),
-            node_type: node_type.expect("validated").to_string(),
-            ref_id: ref_id.expect("validated"),
-            lane_id: lane_id.expect("validated").to_string(),
-            position: position.expect("validated"),
+            id: id.to_string(),
+            node_type: node_type.to_string(),
+            ref_id,
+            lane_id: lane_id.to_string(),
+            position,
         });
     }
     Ok(parsed)
@@ -155,7 +144,7 @@ fn flatten(
     ordering_mode: &str,
     lanes: &Value,
     plan_id: i64,
-) -> Result<(Vec<Node>, Vec<String>), Response> {
+) -> Result<(Vec<Node>, Vec<String>), PreviewError> {
     let lane_ids: Vec<String> = lanes
         .as_array()
         .map(|items| {
@@ -246,13 +235,22 @@ pub async fn preview_plan_projection_handler(
     user: AuthenticatedUser,
     Path(plan_id): Path<i64>,
     Json(request): Json<ReadingOrderProjectionRequest>,
-) -> Result<Json<ReadingOrderProjectionPreview>, Response> {
+) -> Result<Json<ReadingOrderProjectionPreview>, PreviewError> {
     if request.reading_order_id < 1 {
-        return Err(invalid_request());
+        return Err(PreviewError::Json(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            serde_json::json!({
+                "detail": [{
+                    "type": "greater_than",
+                    "loc": ["body", "reading_order_id"],
+                    "msg": "Input should be greater than 0",
+                    "input": 0,
+                    "ctx": { "gt": 0 }
+                }]
+            }),
+        ));
     }
-    let connection = db::checkout(&state)
-        .await
-        .map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state).await?;
 
     let plan_row = connection
         .query_opt(
@@ -261,7 +259,7 @@ pub async fn preview_plan_projection_handler(
             &[&plan_id, &user.id()],
         )
         .await
-        .map_err(|error| ApiError::into_response(db::query_error(error)))?
+        .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
     let plan_name: String = plan_row.get(0);
     let ordering_mode: String = plan_row.get(1);
@@ -274,7 +272,7 @@ pub async fn preview_plan_projection_handler(
             &[&request.reading_order_id, &user.id()],
         )
         .await
-        .map_err(|error| ApiError::into_response(db::query_error(error)))?
+        .map_err(db::query_error)?
         .ok_or_else(|| {
             not_found(format!(
                 "Reading order {} not found",
@@ -299,7 +297,7 @@ pub async fn preview_plan_projection_handler(
                 &[&user.id(), &thread_ids],
             )
             .await
-            .map_err(|error| ApiError::into_response(db::query_error(error)))?;
+            .map_err(db::query_error)?;
         for row in rows {
             thread_titles.insert(row.get(0), row.get(1));
         }
@@ -311,7 +309,7 @@ pub async fn preview_plan_projection_handler(
             &[&request.reading_order_id],
         )
         .await
-        .map_err(|error| ApiError::into_response(db::query_error(error)))?;
+        .map_err(db::query_error)?;
     let mut existing_positions: HashMap<i64, i64> = HashMap::new();
     for row in &existing_rows {
         existing_positions.insert(row.get(0), row.get(1));
