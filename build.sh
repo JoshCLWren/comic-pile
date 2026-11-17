@@ -24,7 +24,8 @@ printf '%s\n' "Production Rust toolchain:"
 cargo --version
 rustc --version --verbose
 
-readonly lock_sha256="$(node check-rust-workspace-lock.mjs --lock-sha256)"
+lock_sha256="$(node check-rust-workspace-lock.mjs --lock-sha256)"
+readonly lock_sha256
 export COMICPILE_EXPECTED_LOCK_SHA256="$lock_sha256"
 printf 'Canonical Cargo.lock SHA-256: %s\n' "$lock_sha256"
 
