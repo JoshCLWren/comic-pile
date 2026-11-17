@@ -8,11 +8,14 @@ REAL_GH="${FACTORY_REAL_GH:-/usr/bin/gh}"
 }
 
 # Attribute every invocation to this job's shared-quota usage report.
+# Reads may use the optional read-only App token (separate quota bucket).
 METER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory-gh-meter.sh"
-if [[ -n "${FACTORY_GH_CALL_LOG:-}" && -f "$METER" ]]; then
+if [[ -f "$METER" ]]; then
   # shellcheck source=/dev/null
   source "$METER"
   factory_gh_meter_record "$@"
+else
+  factory_gh_real() { "$REAL_GH" "$@"; }
 fi
 
 original=("$@")
@@ -24,7 +27,7 @@ command_name="${2:-}"
 FACTORY_DISCOVERY_HELPER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory_discovery.py"
 
 factory_api() {
-  "$REAL_GH" api "$@"
+  factory_gh_real api "$@"
 }
 
 factory_snapshot() {
@@ -83,7 +86,7 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
   repo='' state='' limit='' jq_expr=''
   labels=()
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
-    exec "$REAL_GH" "${original[@]}"
+    factory_gh_real "${original[@]}"; exit $?
   fi
   # Let GitHub narrow worker-owned issue queries server-side. Otherwise each
   # worker re-fetches every page of the entire issue backlog to find one lease.
@@ -128,7 +131,7 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
   repo='' state='' limit='' jq_expr=''
   labels=()
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
-    exec "$REAL_GH" "${original[@]}"
+    factory_gh_real "${original[@]}"; exit $?
   fi
   snapshot=''
   if [[ "$state" == open ]] && ! [[ " ${original[*]} " == *"author"* ]]; then
@@ -198,9 +201,9 @@ if [[ "$command_group" == pr && "$command_name" == view ]]; then
   shift 2
   number='' repo='' jq_expr=''
   if ! parse_view_args number repo jq_expr "$@"; then
-    exec "$REAL_GH" "${original[@]}"
+    factory_gh_real "${original[@]}"; exit $?
   fi
-  raw="$("$REAL_GH" api "repos/${repo}/pulls/${number}")"
+  raw="$(factory_gh_real api "repos/${repo}/pulls/${number}")"
   payload="$(jq -c '
     {
       number,
@@ -224,9 +227,9 @@ if [[ "$command_group" == issue && "$command_name" == view ]]; then
   shift 2
   number='' repo='' jq_expr=''
   if ! parse_view_args number repo jq_expr "$@"; then
-    exec "$REAL_GH" "${original[@]}"
+    factory_gh_real "${original[@]}"; exit $?
   fi
-  raw="$("$REAL_GH" api "repos/${repo}/issues/${number}")"
+  raw="$(factory_gh_real api "repos/${repo}/issues/${number}")"
   payload="$(jq -c '
     {
       number,
@@ -247,7 +250,7 @@ fi
 # interpretation without weakening protected-branch behavior.
 if [[ "$command_group" == pr && "$command_name" == checks ]]; then
   set +e
-  checks_output="$("$REAL_GH" "${original[@]}" 2>&1)"
+  checks_output="$(factory_gh_real "${original[@]}" 2>&1)"
   checks_status=$?
   set -e
 
@@ -284,11 +287,11 @@ if [[ "$command_group" == pr && "$command_name" == checks ]]; then
   fi
 
   if (( is_required == 1 && no_checks == 1 )) && [[ -n "$repo" && -n "$number" ]]; then
-    if pr_raw="$("$REAL_GH" api "repos/${repo}/pulls/${number}" 2>/dev/null)"; then
+    if pr_raw="$(factory_gh_real api "repos/${repo}/pulls/${number}" 2>/dev/null)"; then
       base_ref="$(jq -r '.base.ref // empty' <<< "$pr_raw")"
       if [[ -n "$base_ref" ]]; then
         encoded_base="$(jq -rn --arg value "$base_ref" '$value | @uri')"
-        if branch_raw="$("$REAL_GH" api "repos/${repo}/branches/${encoded_base}" 2>/dev/null)"; then
+        if branch_raw="$(factory_gh_real api "repos/${repo}/branches/${encoded_base}" 2>/dev/null)"; then
           protected="$(jq -r 'if has("protected") then .protected else true end' <<< "$branch_raw")"
           if [[ "$protected" == false ]]; then
             echo "factory gh REST shim: no required checks configured on unprotected base ${base_ref}; treating required-check gate as satisfied" >&2
@@ -303,4 +306,4 @@ if [[ "$command_group" == pr && "$command_name" == checks ]]; then
   exit "$checks_status"
 fi
 
-exec "$REAL_GH" "${original[@]}"
+factory_gh_real "${original[@]}"; exit $?

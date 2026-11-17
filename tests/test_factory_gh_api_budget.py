@@ -122,3 +122,53 @@ def test_dispatcher_and_worker_report_gh_usage() -> None:
     run = (WORKFLOWS / "free-model-factory-run.yml").read_text()
     assert 'cp .github/scripts/factory-gh-meter.sh "$meter_dir/gh"' in run
     assert 'python3 -I "$meter_dir/factory_gh_usage.py"' in run
+
+
+def _route(tmp_path: Path, *args: str, expires_in: int = 600) -> str:
+    """Run the meter as gh with a fake real gh that reports which token it got."""
+    import time
+
+    fake = tmp_path / "real-gh"
+    fake.write_text('#!/usr/bin/env bash\necho "${GH_TOKEN:-none}"\n')
+    fake.chmod(0o755)
+    env = {**os.environ, "FACTORY_REAL_GH": str(fake), "GH_TOKEN": "workflow-token",
+           "FACTORY_READ_TOKEN": "reader-token",
+           "FACTORY_READ_TOKEN_EXPIRES": str(int(time.time()) + expires_in)}
+    env.pop("FACTORY_GH_CALL_LOG", None)
+    result = subprocess.run(["bash", str(METER), *args], env=env, text=True,
+                            capture_output=True, check=True)
+    return result.stdout.strip()
+
+
+def test_pure_reads_use_the_read_only_app_budget(tmp_path: Path) -> None:
+    assert _route(tmp_path, "api", "repos/o/r/pulls/1") == "reader-token"
+    assert _route(tmp_path, "api", "repos/o/r/issues/1/comments", "--paginate") == "reader-token"
+    assert _route(tmp_path, "pr", "view", "1", "--json", "labels") == "reader-token"
+    assert _route(tmp_path, "run", "list") == "reader-token"
+
+
+def test_writes_and_graphql_keep_the_workflow_token(tmp_path: Path) -> None:
+    """Writes stay on GITHUB_TOKEN so they never trigger extra workflows."""
+    assert _route(tmp_path, "api", "-X", "PUT", "repos/o/r/issues/1/labels") == "workflow-token"
+    assert _route(tmp_path, "api", "repos/o/r/issues/1/comments", "-f", "body=x") == "workflow-token"
+    assert _route(tmp_path, "api", "--method=DELETE", "repos/o/r/git/refs/heads/x") == "workflow-token"
+    assert _route(tmp_path, "api", "graphql", "-f", "query=x") == "workflow-token"
+    assert _route(tmp_path, "workflow", "run", "x.yml") == "workflow-token"
+    assert _route(tmp_path, "pr", "merge", "1") == "workflow-token"
+    assert _route(tmp_path, "issue", "comment", "1") == "workflow-token"
+
+
+def test_expired_read_token_falls_back_to_the_workflow_token(tmp_path: Path) -> None:
+    assert _route(tmp_path, "api", "repos/o/r/pulls/1", expires_in=-5) == "workflow-token"
+
+
+def test_read_token_is_optional_and_verified_before_use() -> None:
+    for name in ("fixed-model-factory-dispatch.yml", "free-model-factory-run.yml"):
+        data = yaml.safe_load((WORKFLOWS / name).read_text())
+        steps = [s for job in data["jobs"].values() for s in job.get("steps", [])]
+        mint = next(s for s in steps if s.get("name") == "Mint optional read-only factory App token")
+        assert mint["continue-on-error"] is True
+        assert mint["if"] == "${{ env.FACTORY_READER_APP_ID != '' }}"
+        assert all(v == "read" for k, v in mint["with"].items() if k.startswith("permission-"))
+        verify = next(s for s in steps if s.get("name") == "Verify and enable read-only factory App token")
+        assert verify["run"].index("gh api") < verify["run"].index("FACTORY_READ_TOKEN=")

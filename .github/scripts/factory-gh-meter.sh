@@ -37,8 +37,44 @@ factory_gh_meter_record() {
   printf '%s\t%s\n' "$(date +%s)" "$key" >> "$FACTORY_GH_CALL_LOG" 2>/dev/null || true
 }
 
+# True for gh invocations that only read GitHub state. Those may use the
+# optional read-only factory App token (a separate 5000/h installation bucket)
+# instead of the repository's shared GITHUB_TOKEN budget. Writes always keep
+# the workflow token so they never trigger additional workflows.
+factory_gh_is_read() {
+  local group="${1:-}" name="${2:-}" arg
+  case "$group" in
+    api)
+      shift
+      [[ "${1:-}" != graphql ]] || return 1
+      for arg in "$@"; do
+        case "$arg" in
+          -X|--method|--method=*|-f|-F|--field|--raw-field|--input|-f*|-F*) return 1 ;;
+        esac
+      done
+      return 0 ;;
+    pr) [[ "$name" =~ ^(list|view|checks|diff|status)$ ]] ;;
+    issue) [[ "$name" =~ ^(list|view|status)$ ]] ;;
+    run) [[ "$name" =~ ^(list|view)$ ]] ;;
+    repo|release|workflow) [[ "$name" =~ ^(list|view)$ ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Run the real gh, using the read-only token for pure reads when configured.
+factory_gh_real() {
+  local real="${FACTORY_REAL_GH:-/usr/bin/gh}"
+  # Installation tokens expire after an hour; long sessions fall back.
+  if [[ -n "${FACTORY_READ_TOKEN:-}" ]] \
+    && (( $(date +%s) < ${FACTORY_READ_TOKEN_EXPIRES:-0} )) \
+    && factory_gh_is_read "$@"; then
+    GH_TOKEN="$FACTORY_READ_TOKEN" "$real" "$@"
+  else
+    "$real" "$@"
+  fi
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   factory_gh_meter_record "$@"
-  real="${FACTORY_REAL_GH:-/usr/bin/gh}"
-  exec "$real" "$@"
+  factory_gh_real "$@"
 fi
