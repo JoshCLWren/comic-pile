@@ -717,8 +717,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
             post(comicvine_v2::refresh_metadata),
         )
-        .route("/api/v2/comicvine/search/series", get(comicvine_v2::search_series))
-        .route("/api/v2/comicvine/resolve", get(comicvine_v2::resolve_input))
+        .route(
+            "/api/v2/comicvine/search/series",
+            get(comicvine_v2::search_series),
+        )
+        .route(
+            "/api/v2/comicvine/resolve",
+            get(comicvine_v2::resolve_input),
+        )
         .route(
             "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
             get(comicvine_v2::series_issues),
@@ -727,8 +733,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_v2::series_import_status),
         )
-        .route("/api/v2/comicvine/issues:import", post(comicvine_v2::import_issue))
-        .route("/api/v2/comicvine/series:import", post(comicvine_v2::import_series))
+        .route(
+            "/api/v2/comicvine/issues:import",
+            post(comicvine_v2::import_issue),
+        )
+        .route(
+            "/api/v2/comicvine/series:import",
+            post(comicvine_v2::import_series),
+        )
         .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(issue_read::get_issue_dependencies),

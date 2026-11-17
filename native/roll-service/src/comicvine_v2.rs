@@ -12,8 +12,7 @@
 use crate::{
     auth::AuthenticatedUser,
     comicvine_repair::{provider_issue, provider_response, ProviderFailure},
-    db,
-    ApiError, AppState,
+    db, ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -23,7 +22,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
-use tokio_postgres::{Row, Transaction};
+use tokio_postgres::Transaction;
 
 // ---------------------------------------------------------------------------
 // Wire contract (mirrors app/schemas/comicvine_resolution.py).
@@ -307,7 +306,11 @@ fn provider_string(value: Option<&Value>) -> Option<String> {
 fn provider_image_url(value: Option<&Value>) -> Option<String> {
     let object = value?.as_object()?;
     for key in ["medium_url", "small_url", "super_url", "thumb_url"] {
-        if let Some(url) = object.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        if let Some(url) = object
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+        {
             return Some(url.to_owned());
         }
     }
@@ -318,7 +321,11 @@ fn provider_image_url(value: Option<&Value>) -> Option<String> {
 fn candidate_image_url(value: Option<&Value>) -> Option<String> {
     let object = value?.as_object()?;
     for key in ["small_url", "thumb_url"] {
-        if let Some(url) = object.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        if let Some(url) = object
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+        {
             return Some(url.to_owned());
         }
     }
@@ -346,7 +353,12 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     };
     let after_scheme = with_scheme.split_once("://")?.1;
     let authority = after_scheme.split('/').next()?;
-    let host = authority.rsplit('@').next()?.split(':').next()?.to_ascii_lowercase();
+    let host = authority
+        .rsplit('@')
+        .next()?
+        .split(':')
+        .next()?
+        .to_ascii_lowercase();
     if host != "comicvine.gamespot.com" && host != "www.comicvine.gamespot.com" {
         return None;
     }
@@ -355,8 +367,7 @@ fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
         .split(['?', '#'])
         .next()?
         .split('/')
-        .filter(|part| !part.is_empty())
-        .last()?;
+        .rfind(|part| !part.is_empty())?;
     let (prefix, digits) = segment.split_once('-')?;
     if !digits.bytes().all(|b| b.is_ascii_digit()) || digits.is_empty() {
         return None;
@@ -409,7 +420,9 @@ fn resolve_anchored_position(
 
 fn map_provider_failure(error: ProviderFailure) -> ApiError {
     match error {
-        ProviderFailure::RateLimited(_) | ProviderFailure::Unavailable | ProviderFailure::Timeout => {
+        ProviderFailure::RateLimited(_)
+        | ProviderFailure::Unavailable
+        | ProviderFailure::Timeout => {
             ApiError::ServiceUnavailable("provider_unavailable".to_owned())
         }
         ProviderFailure::InvalidPayload => {
@@ -424,7 +437,11 @@ fn map_provider_failure(error: ProviderFailure) -> ApiError {
 // ---------------------------------------------------------------------------
 
 /// Resolve an owned issue to its thread id and title, or 404.
-async fn owned_issue(tx: &Transaction<'_>, user: i32, issue_id: i32) -> Result<(i32, String), ApiError> {
+async fn owned_issue(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<(i32, String), ApiError> {
     let row = tx
         .query_opt(
             "SELECT t.id, t.title FROM issues i \
@@ -617,8 +634,8 @@ pub async fn get_issue_identity(
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
@@ -634,8 +651,8 @@ pub async fn confirm_identity(
     if request.comicvine_issue_id <= 0 {
         return Err(bad_request("comicvine_issue_id must be positive"));
     }
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
@@ -655,8 +672,8 @@ pub async fn replace_identity(
     if request.reason.as_deref().is_some_and(|r| r.len() > 500) {
         return Err(unprocessable("reason is too long"));
     }
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
     let reason = request
         .reason
@@ -684,8 +701,8 @@ pub async fn remove_identity(
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
     let updated = tx
         .execute(
@@ -715,8 +732,8 @@ pub async fn list_corrections(
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = corrections_list(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
@@ -735,8 +752,8 @@ pub async fn apply_correction(
     if request.canonical_value.is_empty() {
         return Err(unprocessable("Invalid canonical value"));
     }
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
 
     let provider_value: Option<String> = tx
@@ -780,8 +797,8 @@ pub async fn revert_correction(
     Path(issue_id): Path<i32>,
     Json(request): Json<MetadataCorrectionRevertRequest>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
     let updated = tx
         .execute(
@@ -811,8 +828,8 @@ pub async fn refresh_metadata(
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<MetadataRefreshResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
     let comicvine_id: Option<String> = tx
         .query_opt(
@@ -924,7 +941,11 @@ pub async fn import_issue(
     if request.comicvine_issue_id <= 0 {
         return Err(unprocessable("Invalid comicvine_issue_id"));
     }
-    if request.issue_number.as_deref().is_some_and(|n| n.len() > 50) {
+    if request
+        .issue_number
+        .as_deref()
+        .is_some_and(|n| n.len() > 50)
+    {
         return Err(unprocessable("Invalid issue number"));
     }
     for id in [
@@ -940,8 +961,8 @@ pub async fn import_issue(
         }
     }
 
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     let external_id = request.comicvine_issue_id.to_string();
     if let Some(order_id) = request.reading_order_id {
         owned_reading_order(&tx, user.id(), order_id).await?;
@@ -1096,8 +1117,8 @@ pub async fn import_series(
         )));
     }
 
-    let connection = db::checkout(&state).await?;
-    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
     if let Some(order_id) = request.reading_order_id {
         owned_reading_order(&tx, user.id(), order_id).await?;
     }
@@ -1259,9 +1280,7 @@ pub async fn import_series(
     let total_issues = thread_issues.len() as i32;
     let issues_remaining = (total_issues - read_count as i32).max(0);
     let next_unread = thread_issues
-        .iter()
-        .skip(read_count)
-        .next()
+        .get(read_count)
         .map(|row| row.get::<_, i32>(0));
     let status = if issues_remaining == 0 {
         "completed"
@@ -1431,8 +1450,8 @@ pub async fn search_series(
         .flatten()
         .filter_map(|row| series_result(row, None))
         .collect();
-    let total = coerce_provider_int(payload.get("number_of_total_results"))
-        .unwrap_or_else(|| results.len() as i32);
+    let total =
+        coerce_provider_int(payload.get("number_of_total_results")).unwrap_or(results.len() as i32);
     let loaded = offset + results.len() as i32;
     let has_more = loaded < total;
     Ok(Json(ComicVineSeriesSearchResponse {
@@ -1519,7 +1538,10 @@ pub async fn resolve_input(
              comicvine.gamespot.com link or search by title instead."
                 .to_owned()
         });
-        return Ok(Json(ComicVineResolveResponse::search(query.input, validation_error)));
+        return Ok(Json(ComicVineResolveResponse::search(
+            query.input,
+            validation_error,
+        )));
     };
     let Some(key) = provider_key() else {
         return Ok(Json(ComicVineResolveResponse {
@@ -1592,13 +1614,13 @@ pub async fn resolve_input(
             }))
         }
         ParsedResource::Volume(id) => {
-            let Ok(payload) = provider_response(&format!("volume/4050-{id}"), "", &key).await else {
+            let Ok(payload) = provider_response(&format!("volume/4050-{id}"), "", &key).await
+            else {
                 return Ok(failure());
             };
-            let Some(series) = series_result(
-                payload.get("results").unwrap_or(&Value::Null),
-                Some(id),
-            ) else {
+            let Some(series) =
+                series_result(payload.get("results").unwrap_or(&Value::Null), Some(id))
+            else {
                 return Ok(failure());
             };
             let roster = provider_response(
@@ -1918,7 +1940,10 @@ mod tests {
             Some(ParsedResource::Issue(42))
         );
         assert_eq!(parse_comicvine_url("https://example.com/4000-42/"), None);
-        assert_eq!(parse_comicvine_url("https://comicvine.gamespot.com/5000-42/"), None);
+        assert_eq!(
+            parse_comicvine_url("https://comicvine.gamespot.com/5000-42/"),
+            None
+        );
         assert_eq!(parse_comicvine_url("not a url"), None);
     }
 
@@ -1947,12 +1972,21 @@ mod tests {
         let mut positions = HashMap::new();
         positions.insert(10, 2);
         positions.insert(20, 5);
-        assert_eq!(resolve_anchored_position(&positions, Some(10), Some(20), 4), 5);
+        assert_eq!(
+            resolve_anchored_position(&positions, Some(10), Some(20), 4),
+            5
+        );
         assert_eq!(resolve_anchored_position(&positions, Some(10), None, 4), 3);
         assert_eq!(resolve_anchored_position(&positions, None, Some(20), 4), 5);
-        assert_eq!(resolve_anchored_position(&positions, Some(20), Some(10), 4), 6);
+        assert_eq!(
+            resolve_anchored_position(&positions, Some(20), Some(10), 4),
+            6
+        );
         assert_eq!(resolve_anchored_position(&positions, None, None, 4), 5);
-        assert_eq!(resolve_anchored_position(&HashMap::new(), Some(99), None, 0), 1);
+        assert_eq!(
+            resolve_anchored_position(&HashMap::new(), Some(99), None, 0),
+            1
+        );
     }
 
     #[test]
