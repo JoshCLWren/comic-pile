@@ -380,7 +380,13 @@ pub async fn activity(
 
     validate_auth(&claims, &payload.auth)?;
 
-    let events = apply_causal_order(coalesce_rate_pairs(payload.events))
+    let mut raw_events = apply_causal_order(coalesce_rate_pairs(payload.events));
+    // Trim to page size; the extra row is used only for has_more detection
+    let page_limit = page_size as usize;
+    if raw_events.len() > page_limit {
+        raw_events.truncate(page_limit);
+    }
+    let events_vec: Vec<ActivityEvent> = raw_events
         .into_iter()
         .map(|row| ActivityEvent {
             event_id: row.event_id,
@@ -397,7 +403,8 @@ pub async fn activity(
         .collect();
 
     let next_page_token = if payload.has_more {
-        payload.last_id.zip(Some(0)).map(|(id, _)| id.to_string())
+        // Use the last returned event id as cursor to avoid skipping
+        events_vec.last().map(|e| e.event_id.to_string())
     } else {
         None
     };
