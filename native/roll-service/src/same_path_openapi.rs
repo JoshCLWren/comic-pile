@@ -159,6 +159,10 @@ mod tests {
         let generated = same_path_openapi()
             .to_pretty_json()
             .expect("serializable contract");
+        let e_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("contracts/expected.txt");
+        let g_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("contracts/generated.txt");
+        std::fs::write(&e_path, expected.trim_end()).expect("write expected");
+        std::fs::write(&g_path, generated.trim_end()).expect("write generated");
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 
