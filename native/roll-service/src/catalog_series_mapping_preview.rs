@@ -1,484 +1,361 @@
-//! Same-path Rust cutover for series-mappings preview operation.
-//
-// Moved from `app/api/catalog.py` `preview_series_mapping` to native Roll
-//! (`/api/native_roll.rs` via vercel.json) while preserving HTTP method,
-//! exact path, and wire contract. No frontend URL changes.
-//
-// Parity notes (Python oracle is `app/services/catalog.py` `preview_series_mapping`):
-// - Preview token generation, scope determination, classification counts,
-//   and row classification must match the Python oracle.
-// - Auth: authenticated user via the native Roll auth middleware.
-// - SQL budgets: no N+1 queries, no per-row fan-out regressions. All queries
-//   use bounded result sets with explicit limits.
+//! Same-path Rust cutover of `POST /api/v1/catalog/series-mappings/preview`.
+//!
+//! The preview plan (scope, rows, counts, state digest) is produced by the same
+//! `catalog_commit::build_plan_for_commit` builder the Rust commit endpoint uses
+//! to revalidate a preview. The signed token therefore remains mutually
+//! intelligible with both the existing Rust commit handler and the retired
+//! Python preview/commit contract.
 
-#![forbid(unsafe_code)]
-
-use crate::{
-    auth::AuthenticatedUser,
-    db,
-    ApiError, AppState,
-};
+use crate::{auth::AuthenticatedUser, catalog_commit, db, ApiError, AppState};
 use axum::{
     extract::State,
     http::StatusCode,
+    response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
-use tokio_postgres::Row;
+use utoipa::ToSchema;
 
-/// Request contract matching `app/schemas/catalog.py` `SeriesMappingPreviewRequest`.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+const SCOPE_MODE_CONFIRMED_ORIGIN: &str = "confirmed_origin";
+const PREVIEW_TOKEN_TTL_SECONDS: f64 = 600.0;
+
+/// Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct SeriesMappingPreviewRequest {
-    /// The anchor issue ID for the mapping preview.
-    pub origin_issue_id: i32,
-    /// External provider name (e.g., "comicvine").
+    pub origin_issue_id: i64,
     pub provider: String,
-    /// Provider-specific series identifier.
     pub provider_series_external_id: String,
-    /// Preview scope mode: 'confirmed_origin' or 'queue_thread_bootstrap'.
+    #[serde(default = "default_scope_mode")]
     pub scope_mode: String,
 }
 
-/// Response contract matching `app/schemas/catalog.py` `SeriesMappingPreviewResponse`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+fn default_scope_mode() -> String {
+    SCOPE_MODE_CONFIRMED_ORIGIN.to_string()
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SeriesMappingPreviewResponse {
-    /// Preview token when scope is available.
     pub preview_token: Option<String>,
-    /// Scope information.
     pub scope: SeriesMappingPreviewScope,
-    /// Provider series information, when available.
-    pub provider_series: Option<SeriesMappingPreviewProviderSeries>,
-    /// Classification counts.
+    pub provider_series: Option<Value>,
     pub counts: SeriesMappingPreviewCounts,
-    /// Individual issue mappings.
-    pub rows: Vec<SeriesMappingPreviewRow>,
-    /// Token issuance timestamp (Unix epoch).
+    pub rows: Vec<Value>,
     pub issued_at: f64,
-    /// Token expiration timestamp (Unix epoch), when applicable.
     pub expires_at: Option<f64>,
 }
 
-/// Scope information matching Python `SeriesMappingPreviewScope`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SeriesMappingPreviewScope {
-    /// Scope status: 'available' or 'unavailable'.
     pub status: String,
-    /// Opaque scope key when available.
     pub scope_key: Option<String>,
-    /// Origin issue ID.
-    pub origin_issue_id: i32,
-    /// Series label when available.
+    pub origin_issue_id: i64,
     pub series_label: Option<String>,
-    /// Basis for scope determination.
     pub basis: Option<String>,
 }
 
-/// Classification counts matching Python `SeriesMappingPreviewCounts`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SeriesMappingPreviewCounts {
-    /// Number of already confirmed mappings.
-    pub already_confirmed: i32,
-    /// Number of safe exact matches.
-    pub safe_exact_match: i32,
-    /// Number of issues needing review due to ambiguity.
-    pub needs_review_ambiguous: i32,
-    /// Number of issues needing review due to conflicts.
-    pub needs_review_conflict: i32,
-    /// Number of unresolved issues.
-    pub unresolved: i32,
-    /// Number of excluded special/annual issues.
-    pub excluded_special: i32,
+    pub already_confirmed: i64,
+    pub safe_exact_match: i64,
+    pub needs_review_ambiguous: i64,
+    pub needs_review_conflict: i64,
+    pub unresolved: i64,
+    pub excluded_special: i64,
 }
 
-/// Individual row matching Python `SeriesMappingPreviewRow`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct SeriesMappingPreviewRow {
-    /// Stable row identifier, e.g. 'issue:789'.
-    pub row_id: String,
-    /// Internal issue ID.
-    pub issue_id: i32,
-    /// Issue number.
-    pub issue_number: String,
-    /// Issue title, when available.
-    pub title: Option<String>,
-    /// Classification: already_confirmed, safe_exact_match, etc.
-    pub classification: String,
-    /// Thread ID if the issue belongs to a thread.
-    pub thread_id: Option<i32>,
-    /// Thread title if applicable.
-    pub thread_title: Option<String>,
-    /// Current mapping status, when any.
-    pub current_mapping_status: Option<String>,
-    /// External provider name, when any.
-    pub provider: Option<String>,
-    /// Provider-specific identifier, when any.
-    pub external_id: Option<String>,
-    /// Whether this issue would be mapped in the proposed scope.
-    pub proposed_mapping: bool,
-    /// Whether this safe mapping or verified metadata refresh is selected by default.
-    pub default_selected: bool,
-    /// Whether verified existing identity has no usable metadata.
-    pub metadata_refresh_required: bool,
-    /// Explanation for the classification.
-    pub reason: Option<String>,
+#[derive(Debug, Serialize, ToSchema)]
+struct ValidationErrorItem {
+    #[serde(rename = "type")]
+    error_type: String,
+    loc: Vec<String>,
+    msg: String,
+    input: Value,
 }
 
-/// Error response for unprocessable entities.
-fn unprocessable(detail: String) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+fn validation_item(field: &str, msg: &str, input: Value, error_type: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: error_type.to_string(),
+        loc: vec!["body".to_string(), field.to_string()],
+        msg: msg.to_string(),
+        input,
+    }
 }
 
-/// Query the series mapping plan from the database, mirroring
-/// `app/services/catalog.py` `build_series_mapping_plan`.
-///
-/// Positional parameters are bound in the order they are referenced by number:
-/// $1 = origin_issue_id (outer WHERE), $2 = provider_series_external_id,
-/// $3 = provider, $4 = user_id (all inside the mapping subquery). Binding them
-/// in any other order returns rows for the wrong user/origin.
-async fn build_series_mapping_plan(
-    conn: &deadpool_postgres::Object,
-    user_id: i32,
-    origin_issue_id: i32,
-    provider: &str,
-    provider_series_external_id: &str,
-    _scope_mode: &str,
-) -> anyhow::Result<Vec<serde_json::Value>> {
-    let query = "SELECT i.id, i.number, i.title, c.provider, c.external_id,
-         c.classification, c.thread_id, c.thread_title,
-         c.current_mapping_status,
-         CASE WHEN s.id IS NOT NULL THEN true ELSE false END AS proposed_mapping
-      FROM issues i
-      LEFT JOIN comicvine_identities v ON v.issue_id = i.id
-      LEFT JOIN (
-            SELECT DISTINCT ON (i2.id, c2.provider_series_external_id)
-              i2.id AS issue_id,
-              i2.number,
-              i2.title,
-              c2.provider,
-              c2.provider_series_external_id,
-              c2.classification,
-              c2.thread_id,
-              c2.thread_title,
-              c2.current_mapping_status
-            FROM issue_mappings c2
-            JOIN issues i2 ON i2.id = c2.issue_id
-            WHERE i2.user_id = $4
-              AND c2.provider = $3
-              AND c2.provider_series_external_id = $2
-            ORDER BY i2.id, c2.provider_series_external_id, c2.classification DESC
-          ) c ON c.issue_id = i.id
-      LEFT JOIN series_mappings s ON s.issue_id = i.id
-                     AND s.preview_token_is_valid = true
-      WHERE i.id = $1
-      ORDER BY i.id";
-    let rows = conn
-        .query(
-            &query,
-            &[
-                &origin_issue_id,
-                &provider_series_external_id,
-                &provider,
-                &user_id,
-            ],
+/// Validate the request against the Python Pydantic constraints, emitting the
+/// FastAPI 422 `{"detail": [...]}` body for every rejected field.
+fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Response> {
+    let mut items = Vec::new();
+    if request.origin_issue_id < 1 {
+        items.push(validation_item(
+            "origin_issue_id",
+            "Input should be greater than or equal to 1",
+            Value::from(request.origin_issue_id),
+            "greater_than_equal",
+        ));
+    }
+    if request.provider.is_empty() {
+        items.push(validation_item(
+            "provider",
+            "Input should have at least 1 character",
+            Value::String(request.provider.clone()),
+            "string_too_short",
+        ));
+    } else if request.provider != "comicvine" {
+        items.push(validation_item(
+            "provider",
+            "Value error, unsupported provider: ".to_owned() + &request.provider,
+            Value::String(request.provider.clone()),
+            "value_error",
+        ));
+    }
+    if request.provider_series_external_id.is_empty() {
+        items.push(validation_item(
+            "provider_series_external_id",
+            "Input should have at least 1 character",
+            Value::String(request.provider_series_external_id.clone()),
+            "string_too_short",
+        ));
+    }
+    if !matches!(
+        request.scope_mode.as_str(),
+        SCOPE_MODE_CONFIRMED_ORIGIN | "queue_thread_bootstrap"
+    ) {
+        items.push(validation_item(
+            "scope_mode",
+            "Value error, unsupported scope_mode: ".to_owned() + &request.scope_mode,
+            Value::String(request.scope_mode.clone()),
+            "value_error",
+        ));
+    }
+    if items.is_empty() {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({ "detail": items })),
         )
-        .await
-        .map_err(|e| anyhow::anyhow!("Plan build query error: {e}"))?;
-    let mut plan = Vec::with_capacity(rows.len());
-    for row in rows {
-        plan.push(issue_row_to_json(&row));
+            .into_response())
     }
-    Ok(plan)
 }
 
-fn issue_row_to_json(row: &Row) -> serde_json::Value {
-    serde_json::json!({
-        "issue_id": row.get::<_, i32>("id"),
-        "issue_number": row.get::<_, Option<String>>("number"),
-        "title": row.get::<_, Option<String>>("title"),
-        "provider": row.get::<_, Option<String>>("provider"),
-        "external_id": row.get::<_, Option<String>>("external_id"),
-        "classification": row.get::<_, Option<String>>("classification"),
-        "thread_id": row.get::<_, Option<i32>>("thread_id"),
-        "thread_title": row.get::<_, Option<String>>("thread_title"),
-        "current_mapping_status": row.get::<_, Option<String>>("current_mapping_status"),
-        "proposed_mapping": row.get::<_, bool>("proposed_mapping"),
-    })
+/// Build the HMAC-SHA256 token returned by the preview so that the commit
+/// handler's `verify_preview_token` accepts it. The payload is serialized with
+/// Python's `json.dumps(..., sort_keys=True)` separators via `canonical_json`.
+fn issue_preview_token(
+    secret: &str,
+    user_id: i32,
+    request: &SeriesMappingPreviewRequest,
+    plan: &Value,
+    issued_at: f64,
+    expires_at: f64,
+) -> Result<String, ApiError> {
+    let scope_key = plan
+        .get("scope_key")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let digest = plan
+        .get("state_digest")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let issue_numbers: Vec<String> = plan
+        .get("issue_numbers")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let payload = serde_json::json!({
+        "user_id": user_id,
+        "provider": request.provider,
+        "provider_series_external_id": request.provider_series_external_id,
+        "origin_issue_id": request.origin_issue_id,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "classification_digest": digest,
+        "scope_mode": request.scope_mode,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+    });
+    let signature = catalog_commit::hmac_sha256_hex(secret, &catalog_commit::canonical_json(&payload))?;
+    Ok(serde_json::json!({ "payload": payload, "signature": signature }).to_string())
 }
 
-fn classify_rows(
-    rows: &[serde_json::Value],
-) -> (Vec<SeriesMappingPreviewRow>, SeriesMappingPreviewCounts) {
-    let mut classified_rows = Vec::new();
-    let mut counts = SeriesMappingPreviewCounts {
-        already_confirmed: 0,
-        safe_exact_match: 0,
-        needs_review_ambiguous: 0,
-        needs_review_conflict: 0,
-        unresolved: 0,
-        excluded_special: 0,
-    };
-
-    for row in rows {
-        let classification = row
-            .get("classification")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unresolved");
-        let issue_id = row
-            .get("issue_id")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
-        let issue_number = row
-            .get("issue_number")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let mut row_data = SeriesMappingPreviewRow {
-            row_id: format!("issue:{}", issue_id),
-            issue_id,
-            issue_number,
-            title: row.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            classification: classification.to_string(),
-            thread_id: row.get("thread_id").and_then(|v| v.as_i64()).map(|v| v as i32),
-            thread_title: row
-                .get("thread_title")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            current_mapping_status: row
-                .get("current_mapping_status")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            provider: row.get("provider").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            external_id: row
-                .get("external_id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
-            proposed_mapping: row
-                .get("proposed_mapping")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            default_selected: false,
-            metadata_refresh_required: false,
-            reason: None,
-        };
-
-        match classification {
-            "already_confirmed" => {
-                counts.already_confirmed += 1;
-            }
-            "safe_exact_match" => {
-                counts.safe_exact_match += 1;
-                row_data.default_selected = true;
-            }
-            "needs_review_ambiguous" => {
-                counts.needs_review_ambiguous += 1;
-            }
-            "needs_review_conflict" => {
-                counts.needs_review_conflict += 1;
-            }
-            "unresolved" => {
-                counts.unresolved += 1;
-            }
-            "excluded_special" => {
-                counts.excluded_special += 1;
-            }
-            _ => {}
-        }
-
-        classified_rows.push(row_data);
-    }
-
-    (classified_rows, counts)
+fn count(plan: &Value, key: &str) -> i64 {
+    plan.get("counts")
+        .and_then(|counts| counts.get(key))
+        .and_then(Value::as_i64)
+        .unwrap_or_default()
 }
 
-#[axum::async_handler]
-pub async fn get_series_mapping_preview(
+#[utoipa::path(
+    post,
+    path = "/api/v1/catalog/series-mappings/preview",
+    request_body = SeriesMappingPreviewRequest,
+    responses(
+        (status = 200, description = "Read-only series mapping preview", body = SeriesMappingPreviewResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 422, description = "Invalid request body"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub fn documentation() {}
+
+/// Mounted handler for `POST /api/v1/catalog/series-mappings/preview`.
+pub async fn preview_series_mapping_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(req): Json<SeriesMappingPreviewRequest>,
-) -> Result<Json<SeriesMappingPreviewResponse>, ApiError> {
-    let conn = db::checkout(&state)
-        .await
-        .map_err(|e| unprocessable(format!("DB unavailable: {e}")))?;
-
-    // Build the series mapping plan
-    let plan = build_series_mapping_plan(
-        &conn,
+    Json(request): Json<SeriesMappingPreviewRequest>,
+) -> Result<Json<SeriesMappingPreviewResponse>, Response> {
+    validate_request(&request)?;
+    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
+    let plan = catalog_commit::build_plan_for_commit(
+        &connection,
         user.id(),
-        req.origin_issue_id,
-        &req.provider,
-        &req.provider_series_external_id,
-        &req.scope_mode,
+        request.origin_issue_id,
+        &request.provider,
+        &request.provider_series_external_id,
+        &request.scope_mode,
     )
     .await
-    .map_err(|e| unprocessable(format!("Plan build error: {e}")))?;
+    .map_err(ApiError::into_response)?;
 
-    // Classify the rows
-    let (classified_rows, counts) = classify_rows(&plan);
-
-    // Determine scope availability and generate preview token
-    let scope_available = !classified_rows.is_empty();
-    let issued_at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or(0.0);
-    let scope_key = if scope_available {
-        Some(format!("scope_key_{}", req.origin_issue_id))
-    } else {
-        None
-    };
-    let scope_status = if scope_available {
-        "available".to_string()
-    } else {
-        "unavailable".to_string()
-    };
-    let basis = if scope_available {
-        Some("exact_match_found".to_string())
-    } else {
-        None
-    };
-    let scope = SeriesMappingPreviewScope {
-        status: scope_status,
-        scope_key,
-        origin_issue_id: req.origin_issue_id,
-        series_label: None,
-        basis,
-    };
-
-    // Generate preview token when scope is available
-    let preview_token = if scope_available {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        Some(format!("preview_token_{}_{}", req.origin_issue_id, now))
-    } else {
-        None
-    };
-
-    // Provider series information (simplified)
-    let provider_series = if scope_available {
-        Some(SeriesMappingPreviewProviderSeries {
-            id: req.provider_series_external_id.clone(),
-            name: Some("Sample Series".to_string()),
-            publisher: None,
-            start_year: None,
-            count_of_issues: None,
-            site_detail_url: None,
-            image: None,
-        })
-    } else {
-        None
-    };
-
-    // Expiration
-    let scope_ttl_seconds = 600; // PREVIEW_TOKEN_TTL_SECONDS
+    let scope_available = plan
+        .get("scope")
+        .and_then(|scope| scope.get("status"))
+        .and_then(Value::as_str)
+        == Some("available");
+    let issued_at = catalog_commit::now_f64();
     let expires_at = if scope_available {
-        Some(issued_at + scope_ttl_seconds as f64)
+        Some(issued_at + PREVIEW_TOKEN_TTL_SECONDS)
     } else {
         None
     };
-
+    let preview_token = if scope_available {
+        Some(issue_preview_token(
+            &state.preview_token_secret,
+            user.id(),
+            &request,
+            &plan,
+            issued_at,
+            expires_at.unwrap_or(issued_at),
+        )?)
+    } else {
+        None
+    };
+    let scope = plan.get("scope").cloned().unwrap_or(Value::Null);
     let response = SeriesMappingPreviewResponse {
         preview_token,
-        scope,
-        provider_series,
-        counts,
-        rows: classified_rows,
+        scope: SeriesMappingPreviewScope {
+            status: scope
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("unavailable")
+                .to_string(),
+            scope_key: scope
+                .get("scope_key")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            origin_issue_id: scope
+                .get("origin_issue_id")
+                .and_then(Value::as_i64)
+                .unwrap_or(request.origin_issue_id),
+            series_label: scope
+                .get("series_label")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            basis: scope
+                .get("basis")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        },
+        provider_series: plan.get("provider_series").cloned().filter(|v| !v.is_null()),
+        counts: SeriesMappingPreviewCounts {
+            already_confirmed: count(&plan, "already_confirmed"),
+            safe_exact_match: count(&plan, "safe_exact_match"),
+            needs_review_ambiguous: count(&plan, "needs_review_ambiguous"),
+            needs_review_conflict: count(&plan, "needs_review_conflict"),
+            unresolved: count(&plan, "unresolved"),
+            excluded_special: count(&plan, "excluded_special"),
+        },
+        rows: plan
+            .get("rows")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
         issued_at,
         expires_at,
     };
-
     Ok(Json(response))
-}
-
-/// Provider series information matching Python `SeriesMappingPreviewProviderSeries`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct SeriesMappingPreviewProviderSeries {
-    /// Provider series ID.
-    pub id: String,
-    /// Series name, when provider metadata is available.
-    pub name: Option<String>,
-    /// Publisher name.
-    pub publisher: Option<String>,
-    /// Start year.
-    pub start_year: Option<i32>,
-    /// Total number of issues in the series.
-    pub count_of_issues: Option<i32>,
-    /// URL to the series on the provider site.
-    pub site_detail_url: Option<String>,
-    /// Image information.
-    pub image: Option<serde_json::Value>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn request_schema_validates() {
-        let _req: SeriesMappingPreviewRequest = serde_json::from_value(
-            serde_json::json!({
-                "origin_issue_id": 1,
-                "provider": "comicvine",
-                "provider_series_external_id": "series123",
-                "scope_mode": "confirmed_origin",
-            })
-        )
-        .unwrap();
+    fn valid_request() -> SeriesMappingPreviewRequest {
+        SeriesMappingPreviewRequest {
+            origin_issue_id: 42,
+            provider: "comicvine".to_string(),
+            provider_series_external_id: "4050-1".to_string(),
+            scope_mode: default_scope_mode(),
+        }
     }
 
     #[test]
-    fn response_schema_validates() {
-        let _resp: SeriesMappingPreviewResponse = serde_json::from_value(
-            serde_json::json!({
-                "preview_token": "token123",
-                "scope": {
-                    "status": "available",
-                    "scope_key": "key123",
-                    "origin_issue_id": 1,
-                    "series_label": None,
-                    "basis": Some("exact_match_found".to_string()),
-                },
-                "provider_series": Some({
-                    "id": "series123",
-                    "name": Some("Sample Series"),
-                    "publisher": None,
-                    "start_year": None,
-                    "count_of_issues": None,
-                    "site_detail_url": None,
-                    "image": None,
-                }),
-                "counts": {
-                    "already_confirmed": 0,
-                    "safe_exact_match": 5,
-                    "needs_review_ambiguous": 2,
-                    "needs_review_conflict": 1,
-                    "unresolved": 0,
-                    "excluded_special": 0,
-                },
-                "rows": [
-                    {
-                        "row_id": "issue:1",
-                        "issue_id": 1,
-                        "issue_number": "1",
-                        "title": Some("Issue One".to_string()),
-                        "classification": "safe_exact_match",
-                        "thread_id": None,
-                        "thread_title": None,
-                        "current_mapping_status": None,
-                        "provider": Some("comicvine"),
-                        "external_id": None,
-                        "proposed_mapping": true,
-                        "default_selected": true,
-                        "metadata_refresh_required": false,
-                        "reason": None,
-                    }
-                ],
-                "issued_at": 1700000000.0,
-                "expires_at": 1700000600.0,
-            })
+    fn default_scope_mode_matches_python_default() {
+        let request: SeriesMappingPreviewRequest = serde_json::from_value(serde_json::json!({
+            "origin_issue_id": 42,
+            "provider": "comicvine",
+            "provider_series_external_id": "4050-1",
+        }))
+        .expect("valid body");
+        assert_eq!(request.scope_mode, SCOPE_MODE_CONFIRMED_ORIGIN);
+        assert!(validate_request(&request).is_ok());
+    }
+
+    #[test]
+    fn rejects_python_invalid_values_with_422_detail_list() {
+        let mut request = valid_request();
+        request.origin_issue_id = 0;
+        request.provider = "other".to_string();
+        request.provider_series_external_id = String::new();
+        request.scope_mode = "nonsense".to_string();
+        let response = validate_request(&request).expect_err("invalid request must be rejected");
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn preview_token_is_accepted_by_the_commit_verifier_wire_shape() {
+        let plan = serde_json::json!({
+            "scope_key": "exact:42:1",
+            "state_digest": "digest",
+            "issue_numbers": ["1", "2"],
+            "scope": { "status": "available" },
+        });
+        let token = issue_preview_token(
+            "synthetic-secret",
+            7,
+            &valid_request(),
+            &plan,
+            1_700_000_000.0,
+            1_700_000_600.0,
         )
-        .unwrap();
+        .expect("token generation");
+        let data: Value = serde_json::from_str(&token).expect("token is JSON");
+        assert!(data.get("signature").and_then(Value::as_str).is_some());
+        let payload = data.get("payload").expect("payload");
+        assert_eq!(payload.get("user_id").and_then(Value::as_i64), Some(7));
+        assert_eq!(
+            payload.get("classification_digest").and_then(Value::as_str),
+            Some("digest")
+        );
     }
 }
