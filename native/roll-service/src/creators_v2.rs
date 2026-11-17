@@ -1383,10 +1383,7 @@ fn compute_insights(
         .collect();
     issue_insights.sort_by_key(|insight| insight.issue_id);
 
-    let mut highest: Vec<CreatorIssueInsight> = issue_insights
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut highest: Vec<CreatorIssueInsight> = issue_insights.to_vec();
     highest.sort_by(|a, b| {
         b.effective_rating
             .partial_cmp(&a.effective_rating)
@@ -1447,10 +1444,10 @@ fn build_detail(
     library: &CreatorLibrary,
     creator_key: &str,
     creator_id: i64,
+    attribution: &Attribution,
     limit: usize,
     offset: usize,
 ) -> CreatorDetailResponse {
-    let attribution = attribution(library, creator_id).expect("creator was resolved");
     let mut headline_rated: BTreeSet<i64> = BTreeSet::new();
     let mut read_unrated: BTreeSet<i64> = BTreeSet::new();
     let mut upcoming: BTreeSet<i64> = BTreeSet::new();
@@ -1517,7 +1514,7 @@ fn build_detail(
         })
         .collect();
 
-    let aggregates = aggregate_series(library, creator_id, &attribution);
+    let aggregates = aggregate_series(library, creator_id, attribution);
     let series_groups_total = aggregates.len();
     let series_groups: Vec<CreatorSeriesGroup> = aggregates
         .iter()
@@ -1561,7 +1558,7 @@ fn build_detail(
         upcoming_issues: upcoming_rows,
         next_cursor,
         rating_distribution: rating_distribution(&headline_ratings),
-        insights: compute_insights(library, creator_id, &attribution, &headline_rated, &aggregates),
+        insights: compute_insights(library, creator_id, attribution, &headline_rated, &aggregates),
     }
 }
 
@@ -2180,23 +2177,18 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
     let consistently_loved = finish4(consistently_loved);
     let polarizing = finish4(polarizing);
 
-    let mut most_read = most_read;
     most_read.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)));
     let most_read: Vec<CreatorDiscoveryEntry> = most_read.into_iter().map(|row| row.3).collect();
 
-    let mut top_rate = top_rate;
     top_rate.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.partial_cmp(&b.2).unwrap_or(Ordering::Equal)).then(a.3.cmp(&b.3)));
     let top_rate: Vec<CreatorDiscoveryEntry> = top_rate.into_iter().map(|row| row.4).collect();
 
-    let mut small_sample = small_sample;
     small_sample.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     let small_sample: Vec<CreatorDiscoveryEntry> = small_sample.into_iter().map(|row| row.3).collect();
 
-    let mut loved_unread = loved_unread;
     loved_unread.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
     let loved_unread: Vec<CreatorDiscoveryEntry> = loved_unread.into_iter().map(|row| row.4).collect();
 
-    let mut trend = trend;
     trend.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
     let trend: Vec<CreatorDiscoveryEntry> = trend.into_iter().map(|row| row.3).collect();
 
@@ -2320,6 +2312,8 @@ fn team_issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<C
     entries.into_iter().take(MAX_ISSUE_REFS).map(|entry| entry.4).collect()
 }
 
+type RankedTeamPair<'a> = (f64, usize, (i64, i64), &'a BTreeSet<i64>);
+
 fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryResponse {
     let inputs = team_inputs(library);
     let mut pair_issues: BTreeMap<(i64, i64), BTreeSet<i64>> = BTreeMap::new();
@@ -2339,7 +2333,7 @@ fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryRespons
         .filter(|(_, issues)| issues.len() >= MIN_SHARED_TEAM_SAMPLE)
         .collect();
 
-    let mut ranked: Vec<(f64, usize, (i64, i64), &BTreeSet<i64>)> = qualifying
+    let mut ranked: Vec<RankedTeamPair<'_>> = qualifying
         .iter()
         .map(|(pair, issues)| {
             let ratings: Vec<f64> = issues
@@ -2998,10 +2992,9 @@ pub async fn get_detail(
     let (limit, offset) = page_params(query.limit, query.offset, 50, 100)?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
-    if attribution(&library, creator_id).is_none() {
-        return Err(not_found(format!("Creator {creator_key} not found in your library")));
-    }
-    Ok(Json(build_detail(&library, &creator_key, creator_id, limit, offset)))
+    let owner = attribution(&library, creator_id)
+        .ok_or_else(|| not_found(format!("Creator {creator_key} not found in your library")))?;
+    Ok(Json(build_detail(&library, &creator_key, creator_id, &owner, limit, offset)))
 }
 
 pub async fn get_series_issues(
@@ -3336,7 +3329,7 @@ mod tests {
     #[test]
     fn detail_preserves_headline_population_coverage_and_pagination() {
         let library = fixture_library();
-        let detail = build_detail(&library, "creator:7", 7, 50, 0);
+        let detail = build_detail(&library, "creator:7", 7, &attribution(&library, 7).unwrap(), 50, 0);
         assert_eq!(detail.summary.ratings_count, 3);
         assert_eq!(detail.summary.average_rating, Some(4.0));
         assert_eq!(detail.summary.read_unrated_count, 1);
@@ -3355,7 +3348,7 @@ mod tests {
         assert_eq!(insights.individual_issue_limit, 3);
         assert_eq!(insights.highest_rated_issues[0].issue_id, 2);
         assert!(insights.series_message.is_some());
-        let page = build_detail(&library, "creator:7", 7, 1, 0);
+        let page = build_detail(&library, "creator:7", 7, &attribution(&library, 7).unwrap(), 1, 0);
         assert_eq!(page.next_cursor, Some("1".to_string()));
     }
 
