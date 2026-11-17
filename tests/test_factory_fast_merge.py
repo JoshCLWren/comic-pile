@@ -155,7 +155,7 @@ def test_unsupported_or_incomplete_file_listing_is_blocked() -> None:
 
 
 def check(name: str, *, head: str = HEAD, result: str = "success", app: str = "github-actions", id: int = 10) -> dict:
-    """Simulate one GitHub-issued Python CI check for an exact commit head."""
+    """Simulate one GitHub-issued factory CI check for an exact commit head."""
     return {
         "id": id,
         "name": name,
@@ -167,7 +167,7 @@ def check(name: str, *, head: str = HEAD, result: str = "success", app: str = "g
 
 
 def python_ci_rows(*, missing: str = "", fail: str = "", head: str = HEAD, app: str = "github-actions") -> dict:
-    """Supply completed, trusted Python CI checks without executing PR code."""
+    """Supply completed, trusted factory CI checks without executing PR code."""
     rows = [
         check(name, result="failure" if name == fail else "success", head=head, app=app, id=index)
         for index, name in enumerate(sorted(gate.REQUIRED_FAST_CHECKS), start=1)
@@ -179,7 +179,7 @@ def python_ci_rows(*, missing: str = "", fail: str = "", head: str = HEAD, app: 
 def test_factory_merge_requires_successful_exact_head_python_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The fast lane merges only after reading trusted Ruff and ty evidence."""
+    """The fast lane merges only with every exact-head trusted CI check."""
     calls: list[tuple[str, str, dict | None]] = []
 
     def fake_api(
@@ -209,6 +209,12 @@ def test_factory_merge_requires_successful_exact_head_python_checks(
     {"check_runs": [], "total_count": 0},
     python_ci_rows(missing="Python Lint (ruff)"),
     python_ci_rows(missing="Python Type Check (ty)"),
+    python_ci_rows(missing="Factory Tests (complete)"),
+    python_ci_rows(missing="Factory Workflow Syntax (actionlint)"),
+    python_ci_rows(missing="Factory Shell Scripts (shellcheck)"),
+    python_ci_rows(fail="Factory Tests (complete)"),
+    python_ci_rows(fail="Factory Workflow Syntax (actionlint)"),
+    python_ci_rows(fail="Factory Shell Scripts (shellcheck)"),
     python_ci_rows(fail="Python Lint (ruff)"),
     python_ci_rows(fail="Python Type Check (ty)"),
     python_ci_rows(head="b" * 40),
@@ -296,16 +302,22 @@ def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> N
     assert "workflow_run:" not in workflow
     ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     assert "factory-fast-merge-wakeup:" in ci_workflow
-    assert "needs: [python-lint, python-typecheck]" in ci_workflow
+    assert "needs: [python-lint, python-typecheck, factory-complete-tests, factory-actionlint, factory-shellcheck]" in ci_workflow
     assert "needs.python-lint.result == 'success'" in ci_workflow
     assert "needs.python-typecheck.result == 'success'" in ci_workflow
+    assert "needs.factory-complete-tests.result == 'success'" in ci_workflow
+    assert "needs.factory-actionlint.result == 'success'" in ci_workflow
+    assert "needs.factory-shellcheck.result == 'success'" in ci_workflow
+    assert 'name: Factory Tests (complete)' in ci_workflow
+    assert 'name: Factory Workflow Syntax (actionlint)' in ci_workflow
+    assert 'name: Factory Shell Scripts (shellcheck)' in ci_workflow
     assert "gh workflow run factory-fast-merge.yml" in ci_workflow
     assert "secrets.PR_REBASE_TOKEN" in workflow
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "factory-fast-merge.py" in workflow
     assert '"sha": head' in script
-    assert 'python_checks_passed(repo, head)' in script
+    assert 'required_checks_passed(repo, head)' in script
     assert "factory_dispatch_production_deploy" in script
     assert "dispatch_production(len(merged))" in script
     assert "factory_post_merge_closure.py --sweep" in workflow
@@ -423,3 +435,18 @@ def test_inert_docs_can_still_fast_merge() -> None:
     assert gate.factory_candidate(candidate(), files(), REPO) == (
         True, "Factory-only PR eligible",
     )
+
+
+def test_complete_factory_gates_are_required_on_both_paths() -> None:
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert all(name in gate.REQUIRED_FAST_CHECKS for name in (
+        "Factory Tests (complete)", "Factory Workflow Syntax (actionlint)",
+        "Factory Shell Scripts (shellcheck)",
+    ))
+    assert "tests/test_factory_*.py .github/scripts/test_*.py" in ci
+    assert "node --test .github/scripts/*.test.cjs" in ci
+    assert "actionlint@v1.7.11" in ci
+    assert "xargs -0 -r shellcheck --severity=error" in ci
+    assert "needs.factory-complete-tests.result" in ci
+    assert "needs.factory-actionlint.result" in ci
+    assert "needs.factory-shellcheck.result" in ci
