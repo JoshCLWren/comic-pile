@@ -1,15 +1,14 @@
 //! Same-path Rust cutover for the bug-report family (#4852, parent #4335).
 //!
-//! Preserves the Python `app/api/bug_report.py` wire contract at the same
-//! HTTP methods and exact paths (`POST /api/bug-reports/` and
-//! `POST /api/v1/bug-reports/`); only the implementation moves from Python
-//! FastAPI to the native Roll binary. No frontend URL changes. Python
-//! handlers stay mounted until authenticated production proof permits their
-//! removal.
+//! Serves the retired Python `app/api/bug_report.py` wire contract at the
+//! same HTTP methods and exact paths (`POST /api/bug-reports/` and
+//! `POST /api/v1/bug-reports/`); only the implementation moved from Python
+//! FastAPI to the native Roll binary (Python handler deleted in #5162). No
+//! frontend URL changes.
 //!
-//! Parity with the Python oracle (`app/api/bug_report.py` +
-//! `app/services/github_issue_rate_limit.py` +
-//! `app/services/github_service.py`):
+//! Parity with the retired Python oracle (`app/api/bug_report.py` +
+//! `app/services/github_issue_rate_limit.py`, since removed; the shared
+//! `app/services/github_service.py` remains for performance issues):
 //!
 //! * Request `BugReportCreate` (`report_type` default `"bug"`, `title`
 //!   1..=200 chars, `description` 1..=2000 chars, optional `diagnostics`
@@ -240,7 +239,8 @@ fn python_float(value: f64) -> String {
     }
 }
 
-/// Build the GitHub issue body exactly like Python `_create_bug_report_issue_sync`.
+/// Build the GitHub issue body exactly like the retired Python
+/// `_create_bug_report_issue_sync` builder.
 fn build_github_issue_body(
     username: &str,
     report_type: ReportType,
@@ -630,9 +630,9 @@ async fn submit_with_issuer(
 
 /// `POST /api/bug-reports/` and `POST /api/v1/bug-reports/`.
 ///
-/// Wire parity with Python `create_bug_report`: same method/path, 201 on
-/// success, 422 validation, 503 unconfigured, 429 rate-limit with headers,
-/// 502 GitHub failures.
+/// Wire parity with the retired Python `create_bug_report`: same method/path,
+/// 201 on success, 422 validation, 503 unconfigured, 429 rate-limit with
+/// headers, 502 GitHub failures.
 pub async fn create(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,

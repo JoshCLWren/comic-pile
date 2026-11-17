@@ -205,10 +205,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
+    # The bug-report twins were cut over to same-path native Rust (#4852) and
+    # their Python handler was retired (#5162), so the v1 bug-reports path is
+    # excluded from the Python inventory surface entirely; native ingress is
+    # pinned by test_bug_reports_fragment_routes_both_twins_to_native_rust.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/v1/bug-reports")
         for item in v1_ops
     )
     assert any(
@@ -293,10 +295,10 @@ def test_full_surface_matches_deployed_ingress() -> None:
         and item.get("burndown_status") == "shadowed by Rust"
         for item in unversioned_ops
     )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
+    # Same retirement as the v1 twin: POST /api/bug-reports/ is native-only
+    # (#4852, #5162) and no longer part of the Python inventory surface.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/bug-reports")
         for item in unversioned_ops
     )
     assert any(
@@ -545,6 +547,39 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
         operation["path"] == "/api/v2/dependencies/"
         for operation in fragment.operations
     )
+
+
+def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
+    """The bug-reports family owns both POST twins as native after #4852.
+
+    The same-path Rust cutover (#4899, issue #4852) plus the Python handler
+    retirement (#5162) exclude both operations from the Python inventory
+    surface while keeping their exact method/path on native ingress.
+    """
+    fragment = _fragment_named("bug-reports")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    assert set(operations) == {
+        ("POST", "/api/bug-reports/"),
+        ("POST", "/api/v1/bug-reports/"),
+    }
+    for operation in operations.values():
+        assert operation["dest"] == "/api/native_roll.rs"
+        assert operation["exclude_from_inventory"] is True
+        assert operation["owning_issue"] == 4852
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    for bucket in ("v1_operations", "unversioned_operations"):
+        raw_operations = full_surface[bucket]
+        assert isinstance(raw_operations, list)
+        assert not any(
+            "bug-reports" in str(item.get("path", ""))
+            for item in raw_operations
+            if isinstance(item, dict)
+        )
 
 
 def test_release_fragment_covers_every_browser_called_release_route() -> None:
