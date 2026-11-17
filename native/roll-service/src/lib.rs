@@ -1228,3 +1228,5 @@ mod tests {
         );
     }
 }
+
+pub mod dependency_groups;
