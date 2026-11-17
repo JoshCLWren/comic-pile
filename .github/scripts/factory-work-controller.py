@@ -1406,6 +1406,21 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
+    # Resolve an issue wakeup to its canonical open PR *before* loading retry
+    # history or asking Rotisserie to rank fresh issues. Otherwise every
+    # worker candidate reads the entire retry window and authorizes issue
+    # intake even though only the existing PR can be advanced.
+    if target is not None and target[0] == 'issue':
+        issue_number = target[1]
+        linked_prs = [
+            pr for pr in prs
+            if linked_issue_from_pr(pr) == issue_number
+            and pr_suppresses_issue_candidate(pr, {})
+        ]
+        if len(linked_prs) > 1:
+            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
+        if linked_prs:
+            target = ('pr', int(linked_prs[0]['number']))
     try:
         # Targeted PR wakeups require only that PR's retry evidence.
         # A full roster pass still needs the whole issue/PR retry window.
@@ -1429,28 +1444,23 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
-    authorized_issues = rotisserie_issue_intake(issues, prs)
-    if authorized_issues is not None:
-        candidates = [
-            candidate
-            for candidate in candidates
-            if candidate.kind != "issue" or candidate.number in authorized_issues
-        ]
+    # A PR-only target never leases new issue work; issue-intake authorization
+    # is unnecessary and can fail closed or consume remote calls on every
+    # targeted repair/review wakeup.
+    if target is None or target[0] == 'issue':
+        authorized_issues = rotisserie_issue_intake(issues, prs)
+        if authorized_issues is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate.kind != "issue" or candidate.number in authorized_issues
+            ]
     if kinds is not None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     if target is not None:
         kind, number = target
-        linked_prs = [
-            pr for pr in prs
-            if kind == 'issue' and linked_issue_from_pr(pr) == number
-            and pr_suppresses_issue_candidate(pr, {})
-        ]
-        if len(linked_prs) > 1:
-            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
-        if linked_prs:
-            kind, number = 'pr', int(linked_prs[0]['number'])
         candidates = [
             candidate for candidate in candidates
             if (candidate.kind, candidate.number) == (kind, number)

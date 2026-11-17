@@ -1119,9 +1119,15 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     monkeypatch.setattr(controller, "list_prs", lambda: [{"number": pr_number, "headRefOid": head}])
     monkeypatch.setattr(controller, "linked_issue_from_pr", lambda pr: issue_number)
     monkeypatch.setattr(controller, "pr_suppresses_issue_candidate", lambda pr, issues: True)
-    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    retry_reads: list[int | None] = []
+    monkeypatch.setattr(
+        controller, "load_no_diff_attempt_records",
+        lambda *, target_pr=None: retry_reads.append(target_pr) or [],
+    )
     monkeypatch.setattr(controller, "build_candidates", lambda *args, **kwargs: [unrelated, candidate])
-    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda issues, prs: None)
+    def forbidden_issue_intake(*_args: object) -> None:
+        raise AssertionError("A targeted canonical PR must skip issue intake")
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", forbidden_issue_intake)
     monkeypatch.setattr(controller, "candidate_is_live_executable", lambda item: True)
     claims: list[tuple[object, str, dict[str, str]]] = []
 
@@ -1142,6 +1148,9 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     assert claims[-1] == (
         feedback, "17", {"action": "ci-repair", "expected_head": head, "source": "manual"},
     )
+    # Each wakeup selects the exact PR's retry window. The unrelated backlog's
+    # global comment history and Rotisserie intake are never fetched.
+    assert retry_reads == [pr_number] * 4
 
 
 def test_shared_provider_quota_uses_trusted_neon_projection(
