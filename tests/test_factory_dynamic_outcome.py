@@ -270,3 +270,34 @@ def test_review_without_terminal_verdict_is_pr_work_failure() -> None:
     assert result["outcome_class"] == "work_failure"
     assert result["selected_kind"] == "pr"
     assert result["selected_number"] == "5299"
+
+
+def test_clean_exit_prose_about_quotas_is_not_a_provider_throttle() -> None:
+    """Run 44093346708: the agent read docs mentioning quota and rate limits."""
+    log = _review_session("10001", "openrouter-free", "a/b:free", (
+        "> build · a/b:free\n"
+        "Weekly quota exhaustion is legitimate and appears as quota-limited; HTTP 429 means rate limit.\n"
+        "agent exit status 0 for pr #5308\n"
+        "semantic_review_missing_verdict: review model did not produce an authoritative "
+        "terminal verdict for PR #5308"
+    ), number=5308)
+    result = module.classify(log)
+    assert result["outcome_class"] == "work_failure"
+    assert result["exact_model_proven"] is True
+
+
+def test_failed_session_with_http_429_is_still_a_throttle() -> None:
+    log = _review_session("10001", "openrouter-free", "a/b:free", (
+        "Error: HTTP 429 Too Many Requests\n"
+        "agent exit status 1 for pr #5308"
+    ), number=5308)
+    assert module.classify(log)["outcome_class"] == "provider_throttle"
+
+
+def test_zero_exit_account_refusal_keeps_quota() -> None:
+    log = _review_session("10001", "pollinations", "a/b", (
+        "The account behind this API key doesn't have enough credits.\n"
+        "agent exit status 0 for pr #5299\n"
+        "agent exited 0 after a provider account refusal; treating it as a provider failure"
+    ))
+    assert module.classify(log)["outcome_class"] == "provider_quota"
