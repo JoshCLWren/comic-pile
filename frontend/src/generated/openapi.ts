@@ -5093,11 +5093,6 @@ export interface components {
             /** Is Blocked */
             is_blocked: boolean;
         };
-        /** Body_set_pending_thread_api_threads__thread_id__set_pending_post */
-        Body_set_pending_thread_api_threads__thread_id__set_pending_post: {
-            /** Expected Issue Id */
-            expected_issue_id?: number | null;
-        };
         /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
         Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
             /** Expected Issue Id */
