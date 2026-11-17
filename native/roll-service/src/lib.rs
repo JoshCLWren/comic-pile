@@ -735,11 +735,26 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(continuity_rules::delete),
         )
         // Continuity plans v1 routes (cutover from Python)
-        .route("/api/v1/continuity-plans/", get(continuity_plans::list_continuity_plans))
-        .route("/api/v1/continuity-plans/", post(continuity_plans::create_continuity_plan))
-        .route("/api/v1/continuity-plans/{plan_id}", get(continuity_plans::get_continuity_plan))
-        .route("/api/v1/continuity-plans/{plan_id}", put(continuity_plans::update_continuity_plan))
-        .route("/api/v1/continuity-plans/{plan_id}", delete(continuity_plans::delete_continuity_plan))
+        .route(
+            "/api/v1/continuity-plans/",
+            get(continuity_plans::list_continuity_plans),
+        )
+        .route(
+            "/api/v1/continuity-plans/",
+            post(continuity_plans::create_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            get(continuity_plans::get_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            put(continuity_plans::update_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(continuity_plans::delete_continuity_plan),
+        )
         .route(
             "/api/v1/continuity-plans/{plan_id}/membership",
             get(continuity_plans::get_continuity_plan_membership),

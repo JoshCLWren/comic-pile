@@ -355,13 +355,13 @@ pub async fn list_continuity_plans(
             let lanes_json: Vec<serde_json::Value> =
                 serde_json::from_value(lanes_json_val).unwrap_or_default();
             let lane_count = lanes_json.len().saturating_sub(0).max(1);
-            
+
             // Calculate step count from nodes_json
             let nodes_json_val: serde_json::Value = row.get(7);
             let nodes: Vec<serde_json::Value> =
                 serde_json::from_value(nodes_json_val).unwrap_or_default();
             let step_count = nodes.len() as i32;
-            
+
             // Extract source paths from nodes
             let mut source_paths = Vec::new();
             for node in &nodes {
@@ -442,7 +442,9 @@ pub async fn create_continuity_plan(
             .get(0);
         if count as usize != issue_ids.len() {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(bad_request("Some referenced issues are not owned by the user"));
+            return Err(bad_request(
+                "Some referenced issues are not owned by the user",
+            ));
         }
     }
 
@@ -469,14 +471,24 @@ pub async fn create_continuity_plan(
 
     // Validate lane uniqueness
     let lane_ids: Vec<&String> = payload.lanes.iter().map(|l| &l.id).collect();
-    if lane_ids.len() != lane_ids.iter().collect::<std::collections::HashSet<_>>().len() {
+    if lane_ids.len()
+        != lane_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(bad_request("Lane ids must be unique"));
     }
 
     // Check for duplicate node ids
     let node_ids: Vec<&String> = payload.nodes.iter().map(|n| &n.id).collect();
-    if node_ids.len() != node_ids.iter().collect::<std::collections::HashSet<_>>().len() {
+    if node_ids.len()
+        != node_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(bad_request("Node ids must be unique"));
     }
@@ -623,7 +635,7 @@ pub async fn update_continuity_plan(
 
     let expected_version: Option<String> = payload.expected_updated_at.clone();
     let current_updated_at: String = existing.get(3);
-    
+
     if let Some(ref expected) = expected_version {
         if expected != &current_updated_at {
             tx.rollback().await.map_err(db::query_error)?;
@@ -652,7 +664,9 @@ pub async fn update_continuity_plan(
             .get(0);
         if count as usize != issue_ids.len() {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(bad_request("Some referenced issues are not owned by the user"));
+            return Err(bad_request(
+                "Some referenced issues are not owned by the user",
+            ));
         }
     }
 
@@ -854,7 +868,12 @@ pub async fn adopt_reading_order(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Reading order {} not found", payload.reading_order_id)))?;
+        .ok_or_else(|| {
+            not_found(format!(
+                "Reading order {} not found",
+                payload.reading_order_id
+            ))
+        })?;
 
     let order_id: i32 = order.get(0);
     let order_name: String = order.get(1);
@@ -902,7 +921,7 @@ pub async fn adopt_reading_order(
             .await
             .map_err(db::query_error)?
             .get(0);
-        
+
         if count as usize != thread_ids.len() {
             tx.rollback().await.map_err(db::query_error)?;
             return Err(bad_request("Some threads are not owned by the user"));
@@ -913,7 +932,13 @@ pub async fn adopt_reading_order(
     let plan_name = payload
         .plan_name
         .as_ref()
-        .and_then(|n| if n.trim().is_empty() { None } else { Some(n.trim().to_string()) })
+        .and_then(|n| {
+            if n.trim().is_empty() {
+                None
+            } else {
+                Some(n.trim().to_string())
+            }
+        })
         .unwrap_or_else(|| {
             if order_name.trim().is_empty() {
                 format!("From reading order {}", order_id)
@@ -956,7 +981,8 @@ pub async fn adopt_reading_order(
         "id": lane_id,
         "name": lane_name,
         "order": 0
-    })])).unwrap();
+    })]))
+    .unwrap();
     let nodes_json = serde_json::to_string(&nodes_val).unwrap();
 
     let row = tx
@@ -1042,7 +1068,7 @@ pub async fn get_continuity_plan_membership(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<ReadingPlanMembershipResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Check plan ownership
     let plan_owned: Option<i32> = conn
         .query_opt(
@@ -1052,7 +1078,7 @@ pub async fn get_continuity_plan_membership(
         .await
         .map_err(db::query_error)?
         .map(|row| row.get(0));
-    
+
     if plan_owned.is_none() {
         return Err(not_found(format!("Continuity plan {plan_id} not found")));
     }
@@ -1075,14 +1101,16 @@ pub async fn get_continuity_plan_membership(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let thread_ids: Vec<i32> = if let Some(row) = node_rows.first() {
         let nodes: Vec<serde_json::Value> = row.get(0);
         nodes
             .iter()
             .filter_map(|node| {
                 if node.get("node_type").and_then(|v| v.as_str()) == Some("thread") {
-                    node.get("ref_id").and_then(|v| v.as_i64()).map(|v| v as i32)
+                    node.get("ref_id")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as i32)
                 } else {
                     None
                 }
@@ -1354,7 +1382,12 @@ pub async fn confirm_plan_projection(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Reading order {} not found", payload.reading_order_id)))?;
+        .ok_or_else(|| {
+            not_found(format!(
+                "Reading order {} not found",
+                payload.reading_order_id
+            ))
+        })?;
 
     // Get plan nodes
     let plan_rows = tx
@@ -1374,13 +1407,18 @@ pub async fn confirm_plan_projection(
 
     // Extract thread nodes
     let mut thread_nodes: Vec<(i32, i32, String)> = Vec::new(); // (position, thread_id, node_id)
-    let mut node_ids_with_positions: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
-    
+    let mut node_ids_with_positions: std::collections::HashMap<String, i32> =
+        std::collections::HashMap::new();
+
     for (pos, node) in nodes.iter().enumerate() {
         if node.get("node_type").and_then(|v| v.as_str()) == Some("thread") {
             if let (Some(thread_id), Some(node_id)) = (
-                node.get("ref_id").and_then(|v| v.as_i64()).map(|v| v as i32),
-                node.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                node.get("ref_id")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
+                node.get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
             ) {
                 thread_nodes.push((pos as i32, thread_id, node_id.clone()));
                 node_ids_with_positions.insert(node_id, pos as i32);
@@ -1410,7 +1448,11 @@ pub async fn confirm_plan_projection(
 
     if !duplicates.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        let node_id = thread_nodes.iter().find(|(_, t, _)| *t == duplicates[0]).map(|(_, _, n)| n.clone()).unwrap_or_default();
+        let node_id = thread_nodes
+            .iter()
+            .find(|(_, t, _)| *t == duplicates[0])
+            .map(|(_, _, n)| n.clone())
+            .unwrap_or_default();
         let detail = serde_json::json!({
             "code": "projection_conflicts",
             "conflicts": [{
@@ -1433,7 +1475,8 @@ pub async fn confirm_plan_projection(
     .map_err(db::query_error)?;
 
     // Get thread titles
-    let mut thread_titles: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
+    let mut thread_titles: std::collections::HashMap<i32, String> =
+        std::collections::HashMap::new();
     for (_, thread_id, _) in &thread_nodes {
         let title_row = tx
             .query_opt(
@@ -1453,7 +1496,10 @@ pub async fn confirm_plan_projection(
 
     for (pos, thread_id, _node_id) in thread_nodes.into_iter().map(|(p, t, n)| (p, t, n)) {
         let thread_title = thread_titles.get(&thread_id).cloned().unwrap_or_default();
-        let source = if existing_items.iter().any(|r| r.get::<_, i32>(0) == thread_id) {
+        let source = if existing_items
+            .iter()
+            .any(|r| r.get::<_, i32>(0) == thread_id)
+        {
             // Check if position changed
             for row in &existing_items {
                 if row.get::<_, i32>(0) == thread_id {
@@ -1463,7 +1509,10 @@ pub async fn confirm_plan_projection(
                     }
                 }
             }
-            if existing_items.iter().any(|r| r.get::<_, i32>(0) == thread_id && r.get::<_, i32>(1) == pos + 1) {
+            if existing_items
+                .iter()
+                .any(|r| r.get::<_, i32>(0) == thread_id && r.get::<_, i32>(1) == pos + 1)
+            {
                 kept += 1;
                 "existing".to_string()
             } else {
@@ -1565,7 +1614,11 @@ pub async fn create_release_source(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::Unprocessable("Provider volume must be a confirmed mapping for the thread".into()))?;
+        .ok_or_else(|| {
+            ApiError::Unprocessable(
+                "Provider volume must be a confirmed mapping for the thread".into(),
+            )
+        })?;
 
     let identity_id: i32 = mapping.get(0);
     let provider: String = mapping.get(1);
@@ -1798,10 +1851,22 @@ pub async fn list_release_sources_for_reader(
                 thread_id: row.get(1),
                 external_identity_id: row.get(2),
                 provider_volume_id: row.get(7),
-                provider_title: display.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                provider_publisher: display.get("publisher").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                provider_start_year: display.get("start_year").and_then(|v| v.as_i64()).map(|v| v as i32),
-                provider_issue_count: display.get("issue_count").and_then(|v| v.as_i64()).map(|v| v as i32),
+                provider_title: display
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                provider_publisher: display
+                    .get("publisher")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                provider_start_year: display
+                    .get("start_year")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
+                provider_issue_count: display
+                    .get("issue_count")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
                 enabled: row.get(3),
                 last_synced_at: row.get(4),
             }
@@ -1952,7 +2017,9 @@ pub async fn update_release_source(
             .map_err(db::query_error)?;
 
         if mapping.is_none() {
-            return Err(ApiError::Unprocessable("Mapping no longer confirmed".into()));
+            return Err(ApiError::Unprocessable(
+                "Mapping no longer confirmed".into(),
+            ));
         }
     }
 
@@ -2062,56 +2129,89 @@ pub async fn delete_release_source(
 // Helper function to extract provider display metadata
 fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_json::Value {
     let mut display = serde_json::Map::new();
-    
+
     if let Some(m) = metadata_json {
         // Extract title - check both "name" and "title" keys
-        let title_from_name = m.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let title_from_title = m.get("title").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let title_from_name = m
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let title_from_title = m
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let title_str = title_from_name.or(title_from_title);
         if let Some(s) = title_str {
             if !s.trim().is_empty() {
-                display.insert("title".to_string(), serde_json::Value::String(s.trim().to_string()));
+                display.insert(
+                    "title".to_string(),
+                    serde_json::Value::String(s.trim().to_string()),
+                );
             }
         }
-        
+
         // Extract publisher
         if let Some(publisher) = m.get("publisher") {
             if let Some(s) = publisher.as_str() {
                 if !s.trim().is_empty() {
-                    display.insert("publisher".to_string(), serde_json::Value::String(s.trim().to_string()));
+                    display.insert(
+                        "publisher".to_string(),
+                        serde_json::Value::String(s.trim().to_string()),
+                    );
                 }
             } else if let Some(obj) = publisher.as_object() {
                 if let Some(name) = obj.get("name") {
                     if let Some(s) = name.as_str() {
                         if !s.trim().is_empty() {
-                            display.insert("publisher".to_string(), serde_json::Value::String(s.trim().to_string()));
+                            display.insert(
+                                "publisher".to_string(),
+                                serde_json::Value::String(s.trim().to_string()),
+                            );
                         }
                     }
                 }
             }
         }
-        
+
         // Extract start_year
         if let Some(start_year) = m.get("start_year") {
             if let Some(y) = start_year.as_i64() {
-                display.insert("start_year".to_string(), serde_json::Value::Number(y.into()));
+                display.insert(
+                    "start_year".to_string(),
+                    serde_json::Value::Number(y.into()),
+                );
             } else if let Some(s) = start_year.as_str() {
                 if let Ok(y) = s.trim().parse::<i64>() {
-                    display.insert("start_year".to_string(), serde_json::Value::Number(y.into()));
+                    display.insert(
+                        "start_year".to_string(),
+                        serde_json::Value::Number(y.into()),
+                    );
                 }
             }
         }
-        
+
         // Extract issue_count - check both "count_of_issues" and "issue_count" keys
         let count_of_issues_i64 = m.get("count_of_issues").and_then(|v| v.as_i64());
-        let count_of_issues_str = m.get("count_of_issues").and_then(|v| v.as_str()).and_then(|s| s.trim().parse::<i64>().ok());
+        let count_of_issues_str = m
+            .get("count_of_issues")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.trim().parse::<i64>().ok());
         let issue_count_i64 = m.get("issue_count").and_then(|v| v.as_i64());
-        let issue_count_str = m.get("issue_count").and_then(|v| v.as_str()).and_then(|s| s.trim().parse::<i64>().ok());
-        let issue_count = count_of_issues_i64.or(count_of_issues_str).or(issue_count_i64).or(issue_count_str);
+        let issue_count_str = m
+            .get("issue_count")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.trim().parse::<i64>().ok());
+        let issue_count = count_of_issues_i64
+            .or(count_of_issues_str)
+            .or(issue_count_i64)
+            .or(issue_count_str);
         if let Some(c) = issue_count {
-            display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
+            display.insert(
+                "issue_count".to_string(),
+                serde_json::Value::Number(c.into()),
+            );
         }
     }
-    
+
     serde_json::Value::Object(display)
 }

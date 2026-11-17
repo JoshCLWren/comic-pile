@@ -36,7 +36,7 @@
       "method": "POST",
       "path": "/api/v1/continuity-plans/from-reading-order",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/from-reading-order$",
+      "src": "^/api/v1/continuity\\-plans/from\\-reading\\-order$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -47,7 +47,7 @@
       "method": "POST",
       "path": "/api/v1/continuity-plans/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release-sources/$",
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -58,7 +58,7 @@
       "method": "DELETE",
       "path": "/api/v1/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release-sources/[^/]+$",
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -69,7 +69,7 @@
       "method": "PATCH",
       "path": "/api/v1/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/release-sources/[^/]+$",
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -124,7 +124,7 @@
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading-orders/project$",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -135,7 +135,7 @@
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release-sources/$",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -146,7 +146,7 @@
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release-sources/reader$",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/reader$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
