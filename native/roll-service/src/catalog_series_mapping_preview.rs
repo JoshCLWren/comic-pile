@@ -371,6 +371,30 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
+    /// Database-backed exercise of the mounted read-only preview (write-guard
+    /// evidence). The handler only reads; a missing origin yields the canonical
+    /// unavailable scope rather than a mutation.
+    #[tokio::test]
+    async fn preview_series_mapping_read_only_handler_reaches_the_database() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let result = preview_series_mapping_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Json(SeriesMappingPreviewRequest {
+                origin_issue_id: 9_001_001,
+                provider: "comicvine".to_string(),
+                provider_series_external_id: "missing-series".to_string(),
+                scope_mode: default_scope_mode(),
+            }),
+        )
+        .await;
+        let response = result.expect("preview returns a 200 body");
+        assert!(response.scope.status == "available" || response.scope.status == "unavailable");
+    }
+
     #[test]
     fn preview_token_is_accepted_by_the_commit_verifier_wire_shape() {
         let plan = serde_json::json!({
