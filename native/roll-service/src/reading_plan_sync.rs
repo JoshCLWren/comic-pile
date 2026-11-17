@@ -1666,19 +1666,13 @@ pub struct ScheduledSyncResponse {
 
 /// Fail-closed Vercel Cron secret gate, matching `require_cron_secret`: a
 /// deployment without a usable secret returns 503, a missing or incorrect
-/// bearer returns 401. The shared [`crate::cron_auth::authorize_cron`] owns the
-/// placeholder rejection, case-insensitive `Bearer` scheme (RFC 6750, Python's
-/// `scheme.lower()`) and constant-time comparison so every native cron route
-/// authorizes identically. Credentials are never logged.
+/// bearer returns 401. The shared [`crate::cron_auth::authorize_cron_http`]
+/// owns the placeholder rejection, case-insensitive `Bearer` scheme (RFC 6750,
+/// Python's `scheme.lower()`), constant-time comparison and the 503/401 status
+/// split, so every native cron route authorizes identically. Credentials are
+/// never logged.
 fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
-    use crate::cron_auth::{authorize_cron, CronAuthError};
-
-    authorize_cron(headers, expected).map_err(|reason| match reason {
-        CronAuthError::NotConfigured => {
-            ApiError::ServiceUnavailable("Cron endpoint is not configured".to_string())
-        }
-        CronAuthError::Unauthorized => ApiError::Unauthorized("Unauthorized".to_string()),
-    })
+    crate::cron_auth::authorize_cron_http(headers, expected)
 }
 
 fn scheduled_response(payload: ScheduledSyncResponse) -> Response {

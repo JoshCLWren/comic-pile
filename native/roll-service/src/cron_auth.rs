@@ -9,6 +9,7 @@
 //! gate here means every native cron route authorizes through exactly one
 //! path instead of each carrying its own subtly different copy.
 
+use crate::ApiError;
 use axum::http::HeaderMap;
 
 /// Values Python's `usable_cron_secret` treats as an unconfigured secret.
@@ -87,9 +88,28 @@ pub(crate) fn authorize_cron(
     }
 }
 
+/// Authorize a native cron request and map the typed rejection onto the HTTP
+/// error shared by every native route: an unconfigured/placeholder `CRON_SECRET`
+/// is a fail-closed 503, while a missing or incorrect bearer is a 401. Both
+/// native cron routes (release sync and ComicVine repair) call this one helper,
+/// so the status split against Python's `require_cron_secret` cannot drift
+/// between them. Credentials are never logged.
+pub(crate) fn authorize_cron_http(
+    headers: &HeaderMap,
+    expected: Option<&str>,
+) -> Result<(), ApiError> {
+    authorize_cron(headers, expected).map_err(|reason| match reason {
+        CronAuthError::NotConfigured => {
+            ApiError::ServiceUnavailable("Cron endpoint is not configured".to_string())
+        }
+        CronAuthError::Unauthorized => ApiError::Unauthorized("Unauthorized".to_string()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
 
     #[test]
     fn rejects_placeholder_values_with_python_case_rules() {
@@ -173,5 +193,45 @@ mod tests {
                 "placeholder: {placeholder:?}"
             );
         }
+    }
+
+    #[test]
+    fn authorize_cron_http_maps_not_configured_to_503_and_bad_bearer_to_401() {
+        let headers = {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "authorization",
+                "Bearer a-very-secret-value".parse().expect("valid header"),
+            );
+            headers
+        };
+        // Missing and placeholder secrets are fail-closed 503s, not 401s.
+        for expected in [None, Some("<redacted>"), Some("null")] {
+            assert_eq!(
+                authorize_cron_http(&headers, expected)
+                    .expect_err("unconfigured secret")
+                    .status(),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "expected: {expected:?}"
+            );
+        }
+        let mut wrong = HeaderMap::new();
+        wrong.insert(
+            "authorization",
+            "Bearer not-the-secret".parse().expect("valid header"),
+        );
+        assert_eq!(
+            authorize_cron_http(&wrong, Some("a-very-secret-value"))
+                .expect_err("wrong bearer")
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let missing_bearer = HeaderMap::new();
+        assert_eq!(
+            authorize_cron_http(&missing_bearer, Some("a-very-secret-value"))
+                .expect_err("missing bearer")
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }
