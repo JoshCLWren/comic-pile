@@ -1068,7 +1068,10 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("rustc "));
-        assert_eq!(health["build"]["lock_sha256"], env!("COMICPILE_LOCK_SHA256"));
+        assert_eq!(
+            health["build"]["lock_sha256"],
+            env!("COMICPILE_LOCK_SHA256")
+        );
         assert_eq!(health["build"]["lock_sha256"].as_str().unwrap().len(), 64);
         assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
         let executable = std::env::current_exe().expect("current executable");
