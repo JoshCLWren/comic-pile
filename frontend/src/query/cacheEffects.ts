@@ -1025,3 +1025,17 @@ export async function invalidateAfterReadingGraphRepair(
     invalidateReadingEligibility(client, true),
   ])
 }
+
+/**
+ * Invalidate the activity timeline after a rate or snooze action.
+ * The History page displays this data, so it must refresh when
+ * reading activity changes.
+ */
+export async function invalidateAfterActivityChange(client: QueryClient): Promise<void> {
+  // Also invalidate the paginated session list since ratings/snoozes can affect
+  // how many issues read are shown on History cards
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
+    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+  ])
+}

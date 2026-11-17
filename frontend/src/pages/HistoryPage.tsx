@@ -1,6 +1,6 @@
-import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
-import type { SessionSummary } from '../types'
+import { useActivity } from '../hooks/useActivity'
+import type { ActivityEvent } from '../types'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -20,17 +20,98 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
   )
 }
 
+/** Event type labels for display */
+const EVENT_LABELS: Record<string, string> = {
+  roll: 'Rolled',
+  rate: 'Rated',
+  snooze: 'Snoozed',
+  unsnooze: 'Unsnoozed',
+  dismiss: 'Dismissed',
+  undo: 'Restored',
+  restore: 'Restored',
+  move: 'Moved',
+  shuffle: 'Shuffled',
+  complete: 'Completed',
+  completion: 'Completed',
+  session_mode: 'Session mode',
+}
+
+function eventLabel(type: string): string {
+  return EVENT_LABELS[type] ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+}
+
+/**
+ * Format the dice progression from die values
+ */
+function formatDiceProgression(dieBefore: number | null, dieAfter: number | null): string {
+  // This is a simplified version - the actual ladder path is preserved in the events
+  // For activity events, we show die changes as "d{X} → d{Y}"
+  if (dieBefore === null && dieAfter === null) return ''
+  if (dieBefore === null) return `d${dieAfter}`
+  if (dieAfter === null) return `d${dieBefore}`
+  return `d${dieBefore} → d${dieAfter}`
+}
+
+/**
+ * Get the display value for an event
+ */
+function getDisplayValue(event: ActivityEvent): string | null {
+  switch (event.type) {
+    case 'roll':
+      if (event.result != null && event.result > 0) {
+        return `Rolled ${event.result}`
+      }
+      return null
+    case 'rate':
+      if (event.rating != null) {
+        return `Rated ${event.rating.toFixed(1)}`
+      }
+      return null
+    case 'snooze':
+      return `Snoozed to d${event.die_after ?? event.die_before}`
+    case 'unsnooze':
+      return `Unsnoozed`
+    case 'dismiss':
+      return `Dismissed`
+    case 'session_mode':
+      return 'Session mode changed'
+    default:
+      return null
+  }
+}
+
+/**
+ * Get the description for an event (for event cards)
+ */
+function getEventDescription(event: ActivityEvent): string | null {
+  // For roll events, show the die progression
+  const diceProgression = formatDiceProgression(event.die_before, event.die_after)
+  const parts: string[] = []
+
+  if (diceProgression) {
+    parts.push(diceProgression)
+  }
+
+  const displayValue = getDisplayValue(event)
+  if (displayValue) {
+    parts.push(displayValue)
+  }
+
+  return parts.join(' · ')
+}
+
 export default function HistoryPage() {
   const {
-    data: sessions,
+    events,
     isPending,
+    isError,
+    error,
     isLoadingMore,
     hasMore,
     loadMore,
-    error,
-    isRetrying,
     refetch,
-  } = useSessions()
+    isRetrying,
+  } = useActivity()
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -51,27 +132,27 @@ export default function HistoryPage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
+  if (isError && (!events || events.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p role="alert" className="error-message">
-          Failed to load sessions
+          Failed to load activity history
         </p>
         <RetryHistoryButton onRetry={() => void refetch()} />
       </div>
     )
   }
 
-  if (!sessions || sessions.length === 0) {
+  if (!events || events.length === 0) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
+            <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity history</p>
           </div>
         </header>
-        <div className="text-center text-stone-500">No sessions yet</div>
+        <div className="text-center text-stone-500">No activity yet</div>
       </div>
     )
   }
@@ -91,80 +172,18 @@ export default function HistoryPage() {
   }
 
   /**
-   * Unique accessible name for a session-detail link (#3687).
-   *
-   * Every card shows the same concise "View full session" text while the
-   * arrow stays aria-hidden, so without a distinct aria-label a screen reader
-   * announces dozens of identical links and cannot tell the cards apart. The
-   * stable session id keeps each name unique even when the start time is
-   * missing or unparseable, and the start date/time adds spoken context. The
-   * visible label is unchanged.
+   * Get issue number display for event
    */
-  const buildSessionLinkLabel = (session: SessionSummary): string => {
-    const base = `View full session for session ${session.id}`
-    const date = formatDate(session.started_at)
-    const time = formatTime(session.started_at)
-    if (date && time) {
-      return `${base}, started ${date} at ${time}`
-    }
-    return base
+  function getIssueNumberDisplay(event: ActivityEvent): string | null {
+    if (!event.issue_number) return null
+    return `#${event.issue_number}`
   }
 
-  const formatDuration = (startedAt: string | null | undefined, endedAt: string | null | undefined) => {
-    if (!startedAt || !endedAt) return null
-    const start = new Date(startedAt)
-    const end = new Date(endedAt)
-    const diffMs = end.getTime() - start.getTime()
-    if (!Number.isFinite(diffMs) || diffMs < 0) return null
-    const diffMins = Math.floor(diffMs / 60000)
-    const hours = Math.floor(diffMins / 60)
-    const mins = diffMins % 60
-    if (hours === 0) return `${mins}m`
-    if (mins === 0) return `${hours}h`
-    return `${hours}h ${mins}m`
-  }
-
-  const formatDiceProgression = (ladderPath: string | null | undefined, lastRolledResult: number | null | undefined) => {
-    if (!ladderPath) return ''
-    const dice = ladderPath.split(' → ')
-    const progression = dice.map(d => `d${d}`).join(' → ')
-
-    // Only a roll that landed on a number is reported; a missing or zero
-    // result would otherwise render a dangling "· Rolled" suffix.
-    if (lastRolledResult != null && lastRolledResult > 0) {
-      return `${progression} · Rolled ${lastRolledResult}`
-    }
-
-    return progression
-  }
-
-  const buildActivityLine = (
-    session: SessionSummary,
-  ): string | null => {
-    const parts: string[] = []
-
-    const issuesRead = session.active_thread?.issues_read
-    const lastRating = session.active_thread?.last_rating
-
-    // Add issues read information
-    if (issuesRead != null && issuesRead > 0) {
-      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
-    }
-
-    // Add rating information
-    if (lastRating != null) {
-      parts.push(`rated ${lastRating.toFixed(1)}`)
-    }
-
-    // Report the session's recorded start die, not the evolving current die,
-    // so past history never rewrites itself when the reader's current die
-    // setting changes (issue #4243).
-    const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
-    if (hasActivity && session.start_die != null) {
-      parts.push(`Die size d${session.start_die}`)
-    }
-
-    return parts.length > 0 ? parts.join(' · ') : null
+  /**
+   * Check if this is a rate event that should show rating separately
+   */
+  function isRatingEvent(event: ActivityEvent): boolean {
+    return event.type === 'rate' && event.rating != null
   }
 
   return (
@@ -172,94 +191,48 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
+          <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity history</p>
         </div>
       </header>
 
-      <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
-        {sessions.map((session) => {
-          const duration = formatDuration(session.started_at, session.ended_at)
-          const isAbandonedRoll = (
-            !session.active_thread
-            && session.last_rolled_result == null
-            && (session.snapshot_count ?? 0) <= 1
-          )
-          const activityLine = session.active_thread
-            ? buildActivityLine(session)
-            : null
-          // The dice progression is rendered once per card, independently of the
-          // activity line, so a rated or read session never loses its ladder
-          // and roll (#3573).
-          const diceProgression = session.ladder_path
-            ? formatDiceProgression(session.ladder_path, session.last_rolled_result)
-            : ''
+      <div id="events-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Activity history">
+        {events.map((event, index) => {
+          const description = getEventDescription(event)
+          const isRating = isRatingEvent(event)
+
           return (
-            <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
+            <div key={event.event_id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
                 <div className="text-xs font-bold leading-none text-stone-200">
-                  {formatDate(session.started_at)}
+                  {formatDate(event.timestamp)}
                 </div>
                 <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
-                  {formatTime(session.started_at)}
+                  {formatTime(event.timestamp)}
                 </div>
               </div>
 
               <div className="min-w-0 flex-1 space-y-1.5">
-                {isAbandonedRoll ? (
-                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">
-                    No issue selected
-                  </p>
-                ) : session.active_thread ? (
-                  <>
-                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">
-                      {session.active_thread.title}
-                      {session.active_thread.next_issue_number ? (
-                        <span className="text-stone-400"> · #{session.active_thread.next_issue_number}</span>
+                <p className="font-bold text-sm leading-tight text-stone-200 truncate">
+                  {event.thread_title ? (
+                    <>
+                      {event.thread_title}
+                      {event.issue_number ? (
+                        <span className="text-stone-400"> · {getIssueNumberDisplay(event)}</span>
                       ) : null}
-                      {session.active_thread.tags && session.active_thread.tags.length > 0 ? (
-                        <span className="text-stone-400">
-                          {' · ' + session.active_thread.tags.map(t => t.name).join(', ')}
-                        </span>
-                      ) : null}
-                    </p>
-                    {activityLine ? (
-                      <p className="text-xs text-stone-400">
-                        {activityLine}
-                      </p>
-                    ) : (
-                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                        {session.active_thread.issues_remaining != null
-                          ? `${session.active_thread.issues_remaining} left in queue`
-                          : 'In progress'}
-                      </p>
-                    )}
-                  </>
-                ) : null}
-
-                {diceProgression && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                    {diceProgression}
+                    </>
+                  ) : isRating ? (
+                    'Rating recorded'
+                  ) : event.type === 'session_mode' ? (
+                    'Session mode changed'
+                  ) : (
+                    'Thread unavailable'
+                  )}
+                </p>
+                {description && (
+                  <p className="text-xs text-stone-400">
+                    {description}
                   </p>
                 )}
-
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                  {duration && <span>Duration: {duration}</span>}
-                  {(session.snapshot_count ?? 0) > 0 && (
-                    <Link
-                      to={`/sessions/${session.id}`}
-                      className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
-                    >
-                      Snapshots ({session.snapshot_count})
-                    </Link>
-                  )}
-                  <Link
-                    to={`/sessions/${session.id}`}
-                    aria-label={buildSessionLinkLabel(session)}
-                    className="inline-flex items-center gap-1 text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
-                  >
-                    View full session <span aria-hidden>→</span>
-                  </Link>
-                </div>
               </div>
             </div>
           )
@@ -274,10 +247,10 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {error && !isLoadingMore && (
+      {isError && !isLoadingMore && (
         <div className="text-center py-4">
           <p className="text-sm font-bold text-red-400 mb-3">
-            Failed to load more sessions
+            Failed to load more events
           </p>
           <button
             onClick={loadMore}
@@ -294,7 +267,7 @@ export default function HistoryPage() {
             onClick={loadMore}
             className="h-10 md:h-12 px-6 md:px-8 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
-            Load More Sessions
+            Load More Events
           </button>
         </div>
       )}
