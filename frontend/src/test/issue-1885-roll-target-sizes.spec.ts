@@ -87,7 +87,7 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
 }
 
 async function openRatingView(page: Page, threadId: number): Promise<void> {
-  const pending = await page.request.post(`/api/threads/${threadId}/set-pending`, {
+  const pending = await page.request.post(`/api/v1/threads/${threadId}/set-pending`, {
     headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
   })
   expect(pending.ok(), `set-pending failed: ${pending.status()}`).toBeTruthy()

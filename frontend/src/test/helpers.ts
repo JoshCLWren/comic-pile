@@ -434,7 +434,7 @@ export async function createThread(
   let threadId: number | null = null;
 
   while (!success && attempts < maxAttempts) {
-    const response = await page.request.post('/api/threads/', {
+    const response = await page.request.post('/api/v1/threads/', {
       data: dataWithoutTotal,
         headers: jsonHeaders,
       });
@@ -646,7 +646,7 @@ export async function navigateToRatePage(page: Page): Promise<void> {
   const threads = threadsData.threads ?? threadsData
   expect(threads.length).toBeGreaterThan(0)
 
-  await page.request.post(`/api/threads/${threads[0].id}/set-pending`, {
+  await page.request.post(`/api/v1/threads/${threads[0].id}/set-pending`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 

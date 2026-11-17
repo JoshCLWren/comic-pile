@@ -1,24 +1,13 @@
-"""Tests for retained legacy and canonical API route aliases.
+"""Guard retained versioned contracts and retirement of unused bare aliases.
 
-The API exposes a legacy surface (/api/*) and a versioned surface (/api/v1/*).
-/api/v1/sessions/current/ is an explicit backwards-compat alias of
-/api/sessions/current/ so session consumers can use the versioned surface
-without behavior changes. See docs/API.md (API Versioning) and the convention
-comment in app/main.py.
-
-This test file verifies three things:
-1. The alias does not drift for the /sessions/current/ endpoint.
-2. No new client-facing routes are added under bare /api/* (regression guard
-   for the convention documented in app/main.py).
-3. Retired operations stay retired: the Roll skip/unskip surface has no
-   handler, and re-adding one fails this suite.
+Threads, sessions and undo no longer register unversioned compatibility routes.
+Roll retains its aliases while its active migration is delivered separately.
 """
 
 import pytest
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute, Mount
-from httpx import AsyncClient
 
 from app.main import create_app
 
@@ -32,23 +21,6 @@ _BARE_API_EXCEPTIONS = frozenset(
     }
 )
 
-
-@pytest.mark.asyncio
-async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncClient) -> None:
-    """Verify /api/v1/sessions/current/ mirrors /api/sessions/current/.
-
-    This ensures that aliasing does not change behavior and both routes
-    return identical responses when authenticated.
-    """
-    resp_v1 = await auth_client.get("/api/v1/sessions/current/")
-    resp_legacy = await auth_client.get("/api/sessions/current/")
-
-    assert resp_v1.status_code == resp_legacy.status_code
-
-    if resp_legacy.status_code == 200:
-        assert resp_v1.json() == resp_legacy.json()
-    else:
-        assert resp_v1.text == resp_legacy.text
 
 
 def _collect_routes(app) -> dict[str, frozenset[str]]:
@@ -86,21 +58,12 @@ def test_collect_routes_unions_methods_on_the_same_path() -> None:
     assert _collect_routes(app)["/api/v1/threads/"] == frozenset({"GET", "POST"})
 
 
-def test_v1_undo_aliases_match_legacy_route_methods() -> None:
-    """Canonical aliases reuse the same undo handler contracts (v1 snooze retired, #4338)."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-
-    alias_pairs = (
-        (
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        ),
-        ("/api/undo/{session_id}/snapshots", "/api/v1/undo/{session_id}/snapshots"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+@pytest.mark.parametrize("family", ["threads", "sessions", "undo"])
+def test_unused_unversioned_aliases_are_retired(family: str) -> None:
+    """Bare aliases have no handlers; their existing versioned contracts survive."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    assert not any(path.startswith(f"/api/{family}/") for path in methods_by_path)
+    assert any(path.startswith(f"/api/v1/{family}/") for path in methods_by_path)
 
 
 def test_retired_queue_routes_are_absent() -> None:
@@ -226,31 +189,12 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/health/live",
             "/api/health/warmup",
             "/api/instance/warm",
-
             "/api/roll/bootstrap",
             "/api/roll/override",
             "/api/roll/events/{event_id}/recommendation-explanation",
-            "/api/sessions/",
-            "/api/sessions/current/",
-            "/api/sessions/{session_id}/details",
-            "/api/sessions/{session_id}/restore-session-start",
-            "/api/threads/",
-            "/api/threads/{thread_id}",
-            "/api/threads/active",
-            "/api/threads/completed",
-            "/api/threads/reactivate",
-            "/api/threads/stale",
-            "/api/threads/{thread_id}/position",
-            "/api/threads/{thread_id}/set-pending",
-            "/api/threads/{thread_id}/test-backdate",
-            "/api/threads/{thread_id}:migrateToIssues",
-            "/api/threads/{thread_id}:migrateToIssuesSimple",
-            "/api/threads/{thread_id}:setCurrentIssue",
             "/api/tasks/",
             "/api/tasks/ready",
             "/api/tasks/metrics",
-            "/api/undo/{session_id}/snapshots",
-            "/api/undo/{session_id}/undo/{snapshot_id}",
             "/api/{path:path}",
         }
     )
@@ -281,9 +225,8 @@ def test_threads_collection_is_only_the_native_v2_resource() -> None:
     # Creation remains a POST on the same prefix; only the collection read was
     # retired to the native v2 resource.
     assert "GET" not in methods_by_path["/api/v1/threads/"]
-    assert "GET" not in methods_by_path["/api/threads/"]
+    assert "/api/threads/" not in methods_by_path
     assert "POST" in methods_by_path["/api/v1/threads/"]
-    assert "POST" in methods_by_path["/api/threads/"]
     assert "/api/v1/threads/stale" in methods_by_path
 
 
