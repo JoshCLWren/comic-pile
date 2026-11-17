@@ -300,6 +300,10 @@ jobs:
           enable-cache: true
       - name: Install locked factory test dependencies
         run: uv sync --locked
+      - name: Install factory test shell dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ripgrep
       - name: Run every factory and controller Python test
         run: uv run --no-sync pytest -o addopts='' tests/test_factory_*.py .github/scripts/test_*.py
       - name: Run every factory controller JavaScript test
@@ -319,8 +323,9 @@ jobs:
         with:
           go-version: '1.25.x'
           cache: false
-      - name: Install official actionlint release
-        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
+      # Upstream v1.7.11 rejects GitHub's supported concurrency.queue field.
+      - name: Install maintained, queue-aware actionlint
+        run: go install actionlint.kjanat.dev/cmd/actionlint@v1.17.1
       - name: Validate all GitHub Actions workflows
         run: '"$(go env GOPATH)/bin/actionlint" -color'
 
