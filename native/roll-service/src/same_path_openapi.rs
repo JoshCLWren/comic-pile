@@ -25,6 +25,18 @@ use utoipa::OpenApi;
     crate::tags::unassign_tag_documentation,
     crate::tags::usage_tag_documentation,
     crate::session_history::list_session_snapshots_documentation,
+    crate::session_list::list_sessions_documentation,
+    crate::session_list::list_sessions_v1_documentation,
+    crate::session_list::get_current_session_documentation,
+    crate::session_list::get_current_session_v1_documentation,
+    crate::session_details::get_session_details_documentation,
+    crate::session_details::get_session_details_v1_documentation,
+    crate::session_restore::restore_session_start_documentation,
+    crate::session_restore::restore_session_start_v1_documentation,
+    crate::undo_snapshots::list_undo_snapshots_documentation,
+    crate::undo_snapshots::list_undo_snapshots_v1_documentation,
+    crate::undo_apply::undo_to_snapshot_documentation,
+    crate::undo_apply::undo_to_snapshot_v1_documentation,
     crate::issue_read::get_issue_documentation,
     crate::issue_read::get_issue_dependencies_documentation,
     crate::threads::get_thread_detail_documentation,
@@ -74,6 +86,11 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::session_detail::SessionDetailApi::openapi())
+        .merge_from(crate::session_list::SessionListApi::openapi())
+        .merge_from(crate::session_details::SessionDetailsApi::openapi())
+        .merge_from(crate::session_restore::SessionRestoreApi::openapi())
+        .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
