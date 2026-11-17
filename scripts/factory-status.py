@@ -9,8 +9,9 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -23,16 +24,17 @@ LONG_RUNNING_MINUTES = 30
 
 
 def instant(value: object) -> datetime | None:
+    """Parse timezone-aware GitHub timestamps into UTC."""
     if not isinstance(value, str) or not value:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
+    return parsed.astimezone(UTC) if parsed.tzinfo else None
 
 
-def gh_json(endpoint: str) -> Any:
+def gh_json(endpoint: str) -> object:
     """One authenticated read. Never retry in a tight loop or mutate GitHub."""
     try:
         result = subprocess.run(
@@ -82,6 +84,7 @@ def public_snapshot(repo: str) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def age_string(now: datetime, date: datetime | None) -> str:
+    """Render an observed event age without implying liveness."""
     if date is None:
         return "unknown age"
     minutes = max(0, int((now - date).total_seconds() // 60))
@@ -89,11 +92,13 @@ def age_string(now: datetime, date: datetime | None) -> str:
 
 
 def recent(row: dict[str, Any], cutoff: datetime, field: str = "created_at") -> bool:
+    """Check whether a timestamped GitHub record falls within the selected window."""
     when = instant(row.get(field))
     return when is not None and when >= cutoff
 
 
 def factory_pr(pr: dict[str, Any]) -> bool:
+    """Identify PRs carrying the repository's factory label."""
     return any(
         isinstance(label, dict) and label.get("name") == "factory"
         for label in pr.get("labels") or []
@@ -126,6 +131,7 @@ def workflow_runs(
     fetch: Callable[[str], Any], repo: str, workflow: str, limit: int,
     *, branch: str = "",
 ) -> list[dict[str, Any]]:
+    """Fetch workflow executions through the read-only GitHub API."""
     params = f"branch={branch}&" if branch else ""
     payload = fetch(f"repos/{repo}/actions/workflows/{workflow}/runs?{params}per_page={limit}")
     rows = payload.get("workflow_runs") if isinstance(payload, dict) else None
@@ -135,6 +141,7 @@ def workflow_runs(
 
 
 def snapshot_status(snapshot: dict[str, Any] | None, now: datetime) -> tuple[str, str]:
+    """Classify dashboard freshness without affecting live execution counts."""
     if snapshot is None:
         return "UNAVAILABLE", "no dashboard evidence"
     generated = instant(snapshot.get("generated_at"))
@@ -221,6 +228,7 @@ def collect(
 
 
 def render(data: dict[str, Any]) -> str:
+    """Render a console-readable status report with evidence links."""
     def workflow_link(row: dict[str, Any] | None) -> str:
         return str((row or {}).get("html_url") or "not available")
 
@@ -285,6 +293,7 @@ def render(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
+    """Run a bounded, read-only status probe or interval watch."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--minutes", type=int, default=60)
@@ -299,7 +308,7 @@ def main() -> int:
         try:
             snapshot, error = (None, "disabled") if args.no_dashboard else public_snapshot(args.repo)
             report = collect(
-                gh_json, args.repo, datetime.now(timezone.utc),
+                gh_json, args.repo, datetime.now(UTC),
                 minutes=args.minutes, snapshot=snapshot, snapshot_error=error,
             )
         except RuntimeError as exc:
