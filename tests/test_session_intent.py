@@ -240,7 +240,7 @@ async def test_current_session_endpoint_exposes_intent_state(
 
     token = create_access_token(data={"sub": user.username, "jti": "test"})
     response = await client.get(
-        "/api/sessions/current/", headers={"Authorization": f"Bearer {token}"}
+        "/api/v1/sessions/current/", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
