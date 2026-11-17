@@ -3445,7 +3445,7 @@
             "description": "Thread not found"
           },
           "422": {
-            "description": "Invalid status or page size"
+            "description": "Validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
