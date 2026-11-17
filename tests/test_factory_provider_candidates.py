@@ -92,3 +92,26 @@ def test_unknown_provider_fails() -> None:
         assert "unsupported factory provider" in str(exc)
     else:
         raise AssertionError("unknown provider was silently allowed")
+
+
+def test_catalog_without_type_metadata_skips_non_chat_models() -> None:
+    """NVIDIA lists embedding/rerank/safety NIMs that cannot run a coding session."""
+    catalog = json.dumps({"data": [{"id": model} for model in (
+        "nvidia/embed-qa-4",
+        "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+        "nvidia/nv-rerankqa-mistral-4b-v3",
+        "nvidia/llama-3.1-nemoguard-8b-content-safety",
+        "nvidia/llama-3.1-nemotron-70b-reward",
+        "nvidia/nemotron-parse",
+        "qwen/qwen3-coder-480b-a35b-instruct",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    )]})
+    discovery = CANDIDATES.discover("nvidia", catalog)
+    models = {candidate.model for candidate in discovery.candidates}
+    assert models == {"qwen/qwen3-coder-480b-a35b-instruct",
+                      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"}
+
+
+def test_explicit_language_metadata_is_trusted_over_the_name_heuristic() -> None:
+    catalog = json.dumps({"data": [{"id": "vendor/guard-coder-7b", "type": "language"}]})
+    assert [c.model for c in CANDIDATES.discover("nvidia", catalog).candidates] == ["vendor/guard-coder-7b"]
