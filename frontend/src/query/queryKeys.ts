@@ -602,7 +602,6 @@ export const queryKeys = {
    */
   activity: {
     all: ['activity'] as const,
-    list: ({ pageSize, pageToken }: { pageSize: number; pageToken?: string | null }) =>
-      ['activity', { pageSize, pageToken: pageToken ?? null }] as const,
+    list: ({ pageSize }: { pageSize: number }) => ['activity', { pageSize }] as const,
   },
 } as const

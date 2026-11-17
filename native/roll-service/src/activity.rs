@@ -16,7 +16,7 @@ use crate::{
     db,
     ApiError, AppState,
 };
-use axum::{extract::State, Json};
+use axum::{extract::{Query, State}, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,6 +27,15 @@ pub static ACTIVITY_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
 
 /// Default number of activity events per page.
 const DEFAULT_PAGE_SIZE: i64 = 50;
+
+/// Cursor token for activity pagination.
+#[derive(Debug, Deserialize)]
+struct ActivityQuery {
+    /// Cursor token (event_id) for pagination.
+    page_token: Option<String>,
+    /// Page size override.
+    page_size: Option<i64>,
+}
 
 /// One user-visible activity event for the History timeline.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
