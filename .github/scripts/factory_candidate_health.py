@@ -260,17 +260,69 @@ def _model_state(
             return "cooling"
         return "degraded"
     if item.outcome in PROVIDER_FAILURE_OUTCOMES:
-        if provider in MODEL_SCOPED_PROVIDERS:
-            cooldown = (
-                RATE_LIMIT_COOLDOWN_SECONDS
-                if item.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
-                else FAILURE_COOLDOWN_SECONDS
-            )
-            if now_epoch < item.updated + cooldown:
-                return "cooling"
-            return "degraded"
-        return "unknown"
+        cooldown = (
+            RATE_LIMIT_COOLDOWN_SECONDS
+            if item.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
+            else FAILURE_COOLDOWN_SECONDS
+        )
+        if now_epoch < item.updated + cooldown:
+            return "cooling"
+        return "degraded"
     return "unknown"
+
+
+def durable_attempt_evidence(
+    payload: Mapping[str, Any], *, now_epoch: int,
+) -> dict[tuple[str, str], AttemptEvidence]:
+    """Translate only trusted validate-job Neon projections into health evidence.
+
+    Unlike registry comments, this is not user-authored content. Provenance
+    is the protected Actions job output; never interpret arbitrary comments
+    as durable records or promote missing data to healthy.
+    """
+    evidence: dict[tuple[str, str], AttemptEvidence] = {}
+    for row in payload.get("models", []):
+        if not isinstance(row, Mapping):
+            continue
+        source, model = str(row.get("source") or ""), str(row.get("model") or "")
+        status, outcome = str(row.get("status") or ""), str(row.get("outcome") or "")
+        updated, until = int(row.get("updated") or 0), int(row.get("until") or 0)
+        if not source or not model or updated <= 0:
+            continue
+        if status == "retired":
+            classification = "model_retired_410"
+        elif status == "unavailable" and (not until or until > now_epoch):
+            classification = "model_unavailable"
+        elif status == "cooling":
+            classification = outcome if outcome in PROVIDER_FAILURE_OUTCOMES | TRANSIENT_MODEL_OUTCOMES else "unknown_failure"
+            if until > now_epoch:
+                # Respect durable Fibonacci cooldowns longer than the historical
+                # fixed-duration classification used by this pure ranker.
+                seconds = (RATE_LIMIT_COOLDOWN_SECONDS if classification in {
+                    "provider_quota", "provider_throttle", "provider_throttled", "provider_unavailable"
+                } else FAILURE_COOLDOWN_SECONDS)
+                updated = max(updated, until - seconds + 1)
+        elif status == "healthy":
+            classification = "success"
+        else:
+            continue
+        evidence[(source, model)] = AttemptEvidence(source, model, classification, updated)
+
+    for row in payload.get("providers", []):
+        if not isinstance(row, Mapping):
+            continue
+        source = str(row.get("source") or "")
+        until = int(row.get("until") or 0)
+        updated = int(row.get("updated") or 0)
+        outcome = str(row.get("outcome") or "")
+        if source and until > now_epoch and updated > 0 and outcome in PROVIDER_FAILURE_OUTCOMES:
+            seconds = (RATE_LIMIT_COOLDOWN_SECONDS if outcome in {
+                "provider_quota", "provider_throttle", "provider_throttled", "provider_unavailable"
+            } else FAILURE_COOLDOWN_SECONDS)
+            evidence[(source, "__provider_budget__")] = AttemptEvidence(
+                source, "__provider_budget__", outcome, max(updated, until - seconds + 1),
+            )
+    return evidence
 
 
 def rank_candidates(
@@ -278,10 +330,10 @@ def rank_candidates(
     comments: Iterable[Mapping[str, Any]],
     *,
     now_epoch: int,
+    evidence_override: Mapping[tuple[str, str], AttemptEvidence] | None = None,
 ) -> tuple[RankedCandidate, ...]:
     """Annotate discovered candidates with combined provider/model health."""
-    evidence = latest_attempt_evidence(comments)
-    attempts = tuple(evidence.values())
+    evidence = dict(evidence_override) if evidence_override is not None else latest_attempt_evidence(comments)
     ranked: list[RankedCandidate] = []
     for candidate in candidates:
         provider = str(candidate.get("provider") or "")
@@ -295,31 +347,9 @@ def rank_candidates(
             ranked.append(native)
             continue
 
-        provider_state = (
-            "unknown"
-            if provider in MODEL_SCOPED_PROVIDERS
-            else _provider_state(provider, attempts, now_epoch=now_epoch)
-        )
-        model_state = _model_state(
-            provider,
-            model,
-            evidence,
-            now_epoch=now_epoch,
-        )
-        if model_state == "unavailable":
-            state = "unavailable"
-        elif provider_state == "cooling" or model_state == "cooling":
-            state = "cooling"
-        elif model_state == "healthy" and provider_state in {
-            "healthy",
-            "degraded",
-            "unknown",
-        }:
-            state = "healthy" if provider_state != "degraded" else "degraded"
-        elif model_state == "degraded" or provider_state == "degraded":
-            state = "degraded"
-        else:
-            state = "unknown"
+        # A provider failure report is not evidence against unrelated
+        # model IDs on that provider. Only exact source/model health counts.
+        state = _model_state(provider, model, evidence, now_epoch=now_epoch)
         ranked.append(
             RankedCandidate(
                 provider=provider,
@@ -362,6 +392,7 @@ def select_candidate(
     preferred_provider: str | None = None,
     rankings: Mapping[str, float] | None = None,
     require_rankings: bool = False,
+    evidence_override: Mapping[tuple[str, str], AttemptEvidence] | None = None,
 ) -> Selection:
     """Prefer executable candidates while preserving native OmniRoute intents."""
     # Native OmniRoute intents are the execution boundary. ComicPile must not
@@ -394,7 +425,7 @@ def select_candidate(
         )
 
     comment_list = tuple(comments)
-    ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
+    ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch, evidence_override=evidence_override)
     # Catalog presence is not execution evidence for concrete model selectors.
     # Unknown backing-model routes still fail closed.
     priority = {"healthy": 0, "degraded": 1}
@@ -439,13 +470,7 @@ def select_candidate(
         )
 
     states = {candidate.health_state for candidate in ranked}
-    evidence = latest_attempt_evidence(comment_list)
-    attempts = tuple(evidence.values())
-    providers = {candidate.provider for candidate in ranked}
-    provider_cooling = any(
-        _provider_state(provider, attempts, now_epoch=now_epoch) == "cooling"
-        for provider in providers
-    )
+    evidence = dict(evidence_override) if evidence_override is not None else latest_attempt_evidence(comment_list)
     cooling_outcomes = {
         item.outcome
         for candidate in ranked
@@ -453,16 +478,15 @@ def select_candidate(
         for item in [evidence.get((candidate.provider, candidate.model))]
         if item is not None
     }
-    if provider_cooling:
-        if "provider_quota" in cooling_outcomes:
-            failure = "provider_quota"
-            detail = "provider quota exhaustion evidence is cooling all discovered candidates"
-        elif "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
-            failure = "provider_throttle"
-            detail = "provider throttle evidence is cooling all discovered candidates"
-        else:
-            failure = "provider_failure"
-            detail = "provider failure evidence is cooling all discovered candidates"
+    if "provider_quota" in cooling_outcomes:
+        failure = "provider_quota"
+        detail = "source/model quota evidence remains cooling"
+    elif "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
+        failure = "provider_throttle"
+        detail = "source/model throttle evidence remains cooling"
+    elif "provider_failure" in cooling_outcomes or "provider_unavailable" in cooling_outcomes:
+        failure = "provider_failure"
+        detail = "source/model failure evidence remains cooling"
     elif "unknown_failure" in cooling_outcomes:
         failure = "unknown_failure"
         detail = "unknown candidate failures are still cooling"
@@ -499,6 +523,7 @@ def main() -> int:
     parser.add_argument("--worker", type=int, required=True)
     parser.add_argument("--preferred-provider", default=None)
     parser.add_argument("--rankings", type=Path, default=None)
+    parser.add_argument("--durable-health", type=Path, default=None)
     parser.add_argument("--require-rankings", action="store_true")
     parser.add_argument("--now", type=int, default=None)
     args = parser.parse_args()
@@ -508,11 +533,19 @@ def main() -> int:
     candidates = discovery.get("candidates") if isinstance(discovery, Mapping) else None
     if not isinstance(candidates, list):
         candidates = []
+    now_epoch = args.now if args.now is not None else int(time.time())
+    evidence = None
+    if args.durable_health is not None:
+        health = json.loads(args.durable_health.read_text(encoding="utf-8"))
+        if not isinstance(health, Mapping) or not isinstance(health.get("models"), list) or not isinstance(health.get("providers"), list):
+            parser.error("invalid trusted durable health projection")
+        evidence = durable_attempt_evidence(health, now_epoch=now_epoch)
     selection = select_candidate(
         candidates,
         flatten_comments(comments_payload),
         worker=args.worker,
-        now_epoch=args.now if args.now is not None else int(time.time()),
+        now_epoch=now_epoch,
+        evidence_override=evidence,
         preferred_provider=args.preferred_provider,
         rankings=load_code_rankings(args.rankings),
         require_rankings=args.require_rankings,

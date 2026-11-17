@@ -84,10 +84,11 @@ jobs:
           set -Eeuo pipefail
           trusted="$RUNNER_TEMP/fork-trusted"
           mkdir -p "$trusted"
-          cp .github/scripts/factory_fork_control.py .github/scripts/factory_roster.py \
-            .github/scripts/kilo-auto-factory-run.sh .github/scripts/factory-fast-checks.sh \
+          cp .github/scripts/factory_fork_control.py .github/scripts/factory_worker_slots.py \
+            .github/scripts/factory_provider_registry.py .github/scripts/kilo-auto-factory-run.sh \
+            .github/scripts/factory-fast-checks.sh \
             .github/scripts/factory-fork-execute.sh "$trusted/"
-          cp .github/free-model-factories.tsv scripts/install-git-hooks.sh "$trusted/"
+          cp scripts/install-git-hooks.sh "$trusted/"
           echo "TRUSTED_FORK_DIRECTORY=$trusted" >> "$GITHUB_ENV"
       - name: Install pinned anonymous Kilo runtime
         shell: bash

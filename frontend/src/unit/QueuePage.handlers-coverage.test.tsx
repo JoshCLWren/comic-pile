@@ -6,12 +6,20 @@ import QueuePage from '../pages/QueuePage'
 import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
+import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 
 const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() }))
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
+
 vi.mock('../hooks/useThread', () => ({ useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
@@ -41,6 +49,15 @@ const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The finished shelf is fetched separately from the active Queue response.
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
+  vi.mocked(useCompletedThreads).mockReturnValue({
+    // SAFETY: completed is a deliberately minimal ThreadListItem fixture for this test.
+    threads: [completed] as never,
+    hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+    // SAFETY: The mocked collection only needs its rendered fields and paging callbacks.
+  } as never)
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
      // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
@@ -393,7 +410,9 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: /add to queue/i }))
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
 
-    await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[1]!)
+    // The second action lives on the completed row, which is revealed by expanding the shelf.
+    await user.click(screen.getByRole('button', { name: /show finished/i }))
+    await user.click(screen.getByRole('button', { name: /add done back to queue/i }))
     await user.click(screen.getByRole('button', { name: /close modal/i }))
     await user.click(screen.getByText('reposition callback'))
     await user.click(screen.getByRole('button', { name: /close modal/i }))

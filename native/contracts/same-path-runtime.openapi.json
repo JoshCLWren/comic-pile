@@ -1740,6 +1740,187 @@
         ]
       }
     },
+    "/api/v1/issue-identity/cbl-sources/browse": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "`GET /api/v1/issue-identity/cbl-sources/browse`",
+        "operationId": "browse_cbl_source_catalog",
+        "parameters": [
+          {
+            "name": "folder",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLCatalogBrowseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/folders": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "`GET /api/v1/issue-identity/cbl-sources/folders`",
+        "operationId": "list_cbl_source_folders",
+        "parameters": [
+          {
+            "name": "folder",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLFolderListingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBLErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/issues/{issue_id}": {
       "get": {
         "tags": [
@@ -2121,6 +2302,81 @@
           },
           "422": {
             "description": "Request payload failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-plan-sync/status": {
+      "get": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync_status",
+        "responses": {
+          "200": {
+            "description": "Sync state for every release source owned by the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-plan-sync/sync": {
+      "post": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User-triggered sync report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid request"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -3302,6 +3558,87 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/issues": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Same-path native OpenAPI for the browser's issue-list read.",
+        "operationId": "list_thread_issues_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional read or unread filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-100 issues (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "position,id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped, paginated issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Invalid status or page size"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/me/preferences": {
       "get": {
         "tags": [
@@ -3494,6 +3831,113 @@
             ]
           },
           "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ActivityItem": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "type",
+          "timestamp"
+        ],
+        "properties": {
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "die_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "event_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityResponse": {
+        "type": "object",
+        "required": [
+          "activities",
+          "events",
+          "items"
+        ],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "next_page_token": {
             "type": [
               "string",
               "null"
@@ -4492,6 +4936,249 @@
           },
           "target_type": {
             "type": "string"
+          }
+        }
+      },
+      "CBLBreadcrumb": {
+        "type": "object",
+        "required": [
+          "name",
+          "path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "CBLCatalogBrowseResponse": {
+        "type": "object",
+        "required": [
+          "scope",
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "items",
+          "page",
+          "page_size",
+          "total",
+          "total_pages",
+          "has_next",
+          "has_previous"
+        ],
+        "properties": {
+          "breadcrumbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLBreadcrumb"
+            }
+          },
+          "folder": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceFolder"
+            }
+          },
+          "has_next": {
+            "type": "boolean"
+          },
+          "has_previous": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLCatalogListItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Echoed requested page number; preserved for extreme values (e.g. 2^63)."
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CBLCatalogListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "content_hash",
+          "revision_sha"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
+      "CBLDatabaseUnavailableDetail": {
+        "type": "object",
+        "description": "Global dependency-acquisition outage shape.",
+        "required": [
+          "code",
+          "message",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "CBLDatabaseUnavailableResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CBLDatabaseUnavailableDetail"
+          }
+        }
+      },
+      "CBLErrorDetail": {
+        "type": "object",
+        "description": "Error detail for catalog-originated failures (400/404/503).",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "CBLErrorResponse": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/CBLErrorDetail"
+          }
+        }
+      },
+      "CBLFolderListingResponse": {
+        "type": "object",
+        "required": [
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "properties": {
+          "breadcrumbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLBreadcrumb"
+            }
+          },
+          "direct_list_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceFolder"
+            }
+          },
+          "total_list_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CBLSourceFolder": {
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "properties": {
+          "direct_list_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "total_list_count": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -9289,6 +9976,37 @@
           }
         }
       },
+      "SourceSyncFailure": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "plan_id",
+          "thread_id",
+          "volume_id",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volume_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "StartupMetricsResponse": {
         "type": "object",
         "properties": {
@@ -9341,6 +10059,191 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "SyncReport": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "checked_sources",
+          "successful_sources",
+          "failed_sources",
+          "issues_checked",
+          "created_issues",
+          "reused_issues",
+          "future_skips",
+          "unknown_date_skips",
+          "conflicts",
+          "issue_failures",
+          "failures"
+        ],
+        "properties": {
+          "checked_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceSyncFailure"
+            }
+          },
+          "future_skips": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_failures": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issues_checked": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reused_issues": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "skipped_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successful_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unknown_date_skips": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncRequest": {
+        "type": "object",
+        "required": [
+          "as_of"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "result"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SyncReport"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SyncStatusResponse": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "properties": {
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncStatusSource"
+            }
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncStatusSource": {
+        "type": "object",
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -9760,6 +10663,36 @@
           }
         }
       },
+      "ThreadIssueListResponse": {
+        "type": "object",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDetailResponse"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ThreadIssuesEffectiveTagsResponse": {
         "type": "object",
         "required": [
@@ -10110,6 +11043,46 @@
           },
           "username": {
             "type": "string"
+          }
+        }
+      },
+      "ValidationErrorItem": {
+        "type": "object",
+        "description": "FastAPI/Pydantic validation error item shape (422).",
+        "required": [
+          "type",
+          "loc",
+          "msg",
+          "input"
+        ],
+        "properties": {
+          "ctx": {},
+          "input": {},
+          "loc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "msg": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            }
           }
         }
       }

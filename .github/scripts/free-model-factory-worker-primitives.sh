@@ -186,6 +186,12 @@ release_target() {
 
 release_owned_targets() {
   local reason="$1" number stage
+  if [[ -n "${FACTORY_ASSIGNMENT:-}" ]]; then
+    # The separate trusted cleanup job holds the original claim UUID. Never
+    # discover or release another assignment through a worker-wide label scan.
+    log 'deferring general lease release to token-bound trusted cleanup'
+    return 0
+  fi
   if [[ "${FACTORY_RETAIN_LEASE_ON_EXIT:-0}" == '1' && "$reason" == 'session-end-handoff' ]]; then
     log 'retaining current lease because the bounded no-diff marker could not be persisted'
     return 0
@@ -361,8 +367,8 @@ stage_trusted_review_controller() {
     cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
     # Bind model provenance to a trusted main checkout snapshot, not PR data.
-    cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-    cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+    cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
+    cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
     export TRUSTED_REVIEW_CONTROLLER
@@ -506,15 +512,13 @@ run_agent() {
   prompt="Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy.  Edit only the assigned target, run focused validation, and use GitHub for review context. Do not commit or push; the wrapper persists changes. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass OmniRoute or request paid or unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules. Run context: Worker: ${WORKER_ID}; source: ${SOURCE}; model: ${MODEL}; runtime: ${RUNTIME_MODEL}; target: ${target}. ${mission}"
 
   if [[ "$SOURCE" == 'kilo-auto' ]]; then
-    set +e
+    # Do not toggle errexit: callers capture this status under `set +e`.
     bash .github/scripts/kilo-auto-factory-run.sh \
       "$timeout_seconds" \
       "ComicPile Factory ${WORKER} · ${DISPLAY}" \
       "$prompt" \
-      "/tmp/opencode-factory-${WORKER}.log"
-    status=$?
-    set -e
-    return "$status"
+      "/tmp/opencode-factory-${WORKER}.log" || status=$?
+    return "${status:-0}"
   fi
 
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \

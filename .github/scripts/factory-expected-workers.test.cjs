@@ -1,52 +1,57 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const {
   loadExpectedWorkerIds,
   isExpectedWorkerId,
+  defaultLockPath,
+  defaultRosterPath,
   SCHEDULED_WORKER_IDS,
 } = require('./factory-expected-workers.cjs');
 
-test('expected workers come from the lock and include post-71 roster pins', () => {
-  const { expectedWorkers, retiredWorkers, rosterWorkers } = loadExpectedWorkerIds();
-  for (const id of [46, 75, 97, 98, 99]) {
-    assert.equal(expectedWorkers.has(id), true, `expected ${id}`);
-    assert.equal(isExpectedWorkerId(id), true);
-    assert.equal(rosterWorkers.has(id), true);
+test('active provider slots are derived without an inventory file', () => {
+  assert.equal(defaultLockPath(), null);
+  assert.equal(defaultRosterPath(), null);
+  const loaded = loadExpectedWorkerIds();
+  assert(loaded.expectedWorkers.size > 0);
+  assert.deepEqual([...loaded.retiredWorkers], []);
+  assert.deepEqual([...loaded.expectedWorkers], [...loaded.rosterWorkers]);
+  for (const id of loaded.expectedWorkers) {
+    assert(Number.isSafeInteger(id));
+    assert(isExpectedWorkerId(id, loaded));
   }
-  for (const id of [74, 92, 93, 95]) {
-    assert.equal(expectedWorkers.has(id), false);
-    assert.equal(retiredWorkers.has(id), true);
-  }
-  assert.equal(expectedWorkers.has(72), false);
-  assert.equal(retiredWorkers.has(72), true);
-  assert.equal(expectedWorkers.has(73), false);
-  assert.equal(retiredWorkers.has(73), true);
-  assert.equal(retiredWorkers.has(71), true);
-  assert.equal(expectedWorkers.has(76), false);
-  assert.equal(retiredWorkers.has(76), true);
-  assert.equal(expectedWorkers.has(77), false);
-  assert.equal(retiredWorkers.has(77), true);
-  assert.equal(isExpectedWorkerId(76), false);
-  assert.equal(isExpectedWorkerId(77), false);
-  assert.equal(isExpectedWorkerId(73), false);
-  assert.equal(isExpectedWorkerId(72), false);
-  assert.equal(isExpectedWorkerId(71), false);
+  assert(!isExpectedWorkerId(0, loaded));
   assert.deepEqual([...SCHEDULED_WORKER_IDS], [1, 2, 3, 4, 5]);
 });
 
-test('OWNER label definitions track roster size without a hard-coded max', () => {
+test('historical lock/roster files are supported only when explicitly passed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'factory-slots-test-'));
+  try {
+    const lockPath = path.join(dir, 'lock.json');
+    const rosterPath = path.join(dir, 'workers.tsv');
+    fs.writeFileSync(lockPath, JSON.stringify({
+      schema_version: 1, expected_workers: [321], retired_workers: [654],
+    }));
+    fs.writeFileSync(rosterPath, '321\tprovider\ttest-model\n');
+    const loaded = loadExpectedWorkerIds({ lockPath, rosterPath });
+    assert.deepEqual([...loaded.expectedWorkers], [321]);
+    assert.deepEqual([...loaded.retiredWorkers], [654]);
+    assert.deepEqual([...loaded.rosterWorkers], [321]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('GitHub owner labels derive from provider workers and controller identities', () => {
   const visibility = require('./factory-visibility.cjs');
   const { FIXED_MODEL_OWNER_LABELS, WORKER_OWNER_LABELS, EXPECTED_WORKER_IDS } = visibility._test;
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:98'), true)
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:76'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:77'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:93'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:73'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:72'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:71'), false);
-  assert.equal(WORKER_OWNER_LABELS.includes('factory:1'), true);
-  assert.equal(WORKER_OWNER_LABELS.includes('factory:5'), true);
   assert.equal(FIXED_MODEL_OWNER_LABELS.length, EXPECTED_WORKER_IDS.size);
+  const loaded = loadExpectedWorkerIds();
+  for (const worker of loaded.expectedWorkers) {
+    assert(FIXED_MODEL_OWNER_LABELS.includes(`factory:${worker}`));
+  }
   assert.equal(
     WORKER_OWNER_LABELS.length,
     SCHEDULED_WORKER_IDS.length + EXPECTED_WORKER_IDS.size,

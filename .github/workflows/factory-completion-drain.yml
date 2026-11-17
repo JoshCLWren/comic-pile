@@ -1,26 +1,20 @@
 name: Factory Completion Drain
 
+# Terminal outcomes are persisted by trusted Entry before this explicit signal.
+# The canonical dispatcher's hourly watchdog recovers missed signals. This
+# bridge neither discovers demand nor owns a lease or a shared-writer lock.
 on:
-  # Worker Entry explicitly uses workflow_dispatch after its worker job
-  # finishes. GITHUB_TOKEN-launched entries can suppress workflow_run events,
-  # so that event is not a reliable capacity signal or an additional trigger.
-  # Recovery heartbeat only: keep scheduling independent of worker completion.
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Completed Entry run (advisory scheduling context)
+        required: false
+        type: string
 
 permissions:
   actions: write
   contents: read
-  issues: write
-  pull-requests: write
-  checks: read
 
-# This workflow only signals the trusted dispatcher. It never claims an issue
-# or PR itself. Retain the shared job serialization group so wakeups cannot race
-# with controller reconciliation and handoff scheduling.
-# Coalesce duplicate ingress events for this workflow only. The job-level
-# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
   group: factory-completion-drain-ingress
   queue: single
@@ -28,107 +22,28 @@ concurrency:
 
 jobs:
   drain:
-    concurrency:
-      group: fixed-model-factory-dispatch
-      queue: max
-      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-
-      - name: Configure shared Neon factory discovery cache
-        uses: ./.github/actions/factory-state-cache
-        with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
-
-      - name: Install Neon-first GitHub read shim
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          real_gh="$(command -v gh)"
-          shim_dir="$RUNNER_TEMP/factory-gh-rest"
-          mkdir -p "$shim_dir"
-          cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
-          chmod +x "$shim_dir/gh"
-          echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
-          echo "$shim_dir" >> "$GITHUB_PATH"
-
-      - name: Select healthy completion wakeups from current demand
-        id: batch
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          result="$(python3 .github/scripts/factory_full_completion_controller.py)"
-          echo "$result" | jq .
-          # The full-completion controller is signal-only: assignments is
-          # intentionally empty. Use its selected_workers, but give the
-          # existing serialized dispatcher exclusive authority to claim work.
-          workers="$(jq -ec '.selected_workers | select(type == "array") | map(tostring) | unique' <<< "$result")"
-          echo "workers=$workers" >> "$GITHUB_OUTPUT"
-          echo "completion_demand=$(jq -r '.completion_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
-          echo "production_demand=$(jq -r '.production_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
-          echo "completion_target=$(jq -r '.completion_target' <<< "$result")" >> "$GITHUB_OUTPUT"
-
-      - name: Wake serialized dispatcher for selected completion workers
+      - name: Wake canonical dispatcher once
         id: wakeups
-        if: steps.batch.outputs.workers != '[]'
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          WORKERS: ${{ steps.batch.outputs.workers }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
           set -Eeuo pipefail
-          dispatch_failures=0
-          signaled=0
-
-          wake_dispatcher() {
-            local worker="$1"
-            local attempt=1
-            [[ "$worker" =~ ^[1-9][0-9]*$ ]] || {
-              echo "Invalid completion worker ID: $worker" >&2
-              return 1
-            }
-            # Only the dispatcher calls factory-work-controller.py assign;
-            # this signal owns no lease to release or mutate.
-            while (( attempt <= 3 )); do
-              echo "Waking dispatcher for healthy completion worker ${worker} (attempt ${attempt}/3)"
-              if gh workflow run fixed-model-factory-dispatch.yml \
-                --repo "$GITHUB_REPOSITORY" --ref main -f worker="$worker"; then
-                signaled=$((signaled + 1))
-                return 0
-              fi
-              if (( attempt < 3 )); then
-                sleep $((attempt * 3))
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            echo "Unable to wake dispatcher for completion worker ${worker}" >&2
-            return 1
-          }
-
-          while IFS= read -r worker; do
-            [[ -n "$worker" ]] || continue
-            wake_dispatcher "$worker" || dispatch_failures=$((dispatch_failures + 1))
-          done < <(jq -r '.[]' <<< "$WORKERS")
-
-          echo "signaled=$signaled" >> "$GITHUB_OUTPUT"
-          if (( dispatch_failures > 0 )); then
-            echo "${dispatch_failures} completion dispatcher wakeup(s) failed; lease state was not changed" >&2
+          [[ -z "$SOURCE_RUN_ID" || "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || exit 1
+          # A terminal outcome is already persisted by Entry. Installation
+          # quota exhaustion must defer this advisory wake, not manufacture a
+          # failed model or repeatedly retry the same GitHub API request.
+          if result="$(gh workflow run fixed-model-factory-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster \
+            -f source_run_id="$SOURCE_RUN_ID" 2>&1)"; then
+            echo "dispatcher_wakeups=1 source_run_id=${SOURCE_RUN_ID:-manual}"
+          elif grep -Eiq "rate limit exceeded|secondary rate limit|abuse detection" <<< "$result"; then
+            echo "::warning::Installation GitHub API rate-limited; deferring completion wake to roster successor/hourly watchdog"
+            echo "dispatcher_wakeups=0 deferred=github_api_rate_limit source_run_id=${SOURCE_RUN_ID:-manual}"
+            echo "Completion wake deferred by GitHub API rate limit; terminal outcome remains persisted." >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf "%s\n" "$result" >&2
             exit 1
           fi
-
-      - name: Report demand-driven allocation
-        shell: bash
-        env:
-          COMPLETION: ${{ steps.batch.outputs.completion_demand }}
-          PRODUCTION: ${{ steps.batch.outputs.production_demand }}
-          TARGET: ${{ steps.batch.outputs.completion_target }}
-          SIGNALS: ${{ steps.wakeups.outputs.signaled }}
-        run: |
-          echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; dispatcher_wakeups=${SIGNALS:-0} (leases owned by dispatcher)"

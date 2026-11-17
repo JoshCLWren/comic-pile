@@ -50,15 +50,13 @@ def _iter_effective_api_routes(app: FastAPI) -> Iterator[tuple[str, APIRoute]]:
         stack[0:0] = [(nested, nested_prefix) for nested in nested_routes]
 
 
-def test_v1_thread_routes_share_legacy_implementations() -> None:
-    """Canonical retained thread routes must delegate to the compatibility handlers."""
-    legacy = _thread_routes("/api/threads")
+def test_v1_thread_routes_survive_unversioned_alias_retirement() -> None:
+    """Retire bare thread aliases while preserving canonical mutation methods."""
+    assert not _thread_routes("/api/threads")
     canonical = _thread_routes("/api/v1/threads")
-
-    assert legacy
-    assert legacy.keys() <= canonical.keys()
-    for route_key, legacy_endpoint in legacy.items():
-        assert canonical[route_key] is legacy_endpoint
+    assert ("/", ("POST",)) in canonical
+    assert ("/{thread_id}", ("PUT",)) in canonical
+    assert ("/{thread_id}", ("DELETE",)) in canonical
 
 
 def test_v1_thread_openapi_operation_ids_are_unique() -> None:

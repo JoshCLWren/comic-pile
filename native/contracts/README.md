@@ -105,10 +105,11 @@ cargo run --example bug_reports_openapi > ../contracts/bug-reports-v1.openapi.js
 ```
 
 It is generated only from `comicpile_roll_service::bug_reports::BugReportsApi`
-and preserves the Python wire contract (201 `issue_url`, 401/422/429/502/503)
-at the exact same method/paths. Python handlers remain until production
-proof; the frontend caller (`frontend/src/services/api-bug-reports.ts`)
-keeps calling `/v1/bug-reports/` unchanged.
+and preserves the retired Python wire contract (201 `issue_url`,
+401/422/429/502/503) at the exact same method/paths; the Python handlers were
+removed in #5162. The frontend caller
+(`frontend/src/services/api-bug-reports.ts`) keeps calling
+`/v1/bug-reports/` unchanged.
 
 `session-detail-v1.openapi.json` is the generated native contract for the
 same-path single-session slice `GET /api/sessions/{session_id}` and

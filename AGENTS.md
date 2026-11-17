@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 41 (41 native-rust + 0 python-fastapi).
+- Live v2 operations: 42 (42 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 174 operations (v1 154 + unversioned 20); v1 active 118 live Python / 28 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 129 operations (v1 126 + unversioned 3); v1 active 112 live Python / 1 migrated (shadowed by Rust); unversioned active 1 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -75,6 +75,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4595 (2): `GET /api/v2/roll/die-state -> native-rust`; `GET /api/v2/roll/eligible-issue-ids -> native-rust`
 - #4623 (1): `GET /api/v2/issues/{issue_id}/comicvine -> native-rust`
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
+- #4822 (1): `GET /api/v2/activity -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 <!-- route-burndown:end -->
 
@@ -199,6 +200,12 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.14, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `pnpm` (frontend)
+
+## Database query efficiency (owner rule, November 15, 2026)
+
+Write efficient PostgreSQL queries by construction. No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, bounded batch requests, indexed filters, predictable pagination, and one coherent transaction where required. Do not materialize whole libraries or introduce screen-level request waterfalls. Preserve ownership checks, authorization, idempotency, locking, and correct snapshot semantics rather than chasing an arbitrary number of statements. If a real slow query or performance regression is demonstrated, profile the actual workload and fix it with a focused test.
+
+**The blanket per-route SQL-budget program is canceled by the owner.** Never require numeric statement ceilings, a `sql_budget` entry, `pg_stat_statements` proof for every endpoint, small/large fixture quotas, or SQL-budget coverage tickets as a prerequisite for a Rust migration. Do not revive, split, or recreate #4737, #4988, or #5146–#5151 without explicit owner direction. Existing focused regressions for known query failures remain valuable; do not strip legitimate performance safeguards outside this discontinued program.
 
 ## CRITICAL: Async PostgreSQL Only in Application Code
 
@@ -546,21 +553,33 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 - **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 
-## Factory roster discovery
+## Factory provider discovery and durable slots
 
-Fixed-model factories read `.github/free-model-factories.tsv`. Model presence is **OpenCode CLI** (`opencode models <provider>`), not OmniRoute and not integrate.api.nvidia.com alone.
+Factory worker IDs are generated from the provider integration registry by
+`.github/scripts/factory_worker_slots.py`. They are stable per provider and
+slot index, independent of the live catalog and model identity. Do not add a
+source-controlled model/worker roster or expected-worker snapshot.
 
-Scheduled workflow: `.github/workflows/factory-model-discovery.yml` (also `workflow_dispatch`). This audits OpenCode Free model availability but no longer creates roster mutations for new or retired OpenCode models. Durable `opencode-free` worker IDs use the live free catalog at dispatch time, including Big Pickle, without duplicate fixed workers. Discovery still opens a reviewed retirement PR when a non-dynamic pin disappears or a sticky NVIDIA `factory-model-retired-410:v1` marker from #1093 identifies a retired model. The workflow requires `PR_REBASE_TOKEN` to trigger normal PR CI, and never replaces an existing review branch. `.github/factory-expected-workers.json` tracks worker identities, not the complete free-model catalog.
+The trusted dispatcher leases work only to credential-eligible providers that
+are not in cooldown and have capacity. The runner discovers the exact upstream
+model ID from the OpenCode CLI, Kilo CLI or the published provider catalog at
+execution time. The selected model must be passed unchanged to OpenCode.
+Catalog listing alone does not establish callability; actual useful execution
+and its trusted outcome are the evidence of a working route. Pricing is not
+an eligibility gate. Credential failures, provider quotas, throttles and
+observed failures produce bounded retries and cooldowns, never permanent
+inventory retirement.
 
-Local plan against a recorded catalog:
+The model selection/regression contract is checked with:
 
 ```bash
-python3 .github/scripts/factory_model_retirement.py plan \
-  --catalog-json tests/fixtures/opencode-catalog/keep-present.json
 python3 .github/scripts/validate-free-model-factories.py
+python3 -m pytest --noconftest -o addopts='' -q tests/test_factory_provider_candidates.py tests/test_factory_worker_slots.py tests/test_factory_runtime_model_select.py
 ```
 
-Secrets for the live CLI path: `OPENCODE_ZEN_API_KEY`, `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, and `PR_REBASE_TOKEN` to open the retirement PR. Details: `docs/AUTONOMOUS_FACTORY_POLICY.md` (Fixed-model roster discovery and retirement).
+Do not resurrect `.github/free-model-factories.tsv`,
+`.github/factory-expected-workers.json`,
+`.github/factory-roster-snapshot.json`, or the removed retirement workflow.
 
 ## GitHub Issue Workflow
 

@@ -148,6 +148,10 @@ export async function applyRatedThreadCache(
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    // A final rating can move an active series into Finished Series.
+    ...(thread.status === 'completed'
+      ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
+      : []),
   ])
 }
 
@@ -160,6 +164,9 @@ export async function applyUpdatedThreadCache(
 
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    ...(thread.status === 'completed'
+      ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
+      : []),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -205,6 +212,8 @@ export async function invalidateAfterIssueEdit(
     client.invalidateQueries({
       queryKey: queryKeys.queue.pages(),
     }),
+    // A last-issue edit may also move a series across the finished boundary.
+    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     // Marking issues read (including the last unread issue) changes the
     // reader's canonical availability answer, so the "Next issue availability"
     // explanation has to stop serving the pre-edit text (#4181).
@@ -247,6 +256,7 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
   ])
 }
 
@@ -548,20 +558,28 @@ export function applyEditedThreadToQueuePages(
   client: QueryClient,
   updatedThread: Thread,
 ): void {
+  const patchLoadedPages = (old: InfiniteData<ThreadListResponse> | undefined) => {
+    if (!old) return old
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        threads: page.threads.map((t) =>
+          t.id === updatedThread.id ? { ...t, ...updatedThread } : t,
+        ),
+      })),
+    }
+  }
+
   client.setQueriesData<InfiniteData<ThreadListResponse>>(
     { queryKey: queryKeys.queue.pages() },
-    (old) => {
-      if (!old) return old
-      return {
-        ...old,
-        pages: old.pages.map((page) => ({
-          ...page,
-          threads: page.threads.map((t) =>
-            t.id === updatedThread.id ? { ...t, ...updatedThread } : t,
-          ),
-        })),
-      }
-    },
+    patchLoadedPages,
+  )
+  // Finished Series has a separate cursor/cache from the active Queue.
+  // Renames and format edits must update already-loaded completed rows too.
+  client.setQueriesData<InfiniteData<ThreadListResponse>>(
+    { queryKey: queryKeys.completed.pages() },
+    patchLoadedPages,
   )
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)

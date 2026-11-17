@@ -298,7 +298,7 @@ jobs:
           persist-credentials: false
 
       - name: Download the ingress resolved from active handlers
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: resolved-ingress-${{ github.sha }}
           path: .
@@ -319,7 +319,8 @@ jobs:
 
   ui-audit:
     name: Rendered UI Audit (Chromium)
-    runs-on: ubuntu-latest
+    # Playwright system dependencies require Ubuntu 24.04 package names.
+    runs-on: ubuntu-24.04
     needs: [build, build-fork, rust-ingress]
     if: always() && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 20
@@ -330,7 +331,7 @@ jobs:
           persist-credentials: false
 
       - name: Download the ingress resolved from active handlers
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: resolved-ingress-${{ github.sha }}
           path: .

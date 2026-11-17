@@ -45,7 +45,7 @@ dependencies = [
 [dependency-groups]
 factory-syntax = [
     "shfmt-py==4.2.0",
-    "tree-sitter==0.26.0",
+    "tree-sitter==0.26.1",
     "tree-sitter-css==0.25.0",
     "tree-sitter-javascript==0.25.0",
     "tree-sitter-typescript==0.23.2",
@@ -65,7 +65,7 @@ dev = [
     # releases. Worker 48's App name ("Mark Cordova") is already provisioned
     # and persisted in .github/factory-worker-github-apps.json, so a newer
     # Faker would re-roll it and break the existing App identity.
-    "faker==40.44.0",
+    "faker==40.54.0",
     "playwright>=1.50.0",
     "pytest-playwright==0.10.0",
     "uvicorn>=0.30.0",
@@ -169,6 +169,7 @@ venv = ".venv"
 
 [tool.ty.environment]
 python-version = "3.14"
+extra-paths = [".github/scripts"]
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]

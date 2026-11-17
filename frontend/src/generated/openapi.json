@@ -177,6 +177,113 @@
         "title": "ActiveThreadInfo",
         "type": "object"
       },
+      "ActivityItem": {
+        "properties": {
+          "die_after": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "die_before": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "event_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "type",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "ActivityResponse": {
+        "properties": {
+          "activities": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "activities",
+          "events",
+          "items"
+        ],
+        "type": "object"
+      },
       "AnalyticsMetricsResponse": {
         "description": "Reading metrics and analytics for the authenticated user.",
         "properties": {
@@ -370,24 +477,6 @@
           "blocking_reasons"
         ],
         "title": "BlockingExplanation",
-        "type": "object"
-      },
-      "Body_set_pending_thread_api_threads__thread_id__set_pending_post": {
-        "properties": {
-          "expected_issue_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Issue Id"
-          }
-        },
-        "title": "Body_set_pending_thread_api_threads__thread_id__set_pending_post",
         "type": "object"
       },
       "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post": {
@@ -10784,6 +10873,249 @@
         ],
         "type": "object"
       },
+      "NativeCBLBreadcrumb": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "type": "object"
+      },
+      "NativeCBLCatalogBrowseResponse": {
+        "properties": {
+          "breadcrumbs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCBLBreadcrumb"
+            },
+            "type": "array"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCBLSourceFolder"
+            },
+            "type": "array"
+          },
+          "has_next": {
+            "type": "boolean"
+          },
+          "has_previous": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCBLCatalogListItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "description": "Echoed requested page number; preserved for extreme values (e.g. 2^63).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_pages": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scope",
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "items",
+          "page",
+          "page_size",
+          "total",
+          "total_pages",
+          "has_next",
+          "has_previous"
+        ],
+        "type": "object"
+      },
+      "NativeCBLCatalogListItem": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "content_hash",
+          "revision_sha"
+        ],
+        "type": "object"
+      },
+      "NativeCBLDatabaseUnavailableDetail": {
+        "description": "Global dependency-acquisition outage shape.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCBLDatabaseUnavailableResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/NativeCBLDatabaseUnavailableDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "NativeCBLErrorDetail": {
+        "description": "Error detail for catalog-originated failures (400/404/503).",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "NativeCBLErrorResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/NativeCBLErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "NativeCBLFolderListingResponse": {
+        "properties": {
+          "breadcrumbs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCBLBreadcrumb"
+            },
+            "type": "array"
+          },
+          "direct_list_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCBLSourceFolder"
+            },
+            "type": "array"
+          },
+          "total_list_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "type": "object"
+      },
+      "NativeCBLSourceFolder": {
+        "properties": {
+          "direct_list_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "total_list_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "direct_list_count",
+          "total_list_count"
+        ],
+        "type": "object"
+      },
       "NativeComicVineMappingHealth": {
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
         "properties": {
@@ -11268,6 +11600,222 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "NativeSourceSyncFailure": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "volume_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "plan_id",
+          "thread_id",
+          "volume_id",
+          "error"
+        ],
+        "type": "object"
+      },
+      "NativeSyncReport": {
+        "properties": {
+          "checked_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "conflicts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_issues": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded_issues": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "failed_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/NativeSourceSyncFailure"
+            },
+            "type": "array"
+          },
+          "future_skips": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_failures": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issues_checked": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reused_issues": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "skipped_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "successful_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unknown_date_skips": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "checked_sources",
+          "successful_sources",
+          "failed_sources",
+          "issues_checked",
+          "created_issues",
+          "reused_issues",
+          "future_skips",
+          "unknown_date_skips",
+          "conflicts",
+          "issue_failures",
+          "failures"
+        ],
+        "type": "object"
+      },
+      "NativeSyncRequest": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "as_of"
+        ],
+        "type": "object"
+      },
+      "NativeSyncResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/NativeSyncReport"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "result"
+        ],
+        "type": "object"
+      },
+      "NativeSyncStatusResponse": {
+        "properties": {
+          "enabled_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NativeSyncStatusSource"
+            },
+            "type": "array"
+          },
+          "total_sources": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "NativeSyncStatusSource": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
         "type": "object"
       },
       "NearMatch": {
@@ -19239,6 +19787,36 @@
         ],
         "type": "object"
       },
+      "ThreadIssueListResponse": {
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueDetailResponse"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "ThreadIssuesEffectiveTagsResponse": {
         "properties": {
           "issues": {
@@ -19936,6 +20514,46 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "ValidationErrorItem": {
+        "description": "FastAPI/Pydantic validation error item shape (422).",
+        "properties": {
+          "ctx": {},
+          "input": {},
+          "loc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "msg": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "loc",
+          "msg",
+          "input"
+        ],
+        "type": "object"
+      },
+      "ValidationErrorResponse": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -19987,32 +20605,6 @@
         "summary": "OpenAPI documentation for the legacy metrics endpoints.",
         "tags": [
           "metrics"
-        ]
-      }
-    },
-    "/api/ping": {
-      "get": {
-        "description": "Return a minimal alive response.\n\nThis endpoint has zero database, ORM, or heavy dependency\ninitialization overhead. Lifespan startup is intentionally lightweight\nand heavy initialization (database connectivity, durable cache\naccounting, cache provider) is deferred until the first non-ping\nrequest. A cold ``GET /api/ping`` therefore never opens a\nPostgreSQL connection or reserves a cache block.\n\nReturns:\n    Simple status dict with no external dependencies.",
-        "operationId": "ping_api_ping_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Ping Api Ping Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Ping",
-        "tags": [
-          "ping"
         ]
       }
     },
@@ -24455,58 +25047,50 @@
     },
     "/api/v1/issue-identity/cbl-sources/browse": {
       "get": {
-        "description": "Browse one catalog folder or search all CBLs by name and source path.\n\nWith a blank ``q`` the response describes the immediate contents of\n``folder``. With a non-blank ``q`` the search spans the entire shared\ncatalog, regardless of ``folder``, and ``scope`` is ``\"search\"``. ``total``\nis the truthful number of matches, so callers can page past 100 results.\n\nArgs:\n    current_user: The authenticated user (injected by dependency).\n    db: The async database session (injected by dependency).\n    folder: The catalog folder path to browse. Empty string for root.\n    q: Optional search query for CBL name and source path.\n    page: Page number (1-indexed).\n    page_size: Number of results per page (1-100).\n\nReturns:\n    CBLCatalogBrowseResponse: The browse response containing entries and pagination info.",
-        "operationId": "browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get",
+        "operationId": "browse_cbl_source_catalog",
         "parameters": [
           {
-            "in": "query",
+            "in": "path",
             "name": "folder",
-            "required": false,
+            "required": true,
             "schema": {
-              "default": "",
-              "maxLength": 1000,
-              "title": "Folder",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
-            "in": "query",
+            "in": "path",
             "name": "q",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 200,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
-            "in": "query",
+            "in": "path",
             "name": "page",
-            "required": false,
+            "required": true,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
-            "in": "query",
+            "in": "path",
             "name": "page_size",
-            "required": false,
+            "required": true,
             "schema": {
-              "default": 50,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -24515,70 +25099,55 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLCatalogBrowseResponse"
+                  "$ref": "#/components/schemas/NativeCBLCatalogBrowseResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Invalid folder path or search query."
+            "description": ""
           },
           "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Folder not found."
+            "description": ""
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": ""
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/CBLErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CBLDatabaseUnavailableResponse"
-                    }
-                  ],
-                  "title": "Response 503 Browse Cbl Source Catalog Api V1 Issue Identity Cbl Sources Browse Get"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Catalog query or database connection temporarily unavailable."
+            "description": ""
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Browse Cbl Source Catalog",
+        "summary": "`GET /api/v1/issue-identity/cbl-sources/browse`",
         "tags": [
-          "dependencies",
-          "dependencies",
           "issue-identity"
         ]
       }
@@ -24723,18 +25292,17 @@
     },
     "/api/v1/issue-identity/cbl-sources/folders": {
       "get": {
-        "description": "List immediate subfolders of one shared CBL catalog folder.\n\nThe root folder is addressed with an empty ``folder`` value. A request for a\nfolder with no active CBLs or subfolders returns a stable 404 envelope; a\nmalformed path returns 400.\n\nArgs:\n    current_user: The authenticated user (injected by dependency).\n    db: The async database session (injected by dependency).\n    folder: The catalog folder path to list. Empty string for root.\n\nReturns:\n    CBLFolderListingResponse: The folder listing containing subfolders.",
-        "operationId": "list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get",
+        "operationId": "list_cbl_source_folders",
         "parameters": [
           {
-            "in": "query",
+            "in": "path",
             "name": "folder",
-            "required": false,
+            "required": true,
             "schema": {
-              "default": "",
-              "maxLength": 1000,
-              "title": "Folder",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -24743,70 +25311,55 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLFolderListingResponse"
+                  "$ref": "#/components/schemas/NativeCBLFolderListingResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Invalid folder path."
+            "description": ""
           },
           "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLErrorResponse"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Folder not found."
+            "description": ""
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": ""
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/CBLErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CBLDatabaseUnavailableResponse"
-                    }
-                  ],
-                  "title": "Response 503 List Cbl Source Folders Api V1 Issue Identity Cbl Sources Folders Get"
+                  "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
             },
-            "description": "Catalog query or database connection temporarily unavailable."
+            "description": ""
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Cbl Source Folders",
+        "summary": "`GET /api/v1/issue-identity/cbl-sources/folders`",
         "tags": [
-          "dependencies",
-          "dependencies",
           "issue-identity"
         ]
       }
@@ -26493,18 +27046,23 @@
     },
     "/api/v1/reading-plan-sync/status": {
       "get": {
-        "description": "Report persisted sync state for the caller's release sources.",
-        "operationId": "get_sync_status_api_v1_reading_plan_sync_status_get",
+        "operationId": "reading_plan_sync_status",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncStatusResponse"
+                  "$ref": "#/components/schemas/NativeSyncStatusResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Sync state for every release source owned by the caller"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -26512,22 +27070,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Sync Status",
         "tags": [
-          "reading-plan-sync",
           "reading-plan-sync"
         ]
       }
     },
     "/api/v1/reading-plan-sync/sync": {
       "post": {
-        "description": "Sync the caller's followed ComicVine volumes and adopt released issues.\n\nOnly the authenticated user's release sources are evaluated. An issue is\nadopted only when ComicVine reports a ``store_date`` on or before ``as_of``.",
-        "operationId": "sync_released_issues_endpoint_api_v1_reading_plan_sync_sync_post",
+        "operationId": "reading_plan_sync",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SyncRequest"
+                "$ref": "#/components/schemas/NativeSyncRequest"
               }
             }
           },
@@ -26538,21 +27093,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncResponse"
+                  "$ref": "#/components/schemas/NativeSyncResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "User-triggered sync report"
+          },
+          "401": {
+            "description": "Not authenticated"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Invalid request"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -26560,9 +27114,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Sync Released Issues Endpoint",
         "tags": [
-          "reading-plan-sync",
           "reading-plan-sync"
         ]
       }
@@ -28774,61 +29326,44 @@
     },
     "/api/v1/threads/{thread_id}/issues": {
       "get": {
-        "description": "List all issues for a thread with optional status filter and pagination.\n\nArgs:\n    thread_id: The thread ID to list issues for.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    status_filter: Optional filter by issue status (read/unread).\n    page_size: Number of issues to return per page.\n    page_token: Token for pagination continuation.\n\nReturns:\n    IssueListResponse with paginated issues.\n\nRaises:\n    HTTPException: If thread not found.",
-        "operationId": "list_issues_api_v1_threads__thread_id__issues_get",
+        "operationId": "list_thread_issues_documentation",
         "parameters": [
           {
+            "description": "Owned thread ID",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Optional read or unread filter",
             "in": "query",
             "name": "status",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "pattern": "^(unread|read)$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
+              "type": "string"
             }
           },
           {
+            "description": "1-100 issues (default 50)",
             "in": "query",
             "name": "page_size",
             "required": false,
             "schema": {
-              "default": 50,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Page Size",
+              "format": "int64",
               "type": "integer"
             }
           },
           {
+            "description": "position,id continuation cursor",
             "in": "query",
             "name": "page_token",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page Token"
+              "type": "string"
             }
           }
         ],
@@ -28837,21 +29372,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueListResponse"
+                  "$ref": "#/components/schemas/ThreadIssueListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owner-scoped, paginated issues"
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Invalid status or page size"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28859,9 +29399,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Issues",
+        "summary": "Same-path native OpenAPI for the browser's issue-list read.",
         "tags": [
-          "issues",
           "issues"
         ]
       },
@@ -29869,6 +30408,58 @@
         "summary": "Documentation-only operation for recording a Taste Bank verdict.",
         "tags": [
           "taste-signals"
+        ]
+      }
+    },
+    "/api/v2/activity": {
+      "get": {
+        "operationId": "list_activity_documentation",
+        "parameters": [
+          {
+            "description": "Maximum number of activity rows",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque continuation cursor",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped activity history"
+          },
+          "400": {
+            "description": "Malformed or unrecognized page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "activity"
         ]
       }
     },

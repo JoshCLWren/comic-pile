@@ -12,21 +12,31 @@ parity gates #4311. A bootstrap request currently gets 404, never partial JSON.
 ## Build and test
 
 Install rustup, the platform C compiler, pkg-config and OpenSSL development
-headers. Commands run from `native/roll-service`; `rust-toolchain.toml` selects
-the stable toolchain including rustfmt/clippy, and Cargo.lock pins all
-dependencies. `rust-version = "1.88"` documents the minimum toolchain the pinned
-lockfile supports.
+headers. The repository is a single Cargo workspace: the root
+`rust-toolchain.toml` selects the stable toolchain including rustfmt/clippy,
+and the root `Cargo.lock` pins one dependency graph for both this service and
+the deployed Vercel ingress. `rust-version = "1.88"` documents the minimum
+compiler version.
+
+From the repository root:
 
 ```sh
-cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked --all-targets
-cargo build --release --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --locked --all-targets -- -D warnings
+cargo test --workspace --locked --all-targets
+cargo build --release --locked -p comicpile-roll-service
 ```
 
 The `Native Rust Roll` GitHub Actions job runs these checks and publishes the
 Linux x86_64 release binary. It does not deploy previews or change ingress.
-The standalone binary is `target/release/comicpile-roll-service` and depends
+The workspace target directory is the repository root `target/`. The Rust Roll CI
+job uses an absolute `CARGO_TARGET_DIR`
+(`$GITHUB_WORKSPACE/native/roll-service/target`) so parity examples and artifact
+uploads keep their existing paths; e2e builds from the repository root. When
+building from another working directory, set an absolute `CARGO_TARGET_DIR`;
+relative values are resolved against the workspace root by the parity helper
+(Cargo itself resolves a relative `CARGO_TARGET_DIR` against the current
+working directory). The standalone binary depends
 on the build platform's OpenSSL/runtime libraries. It is not a Vercel function;
 provider selection and actual ingress verification belong to #4313.
 
@@ -120,7 +130,7 @@ reseed the application tables between cases and never hand-write them:
 ```sh
 export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
 # migrate the database once (or load the fixture by running any test)
-cargo test --locked --all-targets
+cargo test --locked -p comicpile-roll-service --all-targets
 ```
 
 Missing test configuration fails instead of silently skipping integration tests.
@@ -144,9 +154,7 @@ The local parity example is a CLI only, with no public HTTP route. On a disposab
 PostgreSQL database with the canonical Alembic schema already applied:
 
 ```bash
-cd native/roll-service
-cargo build --locked --example reading_snapshot
-cd ../..
+cargo build --locked -p comicpile-roll-service --example reading_snapshot
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s --no-cov
 ```
 
@@ -192,9 +200,8 @@ loader. The checked execution loader also enforces the global cycle-validation g
 With a disposable local PostgreSQL URL in `RUST_ROLL_TEST_DATABASE_URL`:
 
 ```sh
-cargo build --locked --examples
+cargo build --locked -p comicpile-roll-service --examples
 export RUST_ROLL_PARITY_DATABASE_URL=postgresql://roll_test_dml:roll-test-dml@localhost/native_auth_test
-cd ../..
 PYTHONPATH=. uv run pytest native/roll-service/parity/ -q -s --no-cov
 ```
 
@@ -231,8 +238,7 @@ The offline `constraint_validation` example reads sanitized JSON lines from stdi
 it needs no database, credentials or Python subprocess at runtime.
 
 ```sh
-cargo build --locked --examples
-cd ../..
+cargo build --locked -p comicpile-roll-service --examples
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_constraint_validation.py -q --no-cov
 ```
 
@@ -284,7 +290,7 @@ unchanged. Timestamp spelling is normalized; values, nulls, ordering, and state
 are not discarded. No production data is used.
 
 ```sh
-cargo build --locked --examples
+cargo build --locked -p comicpile-roll-service --examples
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_session_bootstrap.py -q --no-cov
 ```
 

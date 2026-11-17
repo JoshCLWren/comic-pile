@@ -338,22 +338,22 @@ def test_model_policy_violation_is_model_scoped() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
-def test_provider_failure_cools_every_provider_candidate() -> None:
-    """Recent canonical provider-wide failure prevents dispatch to sibling models."""
+def test_provider_failure_only_cools_exact_source_model() -> None:
     result = HEALTH.select_candidate(
         CANDIDATES,
-        [evidence("vendor/a:free", "provider_failure")],
-        worker=1,
-        now_epoch=NOW,
+        [evidence("vendor/a:free", "provider_failure"),
+         evidence("vendor/b:free", "success")],
+        worker=1, now_epoch=NOW,
     )
-
-    assert result.selected is None
-    assert result.failure_outcome == "provider_failure"
-    assert {candidate.health_state for candidate in result.candidates} == {"cooling"}
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+    assert {item.model: item.health_state for item in result.candidates} == {
+        "vendor/a:free": "cooling", "vendor/b:free": "healthy",
+    }
 
 
 def test_provider_throttle_has_canonical_terminal_outcome() -> None:
-    """Rate-limit evidence cools the provider and preserves throttle attribution."""
+    """Rate-limit evidence cools one model, preserving its failure class."""
     result = HEALTH.select_candidate(
         CANDIDATES,
         [evidence("vendor/a:free", "provider_throttle")],
@@ -363,6 +363,9 @@ def test_provider_throttle_has_canonical_terminal_outcome() -> None:
 
     assert result.selected is None
     assert result.failure_outcome == "provider_throttle"
+    assert {item.model: item.health_state for item in result.candidates} == {
+        "vendor/a:free": "cooling", "vendor/b:free": "unknown",
+    }
 
 
 def test_legacy_provider_outage_is_read_but_reemitted_canonically() -> None:
@@ -376,7 +379,9 @@ def test_legacy_provider_outage_is_read_but_reemitted_canonically() -> None:
 
     assert result.selected is None
     assert result.failure_outcome == "provider_failure"
-    assert {candidate.health_state for candidate in result.candidates} == {"cooling"}
+    assert {item.model: item.health_state for item in result.candidates} == {
+        "vendor/a:free": "cooling", "vendor/b:free": "unknown",
+    }
 
 
 def test_later_success_recovers_provider() -> None:

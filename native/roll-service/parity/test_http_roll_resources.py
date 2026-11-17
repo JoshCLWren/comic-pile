@@ -19,8 +19,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from urllib.parse import urlencode
+
+from route_harness import cargo_example_path
 from uuid import uuid4
 
 import pytest
@@ -32,13 +33,7 @@ from app.models import Dependency, Event, Issue, RevokedToken, Thread, User
 SECRET = "synthetic-roll-resource-secret"
 # Whole seconds since the epoch of the owner's password_change credential.
 STORED_EPOCH = 1_767_225_600
-# CI builds into native/roll-service/target; the managed local wrapper keeps
-# its own bounded target directory, so locate the built example without
-# changing how this test builds or runs anything.
-EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_roll_resources"
-)
+EXAMPLE = cargo_example_path("http_roll_resources")
 
 ROLLED_AT = datetime(2026, 11, 1, 10, 0, 0, tzinfo=UTC)
 

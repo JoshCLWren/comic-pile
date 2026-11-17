@@ -370,3 +370,78 @@ def test_closed_factory_pr_triggers_trusted_migration_reconciliation() -> None:
     assert "persist-credentials: false" in workflow
     assert "python3 .github/scripts/factory_migration_lane.py reconcile" in workflow
     assert "group: fixed-model-factory-dispatch" in workflow
+
+
+def test_migration_file_reads_only_for_finalizers_and_waiters(monkeypatch: MonkeyPatch) -> None:
+    module = load_lane()
+    def row(number: int, labels: set[str]) -> dict[str, Any]:
+        return {"number": number, "draft": False, "created_at": "2026-11-16T00:00:00Z",
+                "head": {"ref": f"factory/43-{number}-work"},
+                "labels": [{"name": label} for label in labels]}
+    prs = [
+        row(1, {"factory", "factory:building"}),
+        row(2, {"factory", "factory:review"}),
+        row(3, {"factory", "factory:blocked"}),
+        row(4, {"factory", "factory:blocked", module.WAIT_LABEL}),
+        row(5, {"factory:review"}),
+    ]
+    reads: list[int] = []
+    monkeypatch.setattr(module, "open_pull_requests", lambda: prs)
+    def changed_files(number: int) -> list[dict[str, Any]]:
+        reads.append(number)
+        return [{"filename": "alembic/versions/123_schema.py"}]
+    monkeypatch.setattr(module, "pr_changed_files", changed_files)
+    assert [pr.number for pr in module.current_migration_prs()] == [2, 4]
+    assert reads == [2, 4]
+
+
+def test_read_only_migration_sweep_does_not_probe_label_or_change_ownership(monkeypatch: MonkeyPatch) -> None:
+    module = load_lane()
+    monkeypatch.setattr(module, "current_migration_prs", lambda: [])
+    monkeypatch.setattr(module, "ensure_wait_label", lambda: pytest.fail("no park: no label probe"))
+    monkeypatch.setattr(module, "replace_labels", lambda *_: pytest.fail("no lane work: no labels"))
+    assert module.reconcile() == {"holder": None, "parked": [], "released": None, "waiting": []}
+
+
+
+def test_migration_lane_classifies_actual_api_quota_not_permissions(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    module = load_lane()
+
+    def failure(message: str):
+        def run(*args: object, **kwargs: object) -> object:
+            return module.subprocess.CompletedProcess(
+                ["gh", "api"], 1, "", message,
+            )
+        return run
+
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        failure("gh: API rate limit exceeded for installation"),
+    )
+    with pytest.raises(module.GitHubQuotaDeferredError):
+        module.run_gh(["api", "repos/example/repo/pulls?state=open"])
+
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        failure("gh: HTTP 403: Resource not accessible by integration"),
+    )
+    with pytest.raises(RuntimeError, match="Resource not accessible"):
+        module.run_gh(["api", "repos/example/repo/pulls?state=open"])
+
+
+def test_migration_lane_quota_failure_preserves_pending_migrations(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    module = load_lane()
+    writes: list[int] = []
+
+    def unavailable() -> list[object]:
+        raise module.GitHubQuotaDeferredError("GitHub installation API quota exhausted")
+
+    monkeypatch.setattr(module, "current_migration_prs", unavailable)
+    monkeypatch.setattr(module, "replace_labels", lambda *_: writes.append(1))
+    with pytest.raises(module.GitHubQuotaDeferredError):
+        module.reconcile()
+    assert writes == []

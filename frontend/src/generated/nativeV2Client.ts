@@ -262,9 +262,31 @@ export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse
 
 export type ListResponse = components['schemas']['IdentityInboxResponse']
 
+export interface ListActivityRequest {
+  query?: {
+    limit?: number
+    page_token?: string
+  }
+}
+
+export type ListActivityResponse = components['schemas']['ActivityResponse']
+
 export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
+
+export interface ListThreadIssuesRequest {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
 
 export interface ListThreadsRequest {
   query?: {
@@ -515,8 +537,10 @@ export interface NativeV2Client {
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   list(): Promise<ListResponse>
+  listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
+  listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
@@ -734,11 +758,23 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     list() {
       return client.get<ListResponse>("/v1/identity-inbox")
     },
+    listActivity(args: ListActivityRequest = {}) {
+      return client.get<ListActivityResponse>(
+        "/v2/activity",
+        { params: compactQuery(args.query) },
+      )
+    },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
+    },
+    listThreadIssues(args: ListThreadIssuesRequest) {
+      return client.get<ListThreadIssuesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        { params: compactQuery(args.query) },
+      )
     },
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(

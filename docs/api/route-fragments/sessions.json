@@ -16,38 +16,10 @@
     {
       "bucket": "unversioned_operations",
       "method": "GET",
-      "path": "/api/sessions/",
-      "dest": "/api/index.py",
-      "src": "^/api/sessions/$"
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/sessions/current/",
-      "dest": "/api/index.py",
-      "src": "^/api/sessions/current/$"
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
       "path": "/api/sessions/{session_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/sessions/[0-9]+$",
       "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/sessions/{session_id}/details",
-      "dest": "/api/index.py",
-      "src": "^/api/sessions/[^/]+/details$"
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "POST",
-      "path": "/api/sessions/{session_id}/restore-session-start",
-      "dest": "/api/index.py",
-      "src": "^/api/sessions/[^/]+/restore\\-session\\-start$"
     },
     {
       "bucket": "unversioned_operations",

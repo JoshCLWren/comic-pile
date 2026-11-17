@@ -97,7 +97,7 @@ def test_burndown_summary_matches_deployed_ingress() -> None:
 
 
 def test_reading_boundaries_split_uses_deployed_ingress() -> None:
-    """POST boundaries is Native Rust; v2 operations are now fully native."""
+    """POST boundaries is native; the retired detail GET stays absent."""
     inventory = load_json(INVENTORY_PATH)
     raw_operations = inventory.get("operations")
     assert isinstance(raw_operations, list)
@@ -106,6 +106,11 @@ def test_reading_boundaries_split_uses_deployed_ingress() -> None:
     assert post.get("runtime") == "native-rust"
     assert post.get("ingress_destination") == "/api/native_roll.rs"
     assert post.get("burndown_status") == "native Rust"
+    assert not any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v2/reading-boundaries/{thread_id}"
+        for item in operations
+    )
 
 
 def test_classify_distinguishes_all_burndown_statuses() -> None:
@@ -155,6 +160,9 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     assert summary.get("catch_all_src") == "/api(?:/.*)?"
     assert summary.get("catch_all_dest") == "/api/native_roll.rs"
+    assert summary.get("orphan_method") is None
+    assert summary.get("orphan_path") is None
+    assert "orphan" not in full_surface
     catch_all = full_surface.get("catch_all")
     assert isinstance(catch_all, dict)
     raw_v1 = full_surface.get("v1_operations")
@@ -173,32 +181,56 @@ def test_full_surface_matches_deployed_ingress() -> None:
         and item.get("runtime") == "python-fastapi"
         for item in v1_ops
     )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/creators"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/creators/summaries"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
+    assert not any(item.get("path") == "/api/v1/threads/completed/threads" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/creators" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/creators/summaries" for item in v1_ops)
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
+    # The bug-report twins were cut over to same-path native Rust (#4852) and
+    # their Python handler was retired (#5162), so the v1 bug-reports path is
+    # excluded from the Python inventory surface entirely; native ingress is
+    # pinned by test_bug_reports_fragment_routes_both_twins_to_native_rust.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/v1/bug-reports")
+        for item in v1_ops
+    )
+    assert not any(item.get("path") == "/api/v1/issues/{issue_id}" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/issues/{issue_id}/comicvine" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/issues/{issue_id}/dependencies" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/comicvine/series/{comicvine_volume_id}/import-status" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/threads/{thread_id}/issue-dependencies" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/roll/dismiss-pending" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/auth/login" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/taste/discoveries/{signal_id}/dismiss" for item in v1_ops)
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/taste/discoveries"
         and item.get("burndown_status") == "live transitional Python with callers"
         for item in v1_ops
     )
+    assert not any(
+        item.get("method") == "GET" and item.get("path") == "/api/v1/threads/{thread_id}"
+        for item in v1_ops
+    )
+    assert not any(item.get("path") == "/api/v1/threads/{thread_id}/dependencies" for item in v1_ops)
     shadowed_unversioned = [
         item
         for item in unversioned_ops
         if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_unversioned) == 0
+    assert len(shadowed_unversioned) == sum(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("runtime") == "python-fastapi"
+        for item in unversioned_ops
+    )
+    assert not any(item.get("path") == "/api/auth/login" for item in unversioned_ops)
+    # Same retirement as the v1 twin: POST /api/bug-reports/ is native-only
+    # (#4852, #5162) and no longer part of the Python inventory surface.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/bug-reports")
+        for item in unversioned_ops
+    )
+    assert not any(item.get("path") == "/api/threads/{thread_id}" for item in unversioned_ops)
     live_v1 = [
         item
         for item in v1_ops
@@ -229,6 +261,14 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in v1_ops
         if str(item.get("path", "")).startswith("/api/v1/tags")
     )
+    assert not any(item.get("path") == "/api/v1/users/me/preferences" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/users/me/preferences" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/users/me/taste-signals" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/reading-mode" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/reading-mode" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/reading-mode/dismiss-suggestion" for item in v1_ops)
+    assert not any(item.get("path") == "/api/v1/reading-mode/suggest" for item in v1_ops)
     assert any(
         item.get("method") == "POST"
         and item.get("path") == "/api/v1/threads/groups:batch"
@@ -243,6 +283,26 @@ def test_full_surface_matches_deployed_ingress() -> None:
         == "live transitional Python with callers"
         for item in v1_ops
     )
+    assert all(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+        if item.get("path")
+        in {
+            "/api/v1/sessions/{session_id}",
+            "/api/v1/sessions/{session_id}/snapshots",
+        }
+    )
+    assert all(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in unversioned_ops
+        if item.get("path")
+        in {
+            "/api/sessions/{session_id}",
+            "/api/sessions/{session_id}/snapshots",
+        }
+    )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/sessions/correction-examples"
@@ -255,31 +315,24 @@ def test_full_surface_matches_deployed_ingress() -> None:
             assert item.get("runtime") == "python-fastapi"
 
 
-def test_dependencies_slice_routes_native_while_python_remains_declared() -> None:
-    """All browser dependency paths use native ingress without deleting Python."""
+def test_dependencies_slice_routes_native_after_python_retirement() -> None:
+    """Retired v1 dependency handlers stay absent; live v2 contracts stay native."""
     inventory = load_json(INVENTORY_PATH)
     full_surface = inventory["full_surface"]
     assert isinstance(full_surface, dict)
     operations = full_surface["v1_operations"]
     assert isinstance(operations, list)
-    expected = {
-        ("POST", "/api/v1/dependencies/"),
-        ("GET", "/api/v1/dependencies/blocked"),
-        ("DELETE", "/api/v1/dependencies/{dependency_id}"),
-        ("GET", "/api/v1/dependencies/{dependency_id}"),
-        ("PATCH", "/api/v1/dependencies/{dependency_id}"),
-    }
-    actual = {
-        (item["method"], item["path"])
+    assert not any(
+        isinstance(item, dict) and item["path"].startswith("/api/v1/dependencies")
         for item in operations
-        if isinstance(item, dict) and item["path"].startswith("/api/v1/dependencies")
-    }
-    assert actual == expected
-    for item in operations:
-        if isinstance(item, dict) and (item["method"], item["path"]) in expected:
-            assert item["runtime"] == "python-fastapi"
-            assert item["ingress_destination"] == "/api/native_roll.rs"
-            assert item["burndown_status"] == "shadowed by Rust"
+    )
+    for method, path in (
+        ("POST", "/api/v2/dependencies/"),
+        ("DELETE", "/api/v2/dependencies/{dependency_id}"),
+    ):
+        operation = _operation(inventory["operations"], method, path)
+        assert operation["runtime"] == "native-rust"
+        assert operation["ingress_destination"] == "/api/native_roll.rs"
 
 
 def test_rendered_outputs_match_checked_in_files() -> None:
@@ -322,11 +375,13 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "preferences",
         "reading-mode",
         "reading-orders",
+        "reading-plan-sync",
         "releases",
         "sessions",
         "tags",
         "taste-discoveries",
         "threads",
+        "undo",
     ]
 
 
@@ -451,6 +506,7 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert f"Live v2 operations: {total} ({native} native-rust + {python} python-fastapi)" in agents
     assert "`/api/native_roll.rs`, `/api/native_issue.rs`" in agents
     assert "`POST /api/v2/reading-boundaries -> native-rust`" in agents
+    assert "`GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`" not in agents
     assert "see `docs/api/v2-route-inventory.json` (authoritative)" in agents
     assert "Full Python-handler surface:" in agents
     assert "v1 active" in agents
@@ -467,10 +523,10 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
     """One family's fragment merge never alters another family's routes."""
     inventory = load_json(INVENTORY_PATH)
     fragments = _load_route_fragments(FRAGMENT_DIR)
-    tags = next(f for f in fragments if f.name == "tags")
+    undo = next(f for f in fragments if f.name == "undo")
     creators = next(f for f in fragments if f.name == "creators")
 
-    merged_tags_only = _merge_route_fragments(inventory, [tags])
+    merged_undo_only = _merge_route_fragments(inventory, [undo])
     merged_full = _merge_route_fragments(inventory, fragments)
 
     def _method_path_set(
@@ -488,14 +544,14 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
                 found.add(key)
         return found
 
-    creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations}
-    # Merging tags alone must not remove or alter any creators route.
-    assert _method_path_set(merged_tags_only, creators_keys) == creators_keys
+    creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations if not op.get("exclude_from_inventory")}
+    # Merging undo alone must not remove or alter any creators route.
+    assert _method_path_set(merged_undo_only, creators_keys) == creators_keys
     assert _method_path_set(merged_full, creators_keys) == creators_keys
-    tags_keys = {(str(op["method"]), str(op["path"])) for op in tags.operations}
-    assert tags_keys
-    assert tags_keys.isdisjoint(creators_keys)
-    assert _method_path_set(merged_tags_only, tags_keys) == tags_keys
+    undo_keys = {(str(op["method"]), str(op["path"])) for op in undo.operations if not op.get("exclude_from_inventory")}
+    assert undo_keys
+    assert undo_keys.isdisjoint(creators_keys)
+    assert _method_path_set(merged_undo_only, undo_keys) == undo_keys
 
 
 def test_generators_are_idempotent() -> None:

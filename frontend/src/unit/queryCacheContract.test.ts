@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyEditedThreadToQueuePages,
   applyRatedThreadCache,
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
@@ -196,6 +197,23 @@ describe('canonical query keys', () => {
 })
 
 describe('targeted cache effects', () => {
+  it('keeps an edited finished series current in its separately cached pages', () => {
+    const client = new QueryClient()
+    const listKey = queryKeys.completed.list({ sort: 'created', pageSize: 50 })
+    const completed = { ...thread, status: 'completed' as const }
+    client.setQueryData(listKey, {
+      pages: [{ threads: [completed], next_page_token: null, active_count: 0 }],
+      pageParams: [null],
+    })
+
+    const edited = { ...completed, title: 'Mister Miracle: Renamed' }
+    applyEditedThreadToQueuePages(client, edited)
+
+    const cached = client.getQueryData<{ pages: Array<{ threads: Thread[] }> }>(listKey)
+    expect(cached?.pages[0]?.threads[0]?.title).toBe('Mister Miracle: Renamed')
+    expect(client.getQueryData(queryKeys.thread.detail(thread.id))).toEqual(edited)
+  })
+
   it('uses an authoritative rating response and refreshes every snapshot surface', async () => {
     const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
@@ -360,7 +378,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.dependencies.all,
     })
-    expect(resetQueries).not.toHaveBeenCalled()
+    // The last issue may have completed the series; only the finished cursor is reset.
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
   })
 
   it('limits snooze reconciliation to the exact current session key', async () => {
@@ -520,7 +540,9 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.pages(),
     })
     expect(setQueryData).not.toHaveBeenCalled()
-    expect(resetQueries).not.toHaveBeenCalled()
+    // The completed cursor is the only reset; other resume work remains scoped invalidation.
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
   })
 
   describe('custom CBL cache effects', () => {

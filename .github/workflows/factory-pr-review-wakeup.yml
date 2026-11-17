@@ -60,6 +60,13 @@ jobs:
             echo "PR #${PR_NUMBER} is no longer eligible; no dispatch"
             exit 0
           fi
+          # A live worker lease owns the next action; its handoff and the
+          # check-completion wakeup advance the PR. Skip a redundant pass.
+          if jq -e '[.labels[].name | select(test("^factory:([0-9]+|local)$"))] | length > 0' \
+            <<< "$pr" >/dev/null; then
+            echo "PR #${PR_NUMBER} is leased by an active worker; no dispatch"
+            exit 0
+          fi
           if printf '%s' "$pr" | python3 -c '
           import json
           import sys
@@ -75,4 +82,4 @@ jobs:
             exit 0
           fi
           gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+            --repo "$GITHUB_REPOSITORY" --ref main -f target="pr:$PR_NUMBER" -f action=advance

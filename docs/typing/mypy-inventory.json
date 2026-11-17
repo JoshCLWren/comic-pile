@@ -29,13 +29,13 @@
     "app/api/dependency_group.py",
     "app/api/dependency_group_batch.py",
     "app/api/health.py",
+    "app/api/identity_inbox.py",
     "app/api/images.py",
     "app/api/issue.py",
     "app/api/issue_dependency_batch.py",
     "app/api/issue_identity.py",
     "app/api/metrics.py",
     "app/api/performance_metric.py",
-    "app/api/ping.py",
     "app/api/preferences.py",
     "app/api/prerequisite.py",
     "app/api/queue.py",
@@ -187,6 +187,7 @@
     "app/schemas/dependency.py",
     "app/schemas/dependency_group.py",
     "app/schemas/error.py",
+    "app/schemas/identity_inbox.py",
     "app/schemas/issue.py",
     "app/schemas/issue_dependency_batch.py",
     "app/schemas/migration.py",
@@ -271,6 +272,7 @@
     "app/services/explicit_reader_order_migration.py",
     "app/services/github_service.py",
     "app/services/health_probe.py",
+    "app/services/identity_inbox.py",
     "app/services/image_delivery.py",
     "app/services/issue.py",
     "app/services/issue_identity_reconciliation.py",
@@ -611,6 +613,7 @@
     "tests/test_history.py",
     "tests/test_history_events.py",
     "tests/test_history_issue_stability_regression.py",
+    "tests/test_identity_inbox_list_performance.py",
     "tests/test_image_delivery_api.py",
     "tests/test_import_all.py",
     "tests/test_intent_weighted_acceptance.py",
@@ -1626,27 +1629,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 3
-        }
-      ]
-    },
-    {
-      "path": "app/api/ping.py",
-      "module": "app.api.ping",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -18384,20 +18366,6 @@
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"PerformanceMetricComparison\""
-    },
-    {
-      "file": "app/api/ping.py",
-      "line": 3,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/ping.py",
-      "line": 8,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"ping\" untyped"
     },
     {
       "file": "app/api/preferences.py",
@@ -55695,7 +55663,5 @@
       "severity": "error",
       "message": "Untyped decorator makes function \"test_validate_export_rejects_removed_or_sensitive_payloads\" untyped"
     }
-  ],
-  "module_annotations": {},
-  "file_annotations": []
+  ]
 }

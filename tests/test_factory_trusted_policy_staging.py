@@ -80,11 +80,11 @@ def test_staged_review_controller_starts_without_source_checkout(tmp_path: Path)
         ".github/scripts/factory_issue_acceptance.py",
         ".github/scripts/factory_implementation_delivery.py",
         ".github/scripts/factory_post_merge_closure.py",
-        ".github/scripts/factory_roster.py",
+        ".github/scripts/factory_worker_slots.py",
+        ".github/scripts/factory_provider_registry.py",
         ".github/scripts/factory_work_policy.py",
         ".github/scripts/factory_fork_control.py",
         "scripts/factory_eligibility.py",
-        ".github/free-model-factories.tsv",
     )
     for relative in bundle:
         shutil.copy2(ROOT / relative, staged / Path(relative).name)

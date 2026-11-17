@@ -11,16 +11,17 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
+
+from factory_state_metrics import connect as measured_connect
 
 from factory_state_cache import _dsn
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS
 
 WORKER_RE = re.compile(r"^[0-9]+$")
-HEARTBEAT_RE = re.compile(r"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-(\d+) -->")
-RUN_RE = re.compile(r"(?m)^Run:\s*(\d+)\s*$")
-OUTCOME_RE = re.compile(r"(?m)^Outcome:\s*([^\n]+)")
+LIFECYCLE_STATUSES = {"started": "worker_started", "finished": "worker_outcome_signal",
+                      "failure": "worker_outcome_signal"}
 LEASE_PREFIX = "factory-lease-v1:"
 
 
@@ -35,11 +36,10 @@ def _keys(repo: str, worker: str, numbers: list[int]) -> list[str]:
 
 
 async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str | None:
-    import asyncpg
 
     token = str(uuid.uuid4())
     keys = _keys(repo, worker, numbers)
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         async with conn.transaction():
             # A repository-level transaction lock makes worker and *all* linked
@@ -75,10 +75,10 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
                    VALUES ('github-actions', 'worker_assigned', 'worker', $1,
                      jsonb_build_object('claim_id', $2::text, 'worker', $3::text,
                                         'targets', $4::jsonb, 'run_id', $5::text,
-                                        'source', $6::text))""",
+                                        'source', $6::text, 'repo', $7::text))""",
                 int(worker), token, worker, json.dumps(sorted(set(numbers))),
                 os.environ.get("GITHUB_RUN_ID", ""),
-                _roster()[worker][0],
+                _roster()[worker][0], repo,
             )
         return token
     finally:
@@ -103,9 +103,8 @@ def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = FIXED_L
 
 
 async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         async with conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", LEASE_PREFIX + repo)
@@ -135,8 +134,8 @@ async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
                    (source, event_type, subject_type, subject_number, detail)
                    VALUES ('github-actions', 'worker_released', 'worker', $1,
                      jsonb_build_object('claim_id',$2::text,'worker',$3::text,
-                                        'reason',$4::text,'targets',$5::jsonb))""",
-                int(worker), token, worker, reason, json.dumps(numbers),
+                                        'reason',$4::text,'targets',$5::jsonb,'repo',$6::text))""",
+                int(worker), token, worker, reason, json.dumps(numbers), repo,
             )
         return True
     finally:
@@ -155,8 +154,7 @@ def release_worker(repo: str, worker: str, reason: str) -> bool:
         return False
 
     async def _lookup() -> str | None:
-        import asyncpg
-        conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
         try:
             row = await conn.fetchrow(
                 "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
@@ -176,9 +174,8 @@ def release_worker(repo: str, worker: str, reason: str) -> bool:
 
 
 async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     inserted = 0
     try:
         async with conn.transaction():
@@ -196,7 +193,7 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                     """INSERT INTO public.factory_state_events
                        (source,event_type,subject_type,subject_number,detail)
                        VALUES ('github-actions',$1,'worker',$2,$3::jsonb)""",
-                    entry["event_type"], int(entry["worker"]), json.dumps(entry),
+                    entry["event_type"], int(entry["worker"]), json.dumps({**entry, "repo": repo}),
                 )
                 inserted += 1
                 # 'running' is an initial status marker, not a periodic
@@ -241,9 +238,8 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
 
 async def _renew_verified(repo: str, workers: list[str]) -> int:
     """Extend existing, unexpired reservations for verified running workers."""
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=12)
     renewed = 0
     try:
         async with conn.transaction():
@@ -298,7 +294,7 @@ def renew_verified_workers(repo: str, workers: list[str]) -> int:
     return asyncio.run(_renew_verified(repo, workers))
 
 
-def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
+def worker_claim(repo: str, worker: str, *, active_only: bool = False) -> tuple[str, list[int]] | None:
     """Capture the existing claim before a controller mutates ownership labels.
 
     Args:
@@ -314,13 +310,12 @@ def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
         return None
 
     async def _read() -> tuple[str, list[int]] | None:
-        import asyncpg
 
-        conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
         try:
             raw = await conn.fetchval(
-                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-                _keys(repo, worker, [])[0],
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 AND (NOT $2::boolean OR expires_at>now())",
+                _keys(repo, worker, [])[0], active_only,
             )
             if raw is None:
                 return None
@@ -333,53 +328,68 @@ def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
 
     return asyncio.run(_read())
 
+def recorded_runtime_runs(repo: str, run_ids: list[str]) -> set[str]:
+    """Return the Entry run IDs that already have a terminal runtime outcome.
+
+    The deferred outcome reconciler uses this to avoid re-projecting a run
+    (model-health streaks are not idempotent per run).
+    """
+    if not enabled() or not run_ids:
+        return set()
+    if any(not run_id.isdecimal() for run_id in run_ids):
+        raise ValueError("invalid run ID")
+
+    async def _read() -> set[str]:
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        try:
+            rows = await conn.fetch(
+                """SELECT detail->>'run_id' AS run_id FROM public.factory_state_events
+                   WHERE source='github-actions' AND detail->>'repo'=$1
+                     AND detail->>'event_id' = ANY($2::text[])""",
+                repo, [f"runtime:{run_id}" for run_id in run_ids],
+            )
+            return {str(row["run_id"]) for row in rows}
+        finally:
+            await conn.close()
+
+    return asyncio.run(_read())
+
+
 def record_events(repo: str, entries: list[dict[str, Any]]) -> int:
     if not enabled() or not entries:
         return 0
     return asyncio.run(_events(repo, entries))
 
 
-def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
-    """Ingest only trusted, recent GitHub heartbeat updates, keyed by run/status.
+def record_lifecycle(repo: str, run_id: str, worker: str, status: str) -> int:
+    """Persist a trusted Actions lifecycle observation for one worker run.
 
-    Repeated incremental reads are idempotent. Models never get database access.
+    Only trusted run-workflow jobs (assignment validation and lease release)
+    call this, using the dispatch-input worker and the Actions job result. It
+    replaces the retired issue #1093 heartbeat comments: no GitHub comment is
+    read or written. Repeated calls are idempotent per run and status.
+
+    Args:
+        repo: GitHub repository.
+        run_id: Entry workflow run ID.
+        worker: Numeric factory worker identifier.
+        status: ``started``, ``finished`` or ``failure``.
+
+    Returns:
+        Number of newly inserted lifecycle events.
     """
-    from factory_work_policy import comment_is_trusted
-
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
-    events = []
-    for comment in changes:
-        if not isinstance(comment, dict) or not comment_is_trusted(comment):
-            continue
-        body = str(comment.get("body") or "")
-        worker = HEARTBEAT_RE.search(body)
-        run = RUN_RE.search(body)
-        outcome = OUTCOME_RE.search(body)
-        updated = str(comment.get("updated_at") or "")
-        if not worker or not run or not outcome or not updated:
-            continue
-        try:
-            stamp = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if stamp < cutoff:
-            continue
-        status = outcome.group(1).strip().lower()
-        event_type = (
-            "worker_started" if status == "running"
-            else "worker_outcome_signal" if status in {"success", "failure"}
-            else "worker_heartbeat"
-        )
-        events.append({
-            "event_type": event_type,
-            "event_id": f"heartbeat:{comment.get('id')}:{updated}:{status}",
-            "worker": worker.group(1),
-            "run_id": run.group(1),
-            "status": status,
-            "observed_at": updated,
-        })
-    return record_events(repo, events)
-
+    if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
+        raise ValueError("invalid trusted lifecycle identity")
+    if status not in LIFECYCLE_STATUSES:
+        raise ValueError("invalid trusted lifecycle status")
+    return record_events(repo, [{
+        "event_type": LIFECYCLE_STATUSES[status],
+        "event_id": f"lifecycle:{run_id}:{status}",
+        "worker": worker,
+        "run_id": run_id,
+        "status": "running" if status == "started" else status,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }])
 
 
 def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
@@ -428,6 +438,71 @@ def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict
     if successful and outcome.get("exact_model_proven") is True:
         refined["model"] = successful
     return refined
+
+def refine_trusted_failover_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Attest exact failed pairs, account scope and final provider transitions.
+
+    Only the completed trusted Actions job log and verified worker marker
+    qualify for durable health. A prior candidate can never classify the
+    terminal successful model or overwrite its delivery state.
+    """
+    from factory_provider_candidates import ADAPTERS
+
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+    worker = str(outcome.get("worker") or "")
+    pattern = re.compile(
+        r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z "
+        r"\[factory:(\d+)\]\[source:([^\]\n]+)\]\[model:[^\]\n]+\] "
+        r"FACTORY_TRUSTED_FAILOVER: source=(\S+) model=([\w./:-]{1,180}) "
+        r"outcome=([a-z_]+)(?: scope=(account|model))?\s*$"
+    )
+    accepted = {
+        "provider_failure", "provider_throttle", "provider_quota",
+        "model_unavailable", "model_retired_410", "model_policy_violation",
+    }
+    failures = list(outcome.get("model_failures") or [])
+    seen = {
+        (str(item.get("source") or outcome.get("source") or ""), item.get("model"))
+        for item in failures if isinstance(item, dict)
+    }
+    for match in pattern.finditer(clean):
+        log_worker, log_source, source, model, classification, scope = match.groups()
+        if (log_worker != worker or log_source != source
+                or source not in ADAPTERS or classification not in accepted
+                or (source, model) in seen):
+            continue
+        if scope == "account" and classification not in {"provider_quota", "provider_failure"}:
+            continue
+        failures.append({
+            "source": source, "model": model, "outcome": classification,
+            "scope": scope or "model",
+        })
+        seen.add((source, model))
+
+    # The model cannot choose an unregistered source merely by mentioning one
+    # in its text. The canonical runtime source transition must appear in the
+    # trusted, timestamped wrapper log before a final-source override.
+    transitions = re.findall(
+        r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z "
+        r"\[factory:(\d+)\]\[source:([^\]\n]+)\]\[model:[^\]\n]+\] "
+        r"FACTORY_FLEET_TRANSITION: source=([^\s]+) model=([^\s]+) ",
+        clean,
+    )
+    final_source = str(outcome.get("source") or "")
+    final_model = str(outcome.get("model") or "")
+    trusted_switch = any(
+        w == worker and log_source == source == final_source
+        and model == final_model and source in ADAPTERS
+        for w, log_source, source, model in transitions
+    )
+    result = dict(outcome)
+    if failures:
+        result["model_failures"] = failures
+    if trusted_switch:
+        result["trusted_source_switch"] = True
+    return result
+
+
 
 def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
     """Attribute a 180-second pinned-model smoke timeout to the provider.
@@ -552,6 +627,7 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
         "model_failures": outcome.get("model_failures") or [],
+        "trusted_source_switch": outcome.get("trusted_source_switch") is True,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
     # Separate projection key is idempotent across both trusted outcome writers.
@@ -564,19 +640,30 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
 def main() -> int:
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["runtime-outcome"])
-    parser.add_argument("--file", required=True)
+    parser.add_argument("command", choices=["runtime-outcome", "lifecycle"])
+    parser.add_argument("--file")
+    parser.add_argument("--worker")
+    parser.add_argument("--status", choices=sorted(LIFECYCLE_STATUSES))
     parser.add_argument("--log", help="Trusted completed factory job log, for exact smoke timeout attribution")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile"))
     args = parser.parse_args()
+    if args.command == "lifecycle":
+        if not args.worker or not args.status:
+            parser.error("lifecycle requires --worker and --status")
+        result = record_lifecycle(args.repo, args.run_id, args.worker, args.status)
+        print(f"[factory-ledger] recorded {result} lifecycle event(s)")
+        return 0
     if args.command == "runtime-outcome":
+        if not args.file:
+            parser.error("runtime-outcome requires --file")
         with open(args.file, encoding="utf-8") as stream:
             outcome = json.load(stream)
         if args.log:
             with open(args.log, encoding="utf-8", errors="replace") as stream:
                 job_log = stream.read()
                 outcome = refine_trusted_dynamic_models(outcome, job_log)
+                outcome = refine_trusted_failover_models(outcome, job_log)
                 outcome = refine_trusted_smoke_timeout(outcome, job_log)
         result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")

@@ -2612,30 +2612,23 @@ def test_trusted_review_controller_stages_roster_and_pinned_tsv(worker_script: s
     """All worker paths stage code and roster from main before checkout."""
     script = (SCRIPTS / worker_script).read_text(encoding="utf-8")
     stage = script.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
-    assert 'cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"' in stage
-    assert 'cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"' in stage
+    assert 'cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"' in stage
+    assert 'cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"' in stage
+    assert 'cp .github/free-model-factories.tsv' not in stage
 
 
-def test_roster_model_lookup_ignores_untrusted_pr_checkout(
+def test_model_author_marker_uses_invoked_runtime_model_not_branch_inventory(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The staged controller must not trust a model mapping from the PR branch."""
+    """An untrusted PR cannot rewrite the selected model's trusted provenance."""
     controller = load_review_controller()
-    trusted = tmp_path / "staged-controller"
-    trusted.mkdir()
-    (trusted / "free-model-factories.tsv").write_text(
-        "54\tz-ai\tglm-4.5-flash\t0\tactive\tFactory 54\n",
-        encoding="utf-8",
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "synthetic-provider/executed-model")
+    monkeypatch.chdir(tmp_path)
+    assert controller.roster_model_for_worker("non-pinned-worker") == (
+        "synthetic-provider/executed-model"
     )
-    untrusted = tmp_path / "pr-checkout"
-    (untrusted / ".github").mkdir(parents=True)
-    (untrusted / ".github" / "free-model-factories.tsv").write_text(
-        "54\tz-ai\timpersonated-model\t0\tactive\tUntrusted\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(untrusted)
-    monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
-    assert controller.roster_model_for_worker("54") == "glm-4.5-flash"
+    monkeypatch.delenv("FACTORY_RUNTIME_MODEL")
+    assert controller.roster_model_for_worker("non-pinned-worker") is None
 
 
 def test_model_trailer_models_reports_distinct_trailers() -> None:
@@ -3658,16 +3651,24 @@ def test_review_restores_per_worker_provider_instead_of_a_shared_composite() -> 
     assert "reason='exact-head-semantic-review-only'" not in workflow
     assert "Register composite OpenRouter model for semantic review only" not in workflow
     assert "Factory $worker: routing leased semantic review via" not in workflow
-    assert 'row="$(awk -F' in workflow
-    assert 'echo "source=$source"' in workflow
-    assert 'echo "runtime_model=$runtime_model"' in workflow
+    # Each worker's provider comes from its generated slot (#5213).
+    lane = workflow.split("- name: Resolve executor slot policy", 1)[1].split("- name:", 1)[0]
+    assert "factory_worker_slots.py" in lane
+    assert 'source="$(jq -er \'.source\' <<< "$slot")"' in lane
+    assert 'echo "source=$source"' in lane
+    assert 'echo "runtime_model=$runtime_model"' in lane
 
 
 def test_review_uses_existing_model_preflight_and_provider_rotation() -> None:
     """Review uses the same catalog selection and real work invocation as coding."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    assert '[[ "$SOURCE" == opencode-free || "$SOURCE" == openrouter-free ]]' in workflow
     assert '[[ "${RUNTIME_MODEL:-}" != \'openrouter/free\' ]]' not in workflow
-    assert 'attempted+=("$model")' in workflow
-    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
+    # Review and coding share one dispatch-time catalog selection and the
+    # worker's in-lease fleet failover; no review-only model path exists.
+    selector = workflow.split("- name: Select execution candidate at dispatch time", 1)[1]
+    selector = selector.split("- name:", 1)[0]
+    assert "fleet_fallback()" in selector
+    assert 'echo "runtime_model=$runtime_model"' in selector
     assert "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model" in workflow
+    worker = (WORKFLOWS.parent / "scripts" / "free-model-factory-worker.sh").read_text()
+    assert "select_next_eligible_model" in worker
