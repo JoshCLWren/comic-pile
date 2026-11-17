@@ -14,7 +14,9 @@ set -Eeuo pipefail
 # to the real CLI unchanged.
 install_factory_rest_gh() {
   local real_gh shim_dir
-  real_gh="$(command -v gh)"
+  # Keep a real gh resolved by an outer step: PATH may already start with the
+  # usage-meter shim, and re-resolving here would point the meter at itself.
+  real_gh="${FACTORY_REAL_GH:-$(command -v gh)}"
   shim_dir="$(mktemp -d /tmp/comic-pile-factory-gh.XXXXXX)"
   cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
   chmod +x "$shim_dir/gh"
@@ -72,6 +74,7 @@ unclean_git_state_json() {
 # drops the primitives top-level loop starting at the exact ensure_owner_label
 # sentinel. Shared definitions required here must stay above that sentinel;
 # changes below it are not inherited by this worker.
+# shellcheck disable=SC1090  # trimmed copy of free-model-factory-worker-primitives.sh
 source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)
 source .github/scripts/factory-semantic-verdict.sh
 source .github/scripts/factory-fork-worker.sh
@@ -193,7 +196,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
-  TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
+  # factory-fork-worker.sh reads this from the environment.
+  export TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
   # The staged policy imports canonical eligibility rules; pin this dependency
   # from trusted main too, never from an untrusted PR checkout or /scripts.
   cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
@@ -883,6 +887,7 @@ fi
 # Retain the terminal token for diagnostics; the merge controller remains the
 # only component authorized to decide whether a PR can merge.
 last_token="$(factory_terminal_marker "$review_log" || true)"
+log "agent terminal token for PR #${NUMBER}: ${last_token:-none}"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
 snapshot_failure="$(review_snapshot_failure_reason "$current_head" "$EXPECTED_HEAD" "$NUMBER")"
