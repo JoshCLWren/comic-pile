@@ -7,6 +7,7 @@ import unittest
 from factory_work_policy import (
     BLOCKED_LABELS,
     FACTORY_NO_DIFF_RETRY_LIMIT,
+    FACTORY_PR_WIP_LIMIT,
     FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
     STAGE_LABELS,
     STAGE_PRECEDENCE,
@@ -149,7 +150,7 @@ class CompletionAwareOrderingTests(unittest.TestCase):
                 producer_worker="43",
             ),
         ]
-        self.assertEqual(order_candidates_for_worker(candidates, "9")[0].number, 1)
+        self.assertEqual(order_candidates_for_worker(candidates, "7")[0].number, 1)
 
     def test_review_capacity_worker_still_prefers_review_pr(self) -> None:
         candidates = [
@@ -314,7 +315,7 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in still_same_head))
         self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in after_push))
 
-    def test_exhausted_pr_wakes_up_after_new_actionable_review_state(self) -> None:
+    def test_no_diff_pr_does_not_retry_on_review_to_changes_requested_label_flip(self) -> None:
         now = 2_000_000_000
         head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         attempts = parse_no_diff_attempts_from_comments(
@@ -342,7 +343,9 @@ class RetryBudgetTests(unittest.TestCase):
             no_diff_attempt_records=attempts,
         )
         self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in still_review))
-        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in after_changes))
+        # A label flip without persisted code must not reset the same-head
+        # no-progress repair budget.
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in after_changes))
 
     def test_exhausted_pr_wakes_up_after_new_merge_conflict(self) -> None:
         now = 2_000_000_000
@@ -421,7 +424,7 @@ class WipCapTests(unittest.TestCase):
                 worker=20 + offset,
                 owner=f"factory:{20 + offset}",
             )
-            for offset in range(5)
+            for offset in range(FACTORY_PR_WIP_LIMIT)
         ]
 
     def test_ready_pr_queue_does_not_starve_ordinary_issue(self) -> None:
