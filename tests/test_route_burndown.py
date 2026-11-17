@@ -455,31 +455,35 @@ def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> No
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
 
 
-def test_creator_v2_operations_are_native_and_v1_creator_routes_retired() -> None:
-    """Every creator browser operation is Rust v2; no v1 creator route remains."""
-    inventory = load_json(INVENTORY_PATH)
-    operations = inventory["operations"]
-    assert isinstance(operations, list)
+def test_creator_v2_operations_are_native_and_v1_routes_stay_registry_derived() -> None:
+    """The fragment declares 11 native v2 creator routes and leaves v1 to the registry.
+
+    The inventory and AGENTS.md burndown are bot-owned generated artifacts and
+    are refreshed after merge, so this test asserts the fragment contract
+    instead of the checked-in generated view. The Python v1 creator handlers
+    are still deployed and are retired only after production runtime proof;
+    claiming their paths in ``owned_path_patterns`` before that retirement
+    makes ingress regeneration non-idempotent because the live FastAPI
+    registry keeps re-adding them to the full-surface inventory.
+    """
+    fragment = _fragment_named("creators")
     creator_operations = [
         operation
-        for operation in operations
-        if isinstance(operation, dict)
-        and str(operation.get("path", "")).startswith("/api/v2/creators")
+        for operation in fragment.operations
+        if str(operation.get("path", "")).startswith("/api/v2/creators")
     ]
     assert len(creator_operations) == 11
     for operation in creator_operations:
         assert operation.get("runtime") == "native-rust"
         assert operation.get("status") == "target"
         assert operation.get("owning_issue") == 4836
-        assert operation.get("ingress_destination") == "/api/native_roll.rs"
-    full_surface = inventory["full_surface"]
-    assert isinstance(full_surface, dict)
-    v1_operations = full_surface["v1_operations"]
-    assert isinstance(v1_operations, list)
+        assert operation.get("dest") == "/api/native_roll.rs"
     assert not any(
         str(operation.get("path", "")).startswith("/api/v1/creators")
-        for operation in v1_operations
-        if isinstance(operation, dict)
+        for operation in fragment.operations
+    )
+    assert not any(
+        "/api/v1/creators" in pattern for pattern in fragment.owned_path_patterns
     )
 
 
