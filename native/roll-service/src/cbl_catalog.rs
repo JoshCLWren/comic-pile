@@ -75,7 +75,9 @@ pub struct CBLCatalogBrowseResponse {
     pub breadcrumbs: Vec<CBLBreadcrumb>,
     pub folders: Vec<CBLSourceFolder>,
     pub items: Vec<CBLCatalogListItem>,
-    pub page: i64,
+    /// Echoed requested page number; preserved for extreme values (e.g. 2^63).
+    #[schema(value_type = i64)]
+    pub page: serde_json::Number,
     pub page_size: i64,
     pub total: i64,
     pub total_pages: i64,
@@ -716,7 +718,13 @@ pub async fn browse_cbl_source_catalog(
         } else {
             (total + page_size - 1) / page_size
         };
-        let page_i64 = i64::try_from(page).unwrap_or(i64::MAX);
+        let page_number = if let Ok(n) = i64::try_from(page) {
+            serde_json::Number::from(n)
+        } else {
+            page.to_string()
+                .parse::<serde_json::Number>()
+                .unwrap_or_else(|_| serde_json::Number::from(i64::MAX))
+        };
 
         Ok(Json(CBLCatalogBrowseResponse {
             scope,
@@ -725,7 +733,7 @@ pub async fn browse_cbl_source_catalog(
             breadcrumbs: response_breadcrumbs,
             folders,
             items,
-            page: page_i64,
+            page: page_number,
             page_size,
             total,
             total_pages,
