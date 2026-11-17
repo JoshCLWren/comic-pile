@@ -237,12 +237,14 @@ fn coalescible_rate_pair(first: &ActivityRawRow, second: &ActivityRawRow) -> boo
     if first.event_type != "rate" || second.event_type != "rate" {
         return false;
     }
-    let (issue_receipt, dice_receipt) =
-        match (first.issue_command_key.is_some(), second.issue_command_key.is_some()) {
-            (true, false) => (first, second),
-            (false, true) => (second, first),
-            _ => return false,
-        };
+    let (issue_receipt, dice_receipt) = match (
+        first.issue_command_key.is_some(),
+        second.issue_command_key.is_some(),
+    ) {
+        (true, false) => (first, second),
+        (false, true) => (second, first),
+        _ => return false,
+    };
     if dice_receipt.dice_command_key.is_none() {
         return false;
     }
@@ -480,5 +482,320 @@ mod tests {
             "activity SQL must be one statement (found {} semicolons)",
             semicolon_count
         );
+    }
+
+    /// Build a raw row for the reader-visible projection tests. Only the fields
+    /// the coalescing/ordering logic reads are set; the rest stay at defaults.
+    #[allow(clippy::too_many_arguments)]
+    fn raw(
+        event_id: i32,
+        event_type: &str,
+        timestamp_sec: f64,
+        timestamp_us: Option<f64>,
+        die_before: Option<i32>,
+        die_after: Option<i32>,
+        rating: Option<f64>,
+        thread_id: Option<i32>,
+        issue_number: Option<&str>,
+        issue_id: Option<i32>,
+        dice_command_key: Option<&str>,
+        issue_command_key: Option<&str>,
+    ) -> ActivityRawRow {
+        ActivityRawRow {
+            event_id,
+            event_type: event_type.to_string(),
+            timestamp_sec,
+            timestamp_us,
+            die_before,
+            die_after,
+            rating,
+            thread_id,
+            thread_title: None,
+            issue_number: issue_number.map(str::to_string),
+            issue_id,
+            dice_command_key: dice_command_key.map(str::to_string),
+            issue_command_key: issue_command_key.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn coalesce_rate_pairs_merges_issue_and_dice_receipts() {
+        // One user action: an issue-command receipt and a dice-command receipt.
+        let rows = vec![
+            raw(
+                1050517,
+                "rate",
+                10.0,
+                Some(388000.0),
+                None,
+                Some(8),
+                Some(4.5),
+                Some(52329),
+                Some("2"),
+                Some(900),
+                None,
+                Some("issue-1"),
+            ),
+            raw(
+                1050516,
+                "rate",
+                10.0,
+                Some(440000.0),
+                Some(10),
+                Some(8),
+                Some(4.5),
+                Some(52329),
+                Some("2"),
+                Some(900),
+                Some("dice-1"),
+                None,
+            ),
+        ];
+        let merged = coalesce_rate_pairs(rows);
+        assert_eq!(
+            merged.len(),
+            1,
+            "the rate pair collapses to one display row"
+        );
+        let row = &merged[0];
+        assert_eq!(row.rating, Some(4.5));
+        assert_eq!(row.die_before, Some(10));
+        assert_eq!(row.die_after, Some(8));
+        assert_eq!(row.issue_id, Some(900));
+        // The newer event id/timestamp is retained for a stable display.
+        assert_eq!(row.event_id, 1050517);
+        assert_eq!(row.timestamp_us, Some(440000.0));
+    }
+
+    #[test]
+    fn coalesce_rate_pairs_keeps_unrelated_repeated_ratings() {
+        // Two separate rating actions on two different issues must stay distinct.
+        let rows = vec![
+            raw(
+                3,
+                "rate",
+                30.0,
+                None,
+                None,
+                Some(8),
+                Some(4.0),
+                Some(1),
+                Some("1"),
+                Some(11),
+                None,
+                Some("issue-a"),
+            ),
+            raw(
+                2,
+                "rate",
+                20.0,
+                None,
+                None,
+                Some(8),
+                Some(4.0),
+                Some(1),
+                Some("1"),
+                Some(11),
+                Some("dice-a"),
+                None,
+            ),
+            raw(
+                1,
+                "rate",
+                10.0,
+                None,
+                None,
+                Some(10),
+                Some(4.0),
+                Some(2),
+                Some("2"),
+                Some(22),
+                Some("dice-b"),
+                None,
+            ),
+        ];
+        let merged = coalesce_rate_pairs(rows);
+        assert_eq!(
+            merged.len(),
+            2,
+            "the first pair merges, the unrelated row stays"
+        );
+    }
+
+    #[test]
+    fn apply_causal_order_swaps_inverted_snooze_roll() {
+        // Production defect: the snooze row's timestamp is after the roll it
+        // caused. Newest-first naive order is [snooze, roll]; causally the roll
+        // happened after the snooze, so the roll must read first.
+        let rows = vec![
+            raw(
+                1050512,
+                "snooze",
+                25.0,
+                Some(515000.0),
+                Some(6),
+                Some(8),
+                None,
+                Some(3153),
+                None,
+                None,
+                Some("dice-snooze"),
+                None,
+            ),
+            raw(
+                1050513,
+                "roll",
+                25.0,
+                Some(467000.0),
+                Some(8),
+                None,
+                None,
+                None,
+                None,
+                Some(25301),
+                None,
+                None,
+            ),
+        ];
+        let ordered = apply_causal_order(rows);
+        assert_eq!(ordered[0].event_type, "roll");
+        assert_eq!(ordered[1].event_type, "snooze");
+    }
+
+    #[test]
+    fn activity_finalize_matches_production_sequence() {
+        // The owner-reported 09:42 → 10:01 sequence, newest-first from the SQL
+        // projection (note the inverted snooze/roll timestamps and the rate pair).
+        let rows = vec![
+            raw(
+                1050516,
+                "rate",
+                50.0,
+                Some(440000.0),
+                Some(10),
+                Some(8),
+                Some(4.5),
+                Some(52329),
+                Some("2"),
+                Some(900),
+                Some("dice"),
+                None,
+            ),
+            raw(
+                1050517,
+                "rate",
+                50.0,
+                Some(388000.0),
+                None,
+                Some(8),
+                Some(4.5),
+                Some(52329),
+                Some("2"),
+                Some(900),
+                None,
+                Some("issue"),
+            ),
+            raw(
+                1050514,
+                "snooze",
+                34.0,
+                Some(105000.0),
+                Some(8),
+                Some(10),
+                None,
+                Some(3469),
+                None,
+                None,
+                Some("dice2"),
+                None,
+            ),
+            raw(
+                1050515,
+                "roll",
+                34.0,
+                Some(66000.0),
+                Some(10),
+                None,
+                None,
+                None,
+                None,
+                Some(52329),
+                None,
+                None,
+            ),
+            raw(
+                1050512,
+                "snooze",
+                25.0,
+                Some(515000.0),
+                Some(6),
+                Some(8),
+                None,
+                Some(3153),
+                None,
+                None,
+                Some("dice1"),
+                None,
+            ),
+            raw(
+                1050513,
+                "roll",
+                25.0,
+                Some(467000.0),
+                Some(8),
+                None,
+                None,
+                None,
+                None,
+                Some(25301),
+                None,
+                None,
+            ),
+            raw(
+                1050511,
+                "roll",
+                35.0,
+                Some(28000.0),
+                Some(6),
+                None,
+                None,
+                None,
+                None,
+                Some(1121330),
+                None,
+                None,
+            ),
+        ];
+
+        let ordered: Vec<ActivityRawRow> = apply_causal_order(coalesce_rate_pairs(rows));
+        let summary: Vec<(&str, i32)> = ordered
+            .iter()
+            .map(|row| (row.event_type.as_str(), row.event_id))
+            .collect();
+
+        // Newest-first: the coalesced rating, then roll d10, snooze d8->d10,
+        // roll d8, snooze d6->d8, roll d6. Reversed, this is the causal narrative.
+        assert_eq!(
+            summary,
+            vec![
+                ("rate", 1050517),
+                ("roll", 1050515),
+                ("snooze", 1050514),
+                ("roll", 1050513),
+                ("snooze", 1050512),
+                ("roll", 1050511),
+            ]
+        );
+
+        // Only one rating display row survives, and it carries the merged die
+        // transition (d10 -> d8) from both receipts.
+        let ratings: Vec<&ActivityRawRow> = ordered
+            .iter()
+            .filter(|row| row.event_type == "rate")
+            .collect();
+        assert_eq!(ratings.len(), 1);
+        assert_eq!(ratings[0].die_before, Some(10));
+        assert_eq!(ratings[0].die_after, Some(8));
+        assert_eq!(ratings[0].rating, Some(4.5));
     }
 }
