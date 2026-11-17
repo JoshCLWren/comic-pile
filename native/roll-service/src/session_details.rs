@@ -134,20 +134,27 @@ pub(crate) fn current_die(
 /// Reader-friendly verbs for session event types on the history timeline.
 fn event_word(event_type: &str) -> String {
     match event_type {
-        "skip" => "Skipped",
-        "rolled_but_skipped" => "Skipped",
-        "complete" => "Completed",
-        "completion" => "Completed",
-        "reorder" => "Reordered",
-        "undo" => "Restored",
-        "restore" => "Restored",
-        "move" => "Moved",
-        "shuffle" => "Shuffled",
-        "roll" => "Rolled",
-        "rate" => "Rated",
-        "unsnooze" => "Unsnoozed",
-        "dismiss" => "Dismissed",
-        _ => event_type.replace('_', " ").chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default() + &event_type.replace('_', " ")[1..],
+        "skip" => "Skipped".to_string(),
+        "rolled_but_skipped" => "Skipped".to_string(),
+        "complete" => "Completed".to_string(),
+        "completion" => "Completed".to_string(),
+        "reorder" => "Reordered".to_string(),
+        "undo" => "Restored".to_string(),
+        "restore" => "Restored".to_string(),
+        "move" => "Moved".to_string(),
+        "shuffle" => "Shuffled".to_string(),
+        "roll" => "Rolled".to_string(),
+        "rate" => "Rated".to_string(),
+        "unsnooze" => "Unsnoozed".to_string(),
+        "dismiss" => "Dismissed".to_string(),
+        _ => {
+            let s = event_type.replace('_', " ");
+            let mut chars = s.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().to_string() + chars.as_str(),
+                None => s,
+            }
+        }
     }
 }
 

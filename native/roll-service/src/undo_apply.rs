@@ -449,7 +449,8 @@ async fn apply_delta_snapshot(
     snapshot_session_state: &Option<Value>,
     user_id: i32,
 ) -> Result<(), ApiError> {
-    let thread_states = snapshot_thread_states.as_object().unwrap_or(&serde_json::Map::new());
+    let empty_map = serde_json::Map::new();
+    let thread_states = snapshot_thread_states.as_object().unwrap_or(&empty_map);
 
     // Handle queue position changes
     if let Some(queue_changes) = thread_states.get(QUEUE_CHANGES_KEY).and_then(|v| v.as_object()) {
@@ -588,7 +589,7 @@ async fn restore_thread_from_state(
             .await
             .map_err(db::query_error)?;
 
-        let existing_issues = if let Some(pre_loaded) = pre_loaded_thread {
+        let existing_issues = if let Some(_pre_loaded) = pre_loaded_thread {
             vec![pre_loaded]
         } else {
             connection
@@ -1108,8 +1109,7 @@ pub async fn undo_to_snapshot(
                             .as_deref()
                             .and_then(|text| serde_json::from_str(text).ok())
                             .unwrap_or(Value::Null);
-                        let owned = context;
-                        current_die(session.manual_die, Some((die_after, owned)), session.start_die)
+                        current_die(session.manual_die, Some((die_after, &context)), session.start_die)
                     }
                     None => current_die(session.manual_die, None, session.start_die),
                 };

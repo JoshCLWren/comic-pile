@@ -393,12 +393,12 @@ async fn await_restore_thread_from_state(
     user_id: i32,
     pre_loaded_thread: Option<tokio_postgres::Row>,
 ) -> Result<(), ApiError> {
-    let uses_issue_tracking = state
+    let _uses_issue_tracking = state
         .get(USES_ISSUE_TRACKING_KEY)
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let thread = match pre_loaded_thread {
+    let _thread = match pre_loaded_thread {
         Some(row) => row,
         None => {
             connection
@@ -675,8 +675,7 @@ pub async fn restore_session_start(
                             .as_deref()
                             .and_then(|text| serde_json::from_str(text).ok())
                             .unwrap_or(Value::Null);
-                        let owned = context;
-                        current_die(session.manual_die, Some((die_after, owned)), session.start_die)
+                        current_die(session.manual_die, Some((die_after, &context)), session.start_die)
                     }
                     None => current_die(session.manual_die, None, session.start_die),
                 };
