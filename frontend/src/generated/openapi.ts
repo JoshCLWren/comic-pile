@@ -2885,20 +2885,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Sessions
-         * @description List sessions with cursor-based pagination.
-         *
-         *     Args:
-         *         current_user: The authenticated user making the request.
-         *         page_size: Number of sessions to return per page (default 50, max 200).
-         *         page_token: Token for pagination continuation (started_at timestamp, session_id).
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
-         */
-        get: operations["list_sessions_api_v1_sessions__get"];
+        /** Documentation-only operation for the versioned list. */
+        get: operations["list_sessions_v1_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2995,22 +2983,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Session Details
-         * @description Get session details with all events for expanded view.
-         *
-         *     Args:
-         *         session_id: The session ID to retrieve details for.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionDetailsResponse with events and narrative summary.
-         *
-         *     Raises:
-         *         HTTPException: If session not found.
-         */
-        get: operations["get_session_details_api_v1_sessions__session_id__details_get"];
+        /** Documentation-only operation for the versioned details. */
+        get: operations["get_session_details_v1_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4009,22 +3983,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Session Snapshots
-         * @description List all snapshots for a session.
-         *
-         *     Args:
-         *         session_id: Session whose snapshots should be listed.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Returns:
-         *         Typed snapshot list in reverse chronological order.
-         *
-         *     Raises:
-         *         HTTPException: If the session is not owned by the current user.
-         */
-        get: operations["list_session_snapshots_api_v1_undo__session_id__snapshots_get"];
+        /** Documentation-only operation for the versioned undo snapshots. */
+        get: operations["list_undo_snapshots_v1_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4042,24 +4002,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Undo To Snapshot
-         * @description Undo session state to a snapshot.
-         *
-         *     Args:
-         *         session_id: Session to restore.
-         *         snapshot_id: Snapshot to restore.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Returns:
-         *         Restored session response.
-         *
-         *     Raises:
-         *         HTTPException: If the session or snapshot is not found.
-         *         RuntimeError: If all deadlock retries fail.
-         */
-        post: operations["undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post"];
+        /** Documentation-only operation for the versioned undo apply. */
+        post: operations["undo_to_snapshot_v1_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10106,7 +10050,7 @@ export interface components {
             exists: boolean;
             release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
-        /** @description Canonical bandwidth state; invalid stored values normalize to `null`. */
+        /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;
             /** Format: double */
@@ -10115,7 +10059,29 @@ export interface components {
             predicted_bandwidth?: string | null;
             source?: string | null;
         };
-        /** @description Canonical intent state; invalid stored values normalize to `null`. */
+        /** @description Full session details response with events and narrative summary. */
+        NativeSessionDetailsResponse: {
+            /** Format: int32 */
+            current_die: number;
+            ended_at?: string | null;
+            events: components["schemas"]["SessionEventDetail"][];
+            ladder_path: string;
+            narrative_summary: {
+                [key: string]: string[];
+            };
+            /** Format: int32 */
+            session_id: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+        };
+        /** @description Paginated session history list response. */
+        NativeSessionHistoryListResponse: {
+            next_page_token?: string | null;
+            sessions: components["schemas"]["SessionListItemResponse"][];
+        };
+        /** @description Canonical intent state. */
         NativeSessionIntentState: {
             active_intent?: string | null;
             /** Format: double */
@@ -12400,7 +12366,7 @@ export interface components {
              */
             status: string;
         };
-        /** @description Active (pending or freshly rolled) thread projection for one session. */
+        /** @description Active thread projection. */
         SessionActiveThread: {
             format: string;
             /** Format: int32 */
@@ -12510,6 +12476,29 @@ export interface components {
             /** Timezone */
             timezone?: string | null;
         };
+        /** @description Event detail for session details response. */
+        SessionEventDetail: {
+            description?: string | null;
+            /** Format: int32 */
+            die?: number | null;
+            /** Format: int32 */
+            die_after?: number | null;
+            /** Format: int32 */
+            id: number;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_read?: number | null;
+            queue_move?: string | null;
+            /** Format: double */
+            rating?: number | null;
+            /** Format: int32 */
+            result?: number | null;
+            selection_method?: string | null;
+            thread_deleted: boolean;
+            thread_title?: string | null;
+            timestamp: string;
+            type: string;
+        };
         /**
          * SessionHistoryListResponse
          * @description Schema for paginated session history list response.
@@ -12584,6 +12573,41 @@ export interface components {
             started_at: string | null;
             /** User Id */
             user_id: number;
+        };
+        /** @description List-item session response (history list endpoint). */
+        SessionListItemResponse: {
+            active_thread?: null | components["schemas"]["SessionActiveThread"];
+            /** Format: int32 */
+            current_die: number;
+            ended_at?: string | null;
+            has_restore_point: boolean;
+            /** Format: int32 */
+            id: number;
+            ladder_path: string;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            manual_die?: number | null;
+            reading_bandwidth?: string | null;
+            reading_intent?: string | null;
+            reading_mode_source?: string | null;
+            reading_mode_suggested: boolean;
+            /** Format: int32 */
+            snapshot_count: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /** @description Query parameters for session history pagination. */
+        SessionListParams: {
+            /**
+             * Format: int32
+             * @default 50
+             */
+            page_size: number | null;
+            page_token?: string | null;
         };
         /**
          * SessionResponse
@@ -12670,7 +12694,7 @@ export interface components {
             session_id: number;
             snapshots: components["schemas"]["SessionSnapshotItem"][];
         };
-        /** @description One direct visible tag on the active thread. */
+        /** @description Direct visible tag. */
         SessionTag: {
             color: string;
             created_at: string;
@@ -12683,10 +12707,7 @@ export interface components {
             scope: string;
             updated_at: string;
         };
-        /**
-         * @description Compact thread summary used for the (empty on this endpoint) snoozed and
-         *     skipped lists, kept typed so the contract stays explicit.
-         */
+        /** @description Compact thread summary. */
         SessionThreadSummary: {
             /** Format: int32 */
             id: number;
@@ -13384,6 +13405,58 @@ export interface components {
              * @description Stable identifier for this process instance.
              */
             instance_id: string;
+        };
+        /** @description Full session response matching Python SessionResponse. */
+        UndoApplyResponse: {
+            active_thread?: null | components["schemas"]["SessionActiveThread"];
+            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            /** Format: int32 */
+            current_die: number;
+            ended_at?: string | null;
+            has_restore_point: boolean;
+            /** Format: int32 */
+            id: number;
+            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            ladder_path: string;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            manual_die?: number | null;
+            /** Format: int32 */
+            pending_thread_id?: number | null;
+            reading_bandwidth?: string | null;
+            reading_intent?: string | null;
+            reading_mode_source?: string | null;
+            reading_mode_suggested: boolean;
+            skipped_thread_ids: number[];
+            skipped_threads: components["schemas"]["SessionThreadSummary"][];
+            /** Format: int32 */
+            snapshot_count: number;
+            snoozed_thread_ids: number[];
+            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /** @description Snapshot item in the list response. */
+        UndoSnapshotItem: {
+            created_at: string;
+            description?: string | null;
+            /** Format: int32 */
+            event_id?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            session_id: number;
+        };
+        /** @description Undo snapshots list response. */
+        UndoSnapshotsResponse: {
+            /** Format: int32 */
+            session_id: number;
+            snapshots: components["schemas"]["UndoSnapshotItem"][];
         };
         UpdateTagRequest: {
             color?: string | null;
@@ -18092,13 +18165,11 @@ export interface operations {
             };
         };
     };
-    list_sessions_api_v1_sessions__get: {
+    list_sessions_v1_documentation: {
         parameters: {
             query?: {
-                /** @description Number of sessions to return per page (default 50, max 200) */
                 page_size?: number;
-                /** @description Token for pagination continuation (started_at,session_id) */
-                page_token?: string | null;
+                page_token?: string;
             };
             header?: never;
             path?: never;
@@ -18106,23 +18177,28 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Paginated session history */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionHistoryListResponse"];
+                    "application/json": components["schemas"]["NativeSessionHistoryListResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -18210,34 +18286,47 @@ export interface operations {
             };
         };
     };
-    get_session_details_api_v1_sessions__session_id__details_get: {
+    get_session_details_v1_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Session details with events */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionDetailsResponse"];
+                    "application/json": components["schemas"]["NativeSessionDetailsResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19775,66 +19864,100 @@ export interface operations {
             };
         };
     };
-    list_session_snapshots_api_v1_undo__session_id__snapshots_get: {
+    list_undo_snapshots_v1_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Session restore snapshots */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SnapshotsListResponse"];
+                    "application/json": components["schemas"]["UndoSnapshotsResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post: {
+    undo_to_snapshot_v1_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned reading session */
                 session_id: number;
+                /** @description Snapshot to restore */
                 snapshot_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Restored session */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionResponse"];
+                    "application/json": components["schemas"]["UndoApplyResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Session or snapshot not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Only the latest rating can be undone */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
