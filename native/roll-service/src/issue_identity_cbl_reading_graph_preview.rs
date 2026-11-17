@@ -230,12 +230,21 @@ pub async fn preview_cbl_reading_graph_handler(
     Json(request): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, PreviewError> {
     validate_request(&request)?;
+    // The list key is an int4 column. A path id that cannot fit cannot name an
+    // existing list, so it takes the same structured 404 as a missing list.
+    let list_key = i32::try_from(list_id).map_err(|_| {
+        structured_error(
+            StatusCode::NOT_FOUND,
+            "cbl_source_not_found",
+            format!("CBL source list {list_id} was not found or is inactive"),
+        )
+    })?;
     let connection = db::checkout(&state).await?;
 
     let list_row = connection
         .query_opt(
             "SELECT content_hash, revision_sha, active FROM cbl_source_lists WHERE id = $1",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?
@@ -256,7 +265,11 @@ pub async fn preview_cbl_reading_graph_handler(
         positions.dedup();
         positions
     };
-    let entry_rows = if selected_positions.is_empty() {
+    let position_keys: Vec<i32> = selected_positions
+        .iter()
+        .filter_map(|position| i32::try_from(*position).ok())
+        .collect();
+    let entry_rows = if position_keys.is_empty() {
         Vec::new()
     } else {
         connection
@@ -264,15 +277,17 @@ pub async fn preview_cbl_reading_graph_handler(
                 "SELECT position, series_name, volume_year, external_issue_identity_id, \
                         external_series_identity_id, issue_number
                  FROM cbl_source_entries
-                 WHERE list_id = $1 AND position = ANY($2::int8[])
+                 WHERE list_id = $1 AND position = ANY($2::int4[])
                  ORDER BY position",
-                &[&list_id, &selected_positions],
+                &[&list_key, &position_keys],
             )
             .await
             .map_err(db::query_error)?
     };
-    let known_positions: std::collections::HashSet<i64> =
-        entry_rows.iter().map(|row| row.get::<_, i64>(0)).collect();
+    let known_positions: std::collections::HashSet<i64> = entry_rows
+        .iter()
+        .map(|row| i64::from(row.get::<_, i32>(0)))
+        .collect();
     let unknown: Vec<i64> = selected_positions
         .iter()
         .copied()
@@ -286,16 +301,16 @@ pub async fn preview_cbl_reading_graph_handler(
         ));
     }
 
-    let identity_ids: Vec<i64> = entry_rows
+    let identity_ids: Vec<i32> = entry_rows
         .iter()
-        .filter_map(|row| row.get::<_, Option<i64>>(3))
+        .filter_map(|row| row.get::<_, Option<i32>>(3))
         .collect();
-    let mut external_by_id: HashMap<i64, String> = HashMap::new();
+    let mut external_by_id: HashMap<i32, String> = HashMap::new();
     if !identity_ids.is_empty() {
         for row in connection
             .query(
                 "SELECT id, external_id FROM external_identities
-                 WHERE id = ANY($1::int8[]) AND provider = 'comicvine' AND entity_type = 'issue'",
+                 WHERE id = ANY($1::int4[]) AND provider = 'comicvine' AND entity_type = 'issue'",
                 &[&identity_ids],
             )
             .await
@@ -325,7 +340,7 @@ pub async fn preview_cbl_reading_graph_handler(
         {
             owned_by_external
                 .entry(row.get(0))
-                .or_insert_with(|| row.get::<_, i64>(1));
+                .or_insert_with(|| i64::from(row.get::<_, i32>(1)));
         }
     }
 

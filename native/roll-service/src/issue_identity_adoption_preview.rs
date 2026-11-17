@@ -178,21 +178,21 @@ pub async fn api_cbl_adoption_preview_handler(
         })
         .collect();
 
-    let issue_identity_ids: Vec<i64> = entries
+    let issue_identity_ids: Vec<i32> = entries
         .iter()
         .filter_map(|entry| entry.issue_identity_id)
         .collect();
-    let series_identity_ids: Vec<i64> = entries
+    let series_identity_ids: Vec<i32> = entries
         .iter()
         .filter_map(|entry| entry.series_identity_id)
         .collect();
 
-    let mut issue_external_by_id: HashMap<i64, String> = HashMap::new();
+    let mut issue_external_by_id: HashMap<i32, String> = HashMap::new();
     if !issue_identity_ids.is_empty() {
         for row in connection
             .query(
                 "SELECT id, external_id FROM external_identities
-                 WHERE id = ANY($1::int8[]) AND entity_type = 'issue' AND provider = 'comicvine'",
+                 WHERE id = ANY($1::int4[]) AND entity_type = 'issue' AND provider = 'comicvine'",
                 &[&issue_identity_ids],
             )
             .await
@@ -201,12 +201,12 @@ pub async fn api_cbl_adoption_preview_handler(
             issue_external_by_id.insert(row.get(0), row.get(1));
         }
     }
-    let mut series_external_by_id: HashMap<i64, (String, String)> = HashMap::new();
+    let mut series_external_by_id: HashMap<i32, (String, String)> = HashMap::new();
     if !series_identity_ids.is_empty() {
         for row in connection
             .query(
                 "SELECT id, provider, external_id FROM external_identities
-                 WHERE id = ANY($1::int8[]) AND entity_type = 'series'",
+                 WHERE id = ANY($1::int4[]) AND entity_type = 'series'",
                 &[&series_identity_ids],
             )
             .await
@@ -237,7 +237,7 @@ pub async fn api_cbl_adoption_preview_handler(
         {
             owned_by_external_id
                 .entry(row.get(0))
-                .or_insert_with(|| row.get::<_, i64>(1));
+                .or_insert_with(|| i64::from(row.get::<_, i32>(1)));
         }
     }
 
@@ -290,7 +290,7 @@ pub async fn api_cbl_adoption_preview_handler(
         let adopted =
             adoption_decision == "included_existing" || adoption_decision == "would_create_missing";
         if adopted {
-            final_order.push(entry.position);
+            final_order.push(i64::from(entry.position));
             if resolved_issue_id.is_some() {
                 reused += 1;
             } else {
@@ -302,20 +302,20 @@ pub async fn api_cbl_adoption_preview_handler(
             unresolved += 1;
         }
         if let Some(positions) = decision_positions.get_mut(adoption_decision) {
-            positions.push(entry.position);
+            positions.push(i64::from(entry.position));
         }
 
         plan_entries.push(CBLAdoptionEntry {
             collection_excluded: false,
             collection_exclusion_reason: None,
             collection_exclusion_ids: Vec::new(),
-            cbl_position: entry.position,
-            cbl_entry_id: entry.id,
+            cbl_position: i64::from(entry.position),
+            cbl_entry_id: i64::from(entry.id),
             series_name: entry.series_name,
             issue_number: entry.issue_number,
             series_group_id,
-            volume_year: entry.volume_year,
-            publication_year: entry.publication_year,
+            volume_year: entry.volume_year.map(i64::from),
+            publication_year: entry.publication_year.map(i64::from),
             adoption_class: adoption_class.to_string(),
             adoption_decision: adoption_decision.to_string(),
             adopted,
