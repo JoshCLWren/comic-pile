@@ -155,8 +155,6 @@ def run_migration_rehearsal(
     Raises:
         MigrationRehearsalError: When any rehearsal step fails.
     """
-    from sqlalchemy import create_engine
-
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
     engine = create_engine(_sync_database_url(database_url)) if fixture_applier is not None else None
@@ -201,6 +199,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to alembic.ini",
     )
     parser.add_argument(
+        "--base-revision",
+        default=BASE_REVISION,
+        help="Migration revision the rollback step targets (default: base)",
+    )
+    parser.add_argument(
         "--apply-fixture",
         action="store_true",
         help="Load the prod-shaped migration fixture before upgrading",
@@ -223,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             args.database_url,
             alembic_config_path=args.alembic_config,
             fixture_applier=fixture_applier,
+            base_revision=args.base_revision,
         )
     except MigrationRehearsalError as error:
         print(f"MIGRATION REHEARSAL FAILED: {error}")
