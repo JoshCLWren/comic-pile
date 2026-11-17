@@ -202,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
 
     fixture_applier = None
     if args.apply_fixture:
+        import sys
+
+        repo_root = Path(__file__).resolve().parents[1]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
         from scripts.generate_migration_fixture import apply_fixture
 
         fixture_applier = apply_fixture
