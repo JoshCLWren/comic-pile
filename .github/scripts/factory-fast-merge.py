@@ -22,6 +22,10 @@ FACTORY_PATHS = tuple(
     for pattern in (
         r"^\.github/scripts/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.(?:py|sh|cjs)$",
         r"^\.github/scripts/(?:local-ollama-review|local_review_contract|nvidia-factory-worker|omniroute-factory-worker|stale_pr_decay|hourly_coderabbit_review)\.(?:py|sh|cjs)$",
+        # Owner sign-off (2026-11-16, #1093 retirement): the factory status
+        # dashboard generator and its test are factory-only telemetry code.
+        r"^\.github/scripts/generate_factory_status_dashboard\.py$",
+        r"^tests/test_generate_factory_status_dashboard\.py$",
         r"^\.github/workflows/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.ya?ml$",
         r"^\.github/workflows/local-ollama-review\.ya?ml$",
         r"^\.github/actions/factory-syntax/[A-Za-z0-9_./-]+$",
