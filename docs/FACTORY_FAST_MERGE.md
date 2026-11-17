@@ -17,9 +17,9 @@ or truncated check evidence **must skip the merge**.
 ## Execution
 
 - [`factory-fast-merge.yml`](../.github/workflows/factory-fast-merge.yml)
-  runs trusted `main` on PR open/reopen/synchronize/label and through a
-  completion event for either required Python CI job. No scheduled polling or
-  approval phase is introduced.
+  runs trusted `main` on PR open/reopen/synchronize/label and manual dispatch.
+  A single job in `ci.yml` wakes it once both Python checks succeed. No
+  scheduled polling, job-event storm, or approval phase is introduced.
 - [`factory-fast-merge.py`](../.github/scripts/factory-fast-merge.py)
   reads candidate PR metadata and changed paths, then fetches GitHub check
   runs for the **exact** 40-character head SHA. It selects the latest genuine
@@ -63,9 +63,10 @@ The fast-merge policy itself remains protected from self-approval:
 2. The first fast-merge event may report `skipped`: `Exact-head Python Lint
    (ruff) has not passed` or `Exact-head Python Type Check (ty) has not passed`.
    This is intentional while CI is running, not a factory failure.
-3. The successful completion of either Python CI job retriggers the trusted
-   action for that head. Once both pass, the controller attempts the immediate
-   SHA-pinned merge without waiting for full CI or semantic review.
+3. The `ci.yml` `factory-fast-merge-wakeup` job runs only after **both**
+   Python CI jobs pass and dispatches one targeted, trusted evaluation.
+   The controller re-verifies the exact head, then attempts the SHA-pinned
+   merge without waiting for the full CI summary or semantic review.
 4. A green fast-merge workflow does not imply a merge. Read `merged` and
    `skipped` in its JSON output. A red check blocks the merge until code is
    repaired and a new head passes.
