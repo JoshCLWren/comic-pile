@@ -30,7 +30,12 @@ const PUBLIC_SOURCE_PATH: &str = "DC/Mister Miracle (1989)/Mister Miracle.cbl";
 const ISSUE_ID: &str = "4000-123";
 const VOLUME_ID: &str = "4050-9";
 
-async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>) {
+async fn setup() -> (
+    Arc<AppState>,
+    String,
+    String,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(
         AppState::new(
@@ -53,34 +58,51 @@ async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>
         .unwrap()
         .as_nanos();
     let username = format!("issue-identity-{suffix}");
-    let (status, body) = send(
-        &state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/auth/register")
-            .header(
-                "x-forwarded-for",
-                format!(
-                    "2001:db8::{:x}",
-                    NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
-                ),
-            )
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                json!({
-                    "username": username,
-                    "email": format!("{username}@example.com"),
-                    "password": "correct-horse-battery"
-                })
-                .to_string(),
-            ))
-            .unwrap(),
-    )
-    .await;
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .find_map(|cookie| {
+            let cookie = cookie.to_str().ok()?;
+            cookie
+                .strip_prefix("csrf_token=")?
+                .split(';')
+                .next()
+                .map(str::to_owned)
+        })
+        .expect("register sets a CSRF cookie");
+    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(status, StatusCode::OK, "{body}");
     let token = body["access_token"].as_str().unwrap().to_owned();
     seed_catalog(&state).await;
-    (state, token, guard)
+    (state, token, csrf, guard)
 }
 
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
@@ -142,7 +164,7 @@ async fn seed_catalog(state: &Arc<AppState>) {
 
 #[tokio::test]
 async fn discover_lists_active_sources_with_public_repository() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     let (status, body) = get(
         &state,
         &token,
@@ -165,7 +187,7 @@ async fn discover_lists_active_sources_with_public_repository() {
 
 #[tokio::test]
 async fn discover_search_is_case_insensitive_and_bounded() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     let (status, body) = get(
         &state,
         &token,
@@ -179,7 +201,7 @@ async fn discover_search_is_case_insensitive_and_bounded() {
 
 #[tokio::test]
 async fn discover_validation_matches_fastapi_422() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     for (suffix, field, error_type) in [
         ("?limit=abc", "limit", "int_parsing"),
         ("?limit=0", "limit", "greater_than_equal"),
@@ -203,7 +225,7 @@ async fn discover_validation_matches_fastapi_422() {
 
 #[tokio::test]
 async fn detail_projects_paths_and_echoes_paging() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     let (status, body) = get(
         &state,
         &token,
@@ -234,7 +256,7 @@ async fn detail_projects_paths_and_echoes_paging() {
 
 #[tokio::test]
 async fn detail_missing_or_inactive_list_returns_404() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     for id in [3, 999_999] {
         let uri = format!("/api/v1/issue-identity/cbl-sources/{id}");
         let (status, body) = get(&state, &token, &uri).await;
@@ -245,7 +267,7 @@ async fn detail_missing_or_inactive_list_returns_404() {
 
 #[tokio::test]
 async fn detail_validation_matches_fastapi_422() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     for (suffix, field, error_type) in [
         ("?offset=-1", "offset", "greater_than_equal"),
         ("?limit=0", "limit", "greater_than_equal"),
@@ -262,7 +284,7 @@ async fn detail_validation_matches_fastapi_422() {
 
 #[tokio::test]
 async fn comicvine_lookup_maps_every_selected_column() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     let (status, body) = get(
         &state,
         &token,
@@ -301,7 +323,7 @@ async fn comicvine_lookup_maps_every_selected_column() {
 
 #[tokio::test]
 async fn comicvine_lookup_blank_id_uses_422_plain_detail() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     let (status, body) = get(
         &state,
         &token,
@@ -314,7 +336,7 @@ async fn comicvine_lookup_blank_id_uses_422_plain_detail() {
 
 #[tokio::test]
 async fn comicvine_lookup_validation_matches_fastapi_422() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     for (suffix, field, error_type) in [
         ("?offset=-1", "offset", "greater_than_equal"),
         ("?limit=0", "limit", "greater_than_equal"),
@@ -344,6 +366,7 @@ async fn comicvine_lookup_validation_matches_fastapi_422() {
 async fn post_json(
     state: &Arc<AppState>,
     token: &str,
+    csrf: &str,
     uri: &str,
     body: Value,
 ) -> (StatusCode, Value) {
@@ -354,6 +377,8 @@ async fn post_json(
             .uri(uri)
             .header(header::AUTHORIZATION, format!("Bearer {token}"))
             .header(header::CONTENT_TYPE, "application/json")
+            .header("x-csrf-token", csrf)
+            .header(header::COOKIE, format!("csrf_token={csrf}"))
             .body(Body::from(body.to_string()))
             .unwrap(),
     )
@@ -362,10 +387,11 @@ async fn post_json(
 
 #[tokio::test]
 async fn compare_cbl_sources_ranks_and_validates() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
         &state,
         &token,
+        &csrf,
         "/api/v1/issue-identity/cbl-sources/compare",
         json!({"comicvine_issue_ids": [ISSUE_ID, "4000-999"]}),
     )
@@ -382,6 +408,7 @@ async fn compare_cbl_sources_ranks_and_validates() {
     let (status, body) = post_json(
         &state,
         &token,
+        &csrf,
         "/api/v1/issue-identity/cbl-sources/compare?limit=0",
         json!({"comicvine_issue_ids": [ISSUE_ID]}),
     )
@@ -392,7 +419,7 @@ async fn compare_cbl_sources_ranks_and_validates() {
 
 #[tokio::test]
 async fn reading_list_candidates_reports_gaps_and_ranks() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, _csrf, _guard) = setup().await;
     // Seed a user-owned reading list with one confirmed issue and one missing identity.
     let conn = state.pool.get().await.unwrap();
     conn.batch_execute(r#"
@@ -400,9 +427,9 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
         VALUES (999, 'owner', 'owner@example.com', 'x', NOW()) ON CONFLICT (id) DO NOTHING;
         INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
         VALUES (900, 999, 'Owned Series', 'comic', 1, 1, 'active', 2, 'in_progress', NOW()) ON CONFLICT (id) DO NOTHING;
-        INSERT INTO issues (id, thread_id, issue_number, position, status, weight, created_at)
-        VALUES (9001, 900, '1', 0, 'unread', 1.0, NOW()),
-               (9002, 900, '2', 1, 'unread', 1.0, NOW()) ON CONFLICT (id) DO NOTHING;
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES (9001, 900, '1', 0, 'unread', NOW()),
+               (9002, 900, '2', 1, 'unread', NOW()) ON CONFLICT (id) DO NOTHING;
         INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
         VALUES (901, 'comicvine', 'issue', '4000-123', '{}'::json, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
         INSERT INTO issue_external_identity_mappings (id, issue_id, external_identity_id, status, created_at, updated_at)
@@ -428,16 +455,21 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
 
 #[tokio::test]
 async fn adoption_plan_returns_preview_shape_for_active_list() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
         &state,
         &token,
+        &csrf,
         "/api/v1/issue-identity/cbl/1/adoption-plan",
         json!({"series_decisions": {}, "entry_decisions": {}}),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["source"]["source_list_id"], 1);
+    assert_eq!(
+        body["source"]["source_path"], MIRROR_SOURCE_PATH,
+        "adoption plan must return raw stored source_path like Python"
+    );
     assert!(body["total_positions"].as_i64().unwrap() >= 1, "{body}");
     assert!(body["entries"].is_array(), "{body}");
     assert!(body["summary"]["final_adopted_count"].is_number(), "{body}");
@@ -445,10 +477,11 @@ async fn adoption_plan_returns_preview_shape_for_active_list() {
 
 #[tokio::test]
 async fn adoption_commit_rejects_stale_fingerprint() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
         &state,
         &token,
+        &csrf,
         "/api/v1/cbl/1/adoption-commit",
         json!({
             "entry_decisions": {},
@@ -465,10 +498,11 @@ async fn adoption_commit_rejects_stale_fingerprint() {
 
 #[tokio::test]
 async fn adoption_commit_creates_plan_with_valid_fingerprint() {
-    let (state, token, _guard) = setup().await;
+    let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
         &state,
         &token,
+        &csrf,
         "/api/v1/cbl/1/adoption-commit",
         json!({
             "entry_decisions": {},

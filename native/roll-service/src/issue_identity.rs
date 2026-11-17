@@ -1,20 +1,12 @@
-//! Same-path native Rust replacements for the three read-only CBL source
-//! discovery endpoints of the issue-identity family (#4843).
+//! Same-path native Rust handlers for the in-scope issue-identity / CBL
+//! adoption operations migrated for #4843.
 //!
-//! Scope is deliberately narrow. These three operations are pure projections of
-//! the shared CBL catalog:
+//! This module serves the browser-called operations routed to the native
+//! roll service for this family, including CBL source discovery, comparison,
+//! reading-list candidates, adoption planning, and adoption commits, while
+//! preserving the existing Python wire contracts and same-path ingress.
 //!
-//! * `GET /api/v1/issue-identity/cbl-sources`
-//! * `GET /api/v1/issue-identity/cbl-sources/{list_id}`
-//! * `GET /api/v1/issue-identity/cbl-sources/by-comicvine-issue/{id}`
-//!
-//! The remaining family operations (comparison ranking, reading-list
-//! candidates, adoption planning and the two transactional adoption commits)
-//! intentionally stay on Python in this change: their implementations are large,
-//! stateful and not yet proven in production. Their route fragments keep a
-//! Python destination until real, wire-compatible Rust handlers and an
-//! authenticated production execution proof land. API version is not
-//! implementation language; see AGENTS.md.
+//! API version is not implementation language; see AGENTS.md.
 
 use axum::{
     extract::{Path, Query, State},
@@ -1701,7 +1693,7 @@ fn build_adoption_preview_response(
         source: CblSourceFingerprintResponse {
             source_list_id: list_meta.id,
             source_repository: public_cbl_repository(&list_meta.source_repository),
-            source_path: public_cbl_source_path(&list_meta.source_path),
+            source_path: list_meta.source_path.clone(),
             content_hash: list_meta.content_hash.clone(),
             revision_sha: list_meta.revision_sha.clone(),
         },
@@ -1787,6 +1779,515 @@ fn map_entry_response(e: &serde_json::Map<String, JsonValue>) -> CblAdoptionEntr
         resolution_status: j_str(e, "resolution_status"),
         is_duplicate_identity: j_bool(e, "is_duplicate_identity"),
     }
+}
+
+fn normalize_volume(provider: &str, external_id: &str) -> (String, String) {
+    let provider = provider.trim().to_ascii_lowercase();
+    let value = external_id.trim().to_string();
+    if provider == "comicvine" {
+        let digits = value.strip_prefix("4050-").unwrap_or(&value);
+        if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+            if let Ok(n) = digits.parse::<i64>() {
+                return (provider, n.to_string());
+            }
+        }
+    }
+    (provider, value)
+}
+
+#[derive(Debug, Default)]
+struct CollectionGuardState {
+    volumes: std::collections::HashMap<(String, String), i32>,
+    threads: std::collections::HashMap<i32, i32>,
+    issues: std::collections::HashMap<i32, i32>,
+    issue_threads: std::collections::HashMap<i32, i32>,
+    identity_volumes: std::collections::HashMap<i32, std::collections::HashSet<(String, String)>>,
+    thread_identities: std::collections::HashMap<i32, std::collections::HashSet<(String, String)>>,
+    issue_volumes: std::collections::HashMap<i32, std::collections::HashSet<(String, String)>>,
+    series_threads: std::collections::HashMap<i32, std::collections::HashSet<i32>>,
+    issue_targets: std::collections::HashMap<i32, std::collections::HashSet<i32>>,
+}
+
+fn guard_local_decision(
+    state: &CollectionGuardState,
+    fact: &serde_json::Map<String, JsonValue>,
+) -> Option<(String, Vec<i32>)> {
+    let resolved_issue_id = fact
+        .get("resolved_issue_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let mut thread_id = fact
+        .get("thread_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    if let Some(issue_id) = resolved_issue_id {
+        if let Some(ex_id) = state.issues.get(&issue_id) {
+            return Some(("collection_issue_excluded".to_string(), vec![*ex_id]));
+        }
+        if let Some(tid) = state.issue_threads.get(&issue_id) {
+            thread_id = Some(*tid);
+        }
+    }
+    if let Some(tid) = thread_id {
+        if let Some(ex_id) = state.threads.get(&tid) {
+            return Some(("collection_thread_excluded".to_string(), vec![*ex_id]));
+        }
+    }
+    if let Some(issue_identity_id) = fact
+        .get("external_issue_identity_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    {
+        if let Some(targets) = state.issue_targets.get(&issue_identity_id) {
+            for target in targets {
+                if let Some(ex_id) = state.issues.get(target) {
+                    return Some(("collection_issue_excluded".to_string(), vec![*ex_id]));
+                }
+                if let Some(tt) = state.issue_threads.get(target) {
+                    if let Some(ex_id) = state.threads.get(tt) {
+                        return Some(("collection_thread_excluded".to_string(), vec![*ex_id]));
+                    }
+                }
+            }
+        }
+    }
+    if let Some(series_identity_id) = fact
+        .get("external_series_identity_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    {
+        if let Some(targets) = state.series_threads.get(&series_identity_id) {
+            for target in targets {
+                if let Some(ex_id) = state.threads.get(target) {
+                    return Some(("collection_thread_excluded".to_string(), vec![*ex_id]));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn guard_check(
+    state: &CollectionGuardState,
+    fact: &serde_json::Map<String, JsonValue>,
+) -> Option<(String, Vec<i32>)> {
+    if state.volumes.is_empty() && state.threads.is_empty() && state.issues.is_empty() {
+        return None;
+    }
+    if let Some(local) = guard_local_decision(state, fact) {
+        return Some(local);
+    }
+    let resolved_issue_id = fact
+        .get("resolved_issue_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let thread_id = fact
+        .get("thread_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+        .or_else(|| resolved_issue_id.and_then(|iid| state.issue_threads.get(&iid).copied()));
+    let mut candidates: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+    for key in ["external_series_identity_id", "external_issue_identity_id"] {
+        if let Some(id) = fact.get(key).and_then(|v| v.as_i64()).map(|v| v as i32) {
+            if let Some(vals) = state.identity_volumes.get(&id) {
+                candidates.extend(vals.iter().cloned());
+            }
+        }
+    }
+    for key in ["comicvine_series_id", "volume_id"] {
+        if let Some(v) = fact.get(key) {
+            if let Some(s) = v.as_str() {
+                candidates.insert(normalize_volume("comicvine", s));
+            } else if let Some(n) = v.as_i64() {
+                candidates.insert(normalize_volume("comicvine", &n.to_string()));
+            }
+        }
+    }
+    let provider = fact.get("series_provider").and_then(|v| v.as_str());
+    let external_id = fact.get("series_external_id").and_then(|v| {
+        v.as_str()
+            .map(|s| s.to_string())
+            .or_else(|| v.as_i64().map(|n| n.to_string()))
+    });
+    if let (Some(p), Some(eid)) = (provider, external_id.as_deref()) {
+        candidates.insert(normalize_volume(p, eid));
+    }
+    if let Some(tid) = thread_id {
+        if let Some(vals) = state.thread_identities.get(&tid) {
+            candidates.extend(vals.iter().cloned());
+        }
+    }
+    if let Some(iid) = resolved_issue_id {
+        if let Some(vals) = state.issue_volumes.get(&iid) {
+            candidates.extend(vals.iter().cloned());
+        }
+    }
+    let mut matched: Vec<i32> = candidates
+        .iter()
+        .filter_map(|k| state.volumes.get(k).copied())
+        .collect();
+    matched.sort_unstable();
+    matched.dedup();
+    if !matched.is_empty() {
+        return Some(("collection_volume_excluded".to_string(), matched));
+    }
+    if !state.volumes.is_empty() {
+        let volume_providers: std::collections::HashSet<String> =
+            state.volumes.keys().map(|(p, _)| p.clone()).collect();
+        let candidate_providers: std::collections::HashSet<String> =
+            candidates.iter().map(|(p, _)| p.clone()).collect();
+        let missing_provider = volume_providers
+            .difference(&candidate_providers)
+            .next()
+            .is_some();
+        let malformed = candidates
+            .iter()
+            .any(|(p, v)| p == "comicvine" && !v.chars().all(|c| c.is_ascii_digit()));
+        if candidates.is_empty() || candidates.len() > 1 || missing_provider || malformed {
+            return Some((
+                "collection_identity_requires_review".to_string(),
+                Vec::new(),
+            ));
+        }
+    }
+    None
+}
+
+async fn load_collection_guard_state_pool(
+    pool: &deadpool_postgres::Object,
+    user_id: i32,
+    facts: &[serde_json::Map<String, JsonValue>],
+) -> Result<CollectionGuardState, ApiError> {
+    let mut state = CollectionGuardState::default();
+    let rows = pool.query(
+        "SELECT id, provider, external_volume_id, thread_id, issue_id FROM collection_exclusions WHERE user_id = $1 ORDER BY id",
+        &[&user_id],
+    ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load collection exclusions failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+    for row in rows {
+        let id: i32 = row.get(0);
+        let provider: Option<String> = row.get(1);
+        let external_volume_id: Option<String> = row.get(2);
+        let thread_id: Option<i32> = row.get(3);
+        let issue_id: Option<i32> = row.get(4);
+        if let (Some(p), Some(ev)) = (provider, external_volume_id) {
+            state.volumes.insert(normalize_volume(&p, &ev), id);
+        }
+        if let Some(tid) = thread_id {
+            state.threads.insert(tid, id);
+        }
+        if let Some(iid) = issue_id {
+            state.issues.insert(iid, id);
+        }
+    }
+    if state.volumes.is_empty() && state.threads.is_empty() && state.issues.is_empty() {
+        return Ok(state);
+    }
+    // collect identity ids and issue ids
+    let mut identity_ids: Vec<i32> = Vec::new();
+    let mut issue_ids: Vec<i32> = Vec::new();
+    for fact in facts {
+        for key in ["external_series_identity_id", "external_issue_identity_id"] {
+            if let Some(id) = fact.get(key).and_then(|v| v.as_i64()).map(|v| v as i32) {
+                identity_ids.push(id);
+            }
+        }
+        if let Some(id) = fact
+            .get("resolved_issue_id")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+        {
+            issue_ids.push(id);
+        }
+    }
+    identity_ids.sort_unstable();
+    identity_ids.dedup();
+    issue_ids.sort_unstable();
+    issue_ids.dedup();
+    if !identity_ids.is_empty() {
+        // identity metadata/provider/external_id for volume candidates
+        let rows = pool.query("SELECT id, provider, entity_type, external_id, metadata_json::text FROM external_identities WHERE id = ANY($1)", &[&identity_ids]).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load identities failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        for row in rows {
+            let id: i32 = row.get(0);
+            let provider: String = row.get(1);
+            let entity_type: String = row.get(2);
+            let external_id: String = row.get(3);
+            let metadata_text: Option<String> = row.get(4);
+            let mut vals: std::collections::HashSet<(String, String)> =
+                std::collections::HashSet::new();
+            if entity_type == "series" {
+                vals.insert(normalize_volume(&provider, &external_id));
+            }
+            if let Some(mt) = metadata_text {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&mt) {
+                    if let Some(v) = meta.get("volume_id") {
+                        if let Some(s) = v.as_str() {
+                            vals.insert(normalize_volume(&provider, s));
+                        } else if let Some(n) = v.as_i64() {
+                            vals.insert(normalize_volume(&provider, &n.to_string()));
+                        }
+                    }
+                    if let Some(vol) = meta.get("volume").and_then(|v| v.as_object()) {
+                        if let Some(v) = vol.get("id") {
+                            if let Some(s) = v.as_str() {
+                                vals.insert(normalize_volume(&provider, s));
+                            } else if let Some(n) = v.as_i64() {
+                                vals.insert(normalize_volume(&provider, &n.to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+            if !vals.is_empty() {
+                state.identity_volumes.insert(id, vals);
+            }
+        }
+        // series -> owned threads
+        let rows = pool.query(
+            "SELECT tesm.external_identity_id, t.id FROM thread_external_series_mappings tesm JOIN threads t ON t.id = tesm.thread_id WHERE tesm.external_identity_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2",
+            &[&identity_ids, &user_id]
+        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load series threads failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        for row in rows {
+            state
+                .series_threads
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+        // issue identity -> owned issues
+        let rows = pool.query(
+            "SELECT ieim.external_identity_id, i.id FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id WHERE ieim.external_identity_id = ANY($1) AND ieim.status='confirmed' AND t.user_id=$2",
+            &[&identity_ids, &user_id]
+        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load issue targets failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        for row in rows {
+            state
+                .issue_targets
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+    }
+    let mut all_issue_ids = issue_ids.clone();
+    for targets in state.issue_targets.values() {
+        for id in targets {
+            all_issue_ids.push(*id);
+        }
+    }
+    all_issue_ids.sort_unstable();
+    all_issue_ids.dedup();
+    if !all_issue_ids.is_empty() {
+        let rows = pool.query("SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1) AND t.user_id=$2", &[&all_issue_ids, &user_id]).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load issue threads failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        for row in rows {
+            state.issue_threads.insert(row.get(0), row.get(1));
+        }
+    }
+    Ok(state)
+}
+
+async fn annotate_collection_exclusions_pool(
+    pool: &deadpool_postgres::Object,
+    user_id: i32,
+    facts: &mut [serde_json::Map<String, JsonValue>],
+) -> Result<(), ApiError> {
+    let state = load_collection_guard_state_pool(pool, user_id, facts).await?;
+    for fact in facts.iter_mut() {
+        if let Some((reason, ids)) = guard_check(&state, fact) {
+            fact.insert("collection_excluded".into(), JsonValue::Bool(true));
+            fact.insert(
+                "collection_exclusion_reason".into(),
+                JsonValue::String(reason),
+            );
+            fact.insert(
+                "collection_exclusion_ids".into(),
+                JsonValue::Array(
+                    ids.into_iter()
+                        .map(|i| JsonValue::Number(i.into()))
+                        .collect(),
+                ),
+            );
+        } else {
+            fact.insert("collection_excluded".into(), JsonValue::Bool(false));
+            fact.insert("collection_exclusion_reason".into(), JsonValue::Null);
+            fact.insert("collection_exclusion_ids".into(), JsonValue::Array(vec![]));
+        }
+    }
+    Ok(())
+}
+
+async fn load_collection_guard_state_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    facts: &[serde_json::Map<String, JsonValue>],
+) -> Result<CollectionGuardState, String> {
+    let mut state = CollectionGuardState::default();
+    let rows = tx.query(
+        "SELECT id, provider, external_volume_id, thread_id, issue_id FROM collection_exclusions WHERE user_id = $1 ORDER BY id",
+        &[&user_id],
+    ).await.map_err(|e| e.to_string())?;
+    for row in rows {
+        let id: i32 = row.get(0);
+        let provider: Option<String> = row.get(1);
+        let external_volume_id: Option<String> = row.get(2);
+        let thread_id: Option<i32> = row.get(3);
+        let issue_id: Option<i32> = row.get(4);
+        if let (Some(p), Some(ev)) = (provider, external_volume_id) {
+            state.volumes.insert(normalize_volume(&p, &ev), id);
+        }
+        if let Some(tid) = thread_id {
+            state.threads.insert(tid, id);
+        }
+        if let Some(iid) = issue_id {
+            state.issues.insert(iid, id);
+        }
+    }
+    if state.volumes.is_empty() && state.threads.is_empty() && state.issues.is_empty() {
+        return Ok(state);
+    }
+    let mut identity_ids: Vec<i32> = Vec::new();
+    let mut issue_ids: Vec<i32> = Vec::new();
+    for fact in facts {
+        for key in ["external_series_identity_id", "external_issue_identity_id"] {
+            if let Some(id) = fact.get(key).and_then(|v| v.as_i64()).map(|v| v as i32) {
+                identity_ids.push(id);
+            }
+        }
+        if let Some(id) = fact
+            .get("resolved_issue_id")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+        {
+            issue_ids.push(id);
+        }
+    }
+    identity_ids.sort_unstable();
+    identity_ids.dedup();
+    issue_ids.sort_unstable();
+    issue_ids.dedup();
+    if !identity_ids.is_empty() {
+        let rows = tx.query("SELECT id, provider, entity_type, external_id, metadata_json::text FROM external_identities WHERE id = ANY($1)", &[&identity_ids]).await.map_err(|e| e.to_string())?;
+        for row in rows {
+            let id: i32 = row.get(0);
+            let provider: String = row.get(1);
+            let entity_type: String = row.get(2);
+            let external_id: String = row.get(3);
+            let metadata_text: Option<String> = row.get(4);
+            let mut vals: std::collections::HashSet<(String, String)> =
+                std::collections::HashSet::new();
+            if entity_type == "series" {
+                vals.insert(normalize_volume(&provider, &external_id));
+            }
+            if let Some(mt) = metadata_text {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&mt) {
+                    if let Some(v) = meta.get("volume_id") {
+                        if let Some(s) = v.as_str() {
+                            vals.insert(normalize_volume(&provider, s));
+                        } else if let Some(n) = v.as_i64() {
+                            vals.insert(normalize_volume(&provider, &n.to_string()));
+                        }
+                    }
+                    if let Some(vol) = meta.get("volume").and_then(|v| v.as_object()) {
+                        if let Some(v) = vol.get("id") {
+                            if let Some(s) = v.as_str() {
+                                vals.insert(normalize_volume(&provider, s));
+                            } else if let Some(n) = v.as_i64() {
+                                vals.insert(normalize_volume(&provider, &n.to_string()));
+                            }
+                        }
+                    }
+                }
+            }
+            if !vals.is_empty() {
+                state.identity_volumes.insert(id, vals);
+            }
+        }
+        let rows = tx.query(
+            "SELECT tesm.external_identity_id, t.id FROM thread_external_series_mappings tesm JOIN threads t ON t.id = tesm.thread_id WHERE tesm.external_identity_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2",
+            &[&identity_ids, &user_id]
+        ).await.map_err(|e| e.to_string())?;
+        for row in rows {
+            state
+                .series_threads
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+        let rows = tx.query(
+            "SELECT ieim.external_identity_id, i.id FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id WHERE ieim.external_identity_id = ANY($1) AND ieim.status='confirmed' AND t.user_id=$2",
+            &[&identity_ids, &user_id]
+        ).await.map_err(|e| e.to_string())?;
+        for row in rows {
+            state
+                .issue_targets
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+    }
+    let mut all_issue_ids = issue_ids.clone();
+    for targets in state.issue_targets.values() {
+        for id in targets {
+            all_issue_ids.push(*id);
+        }
+    }
+    all_issue_ids.sort_unstable();
+    all_issue_ids.dedup();
+    if !all_issue_ids.is_empty() {
+        let rows = tx.query("SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1) AND t.user_id=$2", &[&all_issue_ids, &user_id]).await.map_err(|e| e.to_string())?;
+        for row in rows {
+            state.issue_threads.insert(row.get(0), row.get(1));
+        }
+        // thread volumes for involved threads
+        let mut thread_ids: Vec<i32> = state.issue_threads.values().copied().collect();
+        thread_ids.sort_unstable();
+        thread_ids.dedup();
+        if !thread_ids.is_empty() {
+            let rows = tx.query(
+                "SELECT tesm.thread_id, ei.provider, ei.external_id FROM thread_external_series_mappings tesm JOIN external_identities ei ON ei.id = tesm.external_identity_id JOIN threads t ON t.id = tesm.thread_id WHERE tesm.thread_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2 AND ei.entity_type='series'",
+                &[&thread_ids, &user_id]
+            ).await.map_err(|e| e.to_string())?;
+            for row in rows {
+                let tid: i32 = row.get(0);
+                let p: String = row.get(1);
+                let e: String = row.get(2);
+                state
+                    .thread_identities
+                    .entry(tid)
+                    .or_default()
+                    .insert(normalize_volume(&p, &e));
+            }
+        }
+    }
+    Ok(state)
+}
+
+async fn annotate_collection_exclusions_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    facts: &mut [serde_json::Map<String, JsonValue>],
+) -> Result<(), String> {
+    let state = load_collection_guard_state_tx(tx, user_id, facts).await?;
+    for fact in facts.iter_mut() {
+        if let Some((reason, ids)) = guard_check(&state, fact) {
+            fact.insert("collection_excluded".into(), JsonValue::Bool(true));
+            fact.insert(
+                "collection_exclusion_reason".into(),
+                JsonValue::String(reason),
+            );
+            fact.insert(
+                "collection_exclusion_ids".into(),
+                JsonValue::Array(
+                    ids.into_iter()
+                        .map(|i| JsonValue::Number(i.into()))
+                        .collect(),
+                ),
+            );
+        } else {
+            fact.insert("collection_excluded".into(), JsonValue::Bool(false));
+            fact.insert("collection_exclusion_reason".into(), JsonValue::Null);
+            fact.insert("collection_exclusion_ids".into(), JsonValue::Array(vec![]));
+        }
+    }
+    Ok(())
 }
 
 fn calculate_adoption_plan_entries(
@@ -2051,16 +2552,14 @@ async fn reconcile_entries_for_adoption(
             "read_at".into(),
             read_at.map(JsonValue::String).unwrap_or(JsonValue::Null),
         );
-        // Default collection exclusion fields (full guard logic is complex; conservative default).
-        entry.insert("collection_excluded".into(), JsonValue::Bool(false));
-        entry.insert("collection_exclusion_reason".into(), JsonValue::Null);
-        entry.insert("collection_exclusion_ids".into(), JsonValue::Array(vec![]));
+
         entry.insert(
             "series_group_id".into(),
             JsonValue::String(cbl_series_group_id(&entry)),
         );
         out.push(entry);
     }
+    annotate_collection_exclusions_pool(pool, user_id, &mut out).await?;
     Ok(out)
 }
 
@@ -2707,15 +3206,13 @@ async fn reconcile_entries_for_adoption_tx(
             "read_at".into(),
             read_at.map(JsonValue::String).unwrap_or(JsonValue::Null),
         );
-        entry.insert("collection_excluded".into(), JsonValue::Bool(false));
-        entry.insert("collection_exclusion_reason".into(), JsonValue::Null);
-        entry.insert("collection_exclusion_ids".into(), JsonValue::Array(vec![]));
         entry.insert(
             "series_group_id".into(),
             JsonValue::String(cbl_series_group_id(&entry)),
         );
         out.push(entry);
     }
+    annotate_collection_exclusions_tx(tx, user_id, &mut out).await?;
     Ok(out)
 }
 
@@ -3223,7 +3720,7 @@ async fn materialize_missing_issue_tx(
         .get(0);
     let pos = max_pos.unwrap_or(-1) + 1;
     let issue_id: i32 = tx.query_one(
-        "INSERT INTO issues (thread_id,issue_number,position,status,weight,created_at) VALUES ($1,$2,$3,'unread',1.0,NOW()) RETURNING id",
+        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
         &[&thread_id,&issue_number,&pos]
     ).await.map_err(|e| e.to_string())?.get(0);
     // Update thread tracking counts best-effort
