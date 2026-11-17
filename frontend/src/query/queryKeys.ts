@@ -596,4 +596,13 @@ export const queryKeys = {
     page: (query: string, offset: number, pageSize: number) => 
       ['comicvine', 'series', 'search', normalizedSearch(query), { offset, pageSize }] as const,
   },
+  /**
+   * Owner-scoped activity timeline key for the History page.
+   * The cursor lives in `pageParam`, not the key, so pagination stays stable.
+   */
+  activity: {
+    all: ['activity'] as const,
+    list: ({ pageSize, pageToken }: { pageSize: number; pageToken?: string | null }) =>
+      ['activity', { pageSize, pageToken: pageToken ?? null }] as const,
+  },
 } as const

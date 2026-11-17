@@ -928,3 +928,38 @@ export interface CreatorSeriesDrilldown extends CreatorMetricDrilldown {
   series_rated_issue_count: number
   series_average_rating: number | null
 }
+
+/**
+ * One user-visible activity event for the History timeline.
+ * Returned by GET /api/v2/activity.
+ */
+export interface ActivityEvent {
+  /** Unique event identifier. */
+  event_id: number;
+  /** Event type: "roll", "rate", "snooze", "unsnooze", "dismiss", etc. */
+  type: string;
+  /** ISO 8601 timestamp when the event occurred. */
+  timestamp: string;
+  /** Die before this event (for roll, snooze, dismiss, etc.). */
+  die_before: number | null;
+  /** Die after this event (for snooze, undo, etc.). */
+  die_after: number | null;
+  /** Rating value (for rate events). */
+  rating: number | null;
+  /** Thread ID this event relates to. */
+  thread_id: number | null;
+  /** Thread title (denormalized for display). */
+  thread_title: string | null;
+  /** Issue number (for roll events that selected an issue). */
+  issue_number: string | null;
+}
+
+/**
+ * Response from GET /api/v2/activity - owner-scoped activity timeline.
+ */
+export interface ActivityResponse {
+  /** List of activity events in reverse chronological order. */
+  events: ActivityEvent[];
+  /** Cursor token for the next page (event_id format). */
+  next_page_token: string | null;
+}

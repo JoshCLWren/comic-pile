@@ -45,3 +45,7 @@ export interface RollMutationDeps {
 export interface RollDependenciesApi {
   getBatchBlockingInfo: (threadIds: number[]) => Promise<import('../types').BatchBlockingInfoResponse>
 }
+
+export interface ActivityApi {
+  list: (pageToken?: string | null, pageSize?: number) => Promise<import('../types').ActivityResponse>
+}
