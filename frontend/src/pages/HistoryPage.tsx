@@ -20,26 +20,6 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-/** Event type labels for display */
-const EVENT_LABELS = new Map<string, string>([
-  ['roll', 'Rolled'],
-  ['rate', 'Rated'],
-  ['snooze', 'Snoozed'],
-  ['unsnooze', 'Unsnoozed'],
-  ['dismiss', 'Dismissed'],
-  ['undo', 'Restored'],
-  ['restore', 'Restored'],
-  ['move', 'Moved'],
-  ['shuffle', 'Shuffled'],
-  ['complete', 'Completed'],
-  ['completion', 'Completed'],
-  ['session_mode', 'Session mode'],
-])
-
-function eventLabel(type: string): string {
-  return EVENT_LABELS.get(type) ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
-}
-
 /**
  * Format the dice progression from die values
  */
@@ -104,7 +84,6 @@ export default function HistoryPage() {
     events,
     isPending,
     isError,
-    error,
     isLoadingMore,
     hasMore,
     loadMore,
@@ -195,7 +174,7 @@ export default function HistoryPage() {
       </header>
 
       <div id="events-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Activity history">
-        {events.map((event, index) => {
+        {events.map((event) => {
           const description = getEventDescription(event)
           const isRating = isRatingEvent(event)
 
