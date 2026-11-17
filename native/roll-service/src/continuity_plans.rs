@@ -342,13 +342,13 @@ pub async fn list_continuity_plans(
     let plans: Vec<ContinuityPlanListItem> = rows
         .iter()
         .map(|row| {
-            let lanes_json_val: serde_json::Value = row.get(5);
+            let lanes_json_val: serde_json::Value = row.get(3);
             let lanes_json: Vec<serde_json::Value> =
                 serde_json::from_value(lanes_json_val).unwrap_or_default();
             let lane_count = lanes_json.len().saturating_sub(0).max(1);
 
             // Calculate step count from nodes_json
-            let nodes_json_val: serde_json::Value = row.get(7);
+            let nodes_json_val: serde_json::Value = row.get(4);
             let nodes: Vec<serde_json::Value> =
                 serde_json::from_value(nodes_json_val).unwrap_or_default();
             let step_count = nodes.len() as i32;
