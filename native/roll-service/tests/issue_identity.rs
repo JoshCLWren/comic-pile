@@ -420,37 +420,62 @@ async fn compare_cbl_sources_ranks_and_validates() {
 #[tokio::test]
 async fn reading_list_candidates_reports_gaps_and_ranks() {
     let (state, token, _csrf, _guard) = setup().await;
-    // Seed a user-owned reading list with one confirmed issue and one missing identity.
+
+    // Resolve the authenticated user's id from /api/v1/auth/me.
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+
     let conn = state.pool.get().await.unwrap();
-    conn.batch_execute(r#"
-        INSERT INTO users (id, username, email, password_hash, created_at)
-        VALUES (999, 'owner', 'owner@example.com', 'x', NOW()) ON CONFLICT (id) DO NOTHING;
+    conn.batch_execute(&format!(
+        r#"
         INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
-        VALUES (900, 999, 'Owned Series', 'comic', 1, 1, 'active', 2, 'in_progress', NOW()) ON CONFLICT (id) DO NOTHING;
+        VALUES (910, {user_id}, 'Owned Series', 'comic', 1, 1, 'active', 2, 'in_progress', NOW());
         INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
-        VALUES (9001, 900, '1', 0, 'unread', NOW()),
-               (9002, 900, '2', 1, 'unread', NOW()) ON CONFLICT (id) DO NOTHING;
+        VALUES (9101, 910, '1', 0, 'unread', NOW()),
+               (9102, 910, '2', 1, 'unread', NOW());
         INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
-        VALUES (901, 'comicvine', 'issue', '4000-123', '{}'::json, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
-        INSERT INTO issue_external_identity_mappings (id, issue_id, external_identity_id, status, created_at, updated_at)
-        VALUES (901, 9001, 901, 'confirmed', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+        VALUES (911, 'comicvine', 'issue', '{ISSUE_ID}', '{{}}'::json, NOW(), NOW())
+        ON CONFLICT DO NOTHING;
+        INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+        SELECT 9101, ei.id, 'confirmed', 'test', '{{}}'::json, NOW(), NOW()
+        FROM external_identities ei
+        WHERE ei.provider = 'comicvine' AND ei.entity_type = 'issue' AND ei.external_id = '{ISSUE_ID}';
         INSERT INTO custom_cbl_lists (id, user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at)
-        VALUES (900, 999, 'My List', NULL, 'loose', NOW(), NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
+        VALUES (910, {user_id}, 'My List', NULL, 'loose', NOW(), NOW(), NOW());
         INSERT INTO custom_cbl_entries (id, list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
-        VALUES (9001, 900, 9001, 0, NOW(), false, '[]'::json, 'none', false),
-               (9002, 900, 9002, 1, NOW(), false, '[]'::json, 'none', false) ON CONFLICT (id) DO NOTHING;
-    "#).await.unwrap();
-    // authenticate as user 999 by minting token via the app's secret? easier: register/login not tied to fixed id.
-    // Use the existing token owner - but list must be owned by that user. Adjust: create list for token user via direct insert using their id.
-    // Simpler: query user id from username pattern not known; instead create another setup path not worth complexity.
-    // We'll test 404 for non-owned/nonexistent list under current auth user.
+        VALUES (9101, 910, 9101, 0, NOW(), false, '[]'::json, 'none', false),
+               (9102, 910, 9102, 1, NOW(), false, '[]'::json, 'none', false);
+        "#
+    ))
+    .await
+    .unwrap();
+
     let (status, body) = get(
         &state,
         &token,
-        "/api/v1/issue-identity/reading-lists/999999/cbl-candidates",
+        "/api/v1/issue-identity/reading-lists/910/cbl-candidates",
     )
     .await;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["list_id"], 910);
+    assert_eq!(body["list_name"], "My List");
+    assert_eq!(body["input_entry_count"], 2);
+    assert_eq!(body["input_confirmed_total"], 1);
+    assert_eq!(body["input_missing_count"], 1);
+    assert_eq!(body["input_conflict_count"], 0);
+    assert_eq!(body["input_ids"], json!([ISSUE_ID]));
+    let entries = body["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2, "{body}");
+    assert_eq!(entries[0]["identity_status"], "confirmed");
+    assert_eq!(entries[0]["comicvine_issue_id"], ISSUE_ID);
+    assert_eq!(entries[1]["identity_status"], "missing");
+    assert!(entries[1]["comicvine_issue_id"].is_null(), "{body}");
+    assert!(body["candidates_total"].as_i64().unwrap() >= 1, "{body}");
+    let first = &body["candidates"][0];
+    assert_eq!(first["list_id"], 1);
+    assert_eq!(first["matched_input_count"], 1);
+    assert_eq!(first["missing_input_ids"], json!([]));
 }
 
 #[tokio::test]
@@ -524,4 +549,121 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
     assert!(body["created_positions"].is_array(), "{body}");
     assert!(body["excluded_positions"].is_array(), "{body}");
     assert!(body["unresolved_positions"].is_array(), "{body}");
+}
+
+#[tokio::test]
+async fn adoption_plan_reports_title_number_ambiguity_statuses() {
+    let (state, token, csrf, _guard) = setup().await;
+
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (20, '{MIRROR_REPOSITORY}-amb', 'rev-20', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (20, 20, 'DC/Ambiguous/Ambiguous.cbl', 'Ambiguous', 1, 'h-amb', 'rev-20', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (20, 'comicvine', 'issue', '4000-amb', '{{}}'::json, NOW(), NOW()),
+          (21, 'comicvine', 'series', '4050-amb', '{{}}'::json, NOW(), NOW());
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          (20, 20, 0, 'Ambiguous Series', '1', 2000, 2000, 20, 21, NOW());
+
+        INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+        VALUES
+          (920, {user_id}, 'Ambiguous Series', 'comic', 1, 90, 'active', 1, 'in_progress', NOW()),
+          (921, {user_id}, 'Ambiguous Series', 'comic', 1, 91, 'active', 1, 'in_progress', NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES
+          (9201, 920, '1', 0, 'unread', NOW()),
+          (9211, 921, '1', 0, 'unread', NOW());
+        INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+        VALUES
+          (920, 21, 'confirmed', 'test', NOW(), NOW()),
+          (921, 21, 'confirmed', 'test', NOW(), NOW());
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/issue-identity/cbl/20/adoption-plan",
+        json!({"series_decisions": {}, "entry_decisions": {}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["total_positions"], 1, "{body}");
+    let entry = &body["entries"][0];
+    assert_eq!(
+        entry["resolution_status"], "ambiguous_title_number_multiple_matches",
+        "{body}"
+    );
+    assert_eq!(entry["adoption_decision"], "unresolved", "{body}");
+    assert!(entry["resolved_issue_id"].is_null(), "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_materializes_missing_importable_issue() {
+    let (state, token, csrf, _guard) = setup().await;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (30, '{MIRROR_REPOSITORY}-new', 'rev-30', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (30, 30, 'DC/New/New.cbl', 'New Importable', 1, 'h-new', 'rev-30', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (30, 'comicvine', 'issue', '4000-new', '{{}}'::json, NOW(), NOW())
+        ON CONFLICT DO NOTHING;
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          (30, 30, 0, 'Brand New Series', '1', 2024, 2024, 30, NULL, NOW());
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/30/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-new",
+            "revision_sha": "rev-30"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([0]), "{body}");
+    assert_eq!(body["unresolved_positions"], json!([]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([]), "{body}");
 }
