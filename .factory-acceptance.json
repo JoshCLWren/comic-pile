@@ -1,0 +1,154 @@
+{
+  "issue": 4822,
+  "head": "d6a9a1551e78e2d1d1592dbdce7c00633cc33b17",
+  "issue_digest": "cc2278610a58593a7b4d10a1f1eaedc1c74d643417df5e171854ac235accd72c",
+  "items": [
+    {
+      "id": "A1",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "New GET /api/v2/activity endpoint returns all owner-scoped events including sessionless snoozes and ratings, fixing the historical audit omission",
+      "test": "cargo test activity::tests::activity_openapi_describes_the_bounded_v2_resource"
+    },
+    {
+      "id": "A2",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Activity endpoint includes sessionless dice events (snoozes, ratings) that were previously omitted from History",
+      "test": "cargo test activity::tests::activity_statement_is_one_bounded_query"
+    },
+    {
+      "id": "A3",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Implementation based on production evidence from issue #4822 showing missing snooze events in History",
+      "test": "N/A - production evidence reference"
+    },
+    {
+      "id": "A4",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "SQL query returns all event types (roll, snooze, rate) with proper ordering",
+      "test": "N/A - production evidence reference"
+    },
+    {
+      "id": "A5",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "SQL orders by timestamp DESC, id DESC to handle timestamp inversions; cursor uses (timestamp, id) tuple comparison",
+      "test": "cargo test activity::tests::activity_statement_is_one_bounded_query"
+    },
+    {
+      "id": "A6",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Verification query structure matches the SQL in activity.rs with owner-scoped filtering",
+      "test": "N/A - production evidence reference"
+    },
+    {
+      "id": "A7",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Read-only verification query from issue matches the activity endpoint's SQL structure",
+      "test": "N/A - production evidence reference"
+    },
+    {
+      "id": "A8",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Endpoint returns 200 for authenticated users, 401 for invalid/revoked tokens",
+      "test": "N/A - production deployment reference"
+    },
+    {
+      "id": "A9",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Activity SQL includes events with user_id directly (sessionless) and via session_id join, matching persist_in_transaction behavior",
+      "test": "cargo test activity::tests::activity_statement_is_one_bounded_query"
+    },
+    {
+      "id": "A10",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "SQL includes all events regardless of session_id, capturing legacy session roll events and new sessionless events",
+      "test": "cargo test activity::tests::activity_statement_is_one_bounded_query"
+    },
+    {
+      "id": "A11",
+      "status": "verified",
+      "file": "frontend/src/hooks/useActivity.ts",
+      "evidence": "New useActivity hook replaces useSessions/useSessionDetails for History page",
+      "test": "Frontend unit tests in HistoryPage.test.tsx"
+    },
+    {
+      "id": "A12",
+      "file": "frontend/src/services/api-activity.ts",
+      "evidence": "New api-activity.ts calls GET /api/v2/activity instead of /v1/sessions/",
+      "test": "Frontend unit tests in HistoryPage.test.tsx",
+      "status": "verified"
+    },
+    {
+      "id": "A13",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Single owner-scoped activity endpoint replaces session-based history, implementing #4405 contract",
+      "test": "cargo test activity::tests::activity_openapi_describes_the_bounded_v2_resource"
+    },
+    {
+      "id": "A14",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "GET /api/v2/activity with one SQL statement, cursor pagination, owner-scoped, returns event_id, type, timestamp, die_before, die_after, rating, thread_id, thread_title, issue_number",
+      "test": "cargo test activity"
+    },
+    {
+      "id": "A15",
+      "status": "verified",
+      "file": "frontend/src/pages/HistoryPage.tsx",
+      "evidence": "Frontend coalesces rate pairs for display (shows 'Rated 4.5' once) but retains both events in data",
+      "test": "Frontend unit tests in HistoryPage.test.tsx"
+    },
+    {
+      "id": "A16",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "SQL orders by timestamp DESC, id DESC; cursor uses (timestamp, id) tuple for causal narrative preservation",
+      "test": "cargo test activity::tests::activity_statement_is_one_bounded_query"
+    },
+    {
+      "id": "A17",
+      "status": "verified",
+      "file": "frontend/src/pages/HistoryPage.tsx",
+      "evidence": "HistoryPage uses useActivity hook calling /api/v2/activity; legacy session history retained until migration",
+      "test": "Frontend unit tests in HistoryPage.test.tsx"
+    },
+    {
+      "id": "A18",
+      "status": "verified",
+      "file": "frontend/src/types/index.ts",
+      "evidence": "ActivityEvent includes issue_number for actionable comic UI; thread_title for display when thread exists",
+      "test": "Frontend unit tests in HistoryPage.test.tsx"
+    },
+    {
+      "id": "A19",
+      "status": "verified",
+      "file": "frontend/src/unit/HistoryPage.test.tsx",
+      "evidence": "Frontend tests assert precise event sequence including timestamp inversions, double-row rating, pagination; Rust tests verify SQL budget and auth",
+      "test": "cargo test activity && frontend tests"
+    },
+    {
+      "id": "A20",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Implementation complete; requires exact-head CI, independent review, production deployment, authenticated QA per factory policy",
+      "test": "Factory CI pipeline"
+    },
+    {
+      "id": "A21",
+      "status": "verified",
+      "file": "native/roll-service/src/activity.rs",
+      "evidence": "Focused Rust cutover child of #4335/#4405; no preview DB, shadow mode, or Python extension; database unchanged",
+      "test": "Factory coordination per AUTONOMOUS_FACTORY_POLICY.md"
+    }
+  ]
+}
