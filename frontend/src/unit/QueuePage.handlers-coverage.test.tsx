@@ -50,6 +50,7 @@ const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   // The finished shelf is fetched separately from the active Queue response.
+  // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   vi.mocked(useCompletedThreads).mockReturnValue({
     // SAFETY: completed is a deliberately minimal ThreadListItem fixture for this test.
     threads: [completed] as never,
