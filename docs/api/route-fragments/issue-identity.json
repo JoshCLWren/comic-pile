@@ -3,7 +3,7 @@
   "owned_path_patterns": [
     "^/api/v1/cbl/[^/]+/adoption-commit$",
     "^/api/v1/cbl/[^/]+/reading-plans/[^/]+/adoption-commit$",
-    "^/api/v1/issue-identity/(?:anomalies|canonical|conflicts|consolidate|report|cbl-sources|reading-lists)(?:/.*)?$"
+    "^/api/v1/issue-identity/(?:anomalies|canonical|conflicts|consolidate|report|cbl-sources|reading-lists|cbl)(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
