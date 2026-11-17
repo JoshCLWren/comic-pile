@@ -18,64 +18,10 @@
   "operations": [
     {
       "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/cbl/{list_id}/adoption-commit",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/cbl/[^/]+/adoption-commit$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/cbl/[^/]+/reading-plans/[^/]+/adoption-commit$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/issue-identity/cbl-sources",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/cbl-sources$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-reading-graph.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/cbl-sources/by-comicvine-issue/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-reading-graph.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/issue-identity/cbl-sources/compare",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/cbl-sources/compare$",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4843,
@@ -89,21 +35,7 @@
       "method": "GET",
       "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/cbl-sources/[0-9]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-reading-graph.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/cbl/[^/]+/adoption-plan$",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[0-9]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4843,
@@ -115,15 +47,83 @@
     {
       "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+      "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue-identity/reading-lists/[0-9]+/cbl-candidates$",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4843,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl-sources/compare",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue\\-identity/reading\\-lists/[0-9]+/cbl\\-candidates$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-plan$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/adoption-commit",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/cbl/[^/]+/adoption\\-commit$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/cbl/[^/]+/reading\\-plans/[^/]+/adoption\\-commit$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
       ]
     }
   ]
