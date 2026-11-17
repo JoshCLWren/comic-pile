@@ -159,8 +159,11 @@ def test_run_migration_rehearsal_applies_fixture_between_upgrade_and_downgrade(
     def _fake_upgrade(config: object, revision: str) -> None:
         pass
 
+    def _fake_downgrade(config: object, revision: str) -> None:
+        pass
+
     monkeypatch.setattr(rehearsal_module.command, "upgrade", _fake_upgrade)
-    monkeypatch.setattr(rehearsal_module.command, "downgrade", lambda config: None)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", _fake_downgrade)
     monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
 
     result = run_migration_rehearsal(
@@ -202,7 +205,7 @@ def test_run_migration_rehearsal_fails_closed_and_stops_after_first_failure(
 def test_main_returns_zero_when_rehearsal_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     """The CLI exits zero and reports the final revision on success."""
 
-    def _fake_run(**kwargs: Any) -> MigrationRehearsalResult:
+    def _fake_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
         return MigrationRehearsalResult(
             final_revision="c85900000001",
             steps=(RehearsalStepResult(step="upgrade_head", duration_ms=1.0),),
@@ -220,7 +223,7 @@ def test_main_returns_one_when_rehearsal_fails(
 ) -> None:
     """The CLI exits one and reports the failure when the rehearsal fails closed."""
 
-    def _failing_run(**kwargs: Any) -> MigrationRehearsalResult:
+    def _failing_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
         raise MigrationRehearsalError("migration rehearsal step 'upgrade_head' failed: boom")
 
     monkeypatch.setattr(rehearsal_module, "run_migration_rehearsal", _failing_run)
