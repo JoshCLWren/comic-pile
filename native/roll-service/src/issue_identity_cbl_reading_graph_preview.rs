@@ -133,76 +133,66 @@ pub struct ReadingGraphCycleError {
     pub message: String,
 }
 
-fn structured_error(status: StatusCode, code: &str, message: String) -> Response {
-    (
+fn structured_error(status: StatusCode, code: &str, message: String) -> PreviewError {
+    PreviewError::Json(
         status,
-        Json(serde_json::json!({ "detail": { "code": code, "message": message } })),
+        serde_json::json!({ "detail": { "code": code, "message": message } }),
     )
-        .into_response()
 }
 
-fn validate_request(request: &ReadingGraphPreviewRequest) -> Result<(), Response> {
+fn validation_error(items: Value) -> PreviewError {
+    PreviewError::Json(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        serde_json::json!({ "detail": items }),
+    )
+}
+
+fn validate_request(request: &ReadingGraphPreviewRequest) -> Result<(), PreviewError> {
     if request.included_positions.len() > 10_000 {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({
-                "detail": [{
-                    "type": "too_long",
-                    "loc": ["body", "included_positions"],
-                    "msg": "List should have at most 10000 items",
-                    "input": request.included_positions.len(),
-                }]
-            })),
-        )
-            .into_response());
+        return Err(validation_error(serde_json::json!({
+            "detail": [{
+                "type": "too_long",
+                "loc": ["body", "included_positions"],
+                "msg": "List should have at most 10000 items",
+                "input": request.included_positions.len(),
+            }]
+        })));
     }
     if request
         .included_positions
         .iter()
         .any(|position| *position < 1)
     {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({
-                "detail": [{
-                    "type": "greater_than",
-                    "loc": ["body", "included_positions", 0],
-                    "msg": "Input should be greater than 0",
-                    "input": 0,
-                    "ctx": { "gt": 0 },
-                }]
-            })),
-        )
-            .into_response());
+        return Err(validation_error(serde_json::json!({
+            "detail": [{
+                "type": "greater_than",
+                "loc": ["body", "included_positions", 0],
+                "msg": "Input should be greater than 0",
+                "input": 0,
+                "ctx": { "gt": 0 },
+            }]
+        })));
     }
     if request.overlap_choices.len() > 1_000 {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({
-                "detail": [{
-                    "type": "too_long",
-                    "loc": ["body", "overlap_choices"],
-                    "msg": "List should have at most 1000 items",
-                    "input": request.overlap_choices.len(),
-                }]
-            })),
-        )
-            .into_response());
+        return Err(validation_error(serde_json::json!({
+            "detail": [{
+                "type": "too_long",
+                "loc": ["body", "overlap_choices"],
+                "msg": "List should have at most 1000 items",
+                "input": request.overlap_choices.len(),
+            }]
+        })));
     }
     if request.target_list_id.is_some_and(|id| id < 1) {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({
-                "detail": [{
-                    "type": "greater_than",
-                    "loc": ["body", "target_list_id"],
-                    "msg": "Input should be greater than 0",
-                    "input": 0,
-                    "ctx": { "gt": 0 },
-                }]
-            })),
-        )
-            .into_response());
+        return Err(validation_error(serde_json::json!({
+            "detail": [{
+                "type": "greater_than",
+                "loc": ["body", "target_list_id"],
+                "msg": "Input should be greater than 0",
+                "input": 0,
+                "ctx": { "gt": 0 },
+            }]
+        })));
     }
     Ok(())
 }
@@ -228,11 +218,9 @@ pub async fn preview_cbl_reading_graph_handler(
     user: AuthenticatedUser,
     Path(list_id): Path<i64>,
     Json(request): Json<ReadingGraphPreviewRequest>,
-) -> Result<Json<ReadingGraphPreview>, Response> {
+) -> Result<Json<ReadingGraphPreview>, PreviewError> {
     validate_request(&request)?;
-    let connection = db::checkout(&state)
-        .await
-        .map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state).await?;
 
     let list_row = connection
         .query_opt(
@@ -240,7 +228,7 @@ pub async fn preview_cbl_reading_graph_handler(
             &[&list_id],
         )
         .await
-        .map_err(|error| ApiError::into_response(db::query_error(error)))?
+        .map_err(db::query_error)?
         .filter(|row| row.get::<_, bool>(2))
         .ok_or_else(|| {
             structured_error(
@@ -271,7 +259,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&list_id, &selected_positions],
             )
             .await
-            .map_err(|error| ApiError::into_response(db::query_error(error)))?
+            .map_err(db::query_error)?
     };
     let known_positions: std::collections::HashSet<i64> =
         entry_rows.iter().map(|row| row.get::<_, i64>(0)).collect();
@@ -301,7 +289,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&identity_ids],
             )
             .await
-            .map_err(|error| ApiError::into_response(db::query_error(error)))?
+            .map_err(db::query_error)?
         {
             external_by_id.insert(row.get(0), row.get(1));
         }
@@ -340,7 +328,7 @@ pub async fn preview_cbl_reading_graph_handler(
                 &[&user.id(), &external_ids],
             )
             .await
-            .map_err(|error| ApiError::into_response(db::query_error(error)))?
+            .map_err(db::query_error)?
         {
             owned_by_external
                 .entry(row.get(0))
