@@ -1158,15 +1158,22 @@ mod tests {
                 let (access, _, user_id) = register_session(&username).await;
                 seed_threads(user_id, &[(21, 1)]).await;
 
-                let assert_validation_422 = |status: StatusCode, headers: &axum::http::HeaderMap, body: Value, text: &str, uri: &str| {
-                    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri}: {text}");
-                    assert_eq!(
-                        headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()),
-                        Some("application/json"),
-                        "{uri}: {text}"
-                    );
-                    assert_eq!(body["detail"], "Validation failed", "{uri}: {text}");
-                };
+                let assert_validation_422 =
+                    |status: StatusCode,
+                     headers: &axum::http::HeaderMap,
+                     body: Value,
+                     text: &str,
+                     uri: &str| {
+                        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri}: {text}");
+                        assert_eq!(
+                            headers
+                                .get(header::CONTENT_TYPE)
+                                .and_then(|v| v.to_str().ok()),
+                            Some("application/json"),
+                            "{uri}: {text}"
+                        );
+                        assert_eq!(body["detail"], "Validation failed", "{uri}: {text}");
+                    };
 
                 let mut router = app();
                 for uri in [

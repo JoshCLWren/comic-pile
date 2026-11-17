@@ -376,8 +376,7 @@ pub async fn list_thread_issues(
     raw_query: axum::extract::RawQuery,
 ) -> Result<Json<ThreadIssueListResponse>, ApiError> {
     let thread_id: i32 = thread_id.parse().map_err(|_| validation_failed())?;
-    let (status, page_size, page_token) =
-        parse_thread_issue_query(raw_query.0.as_deref())?;
+    let (status, page_size, page_token) = parse_thread_issue_query(raw_query.0.as_deref())?;
     let cursor = page_token
         .as_deref()
         .filter(|token| !token.is_empty())
