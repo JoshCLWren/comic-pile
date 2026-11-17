@@ -509,7 +509,7 @@ pub async fn create_continuity_plan(
         .query_one(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4::json, $5::json, NOW(), NOW())
             RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
             "#,
             &[
@@ -626,7 +626,7 @@ pub async fn update_continuity_plan(
     // Check plan ownership and get current version
     let existing = tx
         .query_opt(
-            "SELECT id, lanes_json, nodes_json, updated_at FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            "SELECT id, lanes_json, nodes_json, updated_at::text FROM continuity_plans WHERE id = $1 AND user_id = $2",
             &[&plan_id, &user.id()],
         )
         .await
@@ -706,7 +706,7 @@ pub async fn update_continuity_plan(
     tx.execute(
         r#"
         UPDATE continuity_plans 
-        SET name = $1, ordering_mode = $2, lanes_json = $3, nodes_json = $4, updated_at = NOW()
+        SET name = $1, ordering_mode = $2, lanes_json = $3::json, nodes_json = $4::json, updated_at = NOW()
         WHERE id = $5 AND user_id = $6
         "#,
         &[
@@ -993,7 +993,7 @@ pub async fn adopt_reading_order(
         .query_one(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
-            VALUES ($1, $2, 'informational', $3, $4, NOW(), NOW())
+            VALUES ($1, $2, 'informational', $3::json, $4::json, NOW(), NOW())
             RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
             "#,
             &[&user.id(), &plan_name, &lanes_json, &nodes_json],
