@@ -203,8 +203,7 @@ SELECT jsonb_agg(jsonb_build_object(
         'issue_number', issue_number
     ) FILTER (WHERE event_id IS NOT NULL), '[]')) FROM page_events),
     'has_more', (SELECT COUNT(*) > $4 FROM page_events),
-    'last_id', (SELECT event_id FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4),
-    'last_ts_us', (SELECT timestamp_sec FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
+    'last_id', (SELECT event_id FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
 )::text
 FROM page_events
 LIMIT 1;
