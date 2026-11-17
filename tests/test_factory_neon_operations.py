@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".github" / "scripts"))
 spec = importlib.util.spec_from_file_location("factory_state_operations", ROOT / ".github/scripts/factory_state_operations.py")
@@ -265,29 +267,31 @@ def test_missing_marker_id_never_reads_obsolete_body_cache():
     assert record == {"nvidia": ["gone"]}
 
 
-def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
-    class IdOnlyDB:
+def test_model_exclusions_never_export_registry_comment_locators():
+    """Issue #1093 is retired: no comment locator crosses to the runner."""
+    class ReadOnlyDB:
+        def __init__(self):
+            self.statements = []
+
         async def fetch(self, statement, *args):
-            if "factory_reconciliation_cursor" in statement:
-                return [
-                    {"scope": "registry-comment-id-v1:heartbeat:worker:111",
-                     "checkpoint": "123"},
-                    {"scope": "registry-comment-id-v1:attempt:worker:111",
-                     "checkpoint": "124"},
-                ]
+            self.statements.append(statement)
             return []
 
         async def fetchval(self, statement, *args):
-            raise AssertionError("registry body must not be read for existing IDs")
+            raise AssertionError("exclusion export must not read a registry cursor")
 
         async def execute(self, statement, *args):
-            raise AssertionError("existing ID lookup must not write")
+            raise AssertionError("exclusion export must not write")
 
+    db = ReadOnlyDB()
     with patch.object(operations, "_roster", return_value={
         "111": ("opencode-free", "glm-5.3-flash-free"),
     }):
-        result = run(operations._export_model_exclusions(IdOnlyDB(), REPO, "111"))
-    assert result == {"__heartbeat_id": ["123"], "__attempt_id": ["124"]}
+        result = run(operations._export_model_exclusions(db, REPO, "111"))
+        with pytest.raises(ValueError):
+            run(operations._export_model_exclusions(ReadOnlyDB(), REPO, "999"))
+    assert result == {}
+    assert not any("factory_reconciliation_cursor" in sql for sql in db.statements)
 
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():

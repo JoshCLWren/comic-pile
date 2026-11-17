@@ -155,66 +155,69 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
 
 
-def test_unavailability_snapshot_cannot_be_overwritten_as_worker_record(tmp_path: Path) -> None:
-    """Execute terminal reporting and inspect the separate immutable failure body."""
-    import json
+def test_unavailability_health_is_persisted_from_the_log_not_a_snapshot(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Model-unavailable, quota and 410 keep their Neon effect without #1093 snapshots."""
     import os
     import subprocess
+    import sys
 
     import yaml
 
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    report = next(
+    names = [step.get("name") for step in workflow["jobs"]["factory"]["steps"]]
+    assert "Report terminal heartbeat" not in names
+    summary_step = next(
         step for step in workflow["jobs"]["factory"]["steps"]
-        if step.get("name") == "Report terminal heartbeat"
+        if step.get("name") == "Summarize factory attempt"
     )
-    script = report["run"]
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     gh = bin_dir / "gh"
-    gh.write_text(
-        "#!/usr/bin/env python3\n"
-        "import json, os, sys\n"
-        "args=sys.argv[1:]\n"
-        "if '--method' in args and args[args.index('--method')+1]=='POST':\n"
-        "    with open(os.environ['CAPTURE_FILE'], 'a') as file:\n"
-        "        file.write(json.dumps(args[-1].removeprefix('body='))+'\\n')\n"
-        "print('[]')\n"
-    )
+    gh.write_text("#!/bin/sh\necho called >> \"$CAPTURE_FILE\"\nexit 1\n")
     gh.chmod(0o755)
     outcome = tmp_path / "outcome"
     outcome.write_text("model_unavailable\tModel unavailable: opencode/ll-alpha-free\n")
-    capture = tmp_path / "posted.jsonl"
+    capture = tmp_path / "calls"
     result = subprocess.run(
-        ["bash", "-c", script],
+        ["bash", "-c", summary_step["run"]],
         env={
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "CAPTURE_FILE": str(capture),
-            "WORKER": "41",
-            "MODEL": "ll-alpha-free",
-            "SOURCE": "opencode-free",
-            "MINUTE": "0",
-            "CONFIGURED": "true",
-            "REASON": "selected-from-live-free-catalog",
+            "GITHUB_STEP_SUMMARY": str(tmp_path / "summary"),
+            "WORKER": "41", "MODEL": "ll-alpha-free", "SOURCE": "opencode-free",
+            "CONFIGURED": "true", "REASON": "selected-from-live-free-catalog",
             "JOB_STATUS": "failure",
             "WORKER_STATUS_FILE": str(tmp_path / "missing"),
             "DISCOVERY_OUTCOME_FILE": str(outcome),
-            "GITHUB_RUN_ID": "123",
-            "GITHUB_REPOSITORY": "owner/repo",
         },
-        capture_output=True,
-        text=True,
-        check=False,
+        capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
-    posted = [json.loads(line) for line in capture.read_text().splitlines()]
-    snapshots = [body for body in posted if "<!-- factory-model-unavailable:v1" in body]
-    assert len(snapshots) == 1
-    snapshot = snapshots[0]
-    assert "<!-- factory-attempt-outcome:v1" not in snapshot
-    assert "Model: ll-alpha-free\nSource: opencode-free" in snapshot
-    assert "Attempt outcome: model_unavailable" in snapshot
-    assert "Updated: " in snapshot
-    assert "Run: 123" in snapshot
-    assert sum("<!-- factory-attempt-outcome:v1" in body for body in posted) == 1
+    assert not capture.exists()
+
+    sys.path.insert(0, str(WORKFLOW.parents[1] / "scripts"))
+    import factory_state_ledger as ledger
+    import factory_state_operations as operations
+
+    projected: list[dict[str, object]] = []
+    monkeypatch.setattr(ledger, "record_events", lambda _repo, entries: len(entries))
+    monkeypatch.setattr(operations, "enabled", lambda: True)
+    monkeypatch.setattr(
+        operations, "record_runtime",
+        lambda _repo, _run, outcome: projected.append(outcome) or True,
+    )
+    for run, classification in enumerate(
+        ("model_unavailable", "provider_quota", "model_retired_410"), start=100,
+    ):
+        ledger.record_runtime_outcome("owner/repo", str(run), {
+            "worker": "41", "source": "opencode-free", "model": "ll-alpha-free",
+            "outcome_class": classification,
+        })
+    assert [item["outcome_class"] for item in projected] == [
+        "model_unavailable", "provider_quota", "model_retired_410",
+    ]
+    assert "model_unavailable" in operations.MODEL_COOLDOWNS
+    assert "provider_quota" in operations.TRANSIENT

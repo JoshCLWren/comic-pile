@@ -1,12 +1,12 @@
-"""Issue #1093 registry comments are optional visibility, never a worker prerequisite.
+"""Issue #1093 is retired as the factory heartbeat/registry.
 
-Production runs 43983704814 and 43983667431 validated their assignment and
-selected a model, then died in "Report selected executor heartbeat" because
-GitHub refuses new comments on a thread with more than 2,500 comments
-(HTTP 403). The worker session never started and the lease was released.
+GitHub refuses new comments on threads with more than 2,500 comments
+(HTTP 403), and GitHub comments must not be operational infrastructure. Neon
+and the trusted Actions job logs are authoritative. These tests prove that no
+factory path reads, POSTs or PATCHes #1093 comments, that the lifecycle signal
+the old read-back used to supply now comes from trusted Neon writes, and that
+failover/transition evidence is still attested from the job log alone.
 
-These tests execute the real workflow step scripts and the real worker
-failover functions against a fake ``gh`` that refuses every registry write.
 Worker IDs, sources and models are generated or discovered dynamically.
 """
 
@@ -21,95 +21,102 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
-RUN_WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
-OBSERVER_WORKFLOW = ROOT / ".github" / "workflows" / "fixed-model-runtime-observer.yml"
+WORKFLOWS = ROOT / ".github" / "workflows"
+RUN_WORKFLOW = WORKFLOWS / "free-model-factory-run.yml"
+ENTRY_WORKFLOW = WORKFLOWS / "free-model-factory-entry.yml"
+OBSERVER_WORKFLOW = WORKFLOWS / "fixed-model-runtime-observer.yml"
+RECOVERY_WORKFLOW = WORKFLOWS / "fixed-model-factory-dispatch-recovery.yml"
 WORKER_SCRIPT = SCRIPTS / "free-model-factory-worker.sh"
 PRIMITIVES = SCRIPTS / "free-model-factory-worker-primitives.sh"
 SESSION_STEP = "Run continuous fixed-model factory session"
-THREAD_EXHAUSTED = "gh: Commenting is disabled on issues with more than 2500 comments (HTTP 403)"
-THROTTLED = "gh: API rate limit exceeded for installation (HTTP 429)"
+LIFECYCLE_START = "Record trusted worker start in Neon"
+LIFECYCLE_EXIT = "Record trusted worker exit in Neon"
 
 sys.path.insert(0, str(SCRIPTS))
 
-# Fake gh: GET/PATCH/POST behaviour is chosen per test through environment
-# variables, and every invocation is captured for assertions.
+# Every retired registry write or locator. Any of these in a factory path
+# means a GitHub comment became operational infrastructure again.
+RETIRED_REGISTRY = (
+    re.compile(r"issues/(?:1093|\{TELEMETRY_ISSUE\})/comments"),
+    re.compile(r"\bTELEMETRY_COMMENT_ID\b"),
+    re.compile(r"\bTELEMETRY_ISSUE\b"),
+    re.compile(r"\bFACTORY_HEARTBEAT_COMMENT_ID\b"),
+    re.compile(r"\bFACTORY_ATTEMPT_COMMENT_ID\b"),
+    re.compile(r"\bATTEMPT_COMMENT_ID\b"),
+    re.compile(r"__heartbeat_id|__attempt_id"),
+    re.compile(r"\bheartbeat_id\b|\battempt_id\b|\battempt_comment_id\b"),
+    re.compile(r"factory_registry_ingest|factory_registry_verify"),
+    re.compile(r"remember_verified_markers|record_heartbeat_comments|sync_registry\b"),
+    re.compile(r"registry-comment-id-v1|registry-event-ingest"),
+    re.compile(r"FACTORY_REGISTRY_VISIBILITY_SKIPPED|registry_visibility(?!_optional)"),
+)
+
+# Records the fake gh sees; any call at all is a regression for these paths.
 FAKE_GH = r"""#!/usr/bin/env python3
 import json, os, sys
-args = sys.argv[1:]
-method = args[args.index("--method") + 1] if "--method" in args else "GET"
 with open(os.environ["GH_CAPTURE"], "a", encoding="utf-8") as capture:
-    capture.write(json.dumps({"method": method, "args": args}) + "\n")
-mode = os.environ.get(f"GH_{method}", "ok")
-if mode != "ok":
-    sys.stderr.write(mode + "\n")
-    raise SystemExit(1)
-if method == "GET":
-    print(os.environ.get("GH_GET_BODY", "{}"))
-elif method == "POST":
-    print(json.dumps({"id": int(os.environ.get("GH_POST_ID", "1"))}))
+    capture.write(json.dumps(sys.argv[1:]) + "\n")
+sys.stderr.write("gh: Commenting is disabled on issues with more than 2500 comments (HTTP 403)\n")
+raise SystemExit(1)
 """
+
+
+def _factory_sources() -> list[Path]:
+    """Every executable factory path: workflows, actions and trusted scripts."""
+    files = [
+        *WORKFLOWS.glob("*.yml"),
+        *(ROOT / ".github" / "actions").rglob("*.yml"),
+        *SCRIPTS.glob("*.py"),
+        *SCRIPTS.glob("*.sh"),
+        *SCRIPTS.glob("*.cjs"),
+        *SCRIPTS.glob("*.mjs"),
+        *(ROOT / "scripts").glob("*.py"),
+        *(ROOT / "scripts").glob("*.sh"),
+    ]
+    # In-tree unit tests may fake a legacy responder; they never run in Actions.
+    return sorted(path for path in files if not path.name.startswith("test_"))
 
 
 def _worker_id() -> str:
     return str(random.randint(10**11, 10**13))
 
 
-def _step(workflow: Path, job: str, name: str) -> dict[str, object]:
-    data = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+def _workflow(path: Path) -> dict[str, Any]:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _step(workflow: Path, job: str, name: str) -> dict[str, Any]:
+    data = _workflow(workflow)
     return next(step for step in data["jobs"][job]["steps"] if step.get("name") == name)
 
 
-def _gh_bin(tmp_path: Path) -> Path:
+def _run_script(
+    tmp_path: Path, script: str, env: dict[str, str]
+) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     gh = bin_dir / "gh"
     gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(0o755)
-    return bin_dir
-
-
-def _calls(capture: Path) -> list[dict[str, object]]:
-    if not capture.exists():
-        return []
-    return [json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()]
-
-
-def _trusted_marker(kind: str, worker: str, comment_id: int, run_id: str) -> str:
-    marker = "heartbeat" if kind == "heartbeat" else "attempt-outcome"
-    return json.dumps({
-        "id": comment_id,
-        "issue_url": "https://api.github.com/repos/JoshCLWren/comic-pile/issues/1093",
-        "user": {"login": "github-actions[bot]", "type": "Bot"},
-        "author_association": "NONE",
-        "performed_via_github_app": {"slug": "github-actions"},
-        "body": (
-            f"<!-- factory-{marker}:v1 worker=opencode-free-model-factory-{worker} -->\n"
-            f"Worker: opencode-free-model-factory-{worker}\nRun: {run_id}"
-        ),
-    })
-
-
-def _run_step(
-    tmp_path: Path, script: str, env: dict[str, str]
-) -> tuple[subprocess.CompletedProcess[str], list[dict[str, object]], Path]:
     capture = tmp_path / "gh-calls.jsonl"
-    github_env = tmp_path / "github-env"
-    github_env.touch()
+    summary = tmp_path / "summary.md"
+    summary.touch()
     result = subprocess.run(
         ["bash", "-c", script],
         cwd=ROOT,
         env={
             **os.environ,
-            "PATH": f"{_gh_bin(tmp_path)}:{os.environ['PATH']}",
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "GH_CAPTURE": str(capture),
             "RUNNER_TEMP": str(tmp_path),
-            "GITHUB_ENV": str(github_env),
+            "GITHUB_STEP_SUMMARY": str(summary),
             "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
             "GITHUB_RUN_ID": str(random.randint(10**10, 10**11)),
             **env,
@@ -118,168 +125,156 @@ def _run_step(
         text=True,
         check=False,
     )
-    return result, _calls(capture), github_env
+    calls = (
+        [json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()]
+        if capture.exists() else []
+    )
+    return result, calls
 
 
-def _heartbeat_env(worker: str, **extra: str) -> dict[str, str]:
-    return {
-        "WORKER": worker,
+def test_no_factory_path_posts_or_patches_issue_1093_comments() -> None:
+    """Regression: no workflow, action or trusted script touches #1093 comments."""
+    offenders = [
+        f"{path.relative_to(ROOT)}:{number}: {line.strip()}"
+        for path in _factory_sources()
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if any(pattern.search(line) for pattern in RETIRED_REGISTRY)
+    ]
+    assert offenders == []
+    # A comment write to any issue from a factory path must name its target;
+    # none may resolve to the retired registry through a variable.
+    writes = re.compile(r"--method\s+(?:POST|PATCH)[^\n]*issues/[^\n]*comments")
+    for path in _factory_sources():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if writes.search(line):
+                assert "1093" not in line, f"{path.relative_to(ROOT)}: {line.strip()}"
+
+
+def test_issue_1093_stays_protected_and_non_executable() -> None:
+    """Retiring the registry never makes #1093 claimable or closable."""
+    from factory_post_merge_closure import PROTECTED_ISSUES
+    from factory_work_policy import NON_EXECUTABLE_ISSUES
+
+    assert 1093 in NON_EXECUTABLE_ISSUES
+    assert 1093 in PROTECTED_ISSUES
+
+
+def test_session_steps_make_no_github_comment_calls(tmp_path: Path) -> None:
+    """The run workflow's attempt summary needs no GitHub API at all."""
+    step = _step(RUN_WORKFLOW, "factory", "Summarize factory attempt")
+    assert step.get("continue-on-error") is True
+    discovery = tmp_path / "discovery"
+    discovery.write_text("model_unavailable\tobserved during real assigned work\n")
+    result, calls = _run_script(tmp_path, str(step["run"]), {
+        "WORKER": _worker_id(),
         "MODEL": f"model-{uuid.uuid4().hex[:8]}",
         "SOURCE": f"source-{uuid.uuid4().hex[:8]}",
-        "MINUTE": "7",
         "CONFIGURED": "true",
         "REASON": "selected-from-live-runtime-catalog",
-        "EXECUTOR_OUTCOME": "success",
-        "FACTORY_HEARTBEAT_COMMENT_ID": "",
-        **extra,
-    }
-
-
-def test_session_cannot_be_skipped_by_a_registry_write_step() -> None:
-    """Every #1093 write before the session is continue-on-error and nonfatal."""
-    data = yaml.safe_load(RUN_WORKFLOW.read_text(encoding="utf-8"))
-    steps = data["jobs"]["factory"]["steps"]
-    session = next(i for i, step in enumerate(steps) if step.get("name") == SESSION_STEP)
-    registry_writers = [
-        step for step in steps[:session]
-        if "issues/1093/comments" in str(step.get("run") or "")
-    ]
-    assert registry_writers, "the selected-executor heartbeat must still be published"
-    for step in registry_writers:
-        # The session step's implicit success() would otherwise be false.
-        assert step.get("continue-on-error") is True, step.get("name")
-        assert "exit 1" not in str(step["run"]), step.get("name")
-    # The session itself remains gated only on the trusted lane, not on telemetry.
-    assert steps[session]["if"] == "steps.lane.outputs.configured == 'true'"
-
-
-@pytest.mark.parametrize("failure", [THREAD_EXHAUSTED, "gh: Not Found (HTTP 404)",
-                                     "gh: Validation Failed (HTTP 422)", THROTTLED])
-def test_selected_heartbeat_create_failure_is_nonfatal(tmp_path: Path, failure: str) -> None:
-    """403 exhausted thread, 404, 422 and 429 do not fail the pre-session heartbeat."""
-    step = _step(RUN_WORKFLOW, "factory", "Report selected executor heartbeat")
-    result, calls, github_env = _run_step(
-        tmp_path, str(step["run"]), {**_heartbeat_env(_worker_id()), "GH_POST": failure},
-    )
-    assert result.returncode == 0, result.stderr
-    assert [call["method"] for call in calls] == ["POST"]
-    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-create" in result.stderr
-    status = re.search(r"HTTP (\d{3})", failure)
-    assert status and f"http={status.group(1)}" in result.stderr
-    # No fabricated locator is exported when the write failed.
-    assert "FACTORY_HEARTBEAT_COMMENT_ID" not in github_env.read_text(encoding="utf-8")
-
-
-def test_selected_heartbeat_unverifiable_locator_never_duplicates(tmp_path: Path) -> None:
-    """A throttled lookup cannot prove absence: skip, never POST a duplicate."""
-    step = _step(RUN_WORKFLOW, "factory", "Report selected executor heartbeat")
-    env = _heartbeat_env(_worker_id(), FACTORY_HEARTBEAT_COMMENT_ID="4242", GH_GET=THROTTLED)
-    result, calls, _ = _run_step(tmp_path, str(step["run"]), env)
-    assert result.returncode == 0, result.stderr
-    assert [call["method"] for call in calls] == ["GET"]
-    assert "op=heartbeat-lookup" in result.stdout + result.stderr
-
-
-def test_selected_heartbeat_patch_failure_keeps_verified_locator(tmp_path: Path) -> None:
-    """An existing verified marker that refuses PATCH stays non-fatal."""
-    worker = _worker_id()
-    comment_id = random.randint(10**9, 10**10)
-    step = _step(RUN_WORKFLOW, "factory", "Report selected executor heartbeat")
-    env = _heartbeat_env(
-        worker,
-        FACTORY_HEARTBEAT_COMMENT_ID=str(comment_id),
-        GH_GET_BODY=_trusted_marker("heartbeat", worker, comment_id, "1"),
-        GH_PATCH=THREAD_EXHAUSTED,
-    )
-    result, calls, github_env = _run_step(tmp_path, str(step["run"]), env)
-    assert result.returncode == 0, result.stderr
-    assert [call["method"] for call in calls] == ["GET", "PATCH"]
-    assert "op=heartbeat-update" in result.stderr
-    assert f"FACTORY_HEARTBEAT_COMMENT_ID={comment_id}" in github_env.read_text()
-
-
-def test_selected_heartbeat_success_still_records_locator(tmp_path: Path) -> None:
-    """Healthy GitHub keeps the existing visibility behaviour."""
-    step = _step(RUN_WORKFLOW, "factory", "Report selected executor heartbeat")
-    new_id = str(random.randint(10**9, 10**10))
-    result, calls, github_env = _run_step(
-        tmp_path, str(step["run"]), {**_heartbeat_env(_worker_id()), "GH_POST_ID": new_id},
-    )
-    assert result.returncode == 0, result.stderr
-    assert [call["method"] for call in calls] == ["POST"]
-    assert f"FACTORY_HEARTBEAT_COMMENT_ID={new_id}" in github_env.read_text()
-    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED" not in result.stderr
-
-
-@pytest.mark.parametrize("outcome", ["model_unavailable", "provider_quota", "model_retired_410"])
-def test_terminal_reporting_survives_exhausted_registry(tmp_path: Path, outcome: str) -> None:
-    """Terminal heartbeat, snapshots and attempt marker failures are warnings only."""
-    step = _step(RUN_WORKFLOW, "factory", "Report terminal heartbeat")
-    discovery = tmp_path / "discovery"
-    discovery.write_text(f"{outcome}\tobserved during real assigned work\n")
-    # The snapshot branches are keyed on registered source names; read them
-    # from the step itself rather than hard-coding provider identities.
-    script = str(step["run"])
-    source = {
-        "model_retired_410": re.search(r'\[\[ "\$SOURCE" == (\S+) && "\$attempt_outcome" == model_retired_410', script),
-        "model_unavailable": re.search(r'\[\[ "\$SOURCE" == (\S+) && \( "\$attempt_outcome" == model_unavailable', script),
-        "provider_quota": re.search(r'\[\[ "\$SOURCE" == (\S+) && \( "\$attempt_outcome" == model_unavailable', script),
-    }[outcome]
-    assert source is not None
-    env = {
-        **_heartbeat_env(_worker_id(), SOURCE=source.group(1)),
         "JOB_STATUS": "failure",
         "WORKER_STATUS_FILE": str(tmp_path / "missing-status"),
         "DISCOVERY_OUTCOME_FILE": str(discovery),
-        "FACTORY_ATTEMPT_COMMENT_ID": "",
-        "GH_POST": THREAD_EXHAUSTED,
-    }
-    result, calls, _ = _run_step(tmp_path, script, env)
+    })
     assert result.returncode == 0, result.stderr
-    posts = [call for call in calls if call["method"] == "POST"]
-    # heartbeat + run-specific snapshot + attempt marker were each attempted once.
-    assert len(posts) == 3
-    assert result.stderr.count("FACTORY_REGISTRY_VISIBILITY_SKIPPED") == 3
-    assert "::error::" not in result.stdout + result.stderr
+    assert calls == []
+    # Visibility goes to the job summary, never into the classified job log.
+    assert "model_unavailable" in (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "model_unavailable" not in result.stdout + result.stderr
 
 
-def test_terminal_throttled_lookup_never_duplicates_markers(tmp_path: Path) -> None:
-    """Comment API throttling neither duplicates markers nor fails the job."""
-    step = _step(RUN_WORKFLOW, "factory", "Report terminal heartbeat")
-    env = {
-        **_heartbeat_env(_worker_id(), FACTORY_HEARTBEAT_COMMENT_ID="31", FACTORY_ATTEMPT_COMMENT_ID="32"),
-        "JOB_STATUS": "success",
-        "WORKER_STATUS_FILE": str(tmp_path / "missing-status"),
-        "DISCOVERY_OUTCOME_FILE": str(tmp_path / "missing-discovery"),
-        "GH_GET": THROTTLED,
-    }
-    result, calls, _ = _run_step(tmp_path, str(step["run"]), env)
-    assert result.returncode == 0, result.stderr
-    assert {call["method"] for call in calls} == {"GET"}
-    output = result.stdout + result.stderr
-    assert "op=heartbeat-lookup" in output
-    assert "op=attempt-lookup" in output
+def test_session_cannot_be_gated_on_telemetry() -> None:
+    """No pre-session step can stop the session; it is gated on the lane only."""
+    steps = _workflow(RUN_WORKFLOW)["jobs"]["factory"]["steps"]
+    session = next(i for i, step in enumerate(steps) if step.get("name") == SESSION_STEP)
+    assert steps[session]["if"] == "steps.lane.outputs.configured == 'true'"
+    for step in steps[:session]:
+        assert "issues/" not in str(step.get("run") or "") or "comments" not in str(step.get("run") or "")
 
 
-def test_runtime_observer_registry_write_cannot_fail_neon_completion() -> None:
-    """The observer's optional marker never exits before Neon persistence."""
-    data = yaml.safe_load(OBSERVER_WORKFLOW.read_text(encoding="utf-8"))
-    steps = next(
-        job["steps"] for job in data["jobs"].values()
-        if any("issues/1093/comments" in str(step.get("run") or "") for step in job["steps"])
+def test_lifecycle_heartbeat_moved_from_registry_read_back_to_trusted_neon() -> None:
+    """The started/exit lifecycle the #1093 ingest supplied is written by trusted jobs."""
+    data = _workflow(RUN_WORKFLOW)
+    start = _step(RUN_WORKFLOW, "validate_assignment", LIFECYCLE_START)
+    start_run = str(start["run"])
+    assert "factory_state_ledger.py lifecycle" in start_run
+    assert "--status started" in start_run
+    assert '--run-id "$GITHUB_RUN_ID"' in start_run
+    # Worker identity comes from the trusted dispatch input, never model output.
+    assert start["env"]["FACTORY_WORKER"] == "${{ inputs.worker }}"
+    # The DSN-bearing job is the trusted preparation job, not the model job.
+    uses = [step.get("uses") for step in data["jobs"]["validate_assignment"]["steps"]]
+    assert "./.github/actions/factory-state-cache" in uses
+    factory_uses = [step.get("uses") for step in data["jobs"]["factory"]["steps"]]
+    assert "./.github/actions/factory-state-cache" not in factory_uses
+    for job in ("release_pre_session_lease", "release_post_session_lease"):
+        step = _step(RUN_WORKFLOW, job, LIFECYCLE_EXIT)
+        assert step["if"] == "always()"
+        assert step["env"]["FACTORY_RESULT"] == "${{ needs.factory.result }}"
+        assert step["env"]["FACTORY_WORKER"] == "${{ inputs.worker }}"
+        assert "factory_state_ledger.py lifecycle" in str(step["run"])
+
+
+@pytest.mark.parametrize(("status", "event_type", "shown"), [
+    ("started", "worker_started", "running"),
+    ("finished", "worker_outcome_signal", "finished"),
+    ("failure", "worker_outcome_signal", "failure"),
+])
+def test_trusted_lifecycle_events_feed_the_runtime_view(
+    monkeypatch: pytest.MonkeyPatch, status: str, event_type: str, shown: str,
+) -> None:
+    """Lifecycle events project into the same heartbeat view recovery reads."""
+    import factory_state_ledger as ledger
+    from factory_runtime_view import project_events
+
+    recorded: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        ledger, "record_events",
+        lambda _repo, entries: recorded.extend(entries) or len(entries),
     )
-    writer = next(step for step in steps if "issues/1093/comments" in str(step.get("run") or ""))
-    script = str(writer["run"])
-    assert "exit 1" not in script
-    assert script.count("FACTORY_REGISTRY_VISIBILITY_SKIPPED") == 3
-    persist = next(step for step in steps if step.get("name") == "Persist classified worker completion in Neon")
+    worker, run_id = _worker_id(), str(random.randint(10**10, 10**11))
+    assert ledger.record_lifecycle("owner/repo", run_id, worker, status) == 1
+    (event,) = recorded
+    assert event["event_type"] == event_type
+    assert event["event_id"] == f"lifecycle:{run_id}:{status}"
+    view = project_events([{"event_type": event_type, "detail": event, "created_at": ""}])
+    assert view["heartbeats"][worker]["run"] == run_id
+    assert view["heartbeats"][worker]["outcome"] == shown
+    with pytest.raises(ValueError):
+        ledger.record_lifecycle("owner/repo", run_id, worker, "running")
+    with pytest.raises(ValueError):
+        ledger.record_lifecycle("owner/repo", "not-a-run", worker, status)
+
+
+def test_dispatch_recovery_reads_only_neon() -> None:
+    """Recovery freshness has no GitHub comment fallback any more."""
+    workflow = RECOVERY_WORKFLOW.read_text(encoding="utf-8")
+    assert "from factory_runtime_view import export_view" in workflow
+    assert "comments" not in workflow
+    assert "issues:" not in str(_workflow(RECOVERY_WORKFLOW).get("permissions"))
+
+
+def test_runtime_observer_persists_to_neon_without_comments() -> None:
+    """The observer's only durable write is the Neon runtime outcome."""
+    data = _workflow(OBSERVER_WORKFLOW)
+    steps = data["jobs"]["publish-runtime-outcome"]["steps"]
+    for step in steps:
+        assert "comments" not in str(step.get("run") or ""), step.get("name")
+    persist = next(s for s in steps if s.get("name") == "Persist classified worker completion in Neon")
     assert str(persist["if"]).startswith("always()")
+    assert data["permissions"]["issues"] == "read"
+
+
+def test_entry_persists_outcome_without_registry_patch() -> None:
+    """Entry's terminal verdict is Neon plus job summary only."""
+    workflow = ENTRY_WORKFLOW.read_text(encoding="utf-8")
+    assert "factory_state_ledger.py runtime-outcome" in workflow
+    assert "issues/comments" not in workflow
 
 
 def _worker_failover_harness(tmp_path: Path, candidates: list[dict[str, str]]) -> str:
     """Build a bash harness around the real worker failover functions."""
     worker = WORKER_SCRIPT.read_text(encoding="utf-8")
-    start = worker.index("registry_visibility() {")
+    start = worker.index("record_model_failover_failure() {")
     end = worker.index("\n}\n", worker.index("select_next_eligible_model() {")) + 3
     functions = worker[start:end]
     log_line = next(
@@ -332,8 +327,8 @@ echo "SELECTED source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
 """
 
 
-def test_worker_failover_advances_and_is_attested_without_comments(tmp_path: Path) -> None:
-    """Transitions survive an exhausted #1093 and are persisted from the job log."""
+def test_worker_failover_is_attested_from_the_log_without_any_gh_call(tmp_path: Path) -> None:
+    """Failover/transition evidence reaches Neon from the job log alone."""
     from factory_provider_candidates import ADAPTERS
     from factory_state_ledger import refine_trusted_failover_models
 
@@ -346,8 +341,7 @@ def test_worker_failover_advances_and_is_attested_without_comments(tmp_path: Pat
     assert exempt
     sources = sorted(set(ADAPTERS) - exempt)
     assert len(sources) >= 3
-    rng = random.Random()
-    origin, first, second = rng.sample(sources, 3)
+    origin, first, second = random.Random().sample(sources, 3)
     candidates = [
         {"source": src, "model": f"m-{uuid.uuid4().hex[:10]}", "runtime_model": f"rt-{uuid.uuid4().hex[:10]}"}
         for src in (first, second)
@@ -355,25 +349,21 @@ def test_worker_failover_advances_and_is_attested_without_comments(tmp_path: Pat
     worker = _worker_id()
     origin_model = f"m-{uuid.uuid4().hex[:10]}"
     script = _worker_failover_harness(tmp_path, candidates)
-    result, calls, _ = _run_step(tmp_path, script, {
+    result, calls = _run_script(tmp_path, script, {
         "WORKER": worker, "WORKER_ID": f"opencode-free-model-factory-{worker}",
         "SOURCE": origin, "MODEL": origin_model, "RUNTIME_MODEL": "rt-origin",
         "MODE": "issue", "NUMBER": str(random.randint(100, 9999)), "EXPECTED_HEAD": "",
-        "GITHUB_RUN_NUMBER": "1", "GH_POST": THREAD_EXHAUSTED,
+        "GITHUB_RUN_NUMBER": "1",
     })
     assert result.returncode == 0, result.stderr
+    assert calls == []
     chosen = candidates[1]
     assert (
         f"SELECTED source={chosen['source']} model={chosen['model']} "
         f"runtime={chosen['runtime_model']}"
     ) in result.stdout
-    # No control-plane terminal outcome was recorded for a refused comment.
+    assert "FACTORY_FLEET_TRANSITION:" in result.stdout
     assert not (tmp_path / "terminal-outcome").exists()
-    posts = [call for call in calls if call["method"] == "POST"]
-    # inference failure + catalog-miss snapshots, then one fleet transition
-    assert len(posts) == 3
-    assert "op=model-failover" in result.stderr
-    assert "op=fleet-transition" in result.stderr
 
     # Actions timestamps every log line; the trusted persister reads only that.
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
@@ -390,12 +380,14 @@ def test_worker_failover_advances_and_is_attested_without_comments(tmp_path: Pat
 
 
 def test_lease_validation_remains_fatal() -> None:
-    """Only telemetry became optional; assignment validation still gates the job."""
-    data = yaml.safe_load(RUN_WORKFLOW.read_text(encoding="utf-8"))
+    """Only the lifecycle observation is advisory; assignment validation gates the job."""
+    data = _workflow(RUN_WORKFLOW)
     factory = data["jobs"]["factory"]
     assert factory["needs"] == "validate_assignment"
     assert "always()" not in str(factory.get("if") or "")
     for step in data["jobs"]["validate_assignment"]["steps"]:
+        if step.get("name") == LIFECYCLE_START:
+            continue
         assert step.get("continue-on-error") is not True, step.get("name")
     for name in ("Verify original active claim and live target", "Require trusted push credential"):
         steps = [s for job in data["jobs"].values() for s in job["steps"] if s.get("name") == name]

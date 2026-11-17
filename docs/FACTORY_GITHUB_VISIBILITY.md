@@ -110,7 +110,7 @@ If factory pull requests later use a separate GitHub App or machine-user identit
 
 ## Active heartbeat monitoring
 
-Registry issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is telemetry, not backlog work. Active fixed-model workers use durable `opencode-free-model-factory-<number>` heartbeat identities. `.github/factory-expected-workers.json` defines the expected roster; retired and paused workers are excluded.
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active fixed-model workers use durable `opencode-free-model-factory-<number>` identities. Their lifecycle (`worker_started` at trusted assignment validation, `worker_outcome_signal` at trusted lease release) is written to Neon by the run workflow's trusted jobs; terminal outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. `.github/factory-expected-workers.json` defines the expected roster; retired and paused workers are excluded.
 
 `.github/workflows/fixed-model-factory-dispatch-recovery.yml` runs every 15 minutes. It records per-worker freshness, last heartbeat timestamp, last run, and the latest classified runtime outcome in the job summary and the `factory-heartbeat-health` JSON artifact. The generated GitHub Pages fleet scoreboard uses the same observations. At 20 minutes an observation becomes stale; missing heartbeats are reported separately. One fresh worker cannot hide stale peers in these diagnostics.
 
@@ -118,7 +118,7 @@ Freshness and provider availability are separate. Weekly quota exhaustion is leg
 
 ## Historical disabled ChatGPT heartbeat schedules
 
-Registry issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is operational telemetry, not executable backlog work. Factories must never claim, implement, label, or close the registry or the watchdog's alert issue.
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is a retired registry and remains non-executable. Factories must never claim, implement, label, close, or comment on it or the watchdog's alert issue.
 
 The five legacy ChatGPT schedules are disabled. Their permanent comments are historical records, excluded from active monitoring. The former heartbeat format and comment IDs are retained for provenance:
 

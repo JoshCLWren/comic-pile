@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
+  issues: read
   pull-requests: read
 
 jobs:
@@ -87,109 +87,21 @@ jobs:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
-      - name: Update durable attempt-outcome marker
+      - name: Summarize observed worker outcome
         if: steps.runtime.outputs.publish == 'true'
         shell: bash
-        env:
-          WORKER: ${{ steps.runtime.outputs.worker }}
         run: |
           set -Eeuo pipefail
+          # Visibility only. Issue #1093 is retired as a registry: the trusted
+          # job log and the Neon write below are the authoritative record.
           data="$RUNNER_TEMP/runtime-outcome.json"
-          # Attempt evidence has its own durable record. Runner liveness updates use
-          # factory-heartbeat:v1 and must never overwrite this classified result.
-          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          model="$(jq -r .model "$data")"
-          source="$(jq -r .source "$data")"
-          minute="$(jq -r .minute "$data")"
-          outcome="$(jq -r .outcome "$data")"
-          outcome_class="$(jq -r .outcome_class "$data")"
-          detail="$(jq -r .detail "$data")"
-          proven="$(jq -r 'if .exact_model_proven then "yes" else "no" end' "$data")"
-          persisted="$(jq -r 'if .persisted_work then "yes" else "no" end' "$data")"
-          delivery_state="$(jq -r '.delivery_outcome // "none"' "$data")"
-          delivery_pr="$(jq -r '.delivery_pr // empty' "$data")"
-          selected_kind="$(jq -r '.selected_kind // ""' "$data")"
-          selected_number="$(jq -r '.selected_number // ""' "$data")"
-          selected='none'
-          if [[ -n "$selected_kind" && -n "$selected_number" ]]; then
-            selected="${selected_kind} #${selected_number}"
-          fi
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nAgent outcome: %s\nAttempt outcome: %s\nExact model execution proven: %s\nSelected: %s\nPersisted work signal: %s\nVerified delivery: %s\nDelivered PR: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$delivery_state" "${delivery_pr:-none}" "$detail" "$now" "$RUN_URL")"
           {
             echo "### Observed factory worker outcome"
             echo
-            echo "Agent: \`$outcome_class\`"
-            echo "Verified delivery: \`$delivery_state\`"
-            echo "PR: \`${delivery_pr:-none}\`"
+            echo "Agent: \`$(jq -r .outcome_class "$data")\`"
+            echo "Verified delivery: \`$(jq -r '.delivery_outcome // "none"' "$data")\`"
+            echo "PR: \`$(jq -r '.delivery_pr // "none"' "$data")\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          # Trusted Neon stores a compact advisory ID. Verify its actual GitHub
-          # author/marker before a mutation; no shared comment body cache.
-          locators="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions \
-            --repo "$GITHUB_REPOSITORY" --worker "$WORKER")"
-          comment_id="$(jq -r '.__attempt_id[0] // empty' <<< "$locators")"
-          current=''
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-attempt-locator-error")"; then
-              :
-            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-attempt-locator-error"; then
-              comment_id=''
-              current=''
-            else
-              # A transient auth/quota error cannot establish that a marker
-              # is absent. Do not create a duplicate or scan full history.
-              # The #1093 marker is optional visibility; Neon stays authoritative.
-              echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup; leaving trusted Neon completion intact'
-              exit 0
-            fi
-          else
-            comment_id=''
-          fi
-          # A missing/invalid compact locator gets a fresh canonical marker;
-          # trusted verification below seeds its new ID in Neon.
-          # Real validation follows: author, canonical worker and marker kind.
-          verified="$(python3 -c 'import json,sys; sys.path.insert(0,".github/scripts"); from factory_registry_ingest import marker_ids; print(any(m["worker"]==sys.argv[1] and m["kind"]=="attempt" and m["id"]==sys.argv[2] for m in marker_ids([json.load(sys.stdin)])))' \
-            "$WORKER" "$comment_id" <<< "$current" 2>/dev/null || true)"
-          if [[ "$verified" != True ]]; then
-            comment_id=''
-            current=''
-          fi
-          existing_run=''
-          if [[ -n "$comment_id" ]]; then
-            existing_run="$(jq -r '.body // ""' <<< "$current" \
-              | sed -n 's/^Run: //p' | tail -1)"
-          fi
-          if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > RUN_ID )); then
-            echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
-          elif [[ -n "$comment_id" ]]; then
-            if ! gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null; then
-              echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-update; Neon stays authoritative'
-              exit 0
-            fi
-          elif created="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"; then
-            comment_id="$(jq -r '.id // empty' <<< "$created")"
-          else
-            # GitHub refuses new comments on threads over 2,500 comments (403).
-            echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-create; Neon stays authoritative'
-            exit 0
-          fi
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
-              > "$RUNNER_TEMP/verified-attempt-marker.json"
-            python3 - "$RUNNER_TEMP/verified-attempt-marker.json" <<'PYMARKER'
-          import json
-          import os
-          import sys
-          sys.path.insert(0, ".github/scripts")
-          from factory_registry_ingest import marker_ids
-          from factory_state_operations import remember_verified_markers
-          with open(sys.argv[1], encoding="utf-8") as stream:
-              markers = [item for item in marker_ids([json.load(stream)]) if item["kind"] == "attempt"]
-          if markers:
-              remember_verified_markers(os.environ["GITHUB_REPOSITORY"], markers)
-          PYMARKER
-          fi
 
       - name: Persist classified worker completion in Neon
         if: always() && steps.runtime.outputs.publish == 'true'
