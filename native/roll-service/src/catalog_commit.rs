@@ -2542,7 +2542,10 @@ mod tests {
             &rows,
             "queue_thread_bootstrap",
         );
-        assert_eq!(d, "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3");
+        assert_eq!(
+            d,
+            "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3"
+        );
     }
 
     /// #5170: the commit path must accept the 33-issue "New Teen Titans (1980)"
@@ -2631,7 +2634,11 @@ mod tests {
         }
     }
 
-    fn commit_request(token: &str, idempotency_key: &str, approved_row_ids: Vec<String>) -> CommitRequest {
+    fn commit_request(
+        token: &str,
+        idempotency_key: &str,
+        approved_row_ids: Vec<String>,
+    ) -> CommitRequest {
         CommitRequest {
             preview_token: token.to_string(),
             idempotency_key: idempotency_key.to_string(),
@@ -2679,7 +2686,10 @@ mod tests {
         assert_eq!(response.confirmed_issue_ids, expected_ids);
         assert_eq!(response.needs_review_issue_ids, Vec::<i32>::new());
         assert_eq!(response.series_mapping.status, "confirmed");
-        assert_eq!(response.series_mapping.evidence_source, "user_series_confirmation");
+        assert_eq!(
+            response.series_mapping.evidence_source,
+            "user_series_confirmation"
+        );
 
         // Reload: confirmed mappings and the thread-series link survive.
         let confirmed: i64 = connection
@@ -2768,7 +2778,11 @@ mod tests {
         with_annual.push("issue:1040".to_string());
         let rejected = commit(
             &state,
-            commit_request(NTT_WITH_ANNUAL_PREVIEW_TOKEN, "ntt-annual-reject", with_annual),
+            commit_request(
+                NTT_WITH_ANNUAL_PREVIEW_TOKEN,
+                "ntt-annual-reject",
+                with_annual,
+            ),
         )
         .await;
         assert!(matches!(

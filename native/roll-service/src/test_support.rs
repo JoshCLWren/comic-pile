@@ -377,8 +377,10 @@ pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static
 /// tests cannot leak a fixture into each other; tests must use unique volume
 /// ids and clear the fixture when done. Nothing here runs unless a test calls
 /// [`install_test_volume_roster`].
+type TestVolumeRosterFixture = (serde_json::Value, Vec<serde_json::Value>);
+
 static TEST_VOLUME_ROSTERS: std::sync::Mutex<
-    Option<std::collections::HashMap<String, (serde_json::Value, Vec<serde_json::Value>)>>,
+    Option<std::collections::HashMap<String, TestVolumeRosterFixture>>,
 > = std::sync::Mutex::new(None);
 
 /// Install a synthetic `(series_info, roster)` returned for `external_id`.
@@ -408,9 +410,7 @@ pub fn clear_test_volume_roster(external_id: &str) {
 }
 
 /// Look up an installed fixture. `None` outside tests and when unset.
-pub(crate) fn lookup_test_volume_roster(
-    external_id: &str,
-) -> Option<(serde_json::Value, Vec<serde_json::Value>)> {
+pub(crate) fn lookup_test_volume_roster(external_id: &str) -> Option<TestVolumeRosterFixture> {
     let guard = TEST_VOLUME_ROSTERS.lock().ok()?;
     guard.as_ref().and_then(|map| map.get(external_id).cloned())
 }
