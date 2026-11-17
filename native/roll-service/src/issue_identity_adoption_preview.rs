@@ -294,10 +294,9 @@ pub async fn api_cbl_adoption_preview_handler(
         } else if adoption_decision == "unresolved" {
             unresolved += 1;
         }
-        decision_positions
-            .get_mut(adoption_decision)
-            .expect("decision key registered")
-            .push(entry.position);
+        if let Some(positions) = decision_positions.get_mut(adoption_decision) {
+            positions.push(entry.position);
+        }
 
         plan_entries.push(CBLAdoptionEntry {
             collection_excluded: false,

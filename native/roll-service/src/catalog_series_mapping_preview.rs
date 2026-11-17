@@ -21,9 +21,19 @@ use utoipa::ToSchema;
 /// Small response error used instead of returning a large Axum `Response` from
 /// helpers (see `clippy::result_large_err`).
 #[derive(Debug)]
-enum PreviewError {
+pub enum PreviewError {
     Api(ApiError),
     Json(StatusCode, Value),
+}
+
+impl PreviewError {
+    #[cfg(test)]
+    fn status(&self) -> StatusCode {
+        match self {
+            Self::Api(error) => error.status(),
+            Self::Json(status, _) => *status,
+        }
+    }
 }
 
 impl From<ApiError> for PreviewError {
@@ -264,17 +274,14 @@ pub async fn preview_series_mapping_handler(
         None
     };
     let preview_token = if scope_available {
-        Some(
-            issue_preview_token(
-                &state.preview_token_secret,
-                user.id(),
-                &request,
-                &plan,
-                issued_at,
-                expires_at.unwrap_or(issued_at),
-            )
-            ?,
-        )
+        Some(issue_preview_token(
+            &state.preview_token_secret,
+            user.id(),
+            &request,
+            &plan,
+            issued_at,
+            expires_at.unwrap_or(issued_at),
+        )?)
     } else {
         None
     };

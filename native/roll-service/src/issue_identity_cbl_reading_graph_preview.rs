@@ -353,8 +353,8 @@ pub async fn preview_cbl_reading_graph_handler(
             .cloned()
             .unwrap_or_default();
         let _ = series_identity_id;
-        let owned_issue_id = external_by_id
-            .get(&identity_id.expect("resolved above"))
+        let owned_issue_id = identity_id
+            .and_then(|id| external_by_id.get(&id))
             .and_then(|external| owned_by_external.get(external))
             .copied();
         let state = if owned_issue_id.is_some() {
