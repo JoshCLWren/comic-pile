@@ -245,6 +245,17 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
     }
 }
 
+/// Map a transactional-statement failure, honoring PostgreSQL deadlock victims
+/// as the retryable [`ApiError::DeadlockDetected`] variant so the bounded
+/// deadlock retry in restore/undo handlers actually engages.
+pub(crate) fn tx_error(error: tokio_postgres::Error) -> ApiError {
+    if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
+        ApiError::DeadlockDetected
+    } else {
+        query_error(error)
+    }
+}
+
 pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
     query_error_for("database.statement", error)
 }

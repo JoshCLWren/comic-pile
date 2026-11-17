@@ -422,6 +422,87 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
     )
 
 
+def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
+    """The bug-reports family owns both POST twins as native after #4852.
+
+    The same-path Rust cutover (#4899, issue #4852) plus the Python handler
+    retirement (#5162) exclude both operations from the Python inventory
+    surface while keeping their exact method/path on native ingress.
+    """
+    fragment = _fragment_named("bug-reports")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    assert set(operations) == {
+        ("POST", "/api/bug-reports/"),
+        ("POST", "/api/v1/bug-reports/"),
+    }
+    for operation in operations.values():
+        assert operation["dest"] == "/api/native_roll.rs"
+        assert operation["exclude_from_inventory"] is True
+        assert operation["owning_issue"] == 4852
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    for bucket in ("v1_operations", "unversioned_operations"):
+        raw_operations = full_surface[bucket]
+        assert isinstance(raw_operations, list)
+        assert not any(
+            "bug-reports" in str(item.get("path", ""))
+            for item in raw_operations
+            if isinstance(item, dict)
+        )
+
+
+def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
+    """The sessions and undo fragments cut the cutover operations over to Rust.
+
+    GET /api/sessions/current/ and GET /api/v1/sessions/current/ stay on the
+    Python handler in this slice: the legacy read creates the session on
+    demand while the native read is a read-only projection that answers 404,
+    so cutting those two twins over here would strand the queue page's
+    cold-open path. GET /api/v1/sessions/correction-examples stays on Python
+    because no browser caller exists.
+    """
+    sessions = _fragment_named("sessions")
+    undo = _fragment_named("undo")
+    native_ops = {
+        ("GET", "/api/sessions/"),
+        ("GET", "/api/v1/sessions/"),
+        ("GET", "/api/sessions/{session_id}/details"),
+        ("GET", "/api/v1/sessions/{session_id}/details"),
+        ("POST", "/api/sessions/{session_id}/restore-session-start"),
+        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
+        ("GET", "/api/undo/{session_id}/snapshots"),
+        ("POST", "/api/undo/{session_id}/undo/{snapshot_id}"),
+        ("GET", "/api/v1/undo/{session_id}/snapshots"),
+        ("POST", "/api/v1/undo/{session_id}/undo/{snapshot_id}"),
+    }
+    python_ops = {
+        ("GET", "/api/sessions/current/"),
+        ("GET", "/api/v1/sessions/current/"),
+        ("GET", "/api/v1/sessions/correction-examples"),
+    }
+    declared = {
+        (operation["method"], operation["path"]): operation
+        for fragment in (sessions, undo)
+        for operation in fragment.operations
+    }
+    assert native_ops | python_ops <= set(declared)
+    for key in native_ops:
+        operation = declared[key]
+        assert operation["dest"] == "/api/native_roll.rs", key
+        # The Python handlers stay mounted until authenticated production
+        # proof permits their deletion, so the cutover operations remain on
+        # the Python inventory surface as shadowed-by-Rust entries.
+        assert operation.get("exclude_from_inventory") is not True, key
+        assert operation["owning_issue"] == 4839, key
+    for key in python_ops:
+        operation = declared[key]
+        assert operation["dest"] == "/api/index.py", key
+        assert operation.get("exclude_from_inventory") is not True, key
+
 def test_release_fragment_covers_every_browser_called_release_route() -> None:
     """The releases family owns all five browser-called operations."""
     release_fragment = _fragment_named("releases")

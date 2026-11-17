@@ -1,8 +1,8 @@
 {
   "family": "undo",
   "owned_path_patterns": [
-    "^/api/undo(?:/.*)?$",
-    "^/api/v1/undo(?:/.*)?$"
+    "^/api/v1/undo(?:/.*)?$",
+    "^/api/undo(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -14,16 +14,36 @@
   },
   "operations": [
     {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/undo/{session_id}/snapshots",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/undo/[^/]+/snapshots$",
+      "owning_issue": 4839
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/undo/{session_id}/undo/{snapshot_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/undo/[^/]+/undo/[^/]+$",
+      "owning_issue": 4839
+    },
+    {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/undo/{session_id}/snapshots",
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/undo/[^/]+/snapshots$",
+      "owning_issue": 4839
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
+      "owning_issue": 4839
     }
   ]
 }

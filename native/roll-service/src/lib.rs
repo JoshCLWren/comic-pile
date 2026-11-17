@@ -54,10 +54,15 @@ pub mod roll_resources;
 pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
+pub mod session_details;
 pub mod session_history;
+pub mod session_list;
+pub mod session_restore;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod undo_apply;
+pub mod undo_snapshots;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -529,6 +534,53 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
+        )
+        // Session list and current session (issue #4839)
+        .route("/api/sessions/", get(session_list::list_sessions))
+        .route("/api/v1/sessions/", get(session_list::list_sessions))
+        .route(
+            "/api/sessions/current/",
+            get(session_list::get_current_session),
+        )
+        .route(
+            "/api/v1/sessions/current/",
+            get(session_list::get_current_session),
+        )
+        // Session details (issue #4839)
+        .route(
+            "/api/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        // Session restore to start (issue #4839)
+        .route(
+            "/api/sessions/{session_id}/restore-session-start",
+            post(session_restore::restore_session_start),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}/restore-session-start",
+            post(session_restore::restore_session_start),
+        )
+        // Undo snapshots list (issue #4839)
+        .route(
+            "/api/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        // Undo apply snapshot (issue #4839)
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
