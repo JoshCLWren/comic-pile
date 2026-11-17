@@ -923,7 +923,7 @@
         "tags": [
           "crate::catalog_series_mapping_preview"
         ],
-        "operationId": "documentation",
+        "operationId": "catalog_series_mapping_preview_documentation",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1008,7 +1008,7 @@
         "tags": [
           "crate::continuity_plans_project_preview"
         ],
-        "operationId": "documentation",
+        "operationId": "continuity_plans_project_preview_documentation",
         "parameters": [
           {
             "name": "plan_id",
@@ -2026,7 +2026,7 @@
         "tags": [
           "crate::issue_identity_adoption_preview"
         ],
-        "operationId": "documentation",
+        "operationId": "issue_identity_adoption_preview_documentation",
         "parameters": [
           {
             "name": "list_id",
@@ -2069,7 +2069,7 @@
         "tags": [
           "crate::issue_identity_cbl_reading_graph_preview"
         ],
-        "operationId": "documentation",
+        "operationId": "issue_identity_cbl_reading_graph_preview_documentation",
         "parameters": [
           {
             "name": "list_id",
