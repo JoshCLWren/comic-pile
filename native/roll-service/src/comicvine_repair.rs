@@ -117,25 +117,14 @@ enum ProviderFailure {
     InvalidPayload,
 }
 
+/// Authorize the ComicVine metadata-repair cron route through the same shared
+/// gate as the release-sync cron: fail closed on a missing/placeholder secret,
+/// accept a case-insensitive `Bearer` scheme (RFC 6750, Python's
+/// `scheme.lower()`), and compare in constant time. Keeping the whole check in
+/// [`crate::cron_auth::authorize_cron`] means the two native cron routes cannot
+/// drift again; the route-level `bool` maps any rejection to 401 in [`drain`].
 fn allowed(headers: &HeaderMap, expected: Option<&str>) -> bool {
-    let Some(secret) = crate::cron_auth::usable_cron_secret(expected) else {
-        return false;
-    };
-    if secret.len() < 16 {
-        return false;
-    }
-    let Some(header) = headers.get("authorization").and_then(|h| h.to_str().ok()) else {
-        return false;
-    };
-    let Some(provided) = header.strip_prefix("Bearer ") else {
-        return false;
-    };
-    let a = provided.as_bytes();
-    let b = secret.as_bytes();
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter().zip(b).fold(0_u8, |v, (x, y)| v | (x ^ y)) == 0
+    crate::cron_auth::authorize_cron(headers, expected).is_ok()
 }
 
 fn issue_id(external_id: &str) -> Option<u32> {
@@ -1063,17 +1052,38 @@ mod tests {
     }
 
     #[test]
+    fn allowed_accepts_case_insensitive_bearer_scheme() {
+        // Parity with Python's `scheme.lower()` and the release-sync cron gate
+        // (RFC 6750): this route used to require the literal "Bearer " prefix,
+        // diverging from Python for `bearer`/`BEARER` casings.
+        let secret = "a-very-secret-value";
+        for scheme in ["bearer", "BEARER", "Bearer"] {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "authorization",
+                format!("{scheme} {secret}").parse().expect("valid header"),
+            );
+            assert!(allowed(&headers, Some(secret)), "scheme: {scheme}");
+        }
+    }
+
+    #[test]
     fn cron_auth_rejects_placeholder_secrets() {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer 1234567890123456".parse().unwrap());
         for placeholder in [
             "",
+            "   ",
             "[SENSITIVE]",
+            "  [SENSITIVE]  ",
             "<redacted>",
             "<REDACTED>",
             "redacted",
+            "REDACTED",
             "undefined",
+            "UNDEFINED",
             "null",
+            "NULL",
         ] {
             assert!(
                 !allowed(&headers, Some(placeholder)),

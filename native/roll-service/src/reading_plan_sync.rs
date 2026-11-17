@@ -1664,40 +1664,21 @@ pub struct ScheduledSyncResponse {
     pub result: ScheduledSyncReport,
 }
 
-/// Compare bearer material without short-circuiting on the first difference.
-fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-    left.iter()
-        .zip(right)
-        .fold(0_u8, |acc, (a, b)| acc | (a ^ b))
-        == 0
-}
-
 /// Fail-closed Vercel Cron secret gate, matching `require_cron_secret`: a
 /// deployment without a usable secret returns 503, a missing or incorrect
-/// bearer returns 401. Missing, empty and placeholder values are rejected as
-/// unconfigured by [`crate::cron_auth::usable_cron_secret`]. Credentials are
-/// never logged. The `Bearer` scheme is matched case-insensitively (RFC 6750),
-/// like Python's `scheme.lower()`.
+/// bearer returns 401. The shared [`crate::cron_auth::authorize_cron`] owns the
+/// placeholder rejection, case-insensitive `Bearer` scheme (RFC 6750, Python's
+/// `scheme.lower()`) and constant-time comparison so every native cron route
+/// authorizes identically. Credentials are never logged.
 fn cron_authorize(headers: &HeaderMap, expected: Option<&str>) -> Result<(), ApiError> {
-    let Some(secret) = crate::cron_auth::usable_cron_secret(expected) else {
-        return Err(ApiError::ServiceUnavailable(
-            "Cron endpoint is not configured".to_string(),
-        ));
-    };
-    let presented = headers
-        .get("authorization")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| {
-            let (scheme, presented) = value.split_once(' ')?;
-            (scheme.eq_ignore_ascii_case("bearer") && !presented.is_empty()).then_some(presented)
-        });
-    match presented {
-        Some(value) if constant_time_eq(value.as_bytes(), secret.as_bytes()) => Ok(()),
-        _ => Err(ApiError::Unauthorized("Unauthorized".to_string())),
-    }
+    use crate::cron_auth::{authorize_cron, CronAuthError};
+
+    authorize_cron(headers, expected).map_err(|reason| match reason {
+        CronAuthError::NotConfigured => {
+            ApiError::ServiceUnavailable("Cron endpoint is not configured".to_string())
+        }
+        CronAuthError::Unauthorized => ApiError::Unauthorized("Unauthorized".to_string()),
+    })
 }
 
 fn scheduled_response(payload: ScheduledSyncResponse) -> Response {
