@@ -10829,6 +10829,7 @@
             "type": "array"
           },
           "page": {
+            "description": "Echoed requested page number; preserved for extreme values (e.g. 2^63).",
             "format": "int64",
             "type": "integer"
           },

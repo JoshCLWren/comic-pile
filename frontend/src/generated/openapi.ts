@@ -9942,7 +9942,10 @@ export interface components {
             has_next: boolean;
             has_previous: boolean;
             items: components["schemas"]["NativeCBLCatalogListItem"][];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
+             */
             page: number;
             /** Format: int64 */
             page_size: number;
