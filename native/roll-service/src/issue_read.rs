@@ -39,7 +39,7 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
@@ -286,13 +286,6 @@ SELECT totals.total_count,
 FROM owned CROSS JOIN totals
 "#;
 
-#[derive(Debug, Default, Deserialize)]
-pub struct ThreadIssueListQuery {
-    pub status: Option<String>,
-    pub page_size: Option<i64>,
-    pub page_token: Option<String>,
-}
-
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadIssueListResponse {
     pub issues: Vec<IssueDetailResponse>,
@@ -312,28 +305,80 @@ fn decode_thread_issue_cursor(token: &str) -> Result<(i32, i32), ApiError> {
     }
 }
 
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
+fn parse_thread_issue_query(
+    raw: Option<&str>,
+) -> Result<(Option<String>, i64, Option<String>), ApiError> {
+    let mut status: Option<String> = None;
+    let mut page_size: i64 = 50;
+    let mut page_token: Option<String> = None;
+    let mut seen_status = false;
+    let mut seen_page_size = false;
+    let mut seen_page_token = false;
+
+    if let Some(raw) = raw {
+        for pair in raw.split('&') {
+            if pair.is_empty() {
+                continue;
+            }
+            let (key, value) = match pair.split_once('=') {
+                Some((k, v)) => (k, v),
+                None => (pair, ""),
+            };
+            match key {
+                "status" => {
+                    if seen_status {
+                        return Err(validation_failed());
+                    }
+                    seen_status = true;
+                    status = Some(value.to_string());
+                }
+                "page_size" => {
+                    if seen_page_size {
+                        return Err(validation_failed());
+                    }
+                    seen_page_size = true;
+                    let parsed = value.parse::<i64>().map_err(|_| validation_failed())?;
+                    if !(1..=100).contains(&parsed) {
+                        return Err(validation_failed());
+                    }
+                    page_size = parsed;
+                }
+                "page_token" => {
+                    if seen_page_token {
+                        return Err(validation_failed());
+                    }
+                    seen_page_token = true;
+                    page_token = Some(value.to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if let Some(ref value) = status {
+        if !matches!(value.as_str(), "unread" | "read") {
+            return Err(validation_failed());
+        }
+    }
+
+    Ok((status, page_size, page_token))
+}
+
 /// GET /api/v1/threads/{thread_id}/issues with Python pagination parity.
 pub async fn list_thread_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(thread_id): Path<i32>,
-    Query(query): Query<ThreadIssueListQuery>,
+    Path(thread_id): Path<String>,
+    raw_query: axum::extract::RawQuery,
 ) -> Result<Json<ThreadIssueListResponse>, ApiError> {
-    if let Some(status) = query.status.as_deref() {
-        if !matches!(status, "unread" | "read") {
-            return Err(ApiError::Unprocessable(
-                "status must be unread or read".into(),
-            ));
-        }
-    }
-    let page_size = query.page_size.unwrap_or(50);
-    if !(1..=100).contains(&page_size) {
-        return Err(ApiError::Unprocessable(
-            "page_size must be between 1 and 100".into(),
-        ));
-    }
-    let cursor = query
-        .page_token
+    let thread_id: i32 = thread_id.parse().map_err(|_| validation_failed())?;
+    let (status, page_size, page_token) =
+        parse_thread_issue_query(raw_query.0.as_deref())?;
+    let cursor = page_token
         .as_deref()
         .filter(|token| !token.is_empty())
         .map(decode_thread_issue_cursor)
@@ -349,7 +394,7 @@ pub async fn list_thread_issues(
             &[
                 &thread_id,
                 &user.id(),
-                &query.status,
+                &status,
                 &position,
                 &issue_id,
                 &limit,
@@ -398,7 +443,7 @@ pub async fn list_thread_issues(
         (status = 400, description = "Invalid page token"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found"),
-        (status = 422, description = "Invalid status or page size"),
+        (status = 422, description = "Validation failed"),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
