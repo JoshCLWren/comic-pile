@@ -11,10 +11,6 @@ on:
         description: Durable factory executor slot
         required: true
         type: string
-    outputs:
-      attempt_comment_id:
-        description: Advisory registry locator from trusted preparation
-        value: ${{ jobs.validate_assignment.outputs.attempt_id }}
     secrets:
       NEON_API_KEY:
         description: Restricted connection resolution in trusted cleanup jobs only
@@ -89,8 +85,6 @@ jobs:
     name: Validate assignment under worker lock (trusted)
     outputs:
       exclusions: ${{ steps.prepare.outputs.exclusions }}
-      heartbeat_id: ${{ steps.prepare.outputs.heartbeat_id }}
-      attempt_id: ${{ steps.prepare.outputs.attempt_id }}
       candidate_health: ${{ steps.prepare.outputs.candidate_health }}
       fleet_sources: ${{ steps.prepare.outputs.fleet_sources }}
     runs-on: ubuntu-latest
@@ -126,8 +120,19 @@ jobs:
           fleet_sources="$(python3 .github/scripts/factory_state_operations.py export-fleet-failover-sources --repo "$GITHUB_REPOSITORY" --worker "$FACTORY_WORKER")"
           jq -e 'type == "array" and all(.[]; type == "string")' <<< "$fleet_sources" >/dev/null
           echo "fleet_sources=$fleet_sources" >> "$GITHUB_OUTPUT"
-          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+      # Trusted lifecycle evidence lives in Neon, keyed by this Entry run.
+      # It replaces the retired issue #1093 heartbeat comments; the model job
+      # never receives the DSN and no GitHub comment is read or written.
+      - name: Record trusted worker start in Neon
+        continue-on-error: true
+        env:
+          FACTORY_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_state_ledger.py lifecycle \
+            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --worker "$FACTORY_WORKER" --status started \
+            || echo '::warning::FACTORY_LIFECYCLE_DEFERRED status=started; terminal outcome still persists from the job log'
 
   factory:
     needs: validate_assignment
@@ -140,8 +145,6 @@ jobs:
       FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}
       FACTORY_CANDIDATE_HEALTH: ${{ needs.validate_assignment.outputs.candidate_health }}
       FACTORY_FLEET_SOURCES: ${{ needs.validate_assignment.outputs.fleet_sources }}
-      FACTORY_HEARTBEAT_COMMENT_ID: ${{ needs.validate_assignment.outputs.heartbeat_id }}
-      FACTORY_ATTEMPT_COMMENT_ID: ${{ needs.validate_assignment.outputs.attempt_id }}
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
       # workflow dispatch. Git fetch/push and PR creation use the dedicated
       # PAT so pull_request workflows and initial review use a trusted actor.
@@ -456,78 +459,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Factory $WORKER discovered $runtime_model; real work verifies callability"
 
-      - name: Report selected executor heartbeat
-        if: always()
-        shell: bash
-        env:
-          WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          MINUTE: ${{ steps.lane.outputs.minute }}
-          CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
-          EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
-        # Informational only: a registry outage must never skip the session.
-        continue-on-error: true
-        run: |
-          set -Eeuo pipefail
-          [[ -n "${WORKER:-}" ]] || exit 0
-          # Issue #1093 comments are optional visibility only. Authoritative
-          # lease, attempt, transition and outcome state lives in Neon and the
-          # trusted Actions job log. GitHub refuses new comments once a thread
-          # exceeds 2,500 comments (HTTP 403); 404/422/429 and secondary rate
-          # limits are equally non-fatal here. Never let them stop a worker.
-          registry_visibility() {
-            local op="$1" error_file="${RUNNER_TEMP:-/tmp}/factory-registry-visibility-error" status
-            shift
-            if "$@" 2>"$error_file"; then
-              return 0
-            fi
-            status="$(grep -Eo 'HTTP [0-9]{3}' "$error_file" | tail -1 | tr -dc '0-9' || true)"
-            printf '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=%s http=%s detail=%s\n' \
-              "$op" "${status:-none}" "$(tr '\n' ' ' < "$error_file" | cut -c1-200)" >&2
-            return 1
-          }
-          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [[ "$CONFIGURED" != true ]]; then
-            outcome='unconfigured'
-          elif [[ "$EXECUTOR_OUTCOME" != success ]]; then
-            outcome='selection-failed'
-          else
-            outcome='running'
-          fi
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          # Use only the compact ID provided by trusted Neon preparation.
-          # 404 means a genuinely missing marker, while a rate limit/auth error
-          # must NOT cause a duplicate comment or a full-history scan.
-          comment_id="${FACTORY_HEARTBEAT_COMMENT_ID:-}"
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-heartbeat-lookup-error")"; then
-              validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
-              [[ "$validated" == "$comment_id" ]] || comment_id=""
-            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
-              comment_id=""
-            else
-              # Cannot prove absence: skip (never duplicate, never scan history).
-              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-heartbeat-lookup-error" | cut -c1-200)"
-              exit 0
-            fi
-          else
-            comment_id=""
-          fi
-          if [[ -n "$comment_id" ]]; then
-            registry_visibility heartbeat-update \
-              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null || true
-          elif created="$(registry_visibility heartbeat-create \
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"; then
-            comment_id="$(jq -r '.id // empty' <<< "$created" 2>/dev/null || true)"
-          fi
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            echo "FACTORY_HEARTBEAT_COMMENT_ID=$comment_id" >> "$GITHUB_ENV"
-          fi
-
       # Crouton's OpenCode Zen free route can reject anonymous runner requests.
       # Do not change the anonymous DeepSeek comparison or other model lanes.
       - name: Configure selected OmniRoute capacity
@@ -664,84 +595,25 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Report terminal heartbeat
+      - name: Summarize factory attempt
         if: always()
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
           WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
           DISCOVERY_OUTCOME_FILE: ${{ runner.temp }}/factory-discovery-outcome
-        # Informational only: the trusted Entry persister classifies the job
-        # log into Neon. A registry write failure must not fail the job.
+        # Visibility only, written to the job summary (not the classified job
+        # log). The trusted Entry persister classifies the job log into Neon;
+        # issue #1093 is retired as a registry and is never written.
         continue-on-error: true
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
-          # Issue #1093 comments are optional visibility only. Authoritative
-          # lease, attempt, transition and outcome state lives in Neon and the
-          # trusted Actions job log. GitHub refuses new comments once a thread
-          # exceeds 2,500 comments (HTTP 403); 404/422/429 and secondary rate
-          # limits are equally non-fatal here. Never let them stop a worker.
-          registry_visibility() {
-            local op="$1" error_file="${RUNNER_TEMP:-/tmp}/factory-registry-visibility-error" status
-            shift
-            if "$@" 2>"$error_file"; then
-              return 0
-            fi
-            status="$(grep -Eo 'HTTP [0-9]{3}' "$error_file" | tail -1 | tr -dc '0-9' || true)"
-            printf '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=%s http=%s detail=%s\n' \
-              "$op" "${status:-none}" "$(tr '\n' ' ' < "$error_file" | cut -c1-200)" >&2
-            return 1
-          }
-          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # A green wrapper exit is NOT evidence of useful coding. The trusted
-          # post-run classifier will publish the final delivery verdict.
-          if [[ "$CONFIGURED" != true ]]; then
-            outcome='unconfigured'
-          elif [[ "$JOB_STATUS" == success ]]; then
-            outcome='finished'
-          else
-            outcome='failure'
-          fi
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          # Use only the compact ID provided by trusted Neon preparation.
-          # 404 means a genuinely missing marker, while a rate limit/auth error
-          # must NOT cause a duplicate comment or a full-history scan.
-          comment_id="${FACTORY_HEARTBEAT_COMMENT_ID:-}"
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-heartbeat-lookup-error")"; then
-              validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind heartbeat --worker "$WORKER" --id "$comment_id" <<< "$current" 2>/dev/null || true)"
-              [[ "$validated" == "$comment_id" ]] || comment_id=""
-            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
-              comment_id=""
-            else
-              # Cannot prove absence: skip the write, never duplicate.
-              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-heartbeat-lookup-error" | cut -c1-200)"
-              comment_id="unverifiable"
-            fi
-          else
-            comment_id=""
-          fi
-          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            registry_visibility heartbeat-update \
-              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null || true
-          elif [[ -z "$comment_id" ]]; then
-            registry_visibility heartbeat-create \
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null || true
-          fi
-
-          # Publish a conservative attempt result synchronously. The asynchronous
-          # log classifier may later replace unknown_failure with a more specific
-          # outcome, but capacity never waits on a chained workflow-run event.
-          attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
           worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"
           discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE" 2>/dev/null || true)"
           if [[ -n "$discovery_record" ]]; then
@@ -759,71 +631,16 @@ jobs:
             attempt_outcome='unknown_failure'
             attempt_detail='factory job failed before a more specific log classification was available'
           fi
-          attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
-            "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
-          # Sticky NVIDIA 410 retirement is reported from the real work attempt.
-          # Never send a separate inference request just to test the model.
-          if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]; then
-            retirement_marker='<!-- factory-model-retired-410:v1 -->'
-            registry_visibility retirement-snapshot gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-              -f body="${retirement_marker}
-          Worker: opencode-free-model-factory-${WORKER}
-          Model: ${MODEL}
-          Source: nvidia
-          Attempt outcome: model_retired_410
-          Detail: Confirmed HTTP 410 during actual assigned work
-          Updated: ${now}
-          Run: ${GITHUB_RUN_ID}" >/dev/null || true
-          fi
-          # Keep a run-specific failure snapshot: later successes overwrite the worker record.
-          if [[ "$SOURCE" == opencode-free && ( "$attempt_outcome" == model_unavailable || "$attempt_outcome" == provider_quota ) ]]; then
-            # Retain a run-specific record even after the worker selects another model.
-            marker_type='factory-model-unavailable'
-            if [[ "$attempt_outcome" == provider_quota ]]; then marker_type='factory-provider-quota'; fi
-            unavailable_marker="<!-- ${marker_type}:v1 run=${GITHUB_RUN_ID} -->"
-            snapshot_body="$(printf '%s\n' "$attempt_body" | tail -n +2)"
-            registry_visibility unavailability-snapshot \
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-              -f body="${unavailable_marker}
-          ${snapshot_body}" >/dev/null || true
-          fi
-          attempt_comment_id="${FACTORY_ATTEMPT_COMMENT_ID:-}"
-          if [[ ! "$attempt_comment_id" =~ ^[1-9][0-9]*$ ]]; then
-            attempt_comment_id=""
-          fi
-          # Trusted preparation supplies a compact marker ID. A missing ID
-          # creates one marker; it never requires downloading issue #1093.
-          existing_run=""
-          if [[ -n "$attempt_comment_id" ]]; then
-            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" 2>"$RUNNER_TEMP/factory-attempt-lookup-error")"; then
-              :
-            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-attempt-lookup-error"; then
-              attempt_comment_id=""
-              current=""
-            else
-              # Cannot prove absence: never duplicate. Neon stays authoritative.
-              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-attempt-lookup-error" | cut -c1-200)"
-              exit 0
-            fi
-            validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind attempt --worker "$WORKER" --id "$attempt_comment_id" <<< "$current" 2>/dev/null || true)"
-            if [[ -n "$attempt_comment_id" && "$validated" == "$attempt_comment_id" ]]; then
-              existing_body="$(jq -r '.body // empty' <<< "$current")"
-              existing_run="$(sed -n 's/^Run: //p' <<< "$existing_body" | tail -1)"
-            else
-              attempt_comment_id=""
-            fi
-          fi
-          if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
-            echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
-          elif [[ -n "$attempt_comment_id" ]]; then
-            registry_visibility attempt-update \
-              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" \
-              -f body="$attempt_body" >/dev/null || true
-          else
-            registry_visibility attempt-create \
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-              -f body="$attempt_body" >/dev/null || true
-          fi
+          {
+            echo "### Factory ${WORKER} attempt"
+            echo
+            printf -- '- Source/model: `%s` / `%s`\n' "$SOURCE" "$MODEL"
+            printf -- '- Job status: `%s`\n' "$JOB_STATUS"
+            printf -- '- Provisional attempt outcome: `%s`\n' "$attempt_outcome"
+            printf -- '- Detail: %s\n' "$attempt_detail"
+            echo
+            echo 'The trusted Entry persister classifies the job log into Neon.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release_pre_session_lease:
     needs: factory
@@ -870,6 +687,20 @@ jobs:
           claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
             --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
+      - name: Record trusted worker exit in Neon
+        if: always()
+        continue-on-error: true
+        env:
+          FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_RESULT: ${{ needs.factory.result }}
+        run: |
+          set -Eeuo pipefail
+          status=failure
+          [[ "$FACTORY_RESULT" == success ]] && status=finished
+          python3 .github/scripts/factory_state_ledger.py lifecycle \
+            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --worker "$FACTORY_WORKER" --status "$status" \
+            || echo "::warning::FACTORY_LIFECYCLE_DEFERRED status=$status"
 
   release_post_session_lease:
     needs: factory
@@ -913,4 +744,18 @@ jobs:
           claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
             --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
+      - name: Record trusted worker exit in Neon
+        if: always()
+        continue-on-error: true
+        env:
+          FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_RESULT: ${{ needs.factory.result }}
+        run: |
+          set -Eeuo pipefail
+          status=failure
+          [[ "$FACTORY_RESULT" == success ]] && status=finished
+          python3 .github/scripts/factory_state_ledger.py lifecycle \
+            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --worker "$FACTORY_WORKER" --status "$status" \
+            || echo "::warning::FACTORY_LIFECYCLE_DEFERRED status=$status"
 

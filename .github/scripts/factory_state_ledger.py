@@ -11,7 +11,7 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from factory_state_metrics import connect as measured_connect
@@ -20,9 +20,8 @@ from factory_state_cache import _dsn
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS
 
 WORKER_RE = re.compile(r"^[0-9]+$")
-HEARTBEAT_RE = re.compile(r"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-(\d+) -->")
-RUN_RE = re.compile(r"(?m)^Run:\s*(\d+)\s*$")
-OUTCOME_RE = re.compile(r"(?m)^Outcome:\s*([^\n]+)")
+LIFECYCLE_STATUSES = {"started": "worker_started", "finished": "worker_outcome_signal",
+                      "failure": "worker_outcome_signal"}
 LEASE_PREFIX = "factory-lease-v1:"
 
 
@@ -335,47 +334,35 @@ def record_events(repo: str, entries: list[dict[str, Any]]) -> int:
     return asyncio.run(_events(repo, entries))
 
 
-def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
-    """Ingest only trusted, recent GitHub heartbeat updates, keyed by run/status.
+def record_lifecycle(repo: str, run_id: str, worker: str, status: str) -> int:
+    """Persist a trusted Actions lifecycle observation for one worker run.
 
-    Repeated incremental reads are idempotent. Models never get database access.
+    Only trusted run-workflow jobs (assignment validation and lease release)
+    call this, using the dispatch-input worker and the Actions job result. It
+    replaces the retired issue #1093 heartbeat comments: no GitHub comment is
+    read or written. Repeated calls are idempotent per run and status.
+
+    Args:
+        repo: GitHub repository.
+        run_id: Entry workflow run ID.
+        worker: Numeric factory worker identifier.
+        status: ``started``, ``finished`` or ``failure``.
+
+    Returns:
+        Number of newly inserted lifecycle events.
     """
-    from factory_work_policy import comment_is_trusted
-
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
-    events = []
-    for comment in changes:
-        if not isinstance(comment, dict) or not comment_is_trusted(comment):
-            continue
-        body = str(comment.get("body") or "")
-        worker = HEARTBEAT_RE.search(body)
-        run = RUN_RE.search(body)
-        outcome = OUTCOME_RE.search(body)
-        updated = str(comment.get("updated_at") or "")
-        if not worker or not run or not outcome or not updated:
-            continue
-        try:
-            stamp = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if stamp < cutoff:
-            continue
-        status = outcome.group(1).strip().lower()
-        event_type = (
-            "worker_started" if status == "running"
-            else "worker_outcome_signal" if status in {"success", "failure"}
-            else "worker_heartbeat"
-        )
-        events.append({
-            "event_type": event_type,
-            "event_id": f"heartbeat:{comment.get('id')}:{updated}:{status}",
-            "worker": worker.group(1),
-            "run_id": run.group(1),
-            "status": status,
-            "observed_at": updated,
-        })
-    return record_events(repo, events)
-
+    if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
+        raise ValueError("invalid trusted lifecycle identity")
+    if status not in LIFECYCLE_STATUSES:
+        raise ValueError("invalid trusted lifecycle status")
+    return record_events(repo, [{
+        "event_type": LIFECYCLE_STATUSES[status],
+        "event_id": f"lifecycle:{run_id}:{status}",
+        "worker": worker,
+        "run_id": run_id,
+        "status": "running" if status == "started" else status,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }])
 
 
 def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
@@ -626,13 +613,23 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
 def main() -> int:
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["runtime-outcome"])
-    parser.add_argument("--file", required=True)
+    parser.add_argument("command", choices=["runtime-outcome", "lifecycle"])
+    parser.add_argument("--file")
+    parser.add_argument("--worker")
+    parser.add_argument("--status", choices=sorted(LIFECYCLE_STATUSES))
     parser.add_argument("--log", help="Trusted completed factory job log, for exact smoke timeout attribution")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile"))
     args = parser.parse_args()
+    if args.command == "lifecycle":
+        if not args.worker or not args.status:
+            parser.error("lifecycle requires --worker and --status")
+        result = record_lifecycle(args.repo, args.run_id, args.worker, args.status)
+        print(f"[factory-ledger] recorded {result} lifecycle event(s)")
+        return 0
     if args.command == "runtime-outcome":
+        if not args.file:
+            parser.error("runtime-outcome requires --file")
         with open(args.file, encoding="utf-8") as stream:
             outcome = json.load(stream)
         if args.log:

@@ -157,9 +157,7 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert model_job["env"]["FACTORY_MODEL_EXCLUSIONS"] == "${{ needs.validate_assignment.outputs.exclusions }}"
     assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
-    # The collector always waits for the worker. After #5137 it also needs
-    # the trusted Neon snapshot to use the existing attempt comment ID.
-    # Check the dependency graph, not a YAML spelling that changed from a
+    # The collector always waits for the worker. Check the dependency graph, not a YAML spelling that changed from a
     # scalar to a list when that second dependency was introduced.
     entry_jobs = yaml.safe_load(entry)["jobs"]
     collector_job = entry_jobs["persist_outcome"]
@@ -177,11 +175,9 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert checkout["with"]["ref"] == "main"
     assert checkout["with"]["persist-credentials"] is False
     assert "factory_checkpoint_handoff.py" in collector
-    if "ATTEMPT_COMMENT_ID:" in collector:
-        assert "run" in needs_set
-        assert collector_job["permissions"]["issues"] == "write"
-        assert "needs.run.outputs.attempt_comment_id" in collector
-        assert "issues/comments/$ATTEMPT_COMMENT_ID" in collector
+    # Issue #1093 is retired: the collector never patches a registry marker.
+    assert "ATTEMPT_COMMENT_ID" not in collector
+    assert "issues/comments" not in collector
     assert "run / factory" in collector
 
 
@@ -189,17 +185,15 @@ def test_recovery_watchdog_uses_trusted_bounded_neon_runtime_view() -> None:
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/fixed-model-factory-dispatch-recovery.yml").read_text()
     assert "from factory_runtime_view import export_view" in workflow
     assert "--view /tmp/factory-runtime-view.json" in workflow
-    assert "factory_registry_ingest.py" in workflow
-    assert "registry_comments()" not in workflow
     assert "uses: ./.github/actions/factory-state-cache" in workflow
-    # A healthy Neon view must not spend another GitHub API request.
-    # If reconciliation fails, recovery must not launch from stale evidence.
+    # Issue #1093 is retired: freshness is Neon-only, with no comment fallback.
+    assert "factory_registry_ingest.py" not in workflow
+    assert "registry_comments()" not in workflow
+    assert "comments" not in workflow
     health_first = workflow.index("refresh_health")
-    registry = workflow.index("if ! python3 .github/scripts/factory_registry_ingest.py")
+    fresh = workflow.index("An active factory heartbeat is fresh; no dispatcher recovery needed.")
     dispatch = workflow.index("gh workflow run fixed-model-factory-dispatch.yml")
-    assert health_first < registry < dispatch
-    assert "dispatcher recovery deferred" in workflow
-    assert "An active factory heartbeat is fresh; no GitHub registry read" in workflow
+    assert health_first < fresh < dispatch
 
 
 def test_unchanged_snapshot_extends_ttl_without_rewriting_payload(monkeypatch, tmp_path):
@@ -394,22 +388,15 @@ def test_factory_dashboard_reuses_one_run_local_inventory():
     assert "FACTORY_DISCOVERY_DIR" not in workflow.split("      - name: Configure shared Neon factory discovery cache", 1)[0]
 
 
-def test_runtime_worker_never_paginates_full_registry_on_missing_marker() -> None:
+def test_runtime_worker_never_reads_or_writes_registry_comments() -> None:
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/free-model-factory-run.yml").read_text()
-    assert '--paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' not in workflow
-    assert "FACTORY_HEARTBEAT_COMMENT_ID:" in workflow
-    assert "FACTORY_ATTEMPT_COMMENT_ID:" in workflow
-    # An unverifiable locator skips the optional write; it never duplicates
-    # or scans history, and never fails the worker (#1093 is visibility only).
-    assert "Cannot prove absence: skip (never duplicate, never scan history)." in workflow
-    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup" in workflow
-    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup" in workflow
-    assert "factory_registry_verify.py verify --kind heartbeat" in workflow
-    assert "factory_registry_verify.py verify --kind attempt" in workflow
-    # Two heartbeat lookups: write, 404 check, and structured skip diagnostic.
-    assert workflow.count("factory-heartbeat-lookup-error") == 6
-    assert "factory-attempt-lookup-error" in workflow
-    # A missing marker is created through an ordinary targeted POST,
-    # not reconstructed from a historical cache or unauthenticated list.
-    assert 'gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments"' in workflow
+    # Issue #1093 is retired as a registry: no locator, lookup or write remains.
+    assert "issues/1093" not in workflow
+    assert "issues/comments" not in workflow
+    assert "FACTORY_HEARTBEAT_COMMENT_ID" not in workflow
+    assert "FACTORY_ATTEMPT_COMMENT_ID" not in workflow
+    assert "__heartbeat_id" not in workflow and "__attempt_id" not in workflow
+    assert "factory_registry_verify.py" not in workflow
+    # Lifecycle evidence goes to trusted Neon from the DSN-bearing jobs only.
+    assert workflow.count("factory_state_ledger.py lifecycle") == 3

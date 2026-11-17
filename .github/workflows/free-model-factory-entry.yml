@@ -81,7 +81,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_WORKER: ${{ inputs.worker }}
-          ATTEMPT_COMMENT_ID: ${{ needs.run.outputs.attempt_comment_id }}
         run: |
           set -Eeuo pipefail
           # Retry only transient GitHub responses. Every retry overwrites its
@@ -200,25 +199,6 @@ jobs:
             printf 'Neon terminal classification: `%s`\n' "$classification"
             printf 'Checkpoint saved: `%s`; work PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
-          # Publish the same final verdict to the existing registry marker.
-          # Use Neon-discovered ID, never re-page all historical comments.
-          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${INPUT_WORKER} -->"
-          if [[ "${ATTEMPT_COMMENT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
-            existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" --jq .body 2>/dev/null || true)"
-            if [[ "$existing" == *"$marker"* ]]; then
-              existing_run="$(sed -n 's/^Run: //p' <<< "$existing" | tail -1)"
-              existing_run="${existing_run##*/}"
-              if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
-                echo "[factory-outcome] preserved newer attempt marker from run $existing_run"
-              else
-                stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nOutcome: %s\nAgent outcome: %s\nAttempt outcome: %s\nVerified delivery: %s\nDelivered PR: %s\nUpdated: %s\nRun: %s' \
-                  "$marker" "$INPUT_WORKER" "$verdict" "$classification" "$classification" "$delivered" "${pr:-none}" "$stamp" "$GITHUB_RUN_ID")"
-                gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" \
-                  -f body="$body" >/dev/null || echo "::warning::Registry status update failed; Neon remains authoritative"
-              fi
-            fi
-          fi
           echo "[factory-outcome] $verdict: $message"
           if [[ "$verdict" == failed ]]; then
             echo "::error::$message"

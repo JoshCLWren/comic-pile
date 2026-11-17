@@ -703,9 +703,7 @@ assuming the account is available.
 
 ## External scheduled-factory heartbeat
 
-Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
-
-A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
+The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to Neon by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. Neon and those job logs are authoritative. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
