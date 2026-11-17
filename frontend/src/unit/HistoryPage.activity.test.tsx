@@ -227,4 +227,65 @@ describe('History activity timeline (#4822)', () => {
     expect(screen.queryByRole('list', { name: 'Activity history' })).not.toBeInTheDocument()
     expect(screen.queryByText(/session/i)).not.toBeInTheDocument()
   })
+
+  it('names every logical action and renders legacy rows without a fabricated die', async () => {
+    const ts = '2026-11-08T15:42:35.028000Z'
+    listMock.mockResolvedValue({
+      items: [
+        item({ event_id: 1, type: 'unsnooze', timestamp: ts, die_before: 8, die_after: 10 }),
+        item({ event_id: 2, type: 'manual_die', timestamp: ts }),
+        item({ event_id: 3, type: 'reset_dice', timestamp: ts }),
+        item({ event_id: 4, type: 'manual_die', timestamp: ts, die_after: 20 }),
+        item({ event_id: 5, type: 'reset_dice', timestamp: ts, die_after: 6 }),
+        item({ event_id: 6, type: 'dismiss', timestamp: ts }),
+        item({ event_id: 7, type: 'undo', timestamp: ts }),
+        item({ event_id: 8, type: 'rolled_but_skipped', timestamp: ts }),
+        item({ event_id: 9, type: 'future_action', timestamp: ts, die_before: 6, die_after: 6 }),
+        item({ event_id: 10, type: 'roll', timestamp: ts, thread_id: 42, die_before: 6, issue_number: '3' }),
+      ],
+      next_page_token: null,
+    })
+
+    renderHistory()
+
+    const list = await screen.findByRole('list', { name: 'Activity history' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10)
+    expect(list).toHaveTextContent('Unsnoozed')
+    expect(list).toHaveTextContent('Die d8 → d10')
+    expect(list).toHaveTextContent('Set die')
+    expect(list).toHaveTextContent('Set die to d20')
+    expect(list).toHaveTextContent('Reset die')
+    expect(list).toHaveTextContent('Reset die to d6')
+    expect(list).toHaveTextContent('Die d20')
+    expect(list).toHaveTextContent('Die d6')
+    expect(list).toHaveTextContent('Dismissed the roll')
+    expect(list).toHaveTextContent('Restored')
+    expect(list).toHaveTextContent('Skipped')
+    expect(list).toHaveTextContent('Future action')
+    // A deleted series gets a historical label, never a fabricated link.
+    expect(list).toHaveTextContent('Deleted series')
+    expect(list).toHaveTextContent('#3')
+  })
+
+  it('normalizes a non-Error failure from the first page', async () => {
+    listMock.mockRejectedValueOnce('offline')
+
+    renderHistory()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load activity')
+  })
+
+  it('normalizes a non-Error failure from a later page', async () => {
+    const user = userEvent.setup()
+    listMock
+      .mockResolvedValueOnce({ items: PRODUCTION_SEQUENCE.slice(0, 1), next_page_token: 'page-2' })
+      .mockRejectedValueOnce('offline')
+
+    renderHistory()
+
+    await screen.findByRole('list', { name: 'Activity history' })
+    await user.click(screen.getByRole('button', { name: 'Load more activity' }))
+
+    expect(await screen.findByText('Failed to load more activity')).toBeInTheDocument()
+  })
 })

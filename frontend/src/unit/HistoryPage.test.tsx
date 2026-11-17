@@ -124,6 +124,7 @@ describe('History page contracts', () => {
 
     await waitFor(() => expect(listMock).toHaveBeenCalledTimes(2))
     expect(await screen.findByText(/still loading your history/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.queryByText('Loading...', { exact: true })).not.toBeInTheDocument()
   })
