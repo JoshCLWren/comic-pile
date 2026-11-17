@@ -82,7 +82,6 @@ struct ActivityPayload {
     events: Vec<ActivityRawRow>,
     has_more: bool,
     last_id: Option<i32>,
-    last_ts_us: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -251,7 +250,7 @@ pub async fn activity(
             ActivityEvent {
                 event_id: row.event_id,
                 event_type: row.event_type,
-                timestamp: row.timestamp_sec.to_string(),
+                timestamp: build_timestamp(row.timestamp_sec, row.timestamp_us),
                 die_before: row.die_before,
                 die_after: row.die_after,
                 rating: row.rating,
