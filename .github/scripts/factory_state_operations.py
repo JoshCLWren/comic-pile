@@ -909,58 +909,6 @@ async def _stats(conn:Any,repo:str)->dict[str,Any]:
 
 
 
-async def _sync_registry(conn: Any, repo: str, comments: list[dict[str,Any]]) -> int:
-    # Convert only trusted #1093 evidence; never trust model-agent content.
-    from factory_candidate_health import latest_attempt_evidence
-    evidence=latest_attempt_evidence(comments)
-    inserted=0
-    for (source,model),item in evidence.items():
-        if not source or not model or item.outcome in {"unknown_failure","control_plane_failure","environment_failure"}:
-            continue
-        if item.outcome == "model_retired_410":
-            status,until="retired",None
-        elif item.outcome in MODEL_COOLDOWNS:
-            status,until="unavailable",datetime.fromtimestamp(item.updated+MODEL_COOLDOWNS[item.outcome],timezone.utc)
-        elif model_scoped_transient(source, item.outcome):
-            status,until="cooling",datetime.fromtimestamp(item.updated+TRANSIENT[item.outcome],timezone.utc)
-        elif item.outcome in TRANSIENT:
-            status,until="unknown",None
-        elif item.outcome in {"success","no_work","work_failure"}:
-            status,until="healthy",None
-        else:
-            continue
-        result=await conn.fetchval(
-            """INSERT INTO public.factory_model_health
-                (repo,source,model,status,last_outcome,cooldown_until,last_verified_at)
-               VALUES($1,$2,$3,$4,$5,$6,$7)
-               ON CONFLICT DO NOTHING RETURNING model""",
-            repo,source,model,status,item.outcome,until,
-            datetime.fromtimestamp(item.updated,timezone.utc) if status=="healthy" else None)
-        inserted+=int(result is not None)
-        if provider_scoped_transient(source, item.outcome):
-            observed=datetime.fromtimestamp(item.updated,timezone.utc)
-            until=_provider_cooldown(source,item.outcome,observed)
-            if until and until>datetime.now(timezone.utc):
-                await conn.execute(
-                    """INSERT INTO public.factory_provider_budget
-                         (repo,source,cooldown_until,quota_reset_at,last_outcome)
-                       VALUES($1,$2,$3,$4,$5)
-                       ON CONFLICT(repo,source) DO UPDATE SET
-                         cooldown_until=greatest(factory_provider_budget.cooldown_until,
-                                                 EXCLUDED.cooldown_until),
-                         quota_reset_at=EXCLUDED.quota_reset_at,last_outcome=EXCLUDED.last_outcome,
-                         updated_at=now()
-                       WHERE factory_provider_budget.last_run_id=0""",
-                    repo,source,until,until if item.outcome=="provider_quota" else None,item.outcome)
-    return inserted
-
-
-def sync_registry(repo: str, comments: list[dict[str,Any]]) -> int:
-    if not enabled():
-        return 0
-    return _run(_sync_registry,repo,comments)
-
-
 async def _sync_catalog(conn:Any,repo:str,report:dict[str,Any])->int:
     """Record trusted catalog absence without editing the checked-in roster."""
     count=0
@@ -1081,33 +1029,10 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
         if state.get("suspended") is True or (retry_at is not None and retry_at > now):
             if model not in excluded.setdefault(source, []):
                 excluded[source].append(model)
-    # Comment locators are compact, verified GitHub IDs, not a body cache.
-    # Read durable coordination first. The legacy registry body is consulted
-    # only once when a trusted marker has not yet been migrated.
-    if worker:
-        if not worker.isdecimal() or worker not in _roster():
-            raise ValueError("invalid trusted worker for registry ID lookup")
-        kinds = {"__heartbeat_id": "heartbeat", "__attempt_id": "attempt"}
-        scopes = {
-            key: f"registry-comment-id-v1:{kind}:worker:{worker}"
-            for key, kind in kinds.items()
-        }
-        recorded = await conn.fetch(
-            """SELECT scope,checkpoint FROM public.factory_reconciliation_cursor
-                WHERE repo=$1 AND scope=ANY($2::text[])""",
-            repo, list(scopes.values()),
-        )
-        known = {
-            str(row["scope"]): str(row["checkpoint"] or "")
-            for row in recorded
-        }
-        missing = {
-            key: scope for key, scope in scopes.items()
-            if not known.get(scope, "").isdecimal() or int(known[scope]) <= 0
-        }
-        for key, scope in scopes.items():
-            if key not in missing:
-                excluded[key] = [known[scope]]
+    # The worker identity is validated for the trusted caller; issue #1093
+    # comment locators are retired and never exported to the runner.
+    if worker and (not worker.isdecimal() or worker not in _roster()):
+        raise ValueError("invalid trusted worker for model exclusions")
     return excluded
 
 
@@ -1230,57 +1155,6 @@ def export_candidate_health(repo: str) -> dict[str, Any]:
     return _run(_export_candidate_health, repo)
 
 
-async def _remember_verified_markers(
-    conn: Any, repo: str, entries: list[dict[str, str]],
-) -> int:
-    """Persist only trusted, canonical registry comment IDs in scoped cursors."""
-    roster = _roster()
-    count = 0
-    for item in entries:
-        worker, kind, comment_id = (
-            str(item.get("worker") or ""), str(item.get("kind") or ""),
-            str(item.get("id") or ""),
-        )
-        if worker not in roster or kind not in {"heartbeat", "attempt"}:
-            continue
-        if not comment_id.isdecimal() or int(comment_id) <= 0:
-            continue
-        scope = f"registry-comment-id-v1:{kind}:worker:{worker}"
-        result = await conn.fetchval(
-            """INSERT INTO public.factory_reconciliation_cursor
-                 (repo,scope,checkpoint,checked_at)
-               VALUES($1,$2,$3,now())
-               ON CONFLICT(repo,scope) DO UPDATE SET
-                 checkpoint=EXCLUDED.checkpoint,checked_at=now()
-               WHERE factory_reconciliation_cursor.checkpoint IS NULL
-                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
-                  OR factory_reconciliation_cursor.checkpoint::bigint
-                       < EXCLUDED.checkpoint::bigint
-               RETURNING 1""",
-            repo, scope, comment_id,
-        )
-        count += bool(result)
-    return count
-
-
-def remember_verified_markers(repo: str, entries: list[dict[str, str]]) -> int:
-    if not enabled():
-        raise RuntimeError("marker coordination needs trusted Neon connection")
-    return _run(_remember_verified_markers, repo, entries)
-
-
-async def _registry_ingest_checkpoint(conn: Any, repo: str) -> str | None:
-    return await conn.fetchval(
-        """SELECT checkpoint FROM public.factory_reconciliation_cursor
-           WHERE repo=$1 AND scope='registry-event-ingest-v2'""", repo,
-    )
-
-
-def registry_ingest_checkpoint(repo: str) -> str | None:
-    return _run(_registry_ingest_checkpoint, repo) if enabled() else None
-
-
-
 async def _export_fleet_failover_sources(conn: Any, repo: str, worker: str) -> list[str]:
     """Admit sources that cannot bypass a configured provider capacity limit.
 
@@ -1336,7 +1210,7 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
 
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health","export-fleet-failover-sources"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","export-model-exclusions","export-candidate-health","export-fleet-failover-sources"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -1369,10 +1243,6 @@ def main() -> int:
         if args.file is None:
             parser.error("--file required")
         print(json.dumps({"missing_models":sync_catalog(args.repo,json.loads(args.file.read_text()))}))
-    elif args.command=="sync-registry":
-        if args.file is None:
-            parser.error("--file required")
-        print(json.dumps({"backfilled":sync_registry(args.repo,json.loads(args.file.read_text()))}))
     elif args.command=="stats":
         print(json.dumps(_run(_stats,args.repo),default=str))
     elif args.command=="ingest-check":

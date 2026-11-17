@@ -1651,14 +1651,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/ping$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
       "methods": [
         "GET",

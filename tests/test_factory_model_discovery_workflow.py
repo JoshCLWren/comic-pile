@@ -48,9 +48,20 @@ def test_runner_uses_unpinned_opencode_v2() -> None:
 
 
 def test_nvidia_410_evidence_comes_from_actual_assigned_work() -> None:
-    """Sticky HTTP 410 evidence is only recorded from real NVIDIA work."""
+    """Sticky HTTP 410 evidence comes from the real work log, not a #1093 snapshot."""
+    import sys
+
     runner = FACTORY_RUN.read_text(encoding="utf-8")
-    report = runner.split("      - name: Report terminal heartbeat", 1)[1]
-    assert 'if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]' in report
-    assert "retirement_marker='<!-- factory-model-retired-410:v1 -->'" in report
-    assert "Confirmed HTTP 410 during actual assigned work" in report
+    assert "factory-model-retired-410:v1" not in runner
+    assert "issues/1093" not in runner
+    worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "printf 'NVIDIA permanently retired model: %s\\n' \"$MODEL\"" in worker
+    sys.path.insert(0, str(ROOT / ".github" / "scripts"))
+    from factory_state_ledger import refine_trusted_smoke_timeout
+
+    model = "generated/retired-model"
+    refined = refine_trusted_smoke_timeout(
+        {"source": "nvidia", "model": model, "outcome_class": "unknown_failure"},
+        f"2026-11-16T00:00:00.0000000Z NVIDIA permanently retired model: {model}\n",
+    )
+    assert refined["outcome_class"] == "model_retired_410"

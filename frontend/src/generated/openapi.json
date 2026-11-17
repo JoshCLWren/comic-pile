@@ -20236,32 +20236,6 @@
         ]
       }
     },
-    "/api/ping": {
-      "get": {
-        "description": "Return a minimal alive response.\n\nThis endpoint has zero database, ORM, or heavy dependency\ninitialization overhead. Lifespan startup is intentionally lightweight\nand heavy initialization (database connectivity, durable cache\naccounting, cache provider) is deferred until the first non-ping\nrequest. A cold ``GET /api/ping`` therefore never opens a\nPostgreSQL connection or reserves a cache block.\n\nReturns:\n    Simple status dict with no external dependencies.",
-        "operationId": "ping_api_ping_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Ping Api Ping Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Ping",
-        "tags": [
-          "ping"
-        ]
-      }
-    },
     "/api/v1/auth/csrf": {
       "get": {
         "operationId": "csrf_documentation___api_v1_auth_csrf",

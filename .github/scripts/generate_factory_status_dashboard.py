@@ -492,17 +492,9 @@ def collect_snapshot() -> dict[str, Any]:
     heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
         view, roster, now=datetime.now(timezone.utc),
     )
-    # The funnel is one anchored, trusted GitHub comment, never a registry scan.
+    # Allocator telemetry lives in the completion drain's Actions job summary.
+    # Issue #1093 is retired as a registry; the dashboard never reads it.
     funnel: dict[str, str] = {}
-    try:
-        anchor = completion.gh_json([
-            "api", f"repos/{REPO}/issues/comments/{full.TELEMETRY_COMMENT_ID}"
-        ])
-        if isinstance(anchor, Mapping) and completion.load_policy().comment_is_trusted(anchor):
-            if str(anchor.get("issue_url") or "").endswith("/issues/1093"):
-                funnel = latest_completion_funnel([anchor])
-    except (RuntimeError, ValueError, OSError):
-        pass
     credits = merge_credit(recently_merged_prs(completion))
     worker_rows = build_worker_rows(
         manifest_rows,
@@ -816,8 +808,8 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
     verdict_class, verdict_title, verdict_detail = system_verdict(snapshot)
     cards = [
         ("Open PRs", snapshot["open_prs"], f"{REPO_URL}/pulls"),
-        ("Working now", snapshot["busy_workers"], f"{REPO_URL}/issues/1093"),
-        ("Executable slots", snapshot["executable_slot_capacity"], f"{REPO_URL}/issues/1093"),
+        ("Working now", snapshot["busy_workers"], f"{REPO_URL}/actions/workflows/free-model-factory-entry.yml"),
+        ("Executable slots", snapshot["executable_slot_capacity"], f"{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"),
         ("7d merge credit", snapshot.get("merged_week", 0), f"{REPO_URL}/pulls?q=is%3Amerged"),
     ]
     cards_html = "".join(
@@ -836,7 +828,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
             ("Conflict", "conflict", "factory%3Amerge-conflict"),
         ]
     )
-    funnel_text = "Latest allocator telemetry unavailable"
+    funnel_text = "Allocator telemetry: completion drain job summaries"
     if funnel:
         funnel_text = (
             f"target {funnel.get('completion target', '?')} · "
@@ -861,7 +853,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <div class="panel"><h2>PR pipeline</h2>{pipeline_html}</div>
 <div class="panel"><h2>Throughput · last hour</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_hour'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_hour'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_hour'] < 0 else 'bad' if throughput['net_hour'] > 0 else ''}">{signed(int(throughput['net_hour']))}</strong></div></div>
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div><div class="row"><span>Factories with 7d merge credit</span><strong>{esc(snapshot.get('productive_workers_week', 0))}</strong></div></div>
-<div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/issues/1093"><span>Heartbeat + allocator registry</span><strong>#1093 ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
+<div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/actions/workflows/free-model-factory-entry.yml"><span>Worker runs + trusted outcomes</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
 </section>
 {render_delivery_funnel(snapshot)}
 {render_roster_section(snapshot)}
