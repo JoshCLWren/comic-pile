@@ -782,10 +782,10 @@ async fn submit_with_issuer(
     request: BugReportCreate,
     settings: GithubSettings,
     issuer: &GithubIssuer<'_>,
-) -> Result<Response, ApiError> {
+) -> Result<Response, BugReportError> {
     let (title, description) = validate_create(&request)?;
     if !settings.is_configured() {
-        return Err(not_configured());
+        return Err(BugReportError::Api(not_configured()));
     }
     let body = build_github_issue_body(
         &username,
@@ -801,7 +801,9 @@ async fn submit_with_issuer(
     if is_admin {
         let issue_url = issuer(settings, title, body, labels)
             .await
-            .map_err(|detail| ApiError::with_status(StatusCode::BAD_GATEWAY, detail))?;
+            .map_err(|detail| {
+                BugReportError::Api(ApiError::with_status(StatusCode::BAD_GATEWAY, detail))
+            })?;
         return Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response());
     }
 
@@ -829,7 +831,10 @@ async fn submit_with_issuer(
         Ok(url) => url,
         Err(detail) => {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError::with_status(StatusCode::BAD_GATEWAY, detail));
+            return Err(BugReportError::Api(ApiError::with_status(
+                StatusCode::BAD_GATEWAY,
+                detail,
+            )));
         }
     };
     let submitted_at_seconds = Utc::now().timestamp_micros() as f64 / 1_000_000.0;
@@ -847,16 +852,8 @@ pub async fn create(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
-) -> Result<Response, ApiError> {
-    let request: BugReportCreate = serde_json::from_slice(&body).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        {
-            unprocessable("Invalid request body: expected a bug-report JSON object".to_string())
-        }
-    })?;
+) -> Result<Response, BugReportError> {
+    let request = parse_request(&body)?;
     let (username, is_admin) = load_user(&state, user.id()).await?;
     let settings = github_settings();
     let issuer =
