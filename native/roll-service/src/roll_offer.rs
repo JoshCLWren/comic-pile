@@ -386,7 +386,7 @@ pub async fn offer(
         .map(|candidate| candidate.thread_id)
         .collect();
 
-    let mut die = dice_state::current_die(&tx, user).await?;
+    let die = dice_state::current_die(&tx, user).await?;
     let mut snoozed_thread_id = None;
     if let Some(previous) = previous_offer {
         // Exclude the previous thread from the offer pool so it doesn't get
