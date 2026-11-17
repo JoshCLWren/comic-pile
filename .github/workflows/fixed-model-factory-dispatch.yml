@@ -198,6 +198,7 @@ jobs:
           cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
+          echo "FACTORY_GH_CALL_LOG=$RUNNER_TEMP/factory-gh-calls.log" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
 
       - name: Gate factory dispatch on Actions REST quota
@@ -794,6 +795,16 @@ jobs:
           echo "Dispatching automatic local Ollama review of PR #${pr}"
           gh workflow run local-ollama-review.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f "pr=${pr}"
+
+      - name: Report GitHub CLI request usage
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        env:
+          USAGE_LABEL: dispatch ${{ inputs.target || inputs.mode || github.event_name }}
+        run: |
+          python3 .github/scripts/factory_gh_usage.py "${FACTORY_GH_CALL_LOG:-/dev/null}" \
+            --label "$USAGE_LABEL" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Report factory query measurements
         if: always() && inputs.measure

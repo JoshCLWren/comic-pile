@@ -140,13 +140,19 @@ def test_checkpoint_ref_is_only_created_for_changes_on_assigned_branch(tmp_path:
             proc.wait()
 
 
-def test_draft_publication_retries_without_another_edit(tmp_path: Path) -> None:
-    """An API failure after a successful snapshot must not strand its branch."""
+def test_publication_runs_once_on_final_flush_and_retries(tmp_path: Path) -> None:
+    """An API failure after a successful snapshot must not strand its branch.
+
+    Publication is no longer attempted every interval (API budget): it runs on
+    the final flush, with a bounded retry.
+    """
     work = repo(tmp_path)
     attempts = tmp_path / 'attempts'
     helper = tmp_path / 'handoff.py'
     helper.write_text(
+        'import sys\n'
         'from pathlib import Path\n'
+        'if "--check-write" in sys.argv: raise SystemExit(0)\n'
         f'path = Path({str(attempts)!r})\n'
         'count = int(path.read_text()) + 1 if path.exists() else 1\n'
         'path.write_text(str(count))\n'
@@ -156,18 +162,41 @@ def test_draft_publication_retries_without_another_edit(tmp_path: Path) -> None:
     proc = start(work, handoff=helper)
     try:
         sha = wait_for_ref(work)
-        for _ in range(60):
-            if attempts.exists() and int(attempts.read_text()) >= 2:
-                break
-            time.sleep(.1)
-        else:
-            raise AssertionError('draft publication was not retried after API failure')
+        time.sleep(2.5)
+        assert not attempts.exists(), 'publication must not run on every interval'
         stop(proc)
+        assert int(attempts.read_text()) == 2
         assert remote_ref(work) == sha
     finally:
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+
+
+def test_unchanged_worktree_makes_no_github_calls(tmp_path: Path) -> None:
+    """Idle intervals must cost zero API requests (write check or publication)."""
+    work = repo(tmp_path)
+    calls = tmp_path / 'calls'
+    helper = tmp_path / 'handoff.py'
+    helper.write_text(
+        'import sys\n'
+        'from pathlib import Path\n'
+        f'p = Path({str(calls)!r})\n'
+        'p.write_text((p.read_text() if p.exists() else "") + " ".join(sys.argv[1:]) + "\\n")\n'
+    )
+    (work / 'tracked.rs').write_text('fn edited() {}\n')
+    proc = start(work, handoff=helper)
+    try:
+        wait_for_ref(work)
+        time.sleep(3.5)
+        stop(proc)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    lines = calls.read_text().splitlines()
+    assert sum('--check-write' in line for line in lines) == 1
+    assert sum('--check-write' not in line for line in lines) == 1
 
 
 def test_pr_repair_branch_names_original_issue_and_model(tmp_path: Path) -> None:
@@ -244,34 +273,25 @@ def test_finalize_adopts_saved_ancestry_and_updates_same_pr_without_reapplying(t
     assert git(work, 'status', '--porcelain') == ''
 
 
-def test_pr_repair_pushes_original_branch_and_tracking_ref_atomically(tmp_path: Path) -> None:
+def test_pr_repair_snapshots_never_move_the_assigned_pr_branch(tmp_path: Path) -> None:
+    """PR #5299: per-minute checkpoint pushes to the PR head re-ran every PR
+    workflow, exhausted the installation API quota and published unguarded
+    scratch files. Snapshots now advance only the private tracking ref."""
     work = repo(tmp_path)
     source = git(work, 'branch', '--show-current')
     git(work, 'push', 'origin', source)
+    original = git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0]
     (work / 'tracked.rs').write_text('fn repaired() {}\n')
     proc = start(work, mode='pr', issue='123')
     try:
         saved = wait_for_ref(work)
+        (work / 'scratch_reproduce.rs').write_text('fn scratch() {}\n')
+        time.sleep(1.5)
         stop(proc)
     finally:
         if proc.poll() is None:
             proc.kill()
             proc.wait()
-    assert git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0] == saved
-    # A newer remote worker commit makes both updates fail, preserving that head
-    # and the prior tracking ref instead of force-pushing either branch.
-    newer = subprocess.run(['git', 'commit-tree', f'{saved}^{{tree}}', '-p', saved],
-                           cwd=work, input='ordinary resumed commit\n', text=True,
-                           check=True, capture_output=True).stdout.strip()
-    git(work, 'push', 'origin', f'{newer}:refs/heads/{source}')
-    (work / 'tracked.rs').write_text('fn stale_writer() {}\n')
-    proc = start(work, mode='pr', issue='123')
-    try:
-        time.sleep(1.4)
-        stop(proc)
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
-    assert remote_ref(work) == saved
-    assert git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0] == newer
+    assert remote_ref(work) != saved  # later snapshot fast-forwarded the tracking ref
+    assert git(work, 'merge-base', '--is-ancestor', saved, remote_ref(work)) == ''
+    assert git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0] == original

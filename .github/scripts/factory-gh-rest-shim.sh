@@ -7,6 +7,14 @@ REAL_GH="${FACTORY_REAL_GH:-/usr/bin/gh}"
   exit 127
 }
 
+# Attribute every invocation to this job's shared-quota usage report.
+METER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory-gh-meter.sh"
+if [[ -n "${FACTORY_GH_CALL_LOG:-}" && -f "$METER" ]]; then
+  # shellcheck source=/dev/null
+  source "$METER"
+  factory_gh_meter_record "$@"
+fi
+
 original=("$@")
 command_group="${1:-}"
 command_name="${2:-}"
