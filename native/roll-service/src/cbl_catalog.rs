@@ -263,9 +263,21 @@ fn parse_page_size(raw: Option<&str>) -> Result<i64, CatalogError> {
     let Some(value) = raw else {
         return Ok(50);
     };
-    let parsed = value.parse::<i64>().map_err(|_| {
-        CatalogError::ValidationItems(vec![validation_int_parsing("page_size", value)])
-    })?;
+    let parsed = match value.parse::<i64>() {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            if value.chars().all(|c| c.is_ascii_digit()) {
+                // Python `Query(le=100)` reports values above the i64 range as less_than_equal.
+                return Err(CatalogError::ValidationItems(vec![
+                    validation_less_than_equal("page_size", value, MAX_PAGE_SIZE),
+                ]));
+            }
+            return Err(CatalogError::ValidationItems(vec![validation_int_parsing(
+                "page_size",
+                value,
+            )]));
+        }
+    };
     if parsed < 1 {
         return Err(CatalogError::ValidationItems(vec![
             validation_greater_than_equal("page_size", value, 1),
