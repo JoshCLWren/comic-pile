@@ -4152,6 +4152,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_activity_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/analytics/metrics": {
         parameters: {
             query?: never;
@@ -5019,6 +5035,31 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        };
+        ActivityItem: {
+            /** Format: int32 */
+            die_after?: number | null;
+            /** Format: int32 */
+            die_before?: number | null;
+            /** Format: int32 */
+            event_id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: double */
+            rating?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+            timestamp: string;
+            type: string;
+        };
+        ActivityResponse: {
+            activities: components["schemas"]["ActivityItem"][];
+            events: components["schemas"]["ActivityItem"][];
+            items: components["schemas"]["ActivityItem"][];
+            next_cursor?: string | null;
+            next_page_token?: string | null;
         };
         /** @description Reading metrics and analytics for the authenticated user. */
         AnalyticsMetricsResponse: {
@@ -19916,6 +19957,45 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_activity_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of activity rows */
+                limit?: number;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped activity history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityResponse"];
+                };
+            };
+            /** @description Malformed or unrecognized page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

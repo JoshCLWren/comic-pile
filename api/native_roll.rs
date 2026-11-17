@@ -246,6 +246,7 @@ fn app() -> Router {
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
+        .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/sessions/{session_id}", get(native_dispatch))
@@ -635,6 +636,26 @@ mod tests {
                 response.status() == StatusCode::UNAUTHORIZED
                     || response.status() == StatusCode::SERVICE_UNAVAILABLE,
                 "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn activity_ingress_reaches_authenticated_native_dispatch() {
+        for uri in ["/api/v2/activity"] {
+            let response = app()
+                .call(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach authenticated native dispatch, got {}",
                 response.status()
             );
             assert_eq!(
