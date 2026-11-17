@@ -48,7 +48,8 @@
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -62,7 +63,8 @@
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
