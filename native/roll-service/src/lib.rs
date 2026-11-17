@@ -1,7 +1,6 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
-pub mod active_issue_stats;
 pub mod activity;
 pub mod analytics;
 pub mod auth;
