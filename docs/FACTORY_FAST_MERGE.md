@@ -1,82 +1,97 @@
-# Factory-only immediate fast merge
+# Factory-only fast merge
 
 ## Contract
 
-**Factory-only means merge immediately without waiting for CI or semantic review.** This is the owner-authorized exception to the ordinary factory review / `factory:ready` merge drain. When an eligible PR appears or becomes unowned, the dedicated **Factory-only Fast Merge** workflow attempts the squash merge at once. **Do not wait on CI, poll check runs, run semantic review, or route eligible work through the normal merge queue.**
+Factory-only PRs merge automatically **after the exact PR head has passed Python
+Ruff lint and ty type checking in the unprivileged CI workflow**. They do not
+wait for the full CI summary or semantic reviewer. The factory-only path
+allowlist, trusted-author rules, ownership/hold labels, head SHA pin, and branch
+rules remain in force.
 
-This exception applies to factory infrastructure only. It does not waive the path allowlist, trusted author, active-ownership/hold restrictions, head-SHA pin, or GitHub's enforcement of branch permissions. The controller **attempts** the merge immediately; GitHub must permit it. If the repository's branch rules still require `CI Summary` from the chosen credential, GitHub rejects the attempt. That is a configuration/credential problem, not a reason to resume an endless CI watch. Do not forge check results or globally remove CI protection for product PRs.
+This bounded preflight was added after the November 17, 2026 incident: factory
+status PRs #5329, #5332, #5333 and their repair #5334 were fast-merged before
+CI, and failing Ruff code reached `main`. A check is not green just because
+the workflow has started. Missing, pending, failed, wrong-head, untrusted-app,
+or truncated check evidence **must skip the merge**.
 
-## Implementation and authorization
+## Execution
 
-- [`.github/workflows/factory-fast-merge.yml`](../.github/workflows/factory-fast-merge.yml): runs from trusted `main` on PR open/reopen, synchronize, ready-for-review, or label updates, and manual dispatch. **There is no scheduled polling loop.** **No CI completion dependency.**
-- [`.github/scripts/factory-fast-merge.py`](../.github/scripts/factory-fast-merge.py): reads each candidate's current metadata/files and immediately calls GitHub's merge API with `sha=<current head>` and `merge_method=squash`. **No check-run, CI-run, or review lookup.**
-- [`.github/factory-fast-merge.json`](../.github/factory-fast-merge.json): owner on/off switch, currently `{"enabled": true}`. Missing/malformed/false disables.
-- [`tests/test_factory_fast_merge.py`](../tests/test_factory_fast_merge.py): eligibility, protected paths, exact-head merge call, absence of CI gating, and error reporting.
-- The workflow uses the existing `PR_REBASE_TOKEN` secret if available, with the built-in `GITHUB_TOKEN` as fallback. **The selected token must have permission to bypass the required `CI Summary` rule** for the eligible PR, otherwise immediate merges are blocked by GitHub. Configure a narrowly authorized ruleset bypass actor/credential if needed; do not relax required CI for unrelated/product PRs. A PAT being an owner PAT does not on its own prove bypass authority.
+- [`factory-fast-merge.yml`](../.github/workflows/factory-fast-merge.yml)
+  runs trusted `main` on PR open/reopen/synchronize/label and through a
+  completion event for either required Python CI job. No scheduled polling or
+  approval phase is introduced.
+- [`factory-fast-merge.py`](../.github/scripts/factory-fast-merge.py)
+  reads candidate PR metadata and changed paths, then fetches GitHub check
+  runs for the **exact** 40-character head SHA. It selects the latest genuine
+  `github-actions` `Python Lint (ruff)` and `Python Type Check (ty)`
+  results for that head. Both must be completed and successful.
+- The merge is pinned to that head SHA with `merge_method=squash`. If another
+  commit lands before the merge API call, the merge fails rather than accepting
+  unchecked code.
+- Ruff and ty execute in the ordinary **unprivileged** CI context, not in
+  the privileged `pull_request_target` merge runner. The merge runner checks
+  trusted GitHub results and **never executes PR code** with write credentials.
+- Semantic review remains bypassed by this owner-authorized exception.
+  Other required branch checks remain under GitHub's protection; the authorized
+  merge token may have a narrowly scoped bypass, but it cannot bypass the
+  controller's exact-head Python gates.
 
-## Operator / agent procedure
+## Eligibility
 
-1. Complete the factory-only change and local targeted checks before pushing. Create a **non-draft**, same-repository PR against `main`. Keep product changes separate.
-2. Ensure labels include `factory` and `factory:unowned`; release any actual worker lease legitimately. Do not strip active owner/hold labels merely to force a merge.
-3. The PR open/label event automatically runs the **Factory-only Fast Merge** action. If a one-shot targeted recovery is needed, use:
-   ```bash
-   gh workflow run factory-fast-merge.yml --ref main -f pr=1234
-   ```
-   Replace `1234` with the PR number. A run is an immediate merge **attempt**, not a delayed approval or auto-merge request.
-4. Read the action's JSON result: `merged` contains confirmed PR numbers, and `skipped` contains concrete refusal reasons. A green *workflow* with an empty `merged` list is **not** proof of a merge.
-5. If GitHub accepts the merge, verify the PR is actually merged and the usual production deployment and linked-issue reconciliation are triggered. If GitHub rejects it for branch protection, fix the scoped permission/bypass configuration; don't pretend waiting for CI is the fast lane.
+The owner switch lives in
+[`factory-fast-merge.json`](../.github/factory-fast-merge.json) and defaults
+off if missing or malformed. Eligible PRs must be open, non-draft, mergeable,
+same-repository, based on `main`, and authored by a trusted collaborator or
+`github-actions[bot]`. Dependabot and Renovate are excluded.
 
-**No CI polling loop.** A PR that the fast gate has rejected is not improved by checking the same status repeatedly. Perform at most one targeted evaluation on known changes and respond to the reported reason.
+The PR must carry `factory` and `factory:unowned` with no active factory
+owner, `factory:blocked`, `needs-human`, `do-not-merge`, or
+`security-review` label. Changed paths must pass the explicit factory-only
+allowlist, including both sides of renames; unknown product paths are excluded.
+Source-controlled provider/model roster files cannot be added or modified.
 
-## Eligibility, enforced by trusted main
+The fast-merge policy itself remains protected from self-approval:
+`.github/factory-fast-merge.json`,
+`.github/workflows/factory-fast-merge.yml`,
+`.github/scripts/factory-fast-merge.py` and
+`tests/test_factory_fast_merge.py` cannot use this exception.
 
-The gate requires **all** of the following:
+## Operating instructions
 
-- Switch explicitly enabled, PR open, non-draft, mergeable with a valid exact head SHA, and targeting this repository's `main`.
-- Same-repository head, not a fork; trusted author association (`OWNER`, `MEMBER`, `COLLABORATOR`) or `github-actions[bot]`. Dependabot and Renovate are excluded.
-- Both `factory` and `factory:unowned` labels. No `factory:local` or `factory:<number>` active owner; no `factory:blocked`, `needs-human`, `do-not-merge`, or `security-review` hold.
-- Every changed path matches the **explicit factory-only allowlist** in the Python controller, including both sides of renames. Complete file enumeration required; unknown or mixed product paths fail closed.
-- The retired roster TSV, generated expected-worker lock and roster snapshot cannot be added or modified. Deleting these artifacts is permitted. Provider slots are derived at runtime.
-- GitHub accepts the SHA-pinned merge with the selected token. A branch-rule rejection becomes a visible `skipped` reason, never a synthetic approval/check.
+1. Complete local focused checks and push a PR with an exact head SHA. Keep
+   product code out of factory-only PRs.
+2. The first fast-merge event may report `skipped`: `Exact-head Python Lint
+   (ruff) has not passed` or `Exact-head Python Type Check (ty) has not passed`.
+   This is intentional while CI is running, not a factory failure.
+3. The successful completion of either Python CI job retriggers the trusted
+   action for that head. Once both pass, the controller attempts the immediate
+   SHA-pinned merge without waiting for full CI or semantic review.
+4. A green fast-merge workflow does not imply a merge. Read `merged` and
+   `skipped` in its JSON output. A red check blocks the merge until code is
+   repaired and a new head passes.
+5. Verify the PR actually merged, the linked issue was reconciled, and the
+   production deployment was dispatched. A merged PR does not prove a healthy
+   production deployment.
 
-**No CI / review eligibility requirement exists in this lane.** `factory:changes-requested` status does not by itself prevent this authorized factory-only merge. The controller never executes PR-head code with a write credential, only trusted `main`.
+A manual targeted re-evaluation remains available:
 
-The allowlist covers selected factory scripts, workflows, factory tests, factory docs/skills and runtime provider-discovery changes. It does **not** include arbitrary `.github/**` changes. The fast-lane control files themselves are excluded to prevent self-authorized policy edits: `.github/factory-fast-merge.json`, `.github/workflows/factory-fast-merge.yml`, `.github/scripts/factory-fast-merge.py`, and `tests/test_factory_fast_merge.py`. Changes to those controls follow the normal protected path; subsequent ordinary factory-only PRs can demonstrate the newly installed lane.
+```bash
+gh workflow run factory-fast-merge.yml --ref main -f pr=1234
+```
 
-## Regression proof: real automatic merge before CI
+This does not bypass failing checks; replace `1234` with the PR number.
 
-A unit test that mocks GitHub's merge API is necessary but not sufficient: the
-workflow credential must also have permission to merge a real eligible PR.
-For a live regression proof, open a harmless **factory-docs-only** PR against
-`main`, with `factory` and `factory:unowned` labels. The normal
-`pull_request_target` label event should immediately run **Factory-only Fast
-Merge**, with no dependency on the ordinary CI workflow or semantic review.
+## Recovery and security
 
-Record three pieces of evidence independently:
-
-1. The proof PR's head SHA and its actual `merged_at` timestamp.
-2. The successful **Factory-only Fast Merge** run that lists the proof PR in
-   its `merged` JSON array, not just a green evaluation with `skipped`.
-3. The CI workflow state at merge time. If CI was pending or not started,
-   that proves the lane's no-CI-wait behavior. If CI was already green,
-   rerun the proof with an eligible PR rather than claiming the timing was proved.
-
-The required `CI Summary` check remains configured for ordinary PRs. The
-ruleset's bypass actor is intentionally broader than this documentation:
-the trusted fast-merge controller's path/ownership restrictions are what
-limit its automated use to factory-only PRs.
-
-## After merge and troubleshooting
-
-A successful bot merge with `GITHUB_TOKEN` does not emit a normal push event. The trusted merge script therefore dispatches Deploy Production in its `finally` block after any successful merge, even if a later PR fails. The workflow also runs the post-merge issue-closure reconciliation sweep.
-
-| Result | Next action |
+| Outcome | Operator response |
 | --- | --- |
-| `enabled: false` | Fix the owner switch via the protected normal path |
-| Missing labels, active lease or hold | Repair genuine ownership/status, do not remove safety controls as a shortcut |
-| Outside allowlist, fork, draft, or unmergeable | Make an eligible factory-only PR or use the ordinary path |
-| `GitHub rejected immediate merge` with a required-CI message | Fix the authorized bypass actor/branch rule configuration; **do not convert this into CI waiting** |
-| `merged` contains the PR | Verify its merged state and production/closure separately |
-| Workflow green but `merged: []` | Read the skip reason. Success only means the evaluation ran |
+| `enabled: false` | Update owner switch through the protected path |
+| Missing/failed/pending Python checks | Correct CI failures; the next successful exact-head check will retrigger evaluation |
+| Missing labels, active lease, hold, or outside allowlist | Correct genuine ownership or scope issues, not the safeguards |
+| Branch protection rejects merge | Fix the scoped credential authorization; never fabricate or forge checks |
+| `merged` contains PR number | Verify actual merge, production dispatch, and post-merge closure |
+| Workflow successful but `merged: []` | Read `skipped`; successful evaluation is not delivered code |
 
-See [`AUTONOMOUS_FACTORY_POLICY.md`](AUTONOMOUS_FACTORY_POLICY.md) for the normal gated merge path and other factory safety contracts.
+Changes to protected fast-merge policy require the normal reviewed and
+CI-verified path. See
+[`AUTONOMOUS_FACTORY_POLICY.md`](AUTONOMOUS_FACTORY_POLICY.md).
