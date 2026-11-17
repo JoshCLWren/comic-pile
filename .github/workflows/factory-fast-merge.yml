@@ -1,12 +1,14 @@
 name: Factory-only Fast Merge
 
-# Trusted main only, never PR heads. Factory-only PRs are attempted immediately
-# after open/synchronize/label, without CI or semantic review dependencies.
+# Privileged automation runs only trusted main. Merge only after the unprivileged
+# CI workflow reports successful Ruff and ty checks for the exact PR head.
 # An owner-authorized token must have a ruleset bypass for protected main.
 # The policy switch lives in .github/factory-fast-merge.json.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled]
+  workflow_job:
+    types: [completed]
   workflow_dispatch:
     inputs:
       pr:
@@ -27,6 +29,9 @@ concurrency:
 
 jobs:
   fast-merge:
+    # Run immediately on PR wakeups (usually a no-op until checks finish), then
+    # retrigger when the second required Python CI job completes successfully.
+    if: ${{ github.event_name != 'workflow_job' || (github.event.workflow_job.conclusion == 'success' && (github.event.workflow_job.name == 'Python Lint (ruff)' || github.event.workflow_job.name == 'Python Type Check (ty)')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -36,7 +41,7 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Immediately merge eligible factory-only PRs
+      - name: Merge only factory PRs with exact-head green Python checks
         id: merge
         shell: bash
         env:
@@ -44,11 +49,14 @@ jobs:
           # The script applies the strict factory-only allowlist and leases.
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr || '' }}
+          CI_HEAD: ${{ github.event_name == 'workflow_job' && github.event.workflow_job.head_sha || '' }}
         run: |
           set -Eeuo pipefail
           args=(--repo "$GITHUB_REPOSITORY")
           if [[ -n "$PR_NUMBER" ]]; then
             args+=(--pr "$PR_NUMBER")
+          elif [[ -n "$CI_HEAD" ]]; then
+            args+=(--head "$CI_HEAD")
           fi
           python3 .github/scripts/factory-fast-merge.py "${args[@]}" > "$RUNNER_TEMP/fast-merge-result.json"
           cat "$RUNNER_TEMP/fast-merge-result.json"
