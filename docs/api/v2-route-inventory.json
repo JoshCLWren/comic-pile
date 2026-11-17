@@ -1003,16 +1003,16 @@
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 126,
-      "v1_shadowed_by_rust": 5,
-      "v1_live_python": 108,
+      "v1_shadowed_by_rust": 1,
+      "v1_live_python": 112,
       "v1_orphaned": 7,
       "unversioned_total": 3,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 1,
       "unversioned_orphaned": 1,
       "total_python_surface": 129,
-      "total_shadowed_by_rust": 5,
-      "total_live_python": 109,
+      "total_shadowed_by_rust": 1,
+      "total_live_python": 113,
       "total_orphaned": 8
     },
     "catch_all": {
@@ -2296,14 +2296,14 @@
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4839,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-sessions.ts"
         ],
         "method": "GET",
         "path": "/api/v1/sessions/",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2335,14 +2335,14 @@
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4839,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-sessions.ts"
         ],
         "method": "GET",
         "path": "/api/v1/sessions/{session_id}/details",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2830,27 +2830,27 @@
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4839,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-undo.ts"
         ],
         "method": "GET",
         "path": "/api/v1/undo/{session_id}/snapshots",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4839,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-undo.ts"
         ],
         "method": "POST",
         "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       }
     ],
