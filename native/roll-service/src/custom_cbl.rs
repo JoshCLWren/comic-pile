@@ -1933,7 +1933,7 @@ async fn editor_nodes_for_plan(
                 serde_json::from_str::<serde_json::Value>(&text)
             {
                 for (key, value) in metadata {
-                    if node.get(&key).map_or(true, |current| current.is_null()) {
+                    if node.get(&key).is_none_or(|current| current.is_null()) {
                         node.insert(key, value);
                     }
                 }
