@@ -275,3 +275,14 @@ def test_an_assignment_resets_the_idle_streak(tmp_path: Path) -> None:
     work = '{"kind":"issue","number":1}'
     calls, _ = _dispatch_batch(tmp_path, [none, none, work, none, none, none, none, none])
     assert calls == 6
+
+
+def test_usage_report_separates_cache_hits_from_github_requests() -> None:
+    usage = USAGE.summarize(["1\tgh pr checks", "2\tgh pr checks", "2\tcache-hit"])
+    assert usage["total"] == 2 and usage["cache_hits"] == 1 and usage["github"] == 1
+
+
+def test_quota_sampler_is_read_only_and_on_demand() -> None:
+    data = yaml.safe_load((WORKFLOWS / "factory-api-quota-sampler.yml").read_text())
+    assert set(data[True]) == {"workflow_dispatch"}
+    assert data["permissions"] == {"actions": "read", "contents": "read"}

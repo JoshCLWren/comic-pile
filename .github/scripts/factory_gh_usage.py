@@ -17,14 +17,20 @@ from pathlib import Path
 def summarize(lines: list[str], top: int = 12) -> dict[str, int | list[tuple[str, int]]]:
     """Count requests by normalized command; paginated calls count once."""
     counts: Counter[str] = Counter()
+    cache_hits = 0
     for line in lines:
         _, _, key = line.partition("\t")
-        if key.strip():
+        if key.strip() == "cache-hit":
+            cache_hits += 1
+        elif key.strip():
             counts[key.strip()] += 1
     writes = sum(n for key, n in counts.items()
                  if key.startswith("api ") and not key.startswith("api GET "))
+    total = sum(counts.values())
     return {
-        "total": sum(counts.values()),
+        "total": total,
+        "cache_hits": cache_hits,
+        "github": total - cache_hits,
         "writes": writes,
         "paginated": sum(n for key, n in counts.items() if key.endswith(" paginate")),
         "top": counts.most_common(top),
@@ -50,7 +56,8 @@ def main() -> int:
         )
         args.summary.open("a", encoding="utf-8").write(
             f"### GitHub CLI requests ({args.label})\n\n"
-            f"Total `gh` invocations: {usage['total']} (writes {usage['writes']}, "
+            f"Total `gh` invocations: {usage['total']}; reached GitHub: {usage['github']} "
+            f"(cache hits {usage['cache_hits']}, writes {usage['writes']}, "
             f"paginated {usage['paginated']}; each paginated call may be several requests)\n\n"
             f"| Command | Calls |\n| --- | ---: |\n{rows}\n"
         )

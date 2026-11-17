@@ -49,6 +49,8 @@ factory_gh_real() {
   if [[ -f "$file" ]]; then
     age=$(( now - $(stat -c %Y "$file") ))
     if (( age >= 0 && age < ${FACTORY_GH_READ_CACHE_TTL:-45} )); then
+      # Usage reports subtract hits: the meter logged this invocation already.
+      [[ -z "${FACTORY_GH_CALL_LOG:-}" ]] || printf '%s\tcache-hit\n' "$now" >> "$FACTORY_GH_CALL_LOG"
       cat "$file"
       return 0
     fi
