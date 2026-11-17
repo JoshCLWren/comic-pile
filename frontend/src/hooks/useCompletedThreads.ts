@@ -37,6 +37,8 @@ export function useCompletedThreads(
     isLoading: query.isLoading,
     isError: query.isError,
     loadMore: query.fetchNextPage,
-    retry: query.refetch,
+    // A failed continuation page is not part of refetch's loaded-page set.
+    // Retry the missing cursor rather than silently reloading page one.
+    retry: query.isFetchNextPageError ? query.fetchNextPage : query.refetch,
   }
 }
