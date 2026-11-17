@@ -5,21 +5,21 @@ PostgreSQL database before touching the production (Neon) database. This module
 owns that rehearsal so the CI job, the deploy workflow and local runs share one
 fail-closed implementation.
 
-The canonical rehearsal sequence for a disposable database prepared at the
-migration base revision is:
+The canonical rehearsal sequence against a disposable database is:
 
-1. ``upgrade_base`` - ensure the disposable schema sits at the rehearsal base;
+1. ``upgrade_head`` - run ``alembic upgrade head`` (fresh disposable database -> head);
 2. ``apply_fixture`` - load the prod-shaped synthetic migration fixture;
-3. ``upgrade_head`` - run ``alembic upgrade head`` from the fixture revision;
-4. ``downgrade_base`` - run ``alembic downgrade <base>`` to roll back applied work;
-5. ``upgrade_head`` - run ``alembic upgrade head`` again to re-apply.
+3. ``downgrade_base`` - run ``alembic downgrade <base_revision>`` to roll back applied work;
+4. ``upgrade_head`` - run ``alembic upgrade head`` again to re-apply.
 
 Every step is timed and fail-closed: the first failing step raises
 :class:`MigrationRehearsalError` and the runner stops, so a rehearsal can never
 report success through a partial cycle.
 
 Deploy gates treat any rehearsal failure as fatal and must not proceed to the
-production migration; production is never used as the rehearsal database.
+production migration; production is never used as the rehearsal database. The
+rollback target defaults to the migration base revision and is scoped to the
+migration set under rehearsal by deploy/CI callers.
 """
 
 from __future__ import annotations
@@ -36,9 +36,8 @@ from sqlalchemy.engine import Engine
 
 #: Ordered rehearsal steps executed against the disposable database.
 REHEARSAL_STEPS: tuple[str, ...] = (
-    "upgrade_base",
-    "apply_fixture",
     "upgrade_head",
+    "apply_fixture",
     "downgrade_base",
     "upgrade_head",
 )
@@ -136,6 +135,7 @@ def run_migration_rehearsal(
     *,
     alembic_config_path: Path = ALEMBIC_CONFIG_PATH,
     fixture_applier: Callable[[Engine], None] | None = None,
+    base_revision: str = BASE_REVISION,
 ) -> MigrationRehearsalResult:
     """Run the disposable-Postgres migration rehearsal cycle.
 
@@ -143,8 +143,10 @@ def run_migration_rehearsal(
         database_url: Disposable rehearsal database URL (throwaway container).
         alembic_config_path: Repository ``alembic.ini`` path.
         fixture_applier: Optional callable that receives the disposable sync
-            engine and loads the prod-shaped fixture before the upgrade step.
+            engine and loads the prod-shaped fixture before the rollback step.
             When omitted, only the migration cycle runs.
+        base_revision: Migration revision the rollback step targets (the base
+            revision of the migration set under rehearsal, or alembic ``base``).
 
     Returns:
         The per-step results and the final revision reached by the cycle.
@@ -158,9 +160,6 @@ def run_migration_rehearsal(
     final_revision: str | None = None
     engine = create_engine(_sync_database_url(database_url)) if fixture_applier is not None else None
 
-    def _upgrade_base() -> None:
-        command.upgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
-
     def _upgrade_head() -> None:
         nonlocal final_revision
         config = _alembic_config(database_url, alembic_config_path)
@@ -168,12 +167,11 @@ def run_migration_rehearsal(
         final_revision = command.current_head(config)
 
     def _downgrade_base() -> None:
-        command.downgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
+        command.downgrade(_alembic_config(database_url, alembic_config_path), base_revision)
 
-    steps.append(_run_step("upgrade_base", _upgrade_base))
+    steps.append(_run_step("upgrade_head", _upgrade_head))
     if fixture_applier is not None and engine is not None:
         steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
-    steps.append(_run_step("upgrade_head", _upgrade_head))
     steps.append(_run_step("downgrade_base", _downgrade_base))
     steps.append(_run_step("upgrade_head", _upgrade_head))
 
