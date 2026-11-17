@@ -479,17 +479,29 @@ pub struct CreatorMetricDrilldown {
     pub included_issues: Vec<CreatorMetricIssue>,
     pub excluded_issues: Vec<CreatorMetricIssue>,
     pub pagination: CreatorMetricPagination,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rating_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bucket_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bucket_percentage: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role_issue_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role_rated_issue_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role_average_rating: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_issue_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_rated_issue_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_average_rating: Option<f64>,
 }
 
@@ -2211,5 +2223,688 @@ fn build_discoveries(library: &CreatorLibrary) -> CreatorDiscoveryResponse {
         },
         minimum_reliable_sample: MIN_RATED_FOR_RELIABLE as i64,
         max_entries_per_view: MAX_DISCOVERY_ENTRIES as i64,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Team chemistry
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct TeamInputs {
+    eligible_issue_creators: BTreeMap<i64, BTreeMap<i64, BTreeSet<String>>>,
+    display_names: HashMap<i64, String>,
+    baseline_ratings: HashMap<i64, BTreeMap<i64, f64>>,
+}
+
+fn team_inputs(library: &CreatorLibrary) -> TeamInputs {
+    let mut eligible_issue_creators: BTreeMap<i64, BTreeMap<i64, BTreeSet<String>>> = BTreeMap::new();
+    let mut display_names: HashMap<i64, String> = HashMap::new();
+    let mut baseline_ratings: HashMap<i64, BTreeMap<i64, f64>> = HashMap::new();
+    for issue in &library.issues {
+        let Some(rating) = library.ratings.get(&issue.id).copied() else {
+            continue;
+        };
+        let Some(credits) = library.credits.get(&issue.id) else {
+            continue;
+        };
+        let mut members: BTreeMap<i64, BTreeSet<String>> = BTreeMap::new();
+        for credit in credits {
+            display_names.entry(credit.external_id).or_insert_with(|| credit.display_name.clone());
+            if credit.roles.iter().any(|role| HEADLINE_ROLES.contains(&role.as_str())) {
+                baseline_ratings
+                    .entry(credit.external_id)
+                    .or_default()
+                    .entry(issue.id)
+                    .or_insert(rating);
+            }
+            let eligible: BTreeSet<String> = credit
+                .roles
+                .iter()
+                .filter(|role| TEAM_ELIGIBLE_ROLES.contains(&role.as_str()))
+                .cloned()
+                .collect();
+            if !eligible.is_empty() {
+                members.entry(credit.external_id).or_default().extend(eligible);
+            }
+        }
+        if members.len() >= 2 {
+            eligible_issue_creators.insert(issue.id, members);
+        }
+    }
+    TeamInputs {
+        eligible_issue_creators,
+        display_names,
+        baseline_ratings,
+    }
+}
+
+fn team_distribution(ratings: &[f64]) -> BTreeMap<String, i64> {
+    let mut counts: Vec<(String, i64)> = Vec::new();
+    for rating in ratings {
+        let key = distribution_key(*rating);
+        if let Some(entry) = counts.iter_mut().find(|entry| entry.0 == key) {
+            entry.1 += 1;
+        } else {
+            counts.push((key, 1));
+        }
+    }
+    counts.sort_by(|a, b| {
+        let a_value: f64 = a.0.parse().unwrap_or(0.0);
+        let b_value: f64 = b.0.parse().unwrap_or(0.0);
+        b_value.partial_cmp(&a_value).unwrap_or(Ordering::Equal)
+    });
+    counts.into_iter().collect()
+}
+
+fn team_issue_refs(library: &CreatorLibrary, issue_ids: &BTreeSet<i64>) -> Vec<CreatorTeamIssueRef> {
+    let mut entries: Vec<(String, String, i64, i64, CreatorTeamIssueRef)> = issue_ids
+        .iter()
+        .copied()
+        .filter_map(|id| library.issue(id).map(|issue| (id, issue)))
+        .map(|(id, issue)| {
+            (
+                issue.thread_title.to_lowercase(),
+                issue.thread_title.clone(),
+                issue.thread_id,
+                id,
+                CreatorTeamIssueRef {
+                    issue_id: id,
+                    thread_id: issue.thread_id,
+                    thread_title: issue.thread_title.clone(),
+                    issue_number: issue.issue_number.clone(),
+                    effective_rating: library.ratings.get(&id).copied(),
+                    status: if library.ratings.contains_key(&id) { "read" } else { "unread" }.to_string(),
+                },
+            )
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
+    entries.into_iter().take(MAX_ISSUE_REFS).map(|entry| entry.4).collect()
+}
+
+fn build_team_chemistry(library: &CreatorLibrary) -> CreatorTeamChemistryResponse {
+    let inputs = team_inputs(library);
+    let mut pair_issues: BTreeMap<(i64, i64), BTreeSet<i64>> = BTreeMap::new();
+    for (issue_id, members) in &inputs.eligible_issue_creators {
+        let ids: Vec<i64> = members.keys().copied().collect();
+        for first in 0..ids.len() {
+            for second in (first + 1)..ids.len() {
+                pair_issues
+                    .entry((ids[first], ids[second]))
+                    .or_default()
+                    .insert(*issue_id);
+            }
+        }
+    }
+    let qualifying: Vec<(&(i64, i64), &BTreeSet<i64>)> = pair_issues
+        .iter()
+        .filter(|(_, issues)| issues.len() >= MIN_SHARED_TEAM_SAMPLE)
+        .collect();
+
+    let mut ranked: Vec<(f64, usize, (i64, i64), &BTreeSet<i64>)> = qualifying
+        .iter()
+        .map(|(pair, issues)| {
+            let ratings: Vec<f64> = issues
+                .iter()
+                .filter_map(|id| library.ratings.get(id).copied())
+                .collect();
+            (round2(mean(&ratings)), issues.len(), **pair, *issues)
+        })
+        .collect();
+    ranked.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(Ordering::Equal)
+            .then(b.1.cmp(&a.1))
+            .then(a.2.cmp(&b.2))
+    });
+
+    let pairs: Vec<CreatorTeamPair> = ranked
+        .into_iter()
+        .take(MAX_RANKED_TEAM_PAIRS)
+        .map(|(shared_average, _, pair, issues)| {
+            let mut members: Vec<CreatorTeamMember> = Vec::new();
+            for creator_id in [pair.0, pair.1] {
+                let baseline: Vec<f64> = inputs
+                    .baseline_ratings
+                    .get(&creator_id)
+                    .into_iter()
+                    .flat_map(|ratings| ratings.values().copied())
+                    .collect();
+                let baseline_average = (!baseline.is_empty()).then(|| round2(mean(&baseline)));
+                let roles: BTreeSet<String> = issues
+                    .iter()
+                    .filter_map(|id| inputs.eligible_issue_creators.get(id))
+                    .filter_map(|members| members.get(&creator_id))
+                    .flatten()
+                    .cloned()
+                    .collect();
+                members.push(CreatorTeamMember {
+                    canonical_creator_key: format!("creator:{creator_id}"),
+                    display_name: inputs.display_names.get(&creator_id).cloned().unwrap_or_default(),
+                    roles: roles.into_iter().collect(),
+                    baseline_rated_count: baseline.len() as i64,
+                    difference_from_baseline: baseline_average
+                        .map(|average| round2(shared_average - average)),
+                    baseline_average_rating: baseline_average,
+                });
+            }
+            let ratings: Vec<f64> = issues
+                .iter()
+                .filter_map(|id| library.ratings.get(id).copied())
+                .collect();
+            let mut series_counts: BTreeMap<i64, (String, i64)> = BTreeMap::new();
+            for issue_id in issues.iter().copied() {
+                if let Some(issue) = library.issue(issue_id) {
+                    let entry = series_counts.entry(issue.thread_id).or_insert_with(|| (issue.thread_title.clone(), 0));
+                    entry.1 += 1;
+                }
+            }
+            let mut shared_series: Vec<CreatorTeamSeriesRef> = series_counts
+                .into_iter()
+                .map(|(thread_id, (thread_title, shared_issue_count))| CreatorTeamSeriesRef {
+                    thread_id,
+                    thread_title,
+                    shared_issue_count,
+                })
+                .collect();
+            shared_series.sort_by(|a, b| {
+                b.shared_issue_count
+                    .cmp(&a.shared_issue_count)
+                    .then(a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+                    .then(a.thread_id.cmp(&b.thread_id))
+            });
+            shared_series.truncate(MAX_SHARED_SERIES);
+            CreatorTeamPair {
+                pair_key: format!("creator:{}|creator:{}", pair.0, pair.1),
+                creators: members,
+                shared_rated_issue_count: issues.len() as i64,
+                shared_average_rating: Some(shared_average),
+                shared_median_rating: (!ratings.is_empty()).then(|| round2(median(&ratings))),
+                shared_rating_distribution: team_distribution(&ratings),
+                shared_series,
+                shared_issue_refs: team_issue_refs(library, issues),
+                max_shared_issue_refs: MAX_ISSUE_REFS as i64,
+            }
+        })
+        .collect();
+
+    let rated_ids: HashSet<i64> = library.ratings.keys().copied().collect();
+    let with_metadata = rated_ids.iter().filter(|id| library.metadata_issues.contains(id)).count() as i64;
+    CreatorTeamChemistryResponse {
+        pairs,
+        pairs_total: qualifying.len() as i64,
+        min_shared_team_sample: MIN_SHARED_TEAM_SAMPLE as i64,
+        max_ranked_pairs: MAX_RANKED_TEAM_PAIRS as i64,
+        coverage: CreatorTeamCoverage {
+            rated_issues_total: rated_ids.len() as i64,
+            rated_issues_with_creator_metadata: with_metadata,
+            ratings_complete: with_metadata >= rated_ids.len() as i64,
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Metric drilldowns
+// ---------------------------------------------------------------------------
+
+fn paginate<T: Clone>(items: &[T], page: i64, page_size: i64) -> (Vec<T>, CreatorMetricPagination) {
+    let total_pages = items.len().div_ceil(page_size as usize) as i64;
+    let start = ((page - 1) * page_size) as usize;
+    let paged = if start >= items.len() {
+        vec![]
+    } else {
+        items[start..(start + page_size as usize).min(items.len())].to_vec()
+    };
+    (
+        paged,
+        CreatorMetricPagination {
+            page,
+            page_size,
+            next_page_token: (page < total_pages).then_some(page + 1),
+            total_pages,
+        },
+    )
+}
+
+fn drilldown_issue(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    issue_id: i64,
+    exclusion_reason: Option<String>,
+) -> CreatorMetricIssue {
+    let issue = library.issue(issue_id);
+    CreatorMetricIssue {
+        issue_id,
+        thread_id: issue.map(|issue| issue.thread_id).unwrap_or(0),
+        thread_title: issue.map(|issue| issue.thread_title.clone()).unwrap_or_default(),
+        issue_number: issue.map(|issue| issue.issue_number.clone()).unwrap_or_default(),
+        status: issue.map(|issue| issue.status.clone()).unwrap_or_default(),
+        effective_rating: library.ratings.get(&issue_id).copied(),
+        effective_rating_source: None,
+        effective_rating_timestamp: library
+            .rating_timestamps
+            .get(&issue_id)
+            .map(iso_timestamp),
+        creator_roles: roles_on_issue(library, creator_id, issue_id),
+        exclusion_reason,
+        missing_rating_cause: None,
+    }
+}
+
+fn empty_calculation() -> CreatorMetricCalculation {
+    CreatorMetricCalculation {
+        formula: "No ratings available".to_string(),
+        numerator: "No rated issues".to_string(),
+        denominator: None,
+        percentage: None,
+    }
+}
+
+fn base_drilldown(
+    metric_type: &str,
+    creator_key: &str,
+    calculation: CreatorMetricCalculation,
+    total_count: i64,
+    included: Vec<CreatorMetricIssue>,
+    excluded: Vec<CreatorMetricIssue>,
+    pagination: CreatorMetricPagination,
+) -> CreatorMetricDrilldown {
+    CreatorMetricDrilldown {
+        metric_type: metric_type.to_string(),
+        creator_key: creator_key.to_string(),
+        calculation,
+        total_count,
+        included_issues: included,
+        excluded_issues: excluded,
+        pagination,
+        rating_value: None,
+        bucket_count: None,
+        bucket_percentage: None,
+        role: None,
+        role_issue_count: None,
+        role_rated_issue_count: None,
+        role_average_rating: None,
+        series_id: None,
+        series_title: None,
+        series_issue_count: None,
+        series_rated_issue_count: None,
+        series_average_rating: None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_drilldown(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    creator_key: &str,
+    metric_type: &str,
+    role: Option<&str>,
+    rating_value: Option<&str>,
+    series_key: Option<&str>,
+    page: i64,
+    page_size: i64,
+) -> Result<CreatorMetricDrilldown, ApiError> {
+    const VALID: &[&str] = &[
+        "average-rating", "median-rating", "rated-issue-count", "five-star-rate",
+        "rating-distribution", "unread-count", "read-unrated-count", "role-stats", "series-stats",
+    ];
+    if !VALID.contains(&metric_type) {
+        return Err(bad_request(format!("Invalid metric type: {metric_type}")));
+    }
+    let Some(attribution) = attribution(library, creator_id) else {
+        return Err(not_found(format!("Metric {metric_type} not available for creator {creator_key}")));
+    };
+    let all_ids: Vec<i64> = attribution.issue_ids.iter().copied().collect();
+    let rated_ids: Vec<i64> = all_ids
+        .iter()
+        .copied()
+        .filter(|id| {
+            library.ratings.contains_key(id)
+                && library
+                    .credits
+                    .get(id)
+                    .into_iter()
+                    .flatten()
+                    .any(|credit| credit.external_id == creator_id && has_headline_role(credit))
+        })
+        .collect();
+    let ratings: Vec<f64> = rated_ids
+        .iter()
+        .filter_map(|id| library.ratings.get(id).copied())
+        .collect();
+    let headline_exclusion = |id: i64| -> String {
+        if !library.ratings.contains_key(&id) {
+            "No stored effective rating".to_string()
+        } else {
+            "Creator only credited in a non-headline role excluded from headline stats".to_string()
+        }
+    };
+    let non_rated: Vec<i64> = all_ids
+        .iter()
+        .copied()
+        .filter(|id| !rated_ids.contains(id))
+        .collect();
+
+    match metric_type {
+        "average-rating" => {
+            if ratings.is_empty() {
+                let excluded: Vec<CreatorMetricIssue> = all_ids
+                    .iter()
+                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .collect();
+                return Ok(base_drilldown(
+                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    paginate::<i64>(&[], page, page_size).1,
+                ));
+            }
+            let points: f64 = ratings.iter().sum();
+            let average = points / ratings.len() as f64;
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{points} total rating points ÷ {} rated issues = {average:.2}★", ratings.len()),
+                numerator: format!("{points} total rating points"),
+                denominator: Some(format!("{} rated issues", ratings.len())),
+                percentage: Some(format!("{average:.2}★")),
+            };
+            let (paged, pagination) = paginate(&rated_ids, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
+            Ok(base_drilldown(metric_type, creator_key, calculation, ratings.len() as i64, included, excluded, pagination))
+        }
+        "median-rating" => {
+            if ratings.is_empty() {
+                let excluded: Vec<CreatorMetricIssue> = all_ids
+                    .iter()
+                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .collect();
+                return Ok(base_drilldown(
+                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    paginate::<i64>(&[], page, page_size).1,
+                ));
+            }
+            let mut sorted = rated_ids.clone();
+            sorted.sort_by(|a, b| {
+                library.ratings.get(a).partial_cmp(library.ratings.get(b)).unwrap_or(Ordering::Equal)
+            });
+            let count = sorted.len();
+            let middle = count / 2;
+            let median_value = median(&ratings);
+            let observation = if count % 2 == 1 {
+                let value = library.ratings[&sorted[middle]];
+                format!("middle value (#{}) = {value}★", middle + 1)
+            } else {
+                let first = library.ratings[&sorted[middle - 1]];
+                let second = library.ratings[&sorted[middle]];
+                format!(
+                    "middle observations (#{} and #{}) = {first}★ and {second}★, average = {median_value}★",
+                    middle, middle + 1
+                )
+            };
+            let median_ids: HashSet<i64> = if count % 2 == 1 {
+                HashSet::from([sorted[middle]])
+            } else {
+                HashSet::from([sorted[middle - 1], sorted[middle]])
+            };
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{count} rated issues sorted by rating\n{observation}"),
+                numerator: observation,
+                denominator: Some(format!("{count} rated issues")),
+                percentage: Some(format!("{median_value:.2}★")),
+            };
+            let (paged, pagination) = paginate(&sorted, page, page_size);
+            let included = paged
+                .into_iter()
+                .map(|id| drilldown_issue(library, creator_id, id, median_ids.contains(&id).then(|| "Median observation".to_string())))
+                .collect();
+            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
+            Ok(base_drilldown(metric_type, creator_key, calculation, count as i64, included, excluded, pagination))
+        }
+        "rated-issue-count" => {
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{} rated issues", rated_ids.len()),
+                numerator: format!("{} rated issues", rated_ids.len()),
+                denominator: None,
+                percentage: None,
+            };
+            let (paged, pagination) = paginate(&rated_ids, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let excluded = non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))).collect();
+            Ok(base_drilldown(metric_type, creator_key, calculation, rated_ids.len() as i64, included, excluded, pagination))
+        }
+        "five-star-rate" => {
+            if ratings.is_empty() {
+                let excluded: Vec<CreatorMetricIssue> = all_ids
+                    .iter()
+                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .collect();
+                let mut result = base_drilldown(
+                    metric_type, creator_key, empty_calculation(), 0, vec![], excluded,
+                    paginate::<i64>(&[], page, page_size).1,
+                );
+                result.calculation.percentage = Some("0%".to_string());
+                return Ok(result);
+            }
+            let five_star: Vec<i64> = rated_ids
+                .iter()
+                .copied()
+                .filter(|id| library.ratings.get(id).is_some_and(|rating| *rating >= 5.0))
+                .collect();
+            let rate = five_star.len() as f64 / ratings.len() as f64 * 100.0;
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{} five-star ratings ÷ {} rated issues = {rate:.1}%", five_star.len(), ratings.len()),
+                numerator: format!("{} five-star ratings", five_star.len()),
+                denominator: Some(format!("{} rated issues", ratings.len())),
+                percentage: Some(format!("{rate:.1}%")),
+            };
+            let (paged, pagination) = paginate(&five_star, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let mut excluded: Vec<CreatorMetricIssue> = rated_ids
+                .iter()
+                .filter(|id| !five_star.contains(id))
+                .map(|id| {
+                    let rating = library.ratings.get(id).copied().unwrap_or(0.0);
+                    drilldown_issue(library, creator_id, *id, Some(format!("Rated {rating}★, not 5★")))
+                })
+                .collect();
+            excluded.extend(non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))));
+            Ok(base_drilldown(metric_type, creator_key, calculation, five_star.len() as i64, included, excluded, pagination))
+        }
+        "rating-distribution" => {
+            let Some(raw_value) = rating_value else {
+                return Err(bad_request("Rating value is required for rating-distribution metric type"));
+            };
+            let Ok(target) = raw_value.parse::<f64>() else {
+                return Err(bad_request(format!("Invalid rating value: {raw_value}")));
+            };
+            if ratings.is_empty() {
+                let calculation = CreatorMetricCalculation {
+                    formula: format!("0 of 0 rated issues are exactly {raw_value}★ = 0.0%"),
+                    numerator: format!("0 issues with {raw_value}★ rating"),
+                    denominator: Some("0 rated issues".to_string()),
+                    percentage: Some("0.0%".to_string()),
+                };
+                let excluded: Vec<CreatorMetricIssue> = all_ids
+                    .iter()
+                    .map(|id| drilldown_issue(library, creator_id, *id, Some("No stored effective rating".to_string())))
+                    .collect();
+                let mut result = base_drilldown(metric_type, creator_key, calculation, 0, vec![], excluded, paginate::<i64>(&[], page, page_size).1);
+                result.rating_value = Some(raw_value.to_string());
+                result.bucket_count = Some(0);
+                result.bucket_percentage = Some(0.0);
+                return Ok(result);
+            }
+            let bucket: Vec<i64> = rated_ids
+                .iter()
+                .copied()
+                .filter(|id| library.ratings.get(id).is_some_and(|rating| *rating == target))
+                .collect();
+            let percentage = bucket.len() as f64 / ratings.len() as f64 * 100.0;
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{} of {} rated issues are exactly {raw_value}★ = {percentage:.1}%", bucket.len(), ratings.len()),
+                numerator: format!("{} issues with {raw_value}★ rating", bucket.len()),
+                denominator: Some(format!("{} rated issues", ratings.len())),
+                percentage: Some(format!("{percentage:.1}%")),
+            };
+            let (paged, pagination) = paginate(&bucket, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let mut excluded: Vec<CreatorMetricIssue> = rated_ids
+                .iter()
+                .filter(|id| library.ratings.get(id).is_some_and(|rating| *rating != target))
+                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Rated {}★, not {raw_value}★", library.ratings.get(id).copied().unwrap_or(0.0)))))
+                .collect();
+            excluded.extend(non_rated.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some(headline_exclusion(id)))));
+            let mut result = base_drilldown(metric_type, creator_key, calculation, ratings.len() as i64, included, excluded, pagination);
+            result.rating_value = Some(raw_value.to_string());
+            result.bucket_count = Some(bucket.len() as i64);
+            result.bucket_percentage = Some(round2(percentage));
+            Ok(result)
+        }
+        "unread-count" => {
+            let unread: Vec<i64> = all_ids
+                .iter()
+                .copied()
+                .filter(|id| library.issue(*id).is_some_and(|issue| issue.status == "unread"))
+                .collect();
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{} unread issues attributed to this creator", unread.len()),
+                numerator: format!("{} unread issues", unread.len()),
+                denominator: None,
+                percentage: None,
+            };
+            let (paged, pagination) = paginate(&unread, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let excluded: Vec<CreatorMetricIssue> = all_ids
+                .iter()
+                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "read"))
+                .map(|id| drilldown_issue(library, creator_id, *id, Some("Issue is marked as read".to_string())))
+                .collect();
+            Ok(base_drilldown(metric_type, creator_key, calculation, unread.len() as i64, included, excluded, pagination))
+        }
+        "read-unrated-count" => {
+            let read_unrated: Vec<i64> = all_ids
+                .iter()
+                .copied()
+                .filter(|id| {
+                    library.issue(*id).is_some_and(|issue| issue.status == "read")
+                        && !library.ratings.contains_key(id)
+                })
+                .collect();
+            let calculation = CreatorMetricCalculation {
+                formula: format!("{} attributed issues are marked read and have no effective rate event", read_unrated.len()),
+                numerator: format!("{} read issues without ratings", read_unrated.len()),
+                denominator: None,
+                percentage: None,
+            };
+            let (paged, pagination) = paginate(&read_unrated, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, Some("Read but has no effective rating".to_string()))).collect();
+            let excluded: Vec<CreatorMetricIssue> = all_ids
+                .iter()
+                .filter(|id| library.issue(**id).is_some_and(|issue| issue.status == "unread") || library.ratings.contains_key(id))
+                .map(|id| {
+                    let reason = if library.issue(**id).is_some_and(|issue| issue.status == "unread") {
+                        "Issue is unread"
+                    } else {
+                        "Issue has an effective rating"
+                    };
+                    drilldown_issue(library, creator_id, *id, Some(reason.to_string()))
+                })
+                .collect();
+            Ok(base_drilldown(metric_type, creator_key, calculation, read_unrated.len() as i64, included, excluded, pagination))
+        }
+        "role-stats" => {
+            let Some(role) = role else {
+                return Err(bad_request("Role is required for role-stats metric type"));
+            };
+            let role_issues: Vec<i64> = all_ids
+                .iter()
+                .copied()
+                .filter(|id| roles_on_issue(library, creator_id, *id).iter().any(|value| value == role))
+                .collect();
+            if role_issues.is_empty() {
+                return Err(not_found(format!("Role {role} not available for creator {creator_key}")));
+            }
+            let role_ratings: Vec<f64> = role_issues
+                .iter()
+                .filter_map(|id| library.ratings.get(id).copied())
+                .collect();
+            let points: f64 = role_ratings.iter().sum();
+            let average = (!role_ratings.is_empty()).then(|| points / role_ratings.len() as f64);
+            let calculation = CreatorMetricCalculation {
+                formula: if let Some(average) = average {
+                    format!("{role}\n{} credited issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★", role_issues.len(), role_ratings.len(), role_ratings.len())
+                } else {
+                    format!("{role}\n{} credited issues\n0 with effective ratings\nNo rating data available", role_issues.len())
+                },
+                numerator: if role_ratings.is_empty() { "No rated issues".to_string() } else { format!("{} rated issues", role_ratings.len()) },
+                denominator: Some(format!("{} total issues", role_issues.len())),
+                percentage: average.map(|value| format!("{value:.2}★")),
+            };
+            let (paged, pagination) = paginate(&role_issues, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let excluded: Vec<CreatorMetricIssue> = all_ids
+                .iter()
+                .filter(|id| !role_issues.contains(id))
+                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Creator not credited as {role} on this issue"))))
+                .collect();
+            let mut result = base_drilldown(metric_type, creator_key, calculation, role_issues.len() as i64, included, excluded, pagination);
+            result.role = Some(role.to_string());
+            result.role_issue_count = Some(role_issues.len() as i64);
+            result.role_rated_issue_count = Some(role_ratings.len() as i64);
+            result.role_average_rating = average;
+            Ok(result)
+        }
+        "series-stats" => {
+            let Some(raw_key) = series_key else {
+                return Err(bad_request("Series key is required for series-stats metric type"));
+            };
+            let Some(thread_id) = parse_series_key(raw_key) else {
+                return Err(bad_request(format!("Invalid series key: {raw_key}")));
+            };
+            let series_issues: Vec<i64> = all_ids
+                .iter()
+                .copied()
+                .filter(|id| library.issue(*id).is_some_and(|issue| issue.thread_id == thread_id))
+                .collect();
+            if series_issues.is_empty() {
+                return Err(not_found(format!("Series {raw_key} not available for creator {creator_key}")));
+            }
+            let series_ratings: Vec<f64> = series_issues
+                .iter()
+                .filter_map(|id| library.ratings.get(id).copied())
+                .collect();
+            let points: f64 = series_ratings.iter().sum();
+            let average = (!series_ratings.is_empty()).then(|| round2(points / series_ratings.len() as f64));
+            let title = series_issues
+                .iter()
+                .filter_map(|id| library.issue(*id))
+                .find(|issue| !issue.thread_title.is_empty())
+                .map(|issue| issue.thread_title.clone())
+                .unwrap_or_else(|| "Unknown Series".to_string());
+            let calculation = CreatorMetricCalculation {
+                formula: if let Some(average) = average {
+                    format!("{title}\n{} attributed issues\n{} with effective ratings\n{points} rating points ÷ {} = {average:.2}★", series_issues.len(), series_ratings.len(), series_ratings.len())
+                } else {
+                    format!("{title}\n{} attributed issues\n0 with effective ratings\nNo rating data available", series_issues.len())
+                },
+                numerator: if series_ratings.is_empty() { "No rated issues".to_string() } else { format!("{} rated issues", series_ratings.len()) },
+                denominator: Some(format!("{} total issues", series_issues.len())),
+                percentage: average.map(|value| format!("{value:.2}★")),
+            };
+            let (paged, pagination) = paginate(&series_issues, page, page_size);
+            let included = paged.into_iter().map(|id| drilldown_issue(library, creator_id, id, None)).collect();
+            let excluded: Vec<CreatorMetricIssue> = all_ids
+                .iter()
+                .filter(|id| !series_issues.contains(id))
+                .map(|id| drilldown_issue(library, creator_id, *id, Some(format!("Issue not part of {title}"))))
+                .collect();
+            let mut result = base_drilldown(metric_type, creator_key, calculation, series_issues.len() as i64, included, excluded, pagination);
+            result.series_id = Some(thread_id);
+            result.series_title = Some(title);
+            result.series_issue_count = Some(series_issues.len() as i64);
+            result.series_rated_issue_count = Some(series_ratings.len() as i64);
+            result.series_average_rating = average;
+            Ok(result)
+        }
+        _ => unreachable!("validated above"),
     }
 }
