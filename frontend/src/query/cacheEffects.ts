@@ -355,9 +355,6 @@ export async function invalidateAfterQueueMutation(
 ): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client, options),
-    // Completion/reactivation changes membership. Reset only the completed
-    // cursor here, not for routine queue movements that cannot affect it.
-    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     invalidatePotentialDuplicates(client),
   ])
 }
