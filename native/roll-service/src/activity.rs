@@ -164,11 +164,10 @@ WITH auth AS (
 me AS (
     SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3
 ),
-cursor_ts AS (
-    SELECT timestamp AS cursor_timestamp
-    FROM events
-    WHERE id = $5
-    LIMIT 1
+cursor_bounds AS (
+    SELECT 
+        COALESCE((SELECT timestamp FROM events WHERE id = $5), '9999-12-31 23:59:59+00'::timestamptz) AS cursor_timestamp,
+        COALESCE($5, 2147483647) AS cursor_id
 ),
 page_events AS (
     SELECT e.id AS event_id,
@@ -182,10 +181,10 @@ page_events AS (
            e.issue_number
     FROM events e
     LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id) AND t.user_id = (SELECT user_id FROM me)
-    CROSS JOIN cursor_ts
+    CROSS JOIN cursor_bounds
     WHERE (e.user_id = (SELECT user_id FROM me)
         OR e.session_id IN (SELECT id FROM sessions WHERE user_id = (SELECT user_id FROM me)))
-      AND ($5 IS NULL OR (e.timestamp, e.id) < (cursor_ts.cursor_timestamp, $5))
+      AND (e.timestamp, e.id) < (cursor_bounds.cursor_timestamp, cursor_bounds.cursor_id)
     ORDER BY e.timestamp DESC, e.id DESC
     LIMIT $4 + 1
 )
