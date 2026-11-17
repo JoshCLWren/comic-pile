@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use deadpool_postgres::Pool;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::instrument;
@@ -503,14 +502,14 @@ pub struct CblCandidatesParams {
 }
 
 /// POST /api/v1/issue-identity/cbl-sources/compare
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn compare_cbl_sources(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Query(params): Query<CompareCblSourcesParams>,
     Json(payload): Json<CompareCblSourcesRequest>,
 ) -> Result<Json<CblSourceComparisonResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // This is a placeholder - full implementation requires the comparison logic
     // from cbl_comicvine_lookup_service.py
@@ -530,10 +529,10 @@ pub struct CompareCblSourcesRequest {
 }
 
 /// GET /api/v1/issue-identity/cbl-sources
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn discover_cbl_source_lists(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Query(params): Query<DiscoverCblSourcesParams>,
 ) -> Result<Json<Vec<CblSourceListDiscoveryItem>>, ApiError> {
     let pool = checkout(&state).await?;
@@ -598,10 +597,10 @@ pub async fn discover_cbl_source_lists(
 }
 
 /// GET /api/v1/issue-identity/cbl-sources/{list_id}
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn get_cbl_source_list(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Query(params): Query<GetCblSourceListParams>,
 ) -> Result<Json<CblSourceListDetail>, ApiError> {
@@ -634,7 +633,7 @@ pub async fn get_cbl_source_list(
     let declared_issue_count: Option<i32> = list_row.get(4);
     let content_hash: String = list_row.get(5);
     let revision_sha: String = list_row.get(6);
-    let repository: String = list_row.get(7);
+    let _repository: String = list_row.get(7);
     let source_ref: String = list_row.get(8);
 
     // Load entries with ComicVine IDs
@@ -709,13 +708,13 @@ pub async fn get_cbl_source_list(
 }
 
 /// GET /api/v1/issue-identity/cbl-sources/folders
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn list_cbl_source_folders(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblFolderListingResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Validate folder path
     let folder = params.folder.trim();
@@ -739,17 +738,17 @@ pub async fn list_cbl_source_folders(
 }
 
 /// GET /api/v1/issue-identity/cbl-sources/browse
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn browse_cbl_source_catalog(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Query(params): Query<BrowseCblCatalogParams>,
 ) -> Result<Json<CblCatalogBrowseResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Placeholder - needs full implementation from cbl_catalog.py
     let response = CblCatalogBrowseResponse {
-        scope: if params.q.is_some() && !params.q.as_ref().unwrap().is_empty() {
+        scope: if params.q.as_deref().is_some_and(|q| !q.is_empty()) {
             "search".to_string()
         } else {
             "folder".to_string()
@@ -774,10 +773,10 @@ pub async fn browse_cbl_source_catalog(
 }
 
 /// GET /api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn find_cbl_sources_by_comicvine_issue(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(comicvine_issue_id): Path<String>,
     Query(params): Query<CblOccurrenceParams>,
 ) -> Result<Json<CblComicvineOccurrencePage>, ApiError> {
@@ -879,14 +878,14 @@ pub async fn find_cbl_sources_by_comicvine_issue(
 }
 
 /// GET /api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn find_cbl_candidates_for_reading_list(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Query(params): Query<CblCandidatesParams>,
 ) -> Result<Json<CblReadingListCandidatesResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Placeholder - needs full implementation from cbl_comicvine_lookup_service.py
     let response = CblReadingListCandidatesResponse {
@@ -906,13 +905,13 @@ pub async fn find_cbl_candidates_for_reading_list(
 }
 
 /// GET /api/v1/issue-identity/cbl/{list_id}/adoption-preview
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn cbl_adoption_preview(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Placeholder - needs full implementation from cbl_reconciliation.py
     // This requires reconcile_cbl_source_list + calculate_cbl_adoption_plan
@@ -946,14 +945,14 @@ pub async fn cbl_adoption_preview(
 }
 
 /// POST /api/v1/issue-identity/cbl/{list_id}/adoption-plan
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn cbl_adoption_plan(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Placeholder - needs full implementation from cbl_reconciliation.py
     let response = CblAdoptionPreviewResponse {
@@ -986,13 +985,13 @@ pub async fn cbl_adoption_plan(
 }
 
 /// GET /api/v1/issue-identity/cbl/{list_id}/reconciliation
-#[instrument(skip(state, auth))]
+#[instrument(skip(state, _auth))]
 pub async fn cbl_reconciliation(
     State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let pool = checkout(&state).await?;
+    let _pool = checkout(&state).await?;
 
     // Placeholder - returns basic reconciliation report
     let response = serde_json::json!({
@@ -1021,20 +1020,20 @@ pub async fn cbl_reconciliation(
 }
 
 /// GET /api/v1/issue-identity/anomalies
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn get_issue_identity_anomalies(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "anomalies": [] })))
 }
 
 /// GET /api/v1/issue-identity/canonical/{comicvine_issue_id}
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn get_canonical_issue(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
     Path(comicvine_issue_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
@@ -1042,20 +1041,20 @@ pub async fn get_canonical_issue(
 }
 
 /// GET /api/v1/issue-identity/conflicts
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn get_issue_identity_conflicts(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "conflicts": [] })))
 }
 
 /// POST /api/v1/issue-identity/consolidate
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn consolidate_issue_identity(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
@@ -1063,20 +1062,20 @@ pub async fn consolidate_issue_identity(
 }
 
 /// GET /api/v1/issue-identity/report
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn get_issue_identity_report(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Placeholder - needs implementation
     Ok(Json(serde_json::json!({ "report": {} })))
 }
 
 /// POST /api/v1/cbl/{list_id}/adoption-commit
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn cbl_adoption_commit(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<Json<CblAdoptionCommitResponse>, ApiError> {
@@ -1089,10 +1088,10 @@ pub async fn cbl_adoption_commit(
 }
 
 /// POST /api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn cbl_targeted_adoption_commit(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
     Path((list_id, plan_id)): Path<(i32, i32)>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<Json<CblAdoptionCommitResponse>, ApiError> {
@@ -1104,10 +1103,10 @@ pub async fn cbl_targeted_adoption_commit(
 }
 
 /// POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview
-#[instrument(skip(state, auth))]
+#[instrument(skip(_state, _auth))]
 pub async fn cbl_reading_graph_preview(
-    State(state): State<Arc<AppState>>,
-    auth: AuthenticatedUser,
+    State(_state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
     Json(request): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, ApiError> {
