@@ -17,13 +17,11 @@ ROUTER_SUBMODULES = (
     "cbl_comicvine_lookup",
     "cbl_sources",
     "collection_exclusions",
-    "continuity_plan",
     "custom_cbl",
     "dependency",
     "dependency_group",
     "dependency_group_batch",
     "health",
-    "reading_order_projection",
     "reading_plan_sync",
     "roll_recovery_switch",
 )
