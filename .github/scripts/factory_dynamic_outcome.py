@@ -60,6 +60,19 @@ _STEP_METADATA = re.compile(
 )
 
 
+_PROSE_PROVIDER_CLASSES = frozenset({"provider_throttle", "provider_quota", "model_unavailable"})
+_EXIT = re.compile(r"\[factory:(?P<worker>\d+)\](?:\[[^\]\n]+\])*\s+agent exit status (?P<status>\d+) for ")
+_ZERO_EXIT_REFUSAL = "agent exited 0 after a provider account refusal"
+
+
+def _clean_final_exit(execution_log: str, worker: str) -> bool:
+    """True when this worker's last agent session exited 0 and was not refused."""
+    exits = [m for m in _EXIT.finditer(execution_log) if m["worker"] == worker]
+    if not exits or exits[-1]["status"] != "0":
+        return False
+    return _ZERO_EXIT_REFUSAL not in execution_log[exits[-1].end():]
+
+
 def strip_step_metadata(log: str) -> str:
     """Drop echoed step metadata lines before any evidence matching."""
     return "\n".join(
@@ -136,6 +149,18 @@ def classify(log: str) -> dict[str, Any]:
         f"runtime={runtime} minute=:00 scheduler=dynamic configured={str(configured).lower()}\n"
     )
     result = canonical.classify(lock + execution_log)
+    if result.outcome_class in _PROSE_PROVIDER_CLASSES and _clean_final_exit(execution_log, worker):
+        # The final model session exited 0, so it was served. Quota, throttle
+        # or missing-model words in its plain-text output are what the agent
+        # read or wrote (docs mention quotas and HTTP 429), not a provider
+        # response. Classify from the remaining evidence instead of cooling a
+        # working model (run 44093346708: a completed review became a throttle).
+        filtered = "\n".join(
+            line for line in execution_log.splitlines()
+            if not any(regex.search(line) for regex in (
+                canonical.QUOTA_RE, canonical.RATE_LIMIT_RE, canonical.MODEL_MISSING_RE))
+        )
+        result = canonical.classify(lock + filtered)
     # Account-wide refusal is different from one inaccessible model. Do not
     # turn a failed model into a provider-wide outage or rate limit.
     executed_lines = "\n".join(
