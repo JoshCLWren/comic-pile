@@ -252,7 +252,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["documentation"];
+        post: operations["catalog_series_mapping_preview_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -926,7 +926,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["documentation"];
+        post: operations["continuity_plans_project_preview_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1966,7 +1966,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["documentation"];
+        get: operations["issue_identity_adoption_preview_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1984,7 +1984,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["documentation"];
+        post: operations["issue_identity_cbl_reading_graph_preview_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14118,7 +14118,7 @@ export interface operations {
             };
         };
     };
-    documentation: {
+    catalog_series_mapping_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15188,7 +15188,7 @@ export interface operations {
             };
         };
     };
-    documentation: {
+    continuity_plans_project_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -16782,7 +16782,7 @@ export interface operations {
             };
         };
     };
-    documentation: {
+    issue_identity_adoption_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -16819,7 +16819,7 @@ export interface operations {
             };
         };
     };
-    documentation: {
+    issue_identity_cbl_reading_graph_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;

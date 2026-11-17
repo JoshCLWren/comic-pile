@@ -21913,7 +21913,7 @@
     },
     "/api/v1/catalog/series-mappings/preview": {
       "post": {
-        "operationId": "documentation",
+        "operationId": "catalog_series_mapping_preview_documentation",
         "requestBody": {
           "content": {
             "application/json": {
@@ -23625,7 +23625,7 @@
     },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
       "post": {
-        "operationId": "documentation",
+        "operationId": "continuity_plans_project_preview_documentation",
         "parameters": [
           {
             "description": "Continuity plan id",
@@ -26375,7 +26375,7 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "operationId": "documentation",
+        "operationId": "issue_identity_adoption_preview_documentation",
         "parameters": [
           {
             "description": "CBL source list id",
@@ -26418,7 +26418,7 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
       "post": {
-        "operationId": "documentation",
+        "operationId": "issue_identity_cbl_reading_graph_preview_documentation",
         "parameters": [
           {
             "description": "CBL source list id",
