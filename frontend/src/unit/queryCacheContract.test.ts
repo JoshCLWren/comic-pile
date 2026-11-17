@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyEditedThreadToQueuePages,
   applyRatedThreadCache,
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
@@ -196,6 +197,23 @@ describe('canonical query keys', () => {
 })
 
 describe('targeted cache effects', () => {
+  it('keeps an edited finished series current in its separately cached pages', () => {
+    const client = new QueryClient()
+    const listKey = queryKeys.completed.list({ sort: 'created', pageSize: 50 })
+    const completed = { ...thread, status: 'completed' as const }
+    client.setQueryData(listKey, {
+      pages: [{ threads: [completed], next_page_token: null, active_count: 0 }],
+      pageParams: [null],
+    })
+
+    const edited = { ...completed, title: 'Mister Miracle: Renamed' }
+    applyEditedThreadToQueuePages(client, edited)
+
+    const cached = client.getQueryData<{ pages: Array<{ threads: Thread[] }> }>(listKey)
+    expect(cached?.pages[0]?.threads[0]?.title).toBe('Mister Miracle: Renamed')
+    expect(client.getQueryData(queryKeys.thread.detail(thread.id))).toEqual(edited)
+  })
+
   it('uses an authoritative rating response and refreshes every snapshot surface', async () => {
     const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
