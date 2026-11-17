@@ -20,6 +20,7 @@ pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
 pub mod identity_inbox;
+pub mod issue_identity;
 pub mod issue_handler;
 pub mod issue_mutation;
 pub mod issue_read;
@@ -662,6 +663,79 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
+        )
+        // Issue Identity / CBL Adoption endpoints
+        .route(
+            "/api/v1/issue-identity/cbl-sources",
+            get(issue_identity::discover_cbl_source_lists),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(issue_identity::get_cbl_source_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(issue_identity::list_cbl_source_folders),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(issue_identity::browse_cbl_source_catalog),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(issue_identity::find_cbl_sources_by_comicvine_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(issue_identity::compare_cbl_sources),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity::cbl_adoption_preview),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(issue_identity::cbl_adoption_plan),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reconciliation",
+            get(issue_identity::cbl_reconciliation),
+        )
+        .route(
+            "/api/v1/issue-identity/anomalies",
+            get(issue_identity::get_issue_identity_anomalies),
+        )
+        .route(
+            "/api/v1/issue-identity/canonical/{comicvine_issue_id}",
+            get(issue_identity::get_canonical_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/conflicts",
+            get(issue_identity::get_issue_identity_conflicts),
+        )
+        .route(
+            "/api/v1/issue-identity/consolidate",
+            post(issue_identity::consolidate_issue_identity),
+        )
+        .route(
+            "/api/v1/issue-identity/report",
+            get(issue_identity::get_issue_identity_report),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(issue_identity::cbl_adoption_commit),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(issue_identity::cbl_targeted_adoption_commit),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity::cbl_reading_graph_preview),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
