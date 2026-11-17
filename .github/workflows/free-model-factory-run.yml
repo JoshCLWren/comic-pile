@@ -55,6 +55,11 @@ on:
         required: false
       PR_REBASE_TOKEN:
         required: true
+      FACTORY_READER_APP_ID:
+        description: Optional read-only factory App (separate API quota bucket)
+        required: false
+      FACTORY_READER_APP_PRIVATE_KEY:
+        required: false
       # Worker 48 only. Missing secrets keep that worker on PR_REBASE_TOKEN.
       # These values do not create the GitHub App.
       FACTORY_WORKER_48_APP_ID:
@@ -154,6 +159,7 @@ jobs:
       FACTORY_WORKER_48_APP_ID: ${{ secrets.FACTORY_WORKER_48_APP_ID }}
       FACTORY_WORKER_48_INSTALLATION_ID: ${{ secrets.FACTORY_WORKER_48_INSTALLATION_ID }}
       FACTORY_WORKER_48_APP_PRIVATE_KEY: ${{ secrets.FACTORY_WORKER_48_APP_PRIVATE_KEY }}
+      FACTORY_READER_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
@@ -527,6 +533,50 @@ jobs:
       # The first model invocation is the real leased coding/review mission.
       # Catalog and free-price checks do not spend inference tokens.
       # No extra smoke, chat-completion probe, or tool-canary prompt.
+
+      # Optional read-only factory App (owner-provisioned secrets
+      # FACTORY_READER_APP_ID / FACTORY_READER_APP_PRIVATE_KEY). Pure reads
+      # then spend that App's own 5000/h installation bucket instead of the
+      # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
+      # token, so no extra workflows are ever triggered. Absent or
+      # under-permissioned Apps are a silent no-op.
+      - name: Mint optional read-only factory App token
+        id: read_token
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
+          private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-checks: read
+          permission-contents: read
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Verify and enable read-only factory App token
+        if: ${{ steps.read_token.outputs.token != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          READ_TOKEN: ${{ steps.read_token.outputs.token }}
+        run: |
+          set -Eeuo pipefail
+          minted="$(date +%s)"
+          for endpoint in "issues?per_page=1" "pulls?per_page=1" "actions/runs?per_page=1" \
+            "commits/main/check-runs?per_page=1"; do
+            if ! GH_TOKEN="$READ_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/${endpoint}" >/dev/null 2>&1; then
+              echo "::warning::Read-only factory App cannot read ${endpoint%%\?*}; staying on the workflow token"
+              exit 0
+            fi
+          done
+          {
+            echo "FACTORY_READ_TOKEN=$READ_TOKEN"
+            echo "FACTORY_READ_TOKEN_EXPIRES=$((minted + 3000))"
+          } >> "$GITHUB_ENV"
+          echo "Pure GitHub reads use the read-only factory App installation budget"
 
       - name: Run continuous fixed-model factory session
         id: worker_session
