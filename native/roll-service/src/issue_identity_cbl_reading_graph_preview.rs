@@ -349,12 +349,12 @@ pub async fn preview_cbl_reading_graph_handler(
     let unresolved: Vec<i64> = entry_rows
         .iter()
         .filter(|row| {
-            row.get::<_, Option<i64>>(3)
+            row.get::<_, Option<i32>>(3)
                 .and_then(|id| external_by_id.get(&id))
                 .and_then(|external| owned_by_external.get(external))
                 .is_none()
         })
-        .map(|row| row.get::<_, i64>(0))
+        .map(|row| i64::from(row.get::<_, i32>(0)))
         .collect();
     if !unresolved.is_empty() {
         return Err(structured_error(
@@ -371,11 +371,11 @@ pub async fn preview_cbl_reading_graph_handler(
     let mut by_volume: HashMap<String, usize> = HashMap::new();
 
     for row in &entry_rows {
-        let position: i64 = row.get(0);
+        let position: i64 = i64::from(row.get::<_, i32>(0));
         let series_name: String = row.get(1);
-        let volume_year: Option<i64> = row.get(2);
-        let identity_id: Option<i64> = row.get(3);
-        let series_identity_id: Option<i64> = row.get(4);
+        let volume_year: Option<i64> = row.get::<_, Option<i32>>(2).map(i64::from);
+        let identity_id: Option<i32> = row.get(3);
+        let series_identity_id: Option<i32> = row.get(4);
         let comicvine_volume_id = identity_id
             .and_then(|id| external_by_id.get(&id))
             .cloned()
