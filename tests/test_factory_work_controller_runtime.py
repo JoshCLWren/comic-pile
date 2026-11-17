@@ -1119,9 +1119,15 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     monkeypatch.setattr(controller, "list_prs", lambda: [{"number": pr_number, "headRefOid": head}])
     monkeypatch.setattr(controller, "linked_issue_from_pr", lambda pr: issue_number)
     monkeypatch.setattr(controller, "pr_suppresses_issue_candidate", lambda pr, issues: True)
-    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    retry_reads: list[int | None] = []
+    monkeypatch.setattr(
+        controller, "load_no_diff_attempt_records",
+        lambda *, target_pr=None: retry_reads.append(target_pr) or [],
+    )
     monkeypatch.setattr(controller, "build_candidates", lambda *args, **kwargs: [unrelated, candidate])
-    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda issues, prs: None)
+    def forbidden_issue_intake(*_args: object) -> None:
+        raise AssertionError("A targeted canonical PR must skip issue intake")
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", forbidden_issue_intake)
     monkeypatch.setattr(controller, "candidate_is_live_executable", lambda item: True)
     claims: list[tuple[object, str, dict[str, str]]] = []
 
@@ -1142,6 +1148,9 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     assert claims[-1] == (
         feedback, "17", {"action": "ci-repair", "expected_head": head, "source": "manual"},
     )
+    # Each wakeup selects the exact PR's retry window. The unrelated backlog's
+    # global comment history and Rotisserie intake are never fetched.
+    assert retry_reads == [pr_number] * 4
 
 
 def test_shared_provider_quota_uses_trusted_neon_projection(
@@ -1298,3 +1307,51 @@ def test_failed_local_discovery_refresh_does_not_undo_github_release(
     monkeypatch.setattr(controller, "update_labels", unavailable)
     assert controller.replace_factory_labels(4843, "factory:unowned") is True
     assert events == ["github-write"]
+
+
+def _cli_assign(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> dict[str, object]:
+    monkeypatch.setattr(sys, "argv", ["factory-work-controller.py", "assign", "--worker", "13", "--batch-reconciled"])
+    assert controller.main() == 0
+    reply: dict[str, object] = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    return reply
+
+
+def test_cli_assign_marks_leased_worker_unavailable_without_reading_pool(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A busy worker must not be reported to the dispatcher as an empty pool."""
+    monkeypatch.setattr(controller, "worker_skip_reason", lambda worker: f"Factory {worker} already has an active lease")
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: (_ for _ in ()).throw(AssertionError("must not rank new work")),
+    )
+
+    assert _cli_assign(controller, monkeypatch, capsys) == {"kind": "none", "reason": "worker_unavailable"}
+
+
+def test_cli_assign_reports_no_work_when_eligible_worker_finds_empty_pool(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only an eligible worker that ranked the pool can report no_work."""
+    monkeypatch.setattr(controller, "worker_skip_reason", lambda worker: None)
+    monkeypatch.setattr(controller, "assign_from_pool", lambda *args, **kwargs: None)
+
+    assert _cli_assign(controller, monkeypatch, capsys) == {"kind": "none", "reason": "no_work"}
+
+
+def test_worker_skip_reason_stops_at_quota_pause_before_lease_lookup(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A quota-paused worker is skipped without consulting leases or budgets."""
+    monkeypatch.setattr(controller, "quota_pause_for", lambda worker: {"worker": worker})
+    monkeypatch.setattr(controller, "describe_quota_pause", lambda pause: "Factory 13 quota-paused")
+    monkeypatch.setattr(
+        controller,
+        "worker_has_active_lease",
+        lambda worker: (_ for _ in ()).throw(AssertionError("lease must not be read")),
+    )
+
+    assert controller.worker_skip_reason("13") == "Factory 13 quota-paused"

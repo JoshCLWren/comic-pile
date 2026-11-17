@@ -1,7 +1,7 @@
 name: Factory-only Fast Merge
 
-# Trusted main only, never PR heads. Factory-only PRs are attempted immediately
-# after open/synchronize/label, without CI or semantic review dependencies.
+# Privileged automation runs only trusted main. Merge only after the unprivileged
+# CI workflow reports successful Ruff and ty checks for the exact PR head.
 # An owner-authorized token must have a ruleset bypass for protected main.
 # The policy switch lives in .github/factory-fast-merge.json.
 on:
@@ -27,6 +27,8 @@ concurrency:
 
 jobs:
   fast-merge:
+    # On PR wakeup, skip if Python CI has not passed. The CI workflow itself
+    # sends one targeted workflow_dispatch once both checks pass.
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -36,7 +38,7 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Immediately merge eligible factory-only PRs
+      - name: Merge only factory PRs with exact-head green Python checks
         id: merge
         shell: bash
         env:

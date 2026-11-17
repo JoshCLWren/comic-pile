@@ -1,4 +1,5 @@
 """Regression coverage for provider-derived dispatcher smoke selection."""
+import re
 from pathlib import Path
 
 
@@ -464,3 +465,96 @@ def test_all_cooling_or_quota_exhausted_roster_is_idle_not_failed() -> None:
     assert 'if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then' in resolve_step
     assert "Dispatcher resolved no workers for smoke run" in resolve_step
     assert "Dispatcher resolved no workers' >&2; exit 1" not in resolve_step
+
+
+def test_targeted_dispatch_uses_roster_credential_availability() -> None:
+    """Targeted issue/PR wakeups must not reject configured providers as missing."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    def provider_flags(step_name: str) -> dict[str, str]:
+        step = workflow.split(f"      - name: {step_name}", 1)[1]
+        header = step.split("        run: |", 1)[0]
+        return dict(re.findall(
+            r"^          (FACTORY_(?:HAS_[A-Z0-9_]+|OMNIROUTE_ENABLED)): (.+)$",
+            header, flags=re.MULTILINE,
+        ))
+
+    roster = provider_flags("Resolve and dispatch fixed workers")
+    targeted = provider_flags("Advance selected issue or pull request")
+    assert roster, "Roster credential contract was not found"
+    assert targeted == roster
+
+
+def _run_dispatch_batch(responses: dict[str, str], workers: list[str]) -> list[str]:
+    """Execute the workflow's real assignment loop with stubbed controller and gh."""
+    import json
+    import os
+    import subprocess
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    step = workflow.split("- name: Resolve and dispatch fixed workers", 1)[1]
+    body = step.split("run: |", 1)[1].split("\n      - name:", 1)[0]
+    # Indentation is irrelevant to bash here (no heredocs in this region).
+    script = "\n".join(line.lstrip() for line in body.splitlines())
+    function = "dispatch_assigned_worker() {" + script.split("dispatch_assigned_worker() {", 1)[1].split(
+        "\n}\n", 1
+    )[0] + "\n}\n"
+    loop = "consecutive_idle=0\nidle_stop=" + script.split("consecutive_idle=0\nidle_stop=", 1)[1].split(
+        "done < <(jq -r '.[]' <<< \"$workers\")", 1
+    )[0] + "done < <(jq -r '.[]' <<< \"$workers\")\n"
+    cases = "\n".join(f"    {w}) printf '%s\\n' '{r}' ;;" for w, r in responses.items())
+    stub = f"""
+controller=controller.py
+dispatched_count=0
+dispatch_failures=0
+budget_deferred=false
+budget_unreadable=false
+workers='{json.dumps(workers)}'
+python3() {{
+  if [[ "$2" == assign ]]; then
+    case "$4" in
+{cases}
+    esac
+  fi
+}}
+gh() {{
+  if [[ "$1" == api ]]; then echo 5000; return 0; fi
+  printf 'gh:%s\\n' "$*"
+}}
+"""
+    result = subprocess.run(
+        ["bash", "-c", "set -Eeuo pipefail\n" + stub + function + loop],
+        env={**os.environ},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return [
+        line.split("worker=", 1)[1].split()[0]
+        for line in result.stdout.splitlines()
+        if line.startswith("gh:workflow run free-model-factory-entry.yml")
+    ]
+
+
+def test_busy_workers_do_not_end_batch_before_free_workers() -> None:
+    """Leased/paused workers say nothing about the pool; later free workers still run."""
+    busy = '{"kind": "none", "reason": "worker_unavailable"}'
+    work = '{"kind": "pr", "number": 5340}'
+    dispatched = _run_dispatch_batch(
+        {"6": busy, "7": busy, "8": busy, "9": busy, "10": work},
+        ["6", "7", "8", "9", "10"],
+    )
+    assert dispatched == ["10"]
+
+
+def test_empty_pool_still_ends_batch_after_idle_stop() -> None:
+    """Three workers that each saw an empty pool stop the tick (legacy reply included)."""
+    empty = '{"kind": "none", "reason": "no_work"}'
+    legacy = '{"kind": "none"}'
+    work = '{"kind": "pr", "number": 5340}'
+    dispatched = _run_dispatch_batch(
+        {"6": empty, "7": legacy, "8": empty, "9": work},
+        ["6", "7", "8", "9"],
+    )
+    assert dispatched == []

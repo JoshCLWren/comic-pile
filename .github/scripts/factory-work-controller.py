@@ -82,12 +82,21 @@ def list_issues() -> list[dict[str, Any]]:
     if re.fullmatch(r'(issue|pr):[1-9][0-9]*', hint):
         kind, raw_number = hint.split(':')
         number = int(raw_number)
+        rows: list[dict[str, Any]] = []
         if kind == 'pr':
             pr = list_prs()[0]
             number = linked_issue_from_pr(pr)
-            if number is None:
-                return []
-        return [canonical_target('issue', target_json(number))]
+        if number is not None:
+            rows.append(canonical_target('issue', target_json(number)))
+        # Target-scoped snapshots must retain the live Rust cutover gate.
+        # Without the epic, build_candidates mistakenly interprets the narrow
+        # candidate view as proof #4335 is closed and admits deferred work.
+        epic_number = eligibility.RUST_CUTOVER_EPIC
+        if not any(int(row['number']) == epic_number for row in rows):
+            epic = target_json(epic_number)
+            if str(epic.get('state') or '').lower() == 'open':
+                rows.append(canonical_target('issue', epic))
+        return rows
     return discover(REPO, 'issue', lambda: cast(list[dict[str, Any]], gh_json([
         'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
         '--json', 'number,title,body,labels,createdAt,updatedAt',
@@ -1340,6 +1349,48 @@ def is_authorized_fixed_worker(worker: str) -> bool:
     )
 
 
+def worker_skip_reason(worker: str) -> str | None:
+    """Return why this worker itself cannot take work now, or None.
+
+    These checks are about the worker (pause, credentials, lease, budget,
+    entry capacity), not the shared work pool. Callers must not treat a
+    non-None reason as evidence that there is no executable work.
+    """
+    quota_pause = quota_pause_for(worker)
+    if quota_pause is not None:
+        return describe_quota_pause(quota_pause)
+    runtime_pause = runtime_quota_block_reason(worker)
+    if runtime_pause is not None:
+        return runtime_pause
+    try:
+        sources = worker_sources()
+        source = sources.get(str(worker), "")
+        from factory_dispatch_credential_filter import ANONYMOUS, TRUTHY, source_requirements
+        needs = source_requirements(source)
+        if source not in ANONYMOUS and needs is not None:
+            env = dict(os.environ)
+            if not all(env.get(key, "").lower() in TRUTHY for key in needs):
+                return f'Factory {worker} missing provider credentials'
+        elif source and source not in ANONYMOUS and needs is None:
+            # Unknown non-anonymous source: cannot prove credentials/configuration.
+            return f'Factory {worker} has unknown provider configuration'
+    except Exception as exc:
+        # Never lease an unproven worker when credential eligibility cannot be evaluated.
+        return f'credential eligibility unavailable for Factory {worker} ({type(exc).__name__})'
+    if worker_has_active_lease(worker):
+        return f'Factory {worker} already has an active lease'
+    budget_reason = budget_block_reason(worker)
+    if budget_reason is not None:
+        return budget_reason
+    snapshot = omniroute_free_entry_capacity()
+    if snapshot['remaining'] <= 0:
+        return (
+            'OmniRoute free-entry cap reached '
+            f'(in_flight={snapshot["in_flight"]} cap={snapshot["cap"]})'
+        )
+    return None
+
+
 def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
@@ -1357,47 +1408,21 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     """
     if not is_authorized_fixed_worker(worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
-    quota_pause = quota_pause_for(worker)
-    if quota_pause is not None:
-        print(f'[factory-controller] {describe_quota_pause(quota_pause)}; skipping dispatch', file=sys.stderr)
+    skip_reason = worker_skip_reason(worker)
+    if skip_reason is not None:
+        print(f'[factory-controller] {skip_reason}; skipping dispatch', file=sys.stderr)
         return None
-    runtime_pause = runtime_quota_block_reason(worker)
-    if runtime_pause is not None:
-        print(f'[factory-controller] {runtime_pause}; skipping dispatch', file=sys.stderr)
-        return None
-    try:
-        sources = worker_sources()
-        source = sources.get(str(worker), "")
-        from factory_dispatch_credential_filter import ANONYMOUS, TRUTHY, source_requirements
-        needs = source_requirements(source)
-        if source not in ANONYMOUS and needs is not None:
-            env = dict(os.environ)
-            if not all(env.get(key, "").lower() in TRUTHY for key in needs):
-                print(f'[factory-controller] Factory {worker} missing provider credentials; skipping dispatch', file=sys.stderr)
-                return None
-        elif source and source not in ANONYMOUS and needs is None:
-            # Unknown non-anonymous source: cannot prove credentials/configuration.
-            print(f'[factory-controller] Factory {worker} has unknown provider configuration; skipping dispatch', file=sys.stderr)
-            return None
-    except Exception as exc:
-        # Never lease an unproven worker when credential eligibility cannot be evaluated.
-        print(f'[factory-controller] credential eligibility unavailable for Factory {worker} ({type(exc).__name__}); skipping dispatch', file=sys.stderr)
-        return None
-    if worker_has_active_lease(worker):
-        print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
-        return None
-    budget_reason = budget_block_reason(worker)
-    if budget_reason is not None:
-        print(f'[factory-controller] {budget_reason}; skipping dispatch', file=sys.stderr)
-        return None
-    snapshot = omniroute_free_entry_capacity()
-    if snapshot['remaining'] <= 0:
-        print(
-            '[factory-controller] OmniRoute free-entry cap reached '
-            f'(in_flight={snapshot["in_flight"]} cap={snapshot["cap"]}); skipping dispatch',
-            file=sys.stderr,
-        )
-        return None
+    return assign_from_pool(worker, kinds, target=target, requested_action=requested_action,
+                            batch_reconciled=batch_reconciled)
+
+
+def assign_from_pool(worker: str, kinds: tuple[str, ...] | None = None,
+    *,
+    target: tuple[str, int] | None = None,
+    requested_action: str = 'advance',
+    batch_reconciled: bool = False,
+) -> Candidate | None:
+    """Rank the shared pool for a worker already proven eligible."""
     # Trusted dispatcher batches run these two full-repository reconciliations
     # once before iterating workers. Standalone/manual assignment still checks
     # them here. Every actual claim remains live-verified in assign_candidate.
@@ -1406,6 +1431,21 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
+    # Resolve an issue wakeup to its canonical open PR *before* loading retry
+    # history or asking Rotisserie to rank fresh issues. Otherwise every
+    # worker candidate reads the entire retry window and authorizes issue
+    # intake even though only the existing PR can be advanced.
+    if target is not None and target[0] == 'issue':
+        issue_number = target[1]
+        linked_prs = [
+            pr for pr in prs
+            if linked_issue_from_pr(pr) == issue_number
+            and pr_suppresses_issue_candidate(pr, {})
+        ]
+        if len(linked_prs) > 1:
+            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
+        if linked_prs:
+            target = ('pr', int(linked_prs[0]['number']))
     try:
         # Targeted PR wakeups require only that PR's retry evidence.
         # A full roster pass still needs the whole issue/PR retry window.
@@ -1429,28 +1469,23 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
-    authorized_issues = rotisserie_issue_intake(issues, prs)
-    if authorized_issues is not None:
-        candidates = [
-            candidate
-            for candidate in candidates
-            if candidate.kind != "issue" or candidate.number in authorized_issues
-        ]
+    # A PR-only target never leases new issue work; issue-intake authorization
+    # is unnecessary and can fail closed or consume remote calls on every
+    # targeted repair/review wakeup.
+    if target is None or target[0] == 'issue':
+        authorized_issues = rotisserie_issue_intake(issues, prs)
+        if authorized_issues is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate.kind != "issue" or candidate.number in authorized_issues
+            ]
     if kinds is not None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     if target is not None:
         kind, number = target
-        linked_prs = [
-            pr for pr in prs
-            if kind == 'issue' and linked_issue_from_pr(pr) == number
-            and pr_suppresses_issue_candidate(pr, {})
-        ]
-        if len(linked_prs) > 1:
-            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
-        if linked_prs:
-            kind, number = 'pr', int(linked_prs[0]['number'])
         candidates = [
             candidate for candidate in candidates
             if (candidate.kind, candidate.number) == (kind, number)
@@ -2439,13 +2474,21 @@ def main() -> int:
         print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
-        candidate = assign(
+        if not is_authorized_fixed_worker(args.worker):
+            raise SystemExit(f'unsupported fixed-model worker: {args.worker}')
+        skip_reason = worker_skip_reason(args.worker)
+        if skip_reason is not None:
+            print(f'[factory-controller] {skip_reason}; skipping dispatch', file=sys.stderr)
+            # A busy/paused/capped worker says nothing about the shared pool.
+            print(json.dumps({'kind': 'none', 'reason': 'worker_unavailable'}))
+            return 0
+        candidate = assign_from_pool(
             args.worker,
             kinds=tuple(args.kinds) if args.kinds else None,
             batch_reconciled=args.batch_reconciled,
         )
         if candidate is None:
-            print(json.dumps({'kind': 'none'}))
+            print(json.dumps({'kind': 'none', 'reason': 'no_work'}))
             return 0
         print(json.dumps(assignment_context(candidate, args.worker)))
         return 0
