@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
@@ -12,7 +12,7 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 status = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(status)
-NOW = datetime(2026, 11, 17, 17, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 11, 17, 17, 30, tzinfo=UTC)
 
 
 def run(name, state, **kwargs):
