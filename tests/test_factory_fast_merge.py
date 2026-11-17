@@ -299,19 +299,18 @@ def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> N
     script = SCRIPT.read_text()
     assert "pull_request_target:" in workflow
     assert "workflow_job:" not in workflow
-    assert "workflow_run:" not in workflow
+    assert "workflow_run:" in workflow
+    assert "workflows: [CI]" in workflow
+    assert "types: [completed]" in workflow
+    assert "github.event.workflow_run.event == 'pull_request'" in workflow
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert "github.event.workflow_run.head_repository.full_name == github.repository" in workflow
+    assert "github.event.workflow_run.pull_requests[0].number" in workflow
+    assert 'GITHUB_EVENT_NAME" == "workflow_run" && -z "$PR_NUMBER' in workflow
     ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    assert "factory-fast-merge-wakeup:" in ci_workflow
-    assert "needs: [python-lint, python-typecheck, factory-complete-tests, factory-actionlint, factory-shellcheck]" in ci_workflow
-    assert "needs.python-lint.result == 'success'" in ci_workflow
-    assert "needs.python-typecheck.result == 'success'" in ci_workflow
-    assert "needs.factory-complete-tests.result == 'success'" in ci_workflow
-    assert "needs.factory-actionlint.result == 'success'" in ci_workflow
-    assert "needs.factory-shellcheck.result == 'success'" in ci_workflow
-    assert 'name: Factory Tests (complete)' in ci_workflow
-    assert 'name: Factory Workflow Syntax (actionlint)' in ci_workflow
-    assert 'name: Factory Shell Scripts (shellcheck)' in ci_workflow
-    assert "gh workflow run factory-fast-merge.yml" in ci_workflow
+    assert "factory-fast-merge-wakeup:" not in ci_workflow
+    assert "actions: write" not in ci_workflow
+    assert "needs: [build, build-fork, node-auth, rust-ingress, factory-pr-auth, factory-complete-tests, factory-actionlint, factory-shellcheck" in ci_workflow
     assert "secrets.PR_REBASE_TOKEN" in workflow
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
@@ -466,3 +465,8 @@ def test_complete_factory_gates_are_required_on_both_paths() -> None:
     assert "needs.factory-complete-tests.result" in ci
     assert "needs.factory-actionlint.result" in ci
     assert "needs.factory-shellcheck.result" in ci
+    assert "factory-fast-merge-wakeup:" not in ci
+    assert "actions: write" not in ci
+    trusted = (ROOT / ".github/workflows/factory-fast-merge.yml").read_text(encoding="utf-8")
+    assert "workflow_run:" in trusted
+    assert "workflows: [CI]" in trusted

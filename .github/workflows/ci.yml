@@ -18,6 +18,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
+  # Pull-request CI is untrusted: no job receives an Actions write token.
   contents: read
 
 env:
@@ -348,26 +349,6 @@ jobs:
           set -euo pipefail
           find .github/scripts scripts -type f -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=error
 
-  factory-fast-merge-wakeup:
-    name: Factory-only required-check handoff
-    needs: [python-lint, python-typecheck, factory-complete-tests, factory-actionlint, factory-shellcheck]
-    # No PR source runs here. A single trusted workflow dispatch follows two
-    # successful required checks, and the merge script re-verifies their exact SHA.
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.python-lint.result == 'success' && needs.python-typecheck.result == 'success' && needs.factory-complete-tests.result == 'success' && needs.factory-actionlint.result == 'success' && needs.factory-shellcheck.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Wake trusted factory-only fast merge
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          gh workflow run factory-fast-merge.yml --repo "$GITHUB_REPOSITORY" --ref main -f pr="$PR_NUMBER"
 
   frontend-unit-tests:
     name: Frontend Unit Tests (vitest)
