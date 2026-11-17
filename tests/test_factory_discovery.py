@@ -87,16 +87,23 @@ def test_targeted_issue_snapshot_retains_rust_freeze(controller, monkeypatch):
     selected = controller.list_issues()
     assert [row['number'] for row in selected] == [issue_number, epic]
     assert controller.build_candidates(selected, []) == []
-    rows[issue_number]['labels'].append({'name': 'rust'})
+    labels = rows[issue_number]['labels']
+    assert isinstance(labels, list)
+    labels.append({'name': 'rust'})
     rust_candidates = controller.build_candidates(controller.list_issues(), [])
     assert [(candidate.kind, candidate.number) for candidate in rust_candidates] == [('issue', issue_number)]
 
 
 def test_worker_ownership_check_is_independent_of_narrow_candidate_view(controller, monkeypatch):
-    observed = []
+    observed: list[list[str]] = []
     monkeypatch.setattr(controller, 'list_issues', lambda: pytest.fail('candidate inventory is not ownership'))
     monkeypatch.setattr(controller, 'list_prs', lambda: pytest.fail('candidate inventory is not ownership'))
-    monkeypatch.setattr(controller, 'gh_json', lambda args: observed.append(args) or [{'number': 99}])
+
+    def _record_ownership_observation(args: list[str]) -> list[dict[str, int]]:
+        observed.append(args)
+        return [{'number': 99}]
+
+    monkeypatch.setattr(controller, 'gh_json', _record_ownership_observation)
     assert controller.worker_has_active_lease('54') is True
     assert observed == [['api', 'repos/JoshCLWren/comic-pile/issues?state=open&labels=factory%3A54&per_page=1']]
 
