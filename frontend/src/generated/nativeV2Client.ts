@@ -27,10 +27,10 @@ export interface ApplyCorrectionRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['MetadataCorrectionRequest']
+  body: components['schemas']['NativeMetadataCorrectionRequest']
 }
 
-export type ApplyCorrectionResponse = components['schemas']['MetadataCorrectionsResponse']
+export type ApplyCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export interface BootstrapRequest {
   query?: {
@@ -59,10 +59,10 @@ export interface ConfirmIdentityRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['ConfirmIdentityRequest']
+  body: components['schemas']['NativeConfirmIdentityRequest']
 }
 
-export type ConfirmIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type ConfirmIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ContinuityRulesCreateRequest {
   body: components['schemas']['ContinuityRuleRequest']
@@ -110,7 +110,7 @@ export interface CreateIssuesRequest {
   body: components['schemas']['CreateIssuesRequest']
 }
 
-export type CreateIssuesResponse = components['schemas']['IssueListResponse']
+export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
 
 export interface CreateLegacyDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
@@ -202,7 +202,7 @@ export interface GetIssueIdentityRequest {
   }
 }
 
-export type GetIssueIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type GetIssueIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface GetLegacyDependencyRequest {
   path: {
@@ -249,16 +249,16 @@ export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIs
 export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
 
 export interface ImportIssueRequest {
-  body: components['schemas']['ImportIssueRequest']
+  body: components['schemas']['NativeImportIssueRequest']
 }
 
-export type ImportIssueResponse = components['schemas']['ImportIssueResponse']
+export type ImportIssueResponse = components['schemas']['NativeImportIssueResponse']
 
 export interface ImportSeriesRequest {
-  body: components['schemas']['ImportSeriesRequest']
+  body: components['schemas']['NativeImportSeriesRequest']
 }
 
-export type ImportSeriesResponse = components['schemas']['ImportSeriesResponse']
+export type ImportSeriesResponse = components['schemas']['NativeImportSeriesResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -317,7 +317,7 @@ export interface ListCorrectionsRequest {
   }
 }
 
-export type ListCorrectionsResponse = components['schemas']['MetadataCorrectionsResponse']
+export type ListCorrectionsResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -396,7 +396,7 @@ export interface ReadReadingListRequest {
 export type ReadReadingListResponse = components['schemas']['ReadingListReader']
 
 export interface ReadingBoundaryBatchRequest {
-  body: components['schemas']['ReadingBoundaryBatchRequest']
+  body: components['schemas']['NativeReadingBoundaryBatchRequest']
 }
 
 export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
@@ -415,7 +415,7 @@ export interface RefreshMetadataRequest {
   }
 }
 
-export type RefreshMetadataResponse = components['schemas']['MetadataRefreshResponse']
+export type RefreshMetadataResponse = components['schemas']['NativeMetadataRefreshResponse']
 
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']
@@ -469,7 +469,7 @@ export interface ReleasesReconcileRequest {
   }
 }
 
-export type ReleasesReconcileResponse = components['schemas']['ReleaseSourceResponse']
+export type ReleasesReconcileResponse = components['schemas']['NativeReleaseSourceResponse']
 
 export interface ReleasesRetractRequest {
   path: {
@@ -497,7 +497,7 @@ export interface RemoveIdentityRequest {
   }
 }
 
-export type RemoveIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type RemoveIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
@@ -509,10 +509,10 @@ export interface ReplaceIdentityRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['ReplaceIdentityRequest']
+  body: components['schemas']['NativeReplaceIdentityRequest']
 }
 
-export type ReplaceIdentityResponse = components['schemas']['IssueIdentityResponse']
+export type ReplaceIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -532,16 +532,16 @@ export interface ResolveInputRequest {
   }
 }
 
-export type ResolveInputResponse = components['schemas']['ComicVineResolveResponse']
+export type ResolveInputResponse = components['schemas']['NativeComicVineResolveResponse']
 
 export interface RevertCorrectionRequest {
   path: {
     issue_id: number
   }
-  body: components['schemas']['MetadataCorrectionRevertRequest']
+  body: components['schemas']['NativeMetadataCorrectionRevertRequest']
 }
 
-export type RevertCorrectionResponse = components['schemas']['MetadataCorrectionsResponse']
+export type RevertCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
 
@@ -553,7 +553,7 @@ export interface SearchSeriesRequest {
   }
 }
 
-export type SearchSeriesResponse = components['schemas']['ComicVineSeriesSearchResponse']
+export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -580,7 +580,7 @@ export interface SeriesIssuesRequest {
   }
 }
 
-export type SeriesIssuesResponse = components['schemas']['ComicVineSeriesIssuesResponse']
+export type SeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
 
 export interface SkipRequest {
   path: {

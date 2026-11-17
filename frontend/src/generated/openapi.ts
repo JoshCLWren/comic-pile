@@ -3486,9 +3486,29 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_thread_detail_documentation"];
-        put?: never;
+        /**
+         * Update Thread
+         * @description Update an owned thread.
+         *
+         *     Args:
+         *         thread_id: The thread ID to update.
+         *         thread_data: Thread update data.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         ThreadResponse with updated thread details.
+         */
+        put: operations["update_thread_api_v1_threads__thread_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Thread
+         * @description Delete a thread and prune dependent session/continuity state.
+         *
+         *     Raises:
+         *         HTTPException: 404 when not found; 400 when deletion is refused.
+         */
+        delete: operations["delete_thread_api_v1_threads__thread_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3613,7 +3633,33 @@ export interface paths {
         /** Same-path native OpenAPI for the browser's issue-list read. */
         get: operations["list_thread_issues_documentation"];
         put?: never;
-        post?: never;
+        /**
+         * Create Issues
+         * @description Create issues from a range string and place them in thread order.
+         *
+         *     Ordinary numeric issue numbers are inserted at their natural position in the
+         *     series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
+         *     saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
+         *     placement. Send explicit JSON ``null`` to append at the end (the UI
+         *     "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
+         *     existing issues later in the thread are shifted upward so the new issues are
+         *     inserted immediately after that issue. Irregular numbering such as
+         *     ``Annual 1`` or ``0`` falls back to append-only placement.
+         *
+         *     Args:
+         *         thread_id: The thread ID to create issues for.
+         *         request: Request with issue range string.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         IssueListResponse with newly created issues only (not all issues).
+         *
+         *     Raises:
+         *         HTTPException: If thread not found, all issues already exist,
+         *                       position collision detected, or issue range is invalid.
+         */
+        post: operations["create_issues_api_v1_threads__thread_id__issues_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5488,35 +5534,65 @@ export interface components {
             tags: components["schemas"]["BootstrapTag"][];
             title: string;
         };
+        /**
+         * BoundaryEditorTarget
+         * @description Where the reader can change the rule that produced a boundary.
+         *
+         *     The target is a descriptor, not a URL: the client owns routing so a
+         *     renamed surface never breaks a stored deep link.
+         */
         BoundaryEditorTarget: {
-            /** Format: int32 */
+            /** Issue Id */
             issue_id?: number | null;
-            kind: components["schemas"]["EditorKind"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reading_list" | "prerequisite" | "issue";
+            /** Label */
             label: string;
-            /** Format: int32 */
+            /** List Id */
             list_id?: number | null;
-            /** Format: int32 */
+            /** Prerequisite Id */
             prerequisite_id?: number | null;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id?: number | null;
         };
+        /**
+         * BoundaryIssue
+         * @description One named Issue, labeled with its Comic Vine volume when known.
+         */
         BoundaryIssue: {
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Issue Number */
             issue_number: string;
+            /** Label */
             label: string;
-            reading_lists: components["schemas"]["BoundaryReadingList"][];
-            /** Format: int32 */
+            /** Reading Lists */
+            reading_lists?: components["schemas"]["BoundaryReadingList"][];
+            /** Thread Id */
             thread_id: number;
+            /** Thread Title */
             thread_title: string;
+            /** Volume Label */
             volume_label?: string | null;
         };
         /** @enum {string} */
         BoundaryListMode: "strict" | "loose";
+        /**
+         * BoundaryReadingList
+         * @description One owned Reading List that places an Issue.
+         */
         BoundaryReadingList: {
-            /** Format: int32 */
+            /** List Id */
             list_id: number;
-            mode: components["schemas"]["BoundaryListMode"];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "strict" | "loose";
+            /** Name */
             name: string;
         };
         /** @enum {string} */
@@ -5762,40 +5838,72 @@ export interface components {
             /** Unresolved Positions */
             unresolved_positions: number[];
         };
+        /**
+         * CBLBreadcrumb
+         * @description One step in the folder breadcrumb, from the catalog root to the folder.
+         */
         CBLBreadcrumb: {
+            /** Name */
             name: string;
+            /** Path */
             path: string;
         };
+        /**
+         * CBLCatalogBrowseResponse
+         * @description Paginated CBL results for one folder or one catalog-wide search.
+         */
         CBLCatalogBrowseResponse: {
+            /** Breadcrumbs */
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /** Folder */
             folder: string;
+            /** Folders */
             folders: components["schemas"]["CBLSourceFolder"][];
+            /** Has Next */
             has_next: boolean;
+            /** Has Previous */
             has_previous: boolean;
+            /** Items */
             items: components["schemas"]["CBLCatalogListItem"][];
-            /**
-             * Format: int64
-             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
-             */
+            /** Page */
             page: number;
-            /** Format: int64 */
+            /** Page Size */
             page_size: number;
+            /** Query */
             query?: string | null;
-            scope: string;
-            /** Format: int64 */
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "folder" | "search";
+            /** Total */
             total: number;
-            /** Format: int64 */
+            /** Total Pages */
             total_pages: number;
         };
+        /**
+         * CBLCatalogListItem
+         * @description One active persisted source list shown in a catalog folder or search page.
+         *
+         *     The shape mirrors the Add-material discovery item, but it is a distinct
+         *     model so the catalog browsing surface never shares a schema title with the
+         *     discovery surface: two same-named models would collapse into one entry in
+         *     the generated OpenAPI components.
+         */
         CBLCatalogListItem: {
+            /** Content Hash */
             content_hash: string;
-            /** Format: int32 */
-            declared_issue_count?: number | null;
-            /** Format: int32 */
+            /** Declared Issue Count */
+            declared_issue_count: number | null;
+            /** Id */
             id: number;
+            /** Name */
             name: string;
+            /** Revision Sha */
             revision_sha: string;
+            /** Source Path */
             source_path: string;
+            /** Source Repository */
             source_repository: string;
         };
         /**
@@ -5905,30 +6013,74 @@ export interface components {
              */
             occurrences_total: number;
         };
-        /** @description Global dependency-acquisition outage shape. */
+        /**
+         * CBLDatabaseUnavailableDetail
+         * @description Application-wide database acquisition error, before route execution.
+         */
         CBLDatabaseUnavailableDetail: {
-            code: string;
+            /**
+             * Code
+             * @constant
+             */
+            code: "database_unavailable";
+            /** Message */
             message: string;
-            status: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "SERVICE_UNAVAILABLE";
         };
+        /**
+         * CBLDatabaseUnavailableResponse
+         * @description Global retryable outage envelope used when a dependency cannot connect.
+         */
         CBLDatabaseUnavailableResponse: {
             error: components["schemas"]["CBLDatabaseUnavailableDetail"];
         };
-        /** @description Error detail for catalog-originated failures (400/404/503). */
+        /**
+         * CBLErrorDetail
+         * @description Machine-readable error code and message for a catalog failure.
+         */
         CBLErrorDetail: {
+            /**
+             * Code
+             * @description Stable machine-readable error code.
+             */
             code: string;
+            /**
+             * Message
+             * @description Human-readable error message.
+             */
             message: string;
         };
+        /**
+         * CBLErrorResponse
+         * @description Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``.
+         */
         CBLErrorResponse: {
             detail: components["schemas"]["CBLErrorDetail"];
         };
+        /**
+         * CBLFolderListingResponse
+         * @description Response for browsing one catalog folder's immediate subfolders.
+         */
         CBLFolderListingResponse: {
+            /** Breadcrumbs */
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
-            /** Format: int32 */
+            /**
+             * Direct List Count
+             * @description Active CBLs stored directly in the requested folder.
+             */
             direct_list_count: number;
+            /** Folder */
             folder: string;
+            /** Folders */
             folders: components["schemas"]["CBLSourceFolder"][];
-            /** Format: int32 */
+            /**
+             * Total List Count
+             * @description Active CBLs anywhere below the requested folder.
+             */
             total_list_count: number;
         };
         /**
@@ -6250,12 +6402,30 @@ export interface components {
             /** Source Repository */
             source_repository: string;
         };
+        /**
+         * CBLSourceFolder
+         * @description One immediate child folder of the requested catalog folder.
+         */
         CBLSourceFolder: {
-            /** Format: int32 */
+            /**
+             * Direct List Count
+             * @description Active CBLs stored directly in this folder.
+             */
             direct_list_count: number;
+            /**
+             * Name
+             * @description Folder name (one path segment).
+             */
             name: string;
+            /**
+             * Path
+             * @description Full source-relative folder path.
+             */
             path: string;
-            /** Format: int32 */
+            /**
+             * Total List Count
+             * @description Active CBLs anywhere below this folder.
+             */
             total_list_count: number;
         };
         /**
@@ -6365,15 +6535,27 @@ export interface components {
              */
             source_repository: string;
         };
+        /**
+         * CanonicalCorrection
+         * @description A user-contributed canonical metadata override.
+         */
         CanonicalCorrection: {
+            /** Canonical Value */
             canonical_value: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
-            /** Format: int32 */
+            /** Created By */
             created_by: number;
+            /** Field Name */
             field_name: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
+            /** Provenance */
             provenance: string;
+            /** Provider Value */
             provider_value?: string | null;
         };
         /**
@@ -6474,28 +6656,60 @@ export interface components {
             /** Roles */
             roles?: string[];
         };
+        /**
+         * ComicVineIssueCandidate
+         * @description One issue candidate from a series for identity mapping.
+         */
         ComicVineIssueCandidate: {
-            /** Format: int32 */
+            /** Comicvine Issue Id */
             comicvine_issue_id: number;
+            /** Cover Date */
             cover_date?: string | null;
+            /** Image Url */
             image_url?: string | null;
+            /** Issue Number */
             issue_number?: string | null;
+            /** Name */
             name?: string | null;
+            /** Site Detail Url */
             site_detail_url?: string | null;
+            /** Store Date */
             store_date?: string | null;
         };
-        /** @description Compact confirmed ComicVine mapping health for one queue row. */
+        /**
+         * ComicVineMappingHealth
+         * @description Compact ComicVine mapping health projection for a queue thread.
+         *
+         *     Derived from stored canonical issue mappings only. No live provider calls.
+         *     Counts are scoped to the issues represented by the Queue thread.
+         */
         ComicVineMappingHealth: {
-            /** Format: int32 */
+            /**
+             * Confirmed Issue Count
+             * @description Issues with confirmed ComicVine mappings
+             */
             confirmed_issue_count: number;
-            /** Format: int32 */
+            /**
+             * Metadata Missing Count
+             * @description Confirmed mappings without usable issue and series metadata
+             * @default 0
+             */
             metadata_missing_count: number;
-            /** Format: int32 */
+            /**
+             * Needs Mapping Count
+             * @description Issues with no confirmed mapping (unresolved/candidate)
+             */
             needs_mapping_count: number;
-            /** Format: int32 */
+            /**
+             * Needs Review Count
+             * @description Issues with conflicting/ambiguous mappings
+             */
             needs_review_count: number;
-            status: string;
-            /** Format: int32 */
+            status: components["schemas"]["ComicVineMappingStatus"];
+            /**
+             * Tracked Issue Count
+             * @description Total issues in this thread's scope
+             */
             tracked_issue_count: number;
         };
         /**
@@ -6510,56 +6724,119 @@ export interface components {
          * @enum {string}
          */
         ComicVineMappingStatus: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
+        /**
+         * ComicVineResolveResponse
+         * @description Result of resolving a correction input that may be a pasted URL.
+         *
+         *     ``kind`` distinguishes an exact issue resolution, an exact volume
+         *     resolution, or an ordinary title-search input. ``validation_error`` carries
+         *     a clear inline message when the input is an unsupported/malformed URL or
+         *     provider resolution failed, while leaving normal title search available.
+         */
         ComicVineResolveResponse: {
+            /** Input */
             input: string;
-            issue?: null | components["schemas"]["ComicVineResolvedIssue"];
+            issue?: components["schemas"]["ComicVineResolvedIssue"] | null;
+            /**
+             * Issues
+             * @default []
+             */
             issues: components["schemas"]["ComicVineIssueCandidate"][];
-            kind: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "issue" | "volume" | "search";
+            /** Validation Error */
             validation_error?: string | null;
-            volume?: null | components["schemas"]["ComicVineSeriesResult"];
+            volume?: components["schemas"]["ComicVineSeriesResult"] | null;
         };
+        /**
+         * ComicVineResolvedIssue
+         * @description A ComicVine issue resolved directly from a pasted URL.
+         *
+         *     Carries the owning series/volume metadata so the confirmation card can
+         *     render without a separate volume search.
+         */
         ComicVineResolvedIssue: {
-            /** Format: int32 */
+            /** Comicvine Issue Id */
             comicvine_issue_id: number;
+            /** Cover Date */
             cover_date?: string | null;
+            /** Image Url */
             image_url?: string | null;
+            /** Issue Number */
             issue_number?: string | null;
+            /** Name */
             name?: string | null;
+            /** Series Name */
             series_name?: string | null;
+            /** Site Detail Url */
             site_detail_url?: string | null;
+            /** Store Date */
             store_date?: string | null;
-            /** Format: int32 */
+            /** Volume Id */
             volume_id?: number | null;
         };
+        /**
+         * ComicVineSeriesIssuesResponse
+         * @description Issues within a ComicVine series.
+         */
         ComicVineSeriesIssuesResponse: {
-            /** Format: int32 */
+            /** Comicvine Volume Id */
             comicvine_volume_id: number;
+            /** Issues */
             issues: components["schemas"]["ComicVineIssueCandidate"][];
+            /** Series Name */
             series_name: string;
         };
+        /**
+         * ComicVineSeriesResult
+         * @description One ComicVine series/volume from a search.
+         */
         ComicVineSeriesResult: {
-            /** Format: int32 */
+            /** Comicvine Volume Id */
             comicvine_volume_id: number;
+            /** Image Url */
             image_url?: string | null;
-            /** Format: int32 */
+            /** Issue Count */
             issue_count?: number | null;
+            /** Name */
             name: string;
+            /** Publisher */
             publisher?: string | null;
+            /** Site Detail Url */
             site_detail_url?: string | null;
-            /** Format: int32 */
+            /** Start Year */
             start_year?: number | null;
         };
+        /**
+         * ComicVineSeriesSearchResponse
+         * @description Paginated series search results using ComicVine offset semantics.
+         */
         ComicVineSeriesSearchResponse: {
+            /**
+             * Has More
+             * @default false
+             */
             has_more: boolean;
-            /** Format: int32 */
+            /**
+             * Limit
+             * @default 10
+             */
             limit: number;
-            /** Format: int32 */
+            /** Next Offset */
             next_offset?: number | null;
-            /** Format: int32 */
+            /**
+             * Offset
+             * @default 0
+             */
             offset: number;
+            /** Query */
             query: string;
+            /** Results */
             results: components["schemas"]["ComicVineSeriesResult"][];
-            /** Format: int32 */
+            /** Total Available */
             total_available?: number | null;
         };
         CommitRequest: {
@@ -6581,8 +6858,15 @@ export interface components {
             provider: string;
             status: string;
         };
+        /**
+         * ConfirmIdentityRequest
+         * @description Request to confirm a specific ComicVine identity for an issue.
+         */
         ConfirmIdentityRequest: {
-            /** Format: int32 */
+            /**
+             * Comicvine Issue Id
+             * @description ComicVine issue ID to confirm
+             */
             comicvine_issue_id: number;
         };
         /**
@@ -7618,7 +7902,7 @@ export interface components {
             ratings_count: number;
         };
         CreatorListResponse: {
-            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
             items: components["schemas"]["CreatorListItem"][];
             /** Format: int64 */
             limit: number;
@@ -8235,39 +8519,122 @@ export interface components {
             total: number;
         };
         CreatorSummariesResponse: {
-            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
             summaries: {
-                [key: string]: components["schemas"]["CreatorSummaryItem"];
+                [key: string]: components["schemas"]["NativeCreatorSummaryItem"];
             };
         };
+        /**
+         * CreatorSummaryCoverage
+         * @description Coverage state distinguishing complete from lower-bound statistics.
+         *
+         *     ``*_complete`` is true only when every owned issue in that category carries
+         *     confirmed usable creator metadata. Missing/unconfirmed metadata never
+         *     counts as negative attribution evidence; it only makes the matching result
+         *     explicitly partial.
+         */
         CreatorSummaryCoverage: {
-            /** Format: int64 */
+            /**
+             * Rated Issues Total
+             * @description Total owned issues with an effective rating.
+             * @default 0
+             */
             rated_issues_total: number;
-            /** Format: int64 */
+            /**
+             * Rated Issues With Creator Metadata
+             * @description Rated owned issues with confirmed usable creator metadata.
+             * @default 0
+             */
             rated_issues_with_creator_metadata: number;
+            /**
+             * Ratings Complete
+             * @description True only when every owned rated issue has confirmed usable creator metadata.
+             * @default true
+             */
             ratings_complete: boolean;
+            /**
+             * Read Unrated Complete
+             * @description True only when every owned read-but-unrated issue has confirmed usable creator metadata.
+             * @default true
+             */
             read_unrated_complete: boolean;
-            /** Format: int64 */
+            /**
+             * Read Unrated Issues Total
+             * @description Total owned read-but-unrated issues.
+             * @default 0
+             */
             read_unrated_issues_total: number;
-            /** Format: int64 */
+            /**
+             * Read Unrated Issues With Creator Metadata
+             * @description Read-but-unrated owned issues with confirmed usable creator metadata.
+             * @default 0
+             */
             read_unrated_issues_with_creator_metadata: number;
-            /** Format: int64 */
+            /**
+             * Unread Issues Total
+             * @description Total owned unread issues.
+             * @default 0
+             */
             unread_issues_total: number;
-            /** Format: int64 */
+            /**
+             * Unread Issues With Creator Metadata
+             * @description Unread owned issues with confirmed usable creator metadata.
+             * @default 0
+             */
             unread_issues_with_creator_metadata: number;
+            /**
+             * Upcoming Complete
+             * @description True only when every owned unread issue considered by the library has confirmed usable creator metadata.
+             * @default true
+             */
             upcoming_complete: boolean;
         };
+        /**
+         * CreatorSummaryItem
+         * @description Summary data for one creator identity in the batch response.
+         *
+         *     ``canonical_creator_key`` is the stable provider + external-ID key from the
+         *     #2036 creator identity contract (``creator:<external-person-id>``). It is
+         *     never display-name based.
+         */
         CreatorSummaryItem: {
-            /** Format: double */
+            /**
+             * Average Rating
+             * @description Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no ratings.
+             */
             average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
             canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
             display_name: string;
-            normalized_roles: string[];
-            /** Format: int64 */
+            /**
+             * Normalized Roles
+             * @description Distinct roles seen for this creator across the user's issues.
+             */
+            normalized_roles?: string[];
+            /**
+             * Ratings Count
+             * @description Number of distinct rated issues contributing to the headline average.
+             * @default 0
+             */
             ratings_count: number;
-            /** Format: int64 */
+            /**
+             * Read Unrated Count
+             * @description Number of read-but-unrated owned issues attributed to this creator.
+             * @default 0
+             */
             read_unrated_count: number;
-            /** Format: int64 */
+            /**
+             * Upcoming Count
+             * @description Number of unread owned issues already in the user's ComicPile attributed to this creator.
+             * @default 0
+             */
             upcoming_count: number;
         };
         /**
@@ -9164,75 +9531,130 @@ export interface components {
             start_year?: number | null;
             volume_name?: string | null;
         };
+        /**
+         * ImportIssueRequest
+         * @description Request to import a ComicVine issue as a new identity-preserving thread.
+         *
+         *     The optional reading-order placement is neighbor-anchored: the anchors are
+         *     the thread IDs of the arc members immediately surrounding the imported
+         *     issue in story-arc order. Anchors absent from the target order fall back
+         *     per ``resolve_anchored_position`` rules.
+         */
         ImportIssueRequest: {
-            /** Format: int32 */
+            /** Anchor After Thread Id */
             anchor_after_thread_id?: number | null;
-            /** Format: int32 */
+            /** Anchor Before Thread Id */
             anchor_before_thread_id?: number | null;
-            /** Format: int32 */
+            /**
+             * Comicvine Issue Id
+             * @description ComicVine issue ID to preserve
+             */
             comicvine_issue_id: number;
+            /** Issue Number */
             issue_number?: string | null;
-            /** Format: int32 */
+            /** Reading Order Id */
             reading_order_id?: number | null;
+            /** Title */
             title: string;
         };
+        /**
+         * ImportIssueResponse
+         * @description Result of an identity-preserving ComicVine issue import.
+         */
         ImportIssueResponse: {
-            /** Format: int32 */
+            /** External Identity Id */
             external_identity_id: number;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
-            /** Format: int32 */
+            /** Position */
             position?: number | null;
-            /** Format: int32 */
+            /** Reading Order Id */
             reading_order_id?: number | null;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
-            /** Format: int32 */
+            /** Total Items */
             total_items?: number | null;
         };
+        /**
+         * ImportSeriesIssueResult
+         * @description Result of adopting one issue during series import.
+         */
         ImportSeriesIssueResult: {
-            /** Format: int32 */
+            /** Comicvine Issue Id */
             comicvine_issue_id: number;
+            /** Conflict Detail */
             conflict_detail?: string | null;
+            /** Hydration */
             hydration: string;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id?: number | null;
+            /** Issue Number */
             issue_number?: string | null;
+            /** Outcome */
             outcome: string;
         };
+        /**
+         * ImportSeriesRequest
+         * @description Request to import a ComicVine series/volume as a new thread with all issues.
+         *
+         *     Creates a thread with the series title and adopts all issues from the
+         *     confirmed ComicVine volume using the shared provider-issue adoption
+         *     primitive. Optional reading progress indicates how many issues from
+         *     the start of the series have already been read.
+         */
         ImportSeriesRequest: {
-            /** Format: int32 */
-            already_read_count?: number;
-            /** Format: int32 */
+            /**
+             * Already Read Count
+             * @description Number of issues already read from the start of the series
+             * @default 0
+             */
+            already_read_count: number;
+            /** Anchor After Thread Id */
             anchor_after_thread_id?: number | null;
-            /** Format: int32 */
+            /** Anchor Before Thread Id */
             anchor_before_thread_id?: number | null;
-            /** Format: int32 */
+            /**
+             * Comicvine Volume Id
+             * @description ComicVine volume ID to import
+             */
             comicvine_volume_id: number;
-            /** Format: int32 */
+            /**
+             * Reading Order Id
+             * @description Optional reading order to add the thread to
+             */
             reading_order_id?: number | null;
         };
+        /**
+         * ImportSeriesResponse
+         * @description Result of a ComicVine series import.
+         */
         ImportSeriesResponse: {
-            /** Format: int32 */
+            /** Comicvine Volume Id */
             comicvine_volume_id: number;
+            /** Issue Results */
             issue_results: components["schemas"]["ImportSeriesIssueResult"][];
-            /** Format: int32 */
+            /** Issues Adopted */
             issues_adopted: number;
-            /** Format: int32 */
+            /** Issues Conflict */
             issues_conflict: number;
-            /** Format: int32 */
+            /** Issues Skipped */
             issues_skipped: number;
-            /** Format: int32 */
+            /** Position */
             position?: number | null;
-            /** Format: int32 */
+            /** Reading Order Id */
             reading_order_id?: number | null;
+            /** Series Name */
             series_name: string;
+            /**
+             * Thread Created
+             * @description True when this call created the local series thread. False when an existing thread already tracked this ComicVine volume, so a retry adopted into the original series instead of duplicating it.
+             */
             thread_created: boolean;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
-            /** Format: int32 */
+            /** Total Issues In Series */
             total_issues_in_series: number;
-            /** Format: int32 */
+            /** Total Items */
             total_items?: number | null;
         };
         InheritanceSource: {
@@ -9386,27 +9808,46 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /**
+         * IssueIdentityMapping
+         * @description One external identity mapping for a ComicPile issue.
+         */
         IssueIdentityMapping: {
+            /** Comicvine Id */
             comicvine_id: string;
-            /** Format: double */
+            /** Confidence */
             confidence?: number | null;
+            /** Created At */
             created_at?: string | null;
+            /** Evidence Source */
             evidence_source?: string | null;
-            /** Format: int32 */
+            /** External Identity Id */
             external_identity_id: number;
+            /** Provider */
             provider: string;
+            /** Status */
             status: string;
         };
+        /**
+         * IssueIdentityResponse
+         * @description Current identity state for one ComicPile issue.
+         */
         IssueIdentityResponse: {
+            /** Candidate Mappings */
             candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
+            /** Comicvine Issue Id */
             comicvine_issue_id?: string | null;
+            /** Confirmed Mappings */
             confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
+            /** Has Confirmed Identity */
             has_confirmed_identity: boolean;
+            /** Has Unresolved */
             has_unresolved: boolean;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
+            /** Thread Title */
             thread_title: string;
         };
         /** @description Wire parity with Python's ComicVineIssueIntelligence. */
@@ -9428,12 +9869,18 @@ export interface components {
             store_date?: string | null;
             story_arcs: components["schemas"]["StoryArc"][];
         };
+        /**
+         * IssueListResponse
+         * @description Schema for paginated issue list response.
+         */
         IssueListResponse: {
-            issues: components["schemas"]["IssueMutationItem"][];
+            /** Issues */
+            issues: components["schemas"]["IssueResponse"][];
+            /** Next Page Token */
             next_page_token?: string | null;
-            /** Format: int64 */
+            /** Page Size */
             page_size: number;
-            /** Format: int32 */
+            /** Total Count */
             total_count: number;
         };
         /**
@@ -9552,24 +9999,58 @@ export interface components {
             /** @enum {string} */
             kind: "manual_select";
         };
+        /**
+         * MetadataCorrectionRequest
+         * @description Request to apply a canonical metadata correction.
+         */
         MetadataCorrectionRequest: {
+            /**
+             * Canonical Value
+             * @description Corrected canonical value
+             */
             canonical_value: string;
+            /**
+             * Field Name
+             * @description Metadata field to correct
+             */
             field_name: string;
+            /**
+             * Reason
+             * @description Reason for correction
+             */
             reason?: string | null;
         };
+        /**
+         * MetadataCorrectionRevertRequest
+         * @description Request to revert a canonical correction.
+         */
         MetadataCorrectionRevertRequest: {
-            /** Format: int32 */
+            /**
+             * Correction Id
+             * @description ID of the correction to revert
+             */
             correction_id: number;
         };
+        /**
+         * MetadataCorrectionsResponse
+         * @description List of corrections for a ComicPile issue.
+         */
         MetadataCorrectionsResponse: {
+            /** Corrections */
             corrections: components["schemas"]["CanonicalCorrection"][];
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
         };
+        /**
+         * MetadataRefreshResponse
+         * @description Result of a provider metadata refresh request.
+         */
         MetadataRefreshResponse: {
+            /** Comicvine Issue Id */
             comicvine_issue_id?: string | null;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Refreshed */
             refreshed: boolean;
         };
         /**
@@ -9624,7 +10105,106 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeCanonicalCorrection2: {
+        NativeBoundaryEditorTarget: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            kind: components["schemas"]["EditorKind"];
+            label: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        NativeBoundaryIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            label: string;
+            reading_lists: components["schemas"]["NativeBoundaryReadingList"][];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_label?: string | null;
+        };
+        NativeBoundaryReadingList: {
+            /** Format: int32 */
+            list_id: number;
+            mode: components["schemas"]["BoundaryListMode"];
+            name: string;
+        };
+        NativeCBLBreadcrumb: {
+            name: string;
+            path: string;
+        };
+        NativeCBLCatalogBrowseResponse: {
+            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
+            folder: string;
+            folders: components["schemas"]["NativeCBLSourceFolder"][];
+            has_next: boolean;
+            has_previous: boolean;
+            items: components["schemas"]["NativeCBLCatalogListItem"][];
+            /**
+             * Format: int64
+             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
+             */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            query?: string | null;
+            scope: string;
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        NativeCBLCatalogListItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description Global dependency-acquisition outage shape. */
+        NativeCBLDatabaseUnavailableDetail: {
+            code: string;
+            message: string;
+            status: string;
+        };
+        NativeCBLDatabaseUnavailableResponse: {
+            error: components["schemas"]["NativeCBLDatabaseUnavailableDetail"];
+        };
+        /** @description Error detail for catalog-originated failures (400/404/503). */
+        NativeCBLErrorDetail: {
+            code: string;
+            message: string;
+        };
+        NativeCBLErrorResponse: {
+            detail: components["schemas"]["NativeCBLErrorDetail"];
+        };
+        NativeCBLFolderListingResponse: {
+            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
+            /** Format: int32 */
+            direct_list_count: number;
+            folder: string;
+            folders: components["schemas"]["NativeCBLSourceFolder"][];
+            /** Format: int32 */
+            total_list_count: number;
+        };
+        NativeCBLSourceFolder: {
+            /** Format: int32 */
+            direct_list_count: number;
+            name: string;
+            path: string;
+            /** Format: int32 */
+            total_list_count: number;
+        };
+        NativeCanonicalCorrection: {
             canonical_value: string;
             created_at: string;
             /** Format: int32 */
@@ -9635,7 +10215,7 @@ export interface components {
             provenance: string;
             provider_value?: string | null;
         };
-        NativeComicVineIssueCandidate2: {
+        NativeComicVineIssueCandidate: {
             /** Format: int32 */
             comicvine_issue_id: number;
             cover_date?: string | null;
@@ -9645,15 +10225,29 @@ export interface components {
             site_detail_url?: string | null;
             store_date?: string | null;
         };
-        NativeComicVineResolveResponse2: {
+        /** @description Compact confirmed ComicVine mapping health for one queue row. */
+        NativeComicVineMappingHealth: {
+            /** Format: int32 */
+            confirmed_issue_count: number;
+            /** Format: int32 */
+            metadata_missing_count: number;
+            /** Format: int32 */
+            needs_mapping_count: number;
+            /** Format: int32 */
+            needs_review_count: number;
+            status: string;
+            /** Format: int32 */
+            tracked_issue_count: number;
+        };
+        NativeComicVineResolveResponse: {
             input: string;
-            issue?: null | components["schemas"]["NativeComicVineResolvedIssue2"];
-            issues: components["schemas"]["NativeComicVineIssueCandidate2"][];
+            issue?: null | components["schemas"]["ComicVineResolvedIssue"];
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
             kind: string;
             validation_error?: string | null;
-            volume?: null | components["schemas"]["NativeComicVineSeriesResult2"];
+            volume?: null | components["schemas"]["ComicVineSeriesResult"];
         };
-        NativeComicVineResolvedIssue2: {
+        NativeComicVineResolvedIssue: {
             /** Format: int32 */
             comicvine_issue_id: number;
             cover_date?: string | null;
@@ -9666,13 +10260,13 @@ export interface components {
             /** Format: int32 */
             volume_id?: number | null;
         };
-        NativeComicVineSeriesIssuesResponse2: {
+        NativeComicVineSeriesIssuesResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
-            issues: components["schemas"]["NativeComicVineIssueCandidate2"][];
+            issues: components["schemas"]["NativeComicVineIssueCandidate"][];
             series_name: string;
         };
-        NativeComicVineSeriesResult2: {
+        NativeComicVineSeriesResult: {
             /** Format: int32 */
             comicvine_volume_id: number;
             image_url?: string | null;
@@ -9684,7 +10278,7 @@ export interface components {
             /** Format: int32 */
             start_year?: number | null;
         };
-        NativeComicVineSeriesSearchResponse2: {
+        NativeComicVineSeriesSearchResponse: {
             has_more: boolean;
             /** Format: int32 */
             limit: number;
@@ -9693,15 +10287,45 @@ export interface components {
             /** Format: int32 */
             offset: number;
             query: string;
-            results: components["schemas"]["NativeComicVineSeriesResult2"][];
+            results: components["schemas"]["NativeComicVineSeriesResult"][];
             /** Format: int32 */
             total_available?: number | null;
         };
-        NativeConfirmIdentityRequest2: {
+        NativeConfirmIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
         };
-        NativeImportIssueRequest2: {
+        NativeCreatorSummaryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        NativeCreatorSummaryItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            normalized_roles: string[];
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            /** Format: int64 */
+            upcoming_count: number;
+        };
+        NativeImportIssueRequest: {
             /** Format: int32 */
             anchor_after_thread_id?: number | null;
             /** Format: int32 */
@@ -9713,7 +10337,7 @@ export interface components {
             reading_order_id?: number | null;
             title: string;
         };
-        NativeImportIssueResponse2: {
+        NativeImportIssueResponse: {
             /** Format: int32 */
             external_identity_id: number;
             /** Format: int32 */
@@ -9727,7 +10351,7 @@ export interface components {
             /** Format: int32 */
             total_items?: number | null;
         };
-        NativeImportSeriesIssueResult2: {
+        NativeImportSeriesIssueResult: {
             /** Format: int32 */
             comicvine_issue_id: number;
             conflict_detail?: string | null;
@@ -9737,7 +10361,7 @@ export interface components {
             issue_number?: string | null;
             outcome: string;
         };
-        NativeImportSeriesRequest2: {
+        NativeImportSeriesRequest: {
             /** Format: int32 */
             already_read_count?: number;
             /** Format: int32 */
@@ -9749,10 +10373,10 @@ export interface components {
             /** Format: int32 */
             reading_order_id?: number | null;
         };
-        NativeImportSeriesResponse2: {
+        NativeImportSeriesResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
-            issue_results: components["schemas"]["NativeImportSeriesIssueResult2"][];
+            issue_results: components["schemas"]["NativeImportSeriesIssueResult"][];
             /** Format: int32 */
             issues_adopted: number;
             /** Format: int32 */
@@ -9772,7 +10396,7 @@ export interface components {
             /** Format: int32 */
             total_items?: number | null;
         };
-        NativeIssueIdentityMapping2: {
+        NativeIssueIdentityMapping: {
             comicvine_id: string;
             /** Format: double */
             confidence?: number | null;
@@ -9783,10 +10407,10 @@ export interface components {
             provider: string;
             status: string;
         };
-        NativeIssueIdentityResponse2: {
-            candidate_mappings: components["schemas"]["NativeIssueIdentityMapping2"][];
+        NativeIssueIdentityResponse: {
+            candidate_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
             comicvine_issue_id?: string | null;
-            confirmed_mappings: components["schemas"]["NativeIssueIdentityMapping2"][];
+            confirmed_mappings: components["schemas"]["NativeIssueIdentityMapping"][];
             has_confirmed_identity: boolean;
             has_unresolved: boolean;
             /** Format: int32 */
@@ -9795,30 +10419,188 @@ export interface components {
             thread_id: number;
             thread_title: string;
         };
-        NativeMetadataCorrectionRequest2: {
+        NativeIssueListResponse: {
+            issues: components["schemas"]["IssueMutationItem"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
+        };
+        NativeMetadataCorrectionRequest: {
             canonical_value: string;
             field_name: string;
             reason?: string | null;
         };
-        NativeMetadataCorrectionRevertRequest2: {
+        NativeMetadataCorrectionRevertRequest: {
             /** Format: int32 */
             correction_id: number;
         };
-        NativeMetadataCorrectionsResponse2: {
-            corrections: components["schemas"]["NativeCanonicalCorrection2"][];
+        NativeMetadataCorrectionsResponse: {
+            corrections: components["schemas"]["NativeCanonicalCorrection"][];
             /** Format: int32 */
             issue_id: number;
         };
-        NativeMetadataRefreshResponse2: {
+        NativeMetadataRefreshResponse: {
             comicvine_issue_id?: string | null;
             /** Format: int32 */
             issue_id: number;
             refreshed: boolean;
         };
-        NativeReplaceIdentityRequest2: {
+        /** @description Confirmed provider series metadata for one queue row. */
+        NativeQueueSeriesMetadata: {
+            publisher?: string | null;
+            volume?: string | null;
+            /** Format: int32 */
+            year?: number | null;
+        };
+        NativeReadingBoundaryBatchRequest: {
+            thread_ids: number[];
+        };
+        NativeReadingBoundaryBlocker: {
+            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
+            reason: string;
+            waiting_on: components["schemas"]["NativeBoundaryIssue"][];
+        };
+        NativeReadingBoundaryNext: {
+            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            issue: components["schemas"]["NativeBoundaryIssue"];
+        };
+        NativeReadingListEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
+        NativeReadingListPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
+        };
+        NativeReadingListReaderEntry: {
+            availability: string;
+            checkpoint_target_issue_ids: number[];
+            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        NativeReleaseSourceResponse: {
+            exists: boolean;
+            release?: null | components["schemas"]["MinimalReleaseResponse"];
+        };
+        NativeReplaceIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
             reason?: string | null;
+        };
+        /** @description Canonical bandwidth state; invalid stored values normalize to `null`. */
+        NativeSessionBandwidthState: {
+            active_bandwidth?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_bandwidth?: string | null;
+            source?: string | null;
+        };
+        /** @description Canonical intent state; invalid stored values normalize to `null`. */
+        NativeSessionIntentState: {
+            active_intent?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_intent?: string | null;
+            source?: string | null;
+        };
+        NativeSourceSyncFailure: {
+            error: string;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            volume_id: number;
+        };
+        NativeSyncReport: {
+            /** Format: int64 */
+            checked_sources: number;
+            /** Format: int64 */
+            conflicts: number;
+            /** Format: int64 */
+            created_issues: number;
+            /** Format: int64 */
+            enabled_sources: number;
+            /** Format: int64 */
+            excluded_issues?: number;
+            /** Format: int64 */
+            excluded_sources?: number;
+            /** Format: int64 */
+            failed_sources: number;
+            failures: components["schemas"]["NativeSourceSyncFailure"][];
+            /** Format: int64 */
+            future_skips: number;
+            /** Format: int64 */
+            issue_failures: number;
+            /** Format: int64 */
+            issues_checked: number;
+            /** Format: int64 */
+            reused_issues: number;
+            /** Format: int64 */
+            skipped_sources?: number;
+            /** Format: int64 */
+            successful_sources: number;
+            /** Format: int64 */
+            total_sources: number;
+            /** Format: int64 */
+            unknown_date_skips: number;
+        };
+        NativeSyncRequest: {
+            /** Format: date-time */
+            as_of: string;
+            refresh?: boolean;
+        };
+        NativeSyncResponse: {
+            message: string;
+            result: components["schemas"]["NativeSyncReport"];
+            success: boolean;
+        };
+        NativeSyncStatusResponse: {
+            /** Format: int64 */
+            enabled_sources: number;
+            sources: components["schemas"]["NativeSyncStatusSource"][];
+            /** Format: int64 */
+            total_sources: number;
+        };
+        NativeSyncStatusSource: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            reading_plan_id: number;
+            /** Format: int32 */
+            thread_id: number;
         };
         NearMatch: {
             color: string;
@@ -10177,11 +10959,29 @@ export interface components {
              */
             shuffled: number;
         };
-        /** @description Confirmed provider series metadata for one queue row. */
+        /**
+         * QueueSeriesMetadata
+         * @description Confirmed provider series metadata projected for one Queue row.
+         *
+         *     Values come only from the reader-owned Thread's own confirmed provider
+         *     series identity. A value that is not stored stays ``None`` instead of being
+         *     inferred from the display title or a provider numeric id.
+         */
         QueueSeriesMetadata: {
+            /**
+             * Publisher
+             * @description Confirmed publisher name
+             */
             publisher?: string | null;
+            /**
+             * Volume
+             * @description Confirmed provider run/volume name when it adds identification beyond the thread title. Never a fabricated numeric volume.
+             */
             volume?: string | null;
-            /** Format: int32 */
+            /**
+             * Year
+             * @description Confirmed publication/start year.
+             */
             year?: number | null;
         };
         /**
@@ -10459,7 +11259,12 @@ export interface components {
             /** Series Name */
             series_name?: string | null;
         };
+        /**
+         * ReadingBoundaryBatchRequest
+         * @description Owned series IDs to explain in one request.
+         */
         ReadingBoundaryBatchRequest: {
+            /** Thread Ids */
             thread_ids: number[];
         };
         /**
@@ -10477,12 +11282,26 @@ export interface components {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
         };
+        /**
+         * ReadingBoundaryBlocker
+         * @description One live Option E requirement that currently blocks the next Issue.
+         */
         ReadingBoundaryBlocker: {
-            editor?: null | components["schemas"]["BoundaryEditorTarget"];
-            kind: components["schemas"]["BlockerKind"];
-            origin: components["schemas"]["BlockerOrigin"];
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "reading_list" | "reader_prerequisite";
+            /** Reason */
             reason: string;
-            waiting_on: components["schemas"]["BoundaryIssue"][];
+            /** Waiting On */
+            waiting_on?: components["schemas"]["BoundaryIssue"][];
         };
         /**
          * ReadingBoundaryExplanation
@@ -10505,8 +11324,8 @@ export interface components {
             thread_id: number;
         };
         ReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["ReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["ReadingBoundaryNext"];
+            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
+            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
@@ -10531,8 +11350,12 @@ export interface components {
             /** Label */
             label: string;
         };
+        /**
+         * ReadingBoundaryNext
+         * @description The Issue the reader may read now.
+         */
         ReadingBoundaryNext: {
-            editor?: null | components["schemas"]["BoundaryEditorTarget"];
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
             issue: components["schemas"]["BoundaryIssue"];
         };
         /**
@@ -10830,44 +11653,91 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /**
+         * ReadingListEntryIntent
+         * @description Explicit positional intent for one stable member Issue.
+         */
         ReadingListEntryIntent: {
-            gate: string;
-            skipped?: boolean;
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
         };
+        /**
+         * ReadingListPredecessorChange
+         * @description Named before/after requirements that the reader must acknowledge.
+         */
         ReadingListPredecessorChange: {
+            /** After Issue Ids */
             after_issue_ids: number[];
+            /** After Issue Names */
             after_issue_names: string[];
+            /** Before Issue Ids */
             before_issue_ids: number[];
+            /** Before Issue Names */
             before_issue_names: string[];
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Issue Name */
             issue_name: string;
         };
         ReadingListReader: {
-            entries: components["schemas"]["ReadingListReaderEntry"][];
+            entries: components["schemas"]["NativeReadingListReaderEntry"][];
             execution_mode: string;
             /** Format: int32 */
             list_id: number;
             mode: string;
             name: string;
         };
+        /**
+         * ReadingListReaderEntry
+         * @description One current list member with the execution authority's decision.
+         */
         ReadingListReaderEntry: {
-            availability: string;
-            checkpoint_target_issue_ids: number[];
-            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
-            gate: string;
-            /** Format: int32 */
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive" | "legacy";
+            /** Checkpoint Target Issue Ids */
+            checkpoint_target_issue_ids?: number[];
+            explanation?: components["schemas"]["BlockingExplanation"] | null;
+            /**
+             * Gate
+             * @default none
+             * @enum {string}
+             */
+            gate: "none" | "hold" | "after_previous";
+            /** Id */
             id: number;
+            /**
+             * Is Checkpoint
+             * @default false
+             */
             is_checkpoint: boolean;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Issue Number */
             issue_number: string;
-            /** Format: int32 */
+            /** Position */
             position: number;
+            /** Series Name */
             series_name: string;
+            /**
+             * Skipped
+             * @default false
+             */
             skipped: boolean;
+            /** Status */
             status: string;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
         /**
@@ -10914,7 +11784,7 @@ export interface components {
             confirmed_predecessor_changes?: unknown;
             description?: string | null;
             entry_intents?: {
-                [key: string]: components["schemas"]["ReadingListEntryIntent"];
+                [key: string]: components["schemas"]["NativeReadingListEntryIntent"];
             } | null;
             issue_ids: number[];
             mode?: string | null;
@@ -11360,10 +12230,39 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        /**
+         * ReleaseSourceResponse
+         * @description A release source with provider display metadata.
+         */
         ReleaseSourceResponse: {
-            exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Id */
+            id: number;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Plan Id */
+            plan_id: number;
+            /** Provider */
+            provider: string;
+            /** Provider Title */
+            provider_title: string | null;
+            /** Provider Volume Id */
+            provider_volume_id: string;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * ReleaseSourceUpdate
@@ -11393,9 +12292,20 @@ export interface components {
             title: string;
             visibility?: string;
         };
+        /**
+         * ReplaceIdentityRequest
+         * @description Request to replace the current confirmed identity with a new one.
+         */
         ReplaceIdentityRequest: {
-            /** Format: int32 */
+            /**
+             * Comicvine Issue Id
+             * @description New ComicVine issue ID to confirm
+             */
             comicvine_issue_id: number;
+            /**
+             * Reason
+             * @description Optional reason for replacement
+             */
             reason?: string | null;
         };
         /**
@@ -11637,6 +12547,7 @@ export interface components {
              */
             series_name: string;
         };
+        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
         SeriesImportStatusResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
@@ -11920,19 +12831,31 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /** @description Canonical bandwidth state; invalid stored values normalize to `null`. */
+        /**
+         * SessionBandwidthState
+         * @description Canonical ephemeral bandwidth state for the active reading session.
+         *
+         *     Every field is always present but nullable so legacy sessions that predate
+         *     bandwidth tracking serialize to a stable, safe shape instead of a missing
+         *     or partially shaped object. This is the single canonical source consumed by
+         *     later weighting and UI work.
+         */
         SessionBandwidthState: {
-            active_bandwidth?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_bandwidth?: string | null;
-            source?: string | null;
+            /** Active Bandwidth */
+            active_bandwidth: ("light" | "balanced" | "deep") | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Mode Version */
+            mode_version: string | null;
+            /** Predicted Bandwidth */
+            predicted_bandwidth: ("light" | "balanced" | "deep") | null;
+            /** Source */
+            source: ("inferred" | "manual" | "snooze" | "quiz") | null;
         };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
             active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["SessionBandwidthState"];
+            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
             correction?: unknown;
             /** Format: int32 */
             current_die: number;
@@ -11940,7 +12863,7 @@ export interface components {
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["SessionIntentState"];
+            intent?: null | components["schemas"]["NativeSessionIntentState"];
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -12001,14 +12924,26 @@ export interface components {
             /** Sessions */
             sessions: components["schemas"]["SessionListItem"][];
         };
-        /** @description Canonical intent state; invalid stored values normalize to `null`. */
+        /**
+         * SessionIntentState
+         * @description Canonical ephemeral reading-intent state for the active reading session.
+         *
+         *     Symmetric to :class:`SessionBandwidthState`. Every field is always present
+         *     but nullable so legacy sessions that predate intent tracking serialize to a
+         *     stable, safe shape instead of a missing or partially shaped object. A fully
+         *     null object means the session defaults to the balanced intent.
+         */
         SessionIntentState: {
-            active_intent?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_intent?: string | null;
-            source?: string | null;
+            /** Active Intent */
+            active_intent: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Mode Version */
+            mode_version: string | null;
+            /** Predicted Intent */
+            predicted_intent: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
+            /** Source */
+            source: ("inferred" | "manual" | "snooze" | "quiz") | null;
         };
         /**
          * SessionListItem
@@ -12284,15 +13219,20 @@ export interface components {
          * @enum {string}
          */
         SourceBackedDecision: "include" | "exclude";
+        /**
+         * SourceSyncFailure
+         * @description One source that could not be evaluated during a sync run.
+         */
         SourceSyncFailure: {
+            /** Error */
             error: string;
-            /** Format: int32 */
+            /** Plan Id */
             plan_id: number;
-            /** Format: int32 */
+            /** Source Id */
             source_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
-            /** Format: int32 */
+            /** Volume Id */
             volume_id: number;
         };
         StartupMetricsResponse: {
@@ -12311,67 +13251,112 @@ export interface components {
             /** Format: int32 */
             total_related_count?: number | null;
         };
+        /**
+         * SyncReport
+         * @description Structured per-run counters for observability.
+         */
         SyncReport: {
-            /** Format: int64 */
+            /** Checked Sources */
             checked_sources: number;
-            /** Format: int64 */
+            /** Conflicts */
             conflicts: number;
-            /** Format: int64 */
+            /** Created Issues */
             created_issues: number;
-            /** Format: int64 */
+            /** Enabled Sources */
             enabled_sources: number;
-            /** Format: int64 */
-            excluded_issues?: number;
-            /** Format: int64 */
-            excluded_sources?: number;
-            /** Format: int64 */
+            /**
+             * Excluded Issues
+             * @default 0
+             */
+            excluded_issues: number;
+            /**
+             * Excluded Sources
+             * @default 0
+             */
+            excluded_sources: number;
+            /** Failed Sources */
             failed_sources: number;
+            /** Failures */
             failures: components["schemas"]["SourceSyncFailure"][];
-            /** Format: int64 */
+            /** Future Skips */
             future_skips: number;
-            /** Format: int64 */
+            /** Issue Failures */
             issue_failures: number;
-            /** Format: int64 */
+            /** Issues Checked */
             issues_checked: number;
-            /** Format: int64 */
+            /** Reused Issues */
             reused_issues: number;
-            /** Format: int64 */
-            skipped_sources?: number;
-            /** Format: int64 */
+            /**
+             * Skipped Sources
+             * @default 0
+             */
+            skipped_sources: number;
+            /** Successful Sources */
             successful_sources: number;
-            /** Format: int64 */
+            /** Total Sources */
             total_sources: number;
-            /** Format: int64 */
+            /** Unknown Date Skips */
             unknown_date_skips: number;
         };
+        /**
+         * SyncRequest
+         * @description Request one release-source sync run for the authenticated user.
+         */
         SyncRequest: {
-            /** Format: date-time */
+            /**
+             * As Of
+             * Format: date-time
+             * @description UTC timestamp defining the release boundary. Only issues whose ComicVine store_date is on or before this instant are adopted.
+             */
             as_of: string;
-            refresh?: boolean;
+            /**
+             * Refresh
+             * @description Force live provider requests instead of reading the ComicVine cache.
+             * @default true
+             */
+            refresh: boolean;
         };
+        /**
+         * SyncResponse
+         * @description Response of a completed release-source sync run.
+         */
         SyncResponse: {
+            /** Message */
             message: string;
             result: components["schemas"]["SyncReport"];
+            /** Success */
             success: boolean;
         };
+        /**
+         * SyncStatusResponse
+         * @description Sync state for every release source owned by the authenticated user.
+         */
         SyncStatusResponse: {
-            /** Format: int64 */
+            /** Enabled Sources */
             enabled_sources: number;
+            /** Sources */
             sources: components["schemas"]["SyncStatusSource"][];
-            /** Format: int64 */
+            /** Total Sources */
             total_sources: number;
         };
+        /**
+         * SyncStatusSource
+         * @description One release source's persisted sync state.
+         */
         SyncStatusSource: {
+            /** Enabled */
             enabled: boolean;
-            /** Format: int32 */
+            /** External Identity Id */
             external_identity_id: number;
-            /** Format: int32 */
+            /** Id */
             id: number;
-            last_synced_at?: string | null;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Provider Volume Id */
             provider_volume_id: string;
-            /** Format: int32 */
+            /** Reading Plan Id */
             reading_plan_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
         Tag: {
@@ -12633,7 +13618,7 @@ export interface components {
         /** @description One reader threads collection item. */
         ThreadListItem: {
             blocking_reasons: string[];
-            comicvine_mapping?: null | components["schemas"]["ComicVineMappingHealth"];
+            comicvine_mapping?: null | components["schemas"]["NativeComicVineMappingHealth"];
             created_at: string;
             format: string;
             /** Format: int32 */
@@ -12647,7 +13632,7 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
-            series_metadata?: null | components["schemas"]["QueueSeriesMetadata"];
+            series_metadata?: null | components["schemas"]["NativeQueueSeriesMetadata"];
             status: string;
             tags: components["schemas"]["ThreadTag"][];
             title: string;
@@ -15774,7 +16759,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
+                    "application/json": components["schemas"]["NativeCBLCatalogBrowseResponse"];
                 };
             };
             400: {
@@ -15782,7 +16767,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
             404: {
@@ -15790,7 +16775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
             422: {
@@ -15806,7 +16791,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
         };
@@ -15896,7 +16881,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLFolderListingResponse"];
+                    "application/json": components["schemas"]["NativeCBLFolderListingResponse"];
                 };
             };
             400: {
@@ -15904,7 +16889,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
             404: {
@@ -15912,7 +16897,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
             422: {
@@ -15928,7 +16913,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
         };
@@ -17120,7 +18105,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncStatusResponse"];
+                    "application/json": components["schemas"]["NativeSyncStatusResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -17148,7 +18133,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SyncRequest"];
+                "application/json": components["schemas"]["NativeSyncRequest"];
             };
         };
         responses: {
@@ -17158,7 +18143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncResponse"];
+                    "application/json": components["schemas"]["NativeSyncResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -17290,7 +18275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                    "application/json": components["schemas"]["NativeReleaseSourceResponse"];
                 };
             };
             /** @description Invalid release writer credential */
@@ -18434,6 +19419,70 @@ export interface operations {
             };
         };
     };
+    update_thread_api_v1_threads__thread_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_thread_api_v1_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_thread_connected_threads_api_v1_threads__thread_id__connected_get: {
         parameters: {
             query?: never;
@@ -18677,6 +19726,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    create_issues_api_v1_threads__thread_id__issues_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCreateRange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -19739,7 +20823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19776,7 +20860,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19807,7 +20891,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfirmIdentityRequest"];
+                "application/json": components["schemas"]["NativeConfirmIdentityRequest"];
             };
         };
         responses: {
@@ -19817,7 +20901,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19848,7 +20932,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReplaceIdentityRequest"];
+                "application/json": components["schemas"]["NativeReplaceIdentityRequest"];
             };
         };
         responses: {
@@ -19858,7 +20942,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                    "application/json": components["schemas"]["NativeIssueIdentityResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19889,7 +20973,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MetadataCorrectionRequest"];
+                "application/json": components["schemas"]["NativeMetadataCorrectionRequest"];
             };
         };
         responses: {
@@ -19899,7 +20983,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19936,7 +21020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -19973,7 +21057,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetadataRefreshResponse"];
+                    "application/json": components["schemas"]["NativeMetadataRefreshResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20004,7 +21088,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MetadataCorrectionRevertRequest"];
+                "application/json": components["schemas"]["NativeMetadataCorrectionRevertRequest"];
             };
         };
         responses: {
@@ -20014,7 +21098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                    "application/json": components["schemas"]["NativeMetadataCorrectionsResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20042,7 +21126,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportIssueRequest"];
+                "application/json": components["schemas"]["NativeImportIssueRequest"];
             };
         };
         responses: {
@@ -20052,7 +21136,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportIssueResponse"];
+                    "application/json": components["schemas"]["NativeImportIssueResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20096,7 +21180,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComicVineResolveResponse"];
+                    "application/json": components["schemas"]["NativeComicVineResolveResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20130,7 +21214,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
+                    "application/json": components["schemas"]["NativeComicVineSeriesSearchResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20193,7 +21277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComicVineSeriesIssuesResponse"];
+                    "application/json": components["schemas"]["NativeComicVineSeriesIssuesResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20214,7 +21298,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportSeriesRequest"];
+                "application/json": components["schemas"]["NativeImportSeriesRequest"];
             };
         };
         responses: {
@@ -20224,7 +21308,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportSeriesResponse"];
+                    "application/json": components["schemas"]["NativeImportSeriesResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20813,7 +21897,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
+                "application/json": components["schemas"]["NativeReadingBoundaryBatchRequest"];
             };
         };
         responses: {
@@ -21696,7 +22780,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueListResponse"];
+                    "application/json": components["schemas"]["NativeIssueListResponse"];
                 };
             };
             /** @description Invalid issue range or no new issues */
