@@ -6,15 +6,237 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 41,
-    "native_rust": 41,
+    "total_live_operations": 57,
+    "native_rust": 57,
     "python_fastapi": 0,
-    "native_rust_status": 41,
+    "native_rust_status": 57,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
   },
   "operations": [
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/adoption-commit",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/anomalies",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/canonical/{comicvine_issue_id}",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/browse",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl-sources/compare",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/folders",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reconciliation",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/conflicts",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/issue-identity/consolidate",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/report",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
     {
       "method": "GET",
       "path": "/api/v2/analytics/metrics",
@@ -989,17 +1211,17 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 126,
-      "v1_shadowed_by_rust": 1,
-      "v1_live_python": 115,
+      "v1_total": 117,
+      "v1_shadowed_by_rust": 2,
+      "v1_live_python": 105,
       "v1_orphaned": 7,
       "unversioned_total": 20,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 17,
       "unversioned_orphaned": 2,
-      "total_python_surface": 146,
-      "total_shadowed_by_rust": 1,
-      "total_live_python": 132,
+      "total_python_surface": 137,
+      "total_shadowed_by_rust": 2,
+      "total_live_python": 122,
       "total_orphaned": 9
     },
     "catch_all": {
@@ -1027,32 +1249,6 @@
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/preview",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/cbl/{list_id}/adoption-commit",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts"
-        ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
@@ -1789,90 +1985,6 @@
         "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/browse",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issue-identity/cbl-sources/compare",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/folders",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "POST",
         "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
         "runtime": "python-fastapi",
@@ -1882,8 +1994,8 @@
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1903,20 +2015,6 @@
       {
         "method": "POST",
         "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,

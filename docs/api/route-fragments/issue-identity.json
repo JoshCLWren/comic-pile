@@ -1,0 +1,237 @@
+{
+  "family": "issue-identity",
+  "owned_path_patterns": [
+    "^/api/v1/cbl/[^/]+/adoption-commit$",
+    "^/api/v1/cbl/[^/]+/reading-plans/[^/]+/adoption-commit$",
+    "^/api/v1/issue-identity/(?:anomalies|canonical|conflicts|consolidate|report|cbl-sources|reading-lists)(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": 4843
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/adoption-commit",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/cbl/[^/]+/adoption-commit$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/cbl/[^/]+/reading-plans/[^/]+/adoption-commit$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/anomalies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/anomalies$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/canonical/{comicvine_issue_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/canonical/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/browse",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources/browse$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources/by-comicvine-issue/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl-sources/compare",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources/compare$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/folders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources/folders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl-sources/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl/[^/]+/adoption-plan$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reconciliation",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/cbl/[^/]+/reconciliation$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/conflicts",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/conflicts$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/consolidate",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/consolidate$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/reading-lists/[0-9]+/cbl-candidates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/report",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue-identity/report$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    }
+  ]
+}
