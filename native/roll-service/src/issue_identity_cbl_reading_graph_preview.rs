@@ -132,7 +132,11 @@ fn validate_request(request: &ReadingGraphPreviewRequest) -> Result<(), Response
         )
             .into_response());
     }
-    if request.included_positions.iter().any(|position| *position < 1) {
+    if request
+        .included_positions
+        .iter()
+        .any(|position| *position < 1)
+    {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({
@@ -202,7 +206,9 @@ pub async fn preview_cbl_reading_graph_handler(
     Json(request): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, Response> {
     validate_request(&request)?;
-    let connection = db::checkout(&state).await.map_err(|error| ApiError::into_response(db::query_error(error)))?;
+    let connection = db::checkout(&state)
+        .await
+        .map_err(ApiError::into_response)?;
 
     let list_row = connection
         .query_opt(
@@ -312,7 +318,9 @@ pub async fn preview_cbl_reading_graph_handler(
             .await
             .map_err(|error| ApiError::into_response(db::query_error(error)))?
         {
-            owned_by_external.entry(row.get(0)).or_insert_with(|| row.get::<_, i64>(1));
+            owned_by_external
+                .entry(row.get(0))
+                .or_insert_with(|| row.get::<_, i64>(1));
         }
     }
 
@@ -342,19 +350,21 @@ pub async fn preview_cbl_reading_graph_handler(
         } else {
             "waits"
         };
-        let index = *by_volume.entry(comicvine_volume_id.clone()).or_insert_with(|| {
-            series_nodes.push(ReadingGraphSeriesNode {
-                comicvine_volume_id: comicvine_volume_id.clone(),
-                series_name: series_name.clone(),
-                year: volume_year,
-                state: state.to_string(),
-                unread_count: 0,
-                rollable_count: 0,
-                waiting_count: 0,
-                waits_for_issue_ids: Vec::new(),
+        let index = *by_volume
+            .entry(comicvine_volume_id.clone())
+            .or_insert_with(|| {
+                series_nodes.push(ReadingGraphSeriesNode {
+                    comicvine_volume_id: comicvine_volume_id.clone(),
+                    series_name: series_name.clone(),
+                    year: volume_year,
+                    state: state.to_string(),
+                    unread_count: 0,
+                    rollable_count: 0,
+                    waiting_count: 0,
+                    waits_for_issue_ids: Vec::new(),
+                });
+                series_nodes.len() - 1
             });
-            series_nodes.len() - 1
-        });
         let node = &mut series_nodes[index];
         node.unread_count += 1;
         if owned_issue_id.is_some() {
@@ -374,9 +384,11 @@ pub async fn preview_cbl_reading_graph_handler(
         });
     }
 
-    if request.overlap_choices.iter().any(|choice| {
-        !matches!(choice.choice.as_str(), "protect_order" | "continue_series")
-    }) {
+    if request
+        .overlap_choices
+        .iter()
+        .any(|choice| !matches!(choice.choice.as_str(), "protect_order" | "continue_series"))
+    {
         return Err(structured_error(
             StatusCode::UNPROCESSABLE_ENTITY,
             "unknown_overlap_choice",
@@ -432,7 +444,8 @@ mod tests {
 
     #[test]
     fn structured_error_uses_python_detail_shape() {
-        let response = structured_error(StatusCode::NOT_FOUND, "cbl_source_not_found", "gone".into());
+        let response =
+            structured_error(StatusCode::NOT_FOUND, "cbl_source_not_found", "gone".into());
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
@@ -451,8 +464,15 @@ mod tests {
         };
         let value = serde_json::to_value(&preview).expect("serializes");
         for key in [
-            "source_list_id", "content_hash", "revision_sha", "series", "overlaps",
-            "issues", "rollable_issue_ids", "waiting_issue_ids", "cycle_errors",
+            "source_list_id",
+            "content_hash",
+            "revision_sha",
+            "series",
+            "overlaps",
+            "issues",
+            "rollable_issue_ids",
+            "waiting_issue_ids",
+            "cycle_errors",
         ] {
             assert!(value.get(key).is_some(), "missing wire field {key}");
         }

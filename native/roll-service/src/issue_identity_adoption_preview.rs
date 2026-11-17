@@ -101,7 +101,10 @@ fn group_id(entry: &SourceEntry, comicvine_series_id: Option<&str>) -> String {
         "{}::{}::{}",
         entry.series_name,
         entry.volume_year.map(|v| v.to_string()).unwrap_or_default(),
-        entry.publication_year.map(|v| v.to_string()).unwrap_or_default()
+        entry
+            .publication_year
+            .map(|v| v.to_string())
+            .unwrap_or_default()
     )
 }
 
@@ -225,7 +228,9 @@ pub async fn api_cbl_adoption_preview_handler(
             .await
             .map_err(db::query_error)?
         {
-            owned_by_external_id.entry(row.get(0)).or_insert_with(|| row.get::<_, i64>(1));
+            owned_by_external_id
+                .entry(row.get(0))
+                .or_insert_with(|| row.get::<_, i64>(1));
         }
     }
 
@@ -275,8 +280,8 @@ pub async fn api_cbl_adoption_preview_handler(
         } else {
             ("ambiguous_unresolved", "unresolved")
         };
-        let adopted = adoption_decision == "included_existing"
-            || adoption_decision == "would_create_missing";
+        let adopted =
+            adoption_decision == "included_existing" || adoption_decision == "would_create_missing";
         if adopted {
             final_order.push(entry.position);
             if resolved_issue_id.is_some() {
@@ -309,7 +314,7 @@ pub async fn api_cbl_adoption_preview_handler(
             adoption_decision: adoption_decision.to_string(),
             adopted,
             comicvine_issue_id,
-            comicvine_series_id,
+            comicvine_series_id: comicvine_series_id.clone(),
             series_provider: series_info.map(|(provider, _)| provider.clone()),
             series_external_id: comicvine_series_id.clone(),
             resolved_issue_id,
@@ -403,8 +408,14 @@ mod tests {
             },
         };
         let value = serde_json::to_value(&response).expect("serializes");
-        assert_eq!(value.get("total_positions").and_then(Value::as_i64), Some(0));
+        assert_eq!(
+            value.get("total_positions").and_then(Value::as_i64),
+            Some(0)
+        );
         assert!(value.get("entries").and_then(Value::as_array).is_some());
-        assert!(value.get("source").and_then(|s| s.get("source_list_id")).is_some());
+        assert!(value
+            .get("source")
+            .and_then(|s| s.get("source_list_id"))
+            .is_some());
     }
 }

@@ -128,7 +128,12 @@ fn parse_nodes(nodes: &Value, plan_id: i64) -> Result<Vec<Node>, Response> {
 }
 
 /// Apply Python's deterministic flattening policy.
-fn flatten(nodes: Vec<Node>, ordering_mode: &str, lanes: &Value, plan_id: i64) -> Result<(Vec<Node>, Vec<String>), Response> {
+fn flatten(
+    nodes: Vec<Node>,
+    ordering_mode: &str,
+    lanes: &Value,
+    plan_id: i64,
+) -> Result<(Vec<Node>, Vec<String>), Response> {
     let lane_ids: Vec<String> = lanes
         .as_array()
         .map(|items| {
@@ -145,7 +150,10 @@ fn flatten(nodes: Vec<Node>, ordering_mode: &str, lanes: &Value, plan_id: i64) -
                 .iter()
                 .filter_map(|lane| {
                     let id = lane.get("id").and_then(Value::as_str)?;
-                    let order = lane.get("order").and_then(Value::as_i64).unwrap_or_default();
+                    let order = lane
+                        .get("order")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default();
                     Some((id.to_string(), order))
                 })
                 .collect()
@@ -220,7 +228,9 @@ pub async fn preview_plan_projection_handler(
     if request.reading_order_id < 1 {
         return Err(invalid_request());
     }
-    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state)
+        .await
+        .map_err(ApiError::into_response)?;
 
     let plan_row = connection
         .query_opt(
@@ -244,7 +254,10 @@ pub async fn preview_plan_projection_handler(
         .await
         .map_err(|error| ApiError::into_response(db::query_error(error)))?
         .ok_or_else(|| {
-            not_found(format!("Reading order {} not found", request.reading_order_id))
+            not_found(format!(
+                "Reading order {} not found",
+                request.reading_order_id
+            ))
         })?;
     let reading_order_name: String = order_row.get(0);
 
@@ -300,7 +313,10 @@ pub async fn preview_plan_projection_handler(
             continue;
         }
         if thread_titles.contains_key(&node.ref_id) {
-            thread_positions.entry(node.ref_id).or_default().push(node.position);
+            thread_positions
+                .entry(node.ref_id)
+                .or_default()
+                .push(node.position);
             if !seen.insert(node.ref_id) {
                 let mut positions = thread_positions[&node.ref_id].clone();
                 positions.sort_unstable();
@@ -376,8 +392,7 @@ mod tests {
     #[test]
     fn request_requires_positive_reading_order_id() {
         let ok: ReadingOrderProjectionRequest =
-            serde_json::from_value(serde_json::json!({ "reading_order_id": 3 }))
-                .expect("valid");
+            serde_json::from_value(serde_json::json!({ "reading_order_id": 3 })).expect("valid");
         assert_eq!(ok.reading_order_id, 3);
         let bad: ReadingOrderProjectionRequest =
             serde_json::from_value(serde_json::json!({ "reading_order_id": 0 }))
@@ -410,7 +425,8 @@ mod tests {
             {"id":"n1","node_type":"thread","ref_id":10,"lane_id":"ghost","position":0}
         ]);
         let parsed = parse_nodes(&nodes, 5).expect("nodes");
-        let (_, dropped) = flatten(parsed, "informational", &serde_json::json!([]), 5).expect("flatten");
+        let (_, dropped) =
+            flatten(parsed, "informational", &serde_json::json!([]), 5).expect("flatten");
         assert_eq!(dropped, vec!["n1"]);
     }
 

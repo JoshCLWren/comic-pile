@@ -124,7 +124,10 @@ fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), Respons
     ) {
         items.push(validation_item(
             "scope_mode",
-            &format!("Value error, unsupported scope_mode: {}", request.scope_mode),
+            &format!(
+                "Value error, unsupported scope_mode: {}",
+                request.scope_mode
+            ),
             Value::String(request.scope_mode.clone()),
             "value_error",
         ));
@@ -184,7 +187,8 @@ fn issue_preview_token(
         "issued_at": issued_at,
         "expires_at": expires_at,
     });
-    let signature = catalog_commit::hmac_sha256_hex(secret, &catalog_commit::canonical_json(&payload))?;
+    let signature =
+        catalog_commit::hmac_sha256_hex(secret, &catalog_commit::canonical_json(&payload))?;
     Ok(serde_json::json!({ "payload": payload, "signature": signature }).to_string())
 }
 
@@ -215,7 +219,9 @@ pub async fn preview_series_mapping_handler(
     Json(request): Json<SeriesMappingPreviewRequest>,
 ) -> Result<Json<SeriesMappingPreviewResponse>, Response> {
     validate_request(&request)?;
-    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state)
+        .await
+        .map_err(ApiError::into_response)?;
     let plan = catalog_commit::build_plan_for_commit(
         &connection,
         user.id(),
@@ -239,15 +245,17 @@ pub async fn preview_series_mapping_handler(
         None
     };
     let preview_token = if scope_available {
-        Some(issue_preview_token(
-            &state.preview_token_secret,
-            user.id(),
-            &request,
-            &plan,
-            issued_at,
-            expires_at.unwrap_or(issued_at),
+        Some(
+            issue_preview_token(
+                &state.preview_token_secret,
+                user.id(),
+                &request,
+                &plan,
+                issued_at,
+                expires_at.unwrap_or(issued_at),
+            )
+            .map_err(ApiError::into_response)?,
         )
-        .map_err(ApiError::into_response)?)
     } else {
         None
     };
@@ -278,7 +286,10 @@ pub async fn preview_series_mapping_handler(
                 .and_then(Value::as_str)
                 .map(str::to_string),
         },
-        provider_series: plan.get("provider_series").cloned().filter(|v| !v.is_null()),
+        provider_series: plan
+            .get("provider_series")
+            .cloned()
+            .filter(|v| !v.is_null()),
         counts: SeriesMappingPreviewCounts {
             already_confirmed: count(&plan, "already_confirmed"),
             safe_exact_match: count(&plan, "safe_exact_match"),
