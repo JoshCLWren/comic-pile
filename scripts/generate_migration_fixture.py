@@ -226,8 +226,8 @@ def _dependency_rows() -> list[dict[str, Any]]:
             "target_issue_id": 920002,
             "created_at": now,
             "note": "synthetic-prerequisite",
-            "origin": "manual",
-            "classification": "needs_review",
+            "origin": "reader",
+            "classification": "A",
             "provenance": "synthetic",
         },
         {
@@ -236,9 +236,9 @@ def _dependency_rows() -> list[dict[str, Any]]:
             "target_issue_id": 920004,
             "created_at": now,
             "note": "cbl-order:1700000000000",
-            "origin": "cbl_order",
+            "origin": None,
             "classification": None,
-            "provenance": "synthetic",
+            "provenance": None,
         },
     ]
 
@@ -250,7 +250,7 @@ def _continuity_plan_rows() -> list[dict[str, Any]]:
             "id": 940001,
             "user_id": 900001,
             "name": "Rehearsal Alpha Plan",
-            "ordering_mode": "strict",
+            "ordering_mode": "strict_sequential",
             "nodes_json": [{"issue_id": 920002, "lane_id": "main"}],
             "lanes_json": {"main": {"prerequisite": "920001"}},
             "created_at": now,
