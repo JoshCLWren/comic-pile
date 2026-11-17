@@ -51,9 +51,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   // The finished shelf is fetched separately from the active Queue response.
   vi.mocked(useCompletedThreads).mockReturnValue({
+    // SAFETY: completed is a deliberately minimal ThreadListItem fixture for this test.
     threads: [completed] as never,
     hasNextPage: false, isLoadingMore: false, isError: false,
     loadMore: vi.fn(), retry: vi.fn(),
+    // SAFETY: The mocked collection only needs its rendered fields and paging callbacks.
   } as never)
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
