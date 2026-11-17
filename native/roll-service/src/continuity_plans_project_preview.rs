@@ -220,7 +220,7 @@ pub async fn preview_plan_projection_handler(
     if request.reading_order_id < 1 {
         return Err(invalid_request());
     }
-    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
+    let connection = db::checkout(&state).await.map_err(|error| ApiError::into_response(db::query_error(error)))?;
 
     let plan_row = connection
         .query_opt(
@@ -229,7 +229,7 @@ pub async fn preview_plan_projection_handler(
             &[&plan_id, &user.id()],
         )
         .await
-        .map_err(ApiError::into_response)?
+        .map_err(|error| ApiError::into_response(db::query_error(error)))?
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
     let plan_name: String = plan_row.get(0);
     let ordering_mode: String = plan_row.get(1);
@@ -242,7 +242,7 @@ pub async fn preview_plan_projection_handler(
             &[&request.reading_order_id, &user.id()],
         )
         .await
-        .map_err(ApiError::into_response)?
+        .map_err(|error| ApiError::into_response(db::query_error(error)))?
         .ok_or_else(|| {
             not_found(format!("Reading order {} not found", request.reading_order_id))
         })?;
@@ -264,7 +264,7 @@ pub async fn preview_plan_projection_handler(
                 &[&user.id(), &thread_ids],
             )
             .await
-            .map_err(ApiError::into_response)?;
+            .map_err(|error| ApiError::into_response(db::query_error(error)))?;
         for row in rows {
             thread_titles.insert(row.get(0), row.get(1));
         }
@@ -276,7 +276,7 @@ pub async fn preview_plan_projection_handler(
             &[&request.reading_order_id],
         )
         .await
-        .map_err(ApiError::into_response)?;
+        .map_err(|error| ApiError::into_response(db::query_error(error)))?;
     let mut existing_positions: HashMap<i64, i64> = HashMap::new();
     for row in &existing_rows {
         existing_positions.insert(row.get(0), row.get(1));
