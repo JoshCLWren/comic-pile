@@ -33,23 +33,19 @@
 //! * Uses owner-scoped SQL queries similar to other native Rust handlers
 //! * Preserves 404 messages from Python for plan/thread ownership checks
 //! * Mirrors Python 409 conflict responses with same message structure
-//! * Uses advisory locking via QUEUE_LOCK_NAMESPACE for write transactions
+//! * Note: the Python continuity-graph advisory lock is not taken yet
 
 #![forbid(unsafe_code)]
 
-use crate::{auth::AuthenticatedUser, db, issue_service, option_inputs, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
-use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_postgres::Transaction;
 use utoipa::ToSchema;
-
-const QUEUE_LOCK_NAMESPACE: i32 = 699001;
 
 // ============================================================================
 // Continuity Plan request/response schemas (mirrors app/schemas/continuity_plan.py)
@@ -295,11 +291,6 @@ pub struct ReadingOrderAdoptRequest {
     pub lane_id: Option<String>,
     #[serde(rename = "lane_name")]
     pub lane_name: Option<String>,
-}
-
-// Read timestamp as RFC3339
-fn format_timestamp(ts: chrono::DateTime<Utc>) -> String {
-    ts.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 // ============================================================================
@@ -1195,9 +1186,7 @@ pub async fn link_plan_dependency_edge(
     let dep_row = tx
         .query_opt(
             r#"
-            SELECT d.id, d.source_issue_id, d.target_issue_id,
-                   si.thread_id, st.title as source_title, si.issue_number,
-                   ti.thread_id, tt.title as target_title, ti.issue_number
+            SELECT d.source_issue_id, d.target_issue_id
             FROM dependencies d
             JOIN issues si ON si.id = d.source_issue_id
             JOIN threads st ON st.id = si.thread_id
@@ -1211,14 +1200,8 @@ pub async fn link_plan_dependency_edge(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found("Dependency not found or not owned"))?;
 
-    let source_issue_id: i32 = dep_row.get(1);
-    let target_issue_id: i32 = dep_row.get(2);
-    let source_thread_id: i32 = dep_row.get(3);
-    let source_title: String = dep_row.get(4);
-    let source_issue_number: String = dep_row.get(5);
-    let target_thread_id: i32 = dep_row.get(6);
-    let target_title: String = dep_row.get(7);
-    let target_issue_number: String = dep_row.get(8);
+    let source_issue_id: i32 = dep_row.get(0);
+    let target_issue_id: i32 = dep_row.get(1);
 
     // Check if already linked
     let existing = tx
@@ -1365,29 +1348,27 @@ pub async fn confirm_plan_projection(
         .map_err(db::query_error)?;
 
     // Check plan ownership
-    let plan = tx
-        .query_opt(
-            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    tx.query_opt(
+        "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+        &[&plan_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
     // Check reading order ownership
-    let order = tx
-        .query_opt(
-            "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2",
-            &[&payload.reading_order_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| {
-            not_found(format!(
-                "Reading order {} not found",
-                payload.reading_order_id
-            ))
-        })?;
+    tx.query_opt(
+        "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2",
+        &[&payload.reading_order_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| {
+        not_found(format!(
+            "Reading order {} not found",
+            payload.reading_order_id
+        ))
+    })?;
 
     // Get plan nodes
     let plan_rows = tx
@@ -1399,11 +1380,6 @@ pub async fn confirm_plan_projection(
         .map_err(db::query_error)?;
 
     let nodes: Vec<serde_json::Value> = plan_rows.get(0);
-    let plan_ordering_mode: String = if nodes.is_empty() {
-        "informational".to_string()
-    } else {
-        "strict_sequential".to_string() // Simplified for now
-    };
 
     // Extract thread nodes
     let mut thread_nodes: Vec<(i32, i32, String)> = Vec::new(); // (position, thread_id, node_id)
@@ -1474,28 +1450,11 @@ pub async fn confirm_plan_projection(
     .await
     .map_err(db::query_error)?;
 
-    // Get thread titles
-    let mut thread_titles: std::collections::HashMap<i32, String> =
-        std::collections::HashMap::new();
-    for (_, thread_id, _) in &thread_nodes {
-        let title_row = tx
-            .query_opt(
-                "SELECT title FROM threads WHERE id = $1 AND user_id = $2",
-                &[thread_id, &user.id()],
-            )
-            .await
-            .map_err(db::query_error)?;
-        if let Some(row) = title_row {
-            thread_titles.insert(*thread_id, row.get(0));
-        }
-    }
+    let mut added: i32 = 0;
+    let mut updated: i32 = 0;
+    let mut kept: i32 = 0;
 
-    let mut added = 0;
-    let mut updated = 0;
-    let mut kept = 0;
-
-    for (pos, thread_id, _node_id) in thread_nodes.into_iter().map(|(p, t, n)| (p, t, n)) {
-        let thread_title = thread_titles.get(&thread_id).cloned().unwrap_or_default();
+    for (pos, thread_id, _node_id) in thread_nodes {
         let source = if existing_items
             .iter()
             .any(|r| r.get::<_, i32>(0) == thread_id)
@@ -1541,7 +1500,7 @@ pub async fn confirm_plan_projection(
         added_count: added,
         updated_count: updated,
         kept_count: kept,
-        total_positions: (added + updated + kept) as i32,
+        total_positions: added + updated + kept,
     }))
 }
 
@@ -1620,7 +1579,6 @@ pub async fn create_release_source(
             )
         })?;
 
-    let identity_id: i32 = mapping.get(0);
     let provider: String = mapping.get(1);
     let entity_type: String = mapping.get(2);
     let provider_volume_id: String = mapping.get(3);
