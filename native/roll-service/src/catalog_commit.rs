@@ -2653,7 +2653,7 @@ mod tests {
 
     #[tokio::test]
     async fn bootstrap_clean_preview_commits_replays_and_stays_confirmed() {
-        let state = crate::test_support::test_state(1)
+        let state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
         let _db = crate::test_support::reset_for_test(&state).await;
@@ -2742,7 +2742,7 @@ mod tests {
 
     #[tokio::test]
     async fn bootstrap_commit_rejects_unapproved_rows_with_zero_writes() {
-        let state = crate::test_support::test_state(1)
+        let state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
         let _db = crate::test_support::reset_for_test(&state).await;
