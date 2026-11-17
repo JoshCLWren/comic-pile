@@ -12,7 +12,7 @@
 //! Authentication, token-revocation state, the credential epoch and every
 //! activity projection are folded into one owner-scoped PostgreSQL statement.
 use crate::{
-    auth::{validate_folded_auth, FoldedAuthRow, VerifiedAccessClaims, FOLDED_AUTH_CTES},
+    auth::VerifiedAccessClaims,
     db,
     ApiError, AppState,
 };
@@ -20,6 +20,7 @@ use axum::{extract::State, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Handler-level query count for the activity read.
 pub static ACTIVITY_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
@@ -72,7 +73,7 @@ struct ActivityPayload {
     events: Vec<ActivityRawRow>,
     has_more: bool,
     last_id: Option<i32>,
-    last_timestamp: Option<String>,
+    last_ts_us: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,13 +114,19 @@ fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Resul
 
 /// Build the ISO 8601 timestamp with microsecond precision from separate fields.
 fn build_timestamp(sec: f64, us: Option<f64>) -> String {
-    let datetime: DateTime<Utc> = DateTime::from_timestamp(sec as i64, ((us.unwrap_or(0.0)) % 1.0 * 1_000_000.0) as i32)
+    let datetime: DateTime<Utc> = DateTime::from_timestamp(sec as i64, 0)
         .unwrap_or_else(|| DateTime::from_timestamp(sec as i64, 0).unwrap());
     // Include microseconds if present and non-zero
     match us {
         Some(us_val) if us_val > 0.0 => {
-            let us = (us_val % 1.0 * 1_000_000.0) as u32;
-            datetime.format(&format!("Y-%m-%dT%H:%M:%S.{us:06}Z")).to_string()
+            let us = us_val.fract() * 1_000_000.0;
+            if us > 0.0 {
+                let us_u32 = us as u32;
+                let iso = datetime.format("%Y-%m-%dT%H:%M:%S");
+                format!("{iso}.{us_u32:06}Z")
+            } else {
+                datetime.to_rfc3339()
+            }
         }
         _ => datetime.to_rfc3339(),
     }
@@ -133,7 +140,6 @@ fn build_timestamp(sec: f64, us: Option<f64>) -> String {
 /// The query includes:
 /// - Events from sessions owned by the user (via session_id join)
 /// - Sessionless events that have user_id directly (snoozes, ratings, etc.)
-/// - The most recent event per session that caused a rate/snooze action
 const ACTIVITY_SQL: &str = r#"
 WITH auth AS (
     SELECT u.id AS user_id,
@@ -149,8 +155,7 @@ me AS (
 page_events AS (
     SELECT e.id AS event_id,
            e.type AS event_type,
-           EXTRACT(EPOCH FROM e.timestamp) AS ts_sec,
-           EXTRACT(EPOCH FROM e.timestamp) * 1000000 AS ts_us,
+           e.timestamp AS event_timestamp,
            e.die AS die_before,
            e.die_after,
            e.rating,
@@ -169,8 +174,7 @@ SELECT jsonb_agg(jsonb_build_object(
     'events', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
         'event_id', event_id,
         'type', event_type,
-        'timestamp_sec', ts_sec,
-        'timestamp_us', ts_us,
+        'timestamp', to_char(event_timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.USZ'),
         'die_before', die_before,
         'die_after', die_after,
         'rating', rating,
@@ -180,8 +184,7 @@ SELECT jsonb_agg(jsonb_build_object(
     ) FILTER (WHERE event_id IS NOT NULL), '[]')) FROM page_events),
     'has_more', (SELECT COUNT(*) > $4 FROM page_events),
     'last_id', (SELECT event_id FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4),
-    'last_timestamp_sec', (SELECT ts_sec FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4),
-    'last_timestamp_us', (SELECT ts_us FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
+    'last_ts_us', (SELECT to_char(event_timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.USZ') FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
 )::text
 FROM page_events
 LIMIT 1;
@@ -216,11 +219,10 @@ pub async fn activity(
         .events
         .into_iter()
         .map(|row| {
-            let timestamp = build_timestamp(row.timestamp_sec, row.timestamp_us);
             ActivityEvent {
                 event_id: row.event_id,
                 event_type: row.event_type,
-                timestamp,
+                timestamp: row.timestamp_sec.to_string(),
                 die_before: row.die_before,
                 die_after: row.die_after,
                 rating: row.rating,
@@ -232,10 +234,7 @@ pub async fn activity(
         .collect();
 
     let next_page_token = if payload.has_more {
-        payload.last_timestamp_sec.zip(payload.last_id).map(|(ts, id)| {
-            let ts_us = payload.last_timestamp_us.unwrap_or(0.0);
-            format!("{},{}", ts_us, id)
-        })
+        payload.last_id.zip(Some(0)).map(|(id, _)| id.to_string())
     } else {
         None
     };
