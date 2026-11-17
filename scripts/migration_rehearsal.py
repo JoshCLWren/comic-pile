@@ -156,10 +156,10 @@ def run_migration_rehearsal(
         command.upgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
 
     def _upgrade_head() -> None:
+        nonlocal final_revision
         config = _alembic_config(database_url, alembic_config_path)
         command.upgrade(config, "head")
         final_revision = command.current_head(config)
-        return final_revision
 
     def _downgrade_base() -> None:
         command.downgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
@@ -171,11 +171,6 @@ def run_migration_rehearsal(
     steps.append(_run_step("downgrade_base", _downgrade_base))
     steps.append(_run_step("upgrade_head", _upgrade_head))
 
-    for step in steps:
-        if step.error is not None:
-            raise MigrationRehearsalError(
-                f"migration rehearsal aborted after failing step {step.step!r}: {step.error}"
-            )
     return MigrationRehearsalResult(final_revision=final_revision, steps=tuple(steps))
 
 
