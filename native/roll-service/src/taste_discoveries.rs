@@ -303,11 +303,11 @@ pub async fn list_taste_discoveries(
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
     let Query(query) =
         query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
-    let user = auth::authenticate_claims(&state, &claims).await?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
         return Err(ApiError::Unprocessable("Validation failed".to_string()));
     }
+    let user = auth::authenticate_claims(&state, &claims).await?;
 
     let now = Utc::now();
     let connection = db::checkout(&state).await?;
@@ -669,7 +669,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_returns_ranked_discoveries_and_records_prompting() {
-        let (state, user, _guard) = database_fixture().await;
+        let (state, _user, _guard) = database_fixture().await;
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
