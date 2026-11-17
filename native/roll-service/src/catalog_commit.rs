@@ -594,7 +594,16 @@ fn plan_state_digest(
         format!("basis={scope_basis}"),
     ];
     for row in rows {
-        let row_id = row.get("row_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        // Python binds the digest to `_preview_row_id(issue_id)` — always the
+        // `issue:` prefix, never the `roster:` inventory prefix — so recompute
+        // it here instead of trusting the row's display row_id.
+        let row_id = match row.get("issue_id") {
+            Some(Value::Null) | None => "issue:None".to_string(),
+            Some(v) => match v.as_i64() {
+                Some(id) => format!("issue:{id}"),
+                None => format!("issue:{}", v.as_str().unwrap_or("None")),
+            },
+        };
         let issue_number = row
             .get("issue_number")
             .and_then(|v| v.as_str())
