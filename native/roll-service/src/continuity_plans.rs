@@ -527,7 +527,8 @@ impl ContinuityPlanWrite {
                     node.id
                 )));
             }
-            if (node.checkpoint_target_ref_id.is_some() || !node.checkpoint_target_ref_ids.is_empty())
+            if (node.checkpoint_target_ref_id.is_some()
+                || !node.checkpoint_target_ref_ids.is_empty())
                 && !node.is_checkpoint
             {
                 return Err(unprocessable(format!(
@@ -549,8 +550,11 @@ impl ContinuityPlanWrite {
             }
         }
 
-        let nodes_by_id: HashMap<&str, &ContinuityPlanNode> =
-            self.nodes.iter().map(|node| (node.id.as_str(), node)).collect();
+        let nodes_by_id: HashMap<&str, &ContinuityPlanNode> = self
+            .nodes
+            .iter()
+            .map(|node| (node.id.as_str(), node))
+            .collect();
         for node in &self.nodes {
             if node.convergence_gate.is_empty() {
                 continue;
@@ -740,7 +744,10 @@ fn detect_plan_cycles(
 fn source_metadata_for_node(node: &ContinuityPlanNode) -> Option<serde_json::Value> {
     let mut map = serde_json::Map::new();
     if let Some(value) = &node.source_role {
-        map.insert("source_role".into(), serde_json::Value::String(value.clone()));
+        map.insert(
+            "source_role".into(),
+            serde_json::Value::String(value.clone()),
+        );
     }
     if let Some(value) = &node.source_confidence {
         map.insert(
@@ -1019,8 +1026,13 @@ fn checkpoint_edges(nodes: &[ContinuityPlanNode]) -> Vec<CompiledEdge> {
             }
             continue;
         }
-        let lane_nodes = by_lane.get(node.lane_id.as_str()).cloned().unwrap_or_default();
-        let index = lane_nodes.iter().position(|candidate| candidate.id == node.id);
+        let lane_nodes = by_lane
+            .get(node.lane_id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        let index = lane_nodes
+            .iter()
+            .position(|candidate| candidate.id == node.id);
         let Some(index) = index else { continue };
         if index + 1 >= lane_nodes.len() {
             continue;
@@ -1086,8 +1098,7 @@ async fn compile_plan_rules(
         .iter()
         .flat_map(|rule| rule.edge.pairs())
         .collect();
-    let old_identities: HashSet<&CompiledEdge> =
-        old_rules.iter().map(|rule| &rule.edge).collect();
+    let old_identities: HashSet<&CompiledEdge> = old_rules.iter().map(|rule| &rule.edge).collect();
 
     let unchanged_strict_save = ordering_mode == "strict_sequential"
         && incoming_ids == prior_membership
@@ -1813,10 +1824,7 @@ pub async fn update_continuity_plan(
                 .collect()
         })
         .unwrap_or_default();
-    if !membership_ids.is_empty()
-        && incoming_ids == json_ids
-        && incoming_ids != membership_ids
-    {
+    if !membership_ids.is_empty() && incoming_ids == json_ids && incoming_ids != membership_ids {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(domain_conflict(serde_json::json!({
             "code": "stale_plan_nodes",
@@ -2727,25 +2735,23 @@ pub async fn confirm_plan_projection(
             values
                 .iter()
                 .map(|value| ProjectNode {
-                    id: value.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    id: value
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     node_type: value
                         .get("node_type")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    ref_id: value
-                        .get("ref_id")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0) as i32,
+                    ref_id: value.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
                     lane_id: value
                         .get("lane_id")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    position: value
-                        .get("position")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0) as i32,
+                    position: value.get("position").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
                 })
                 .collect()
         })
@@ -2875,7 +2881,10 @@ pub async fn confirm_plan_projection(
             .or_default()
             .push(node.position);
         if seen_threads.contains(&node.ref_id) {
-            let mut positions = thread_positions.get(&node.ref_id).cloned().unwrap_or_default();
+            let mut positions = thread_positions
+                .get(&node.ref_id)
+                .cloned()
+                .unwrap_or_default();
             positions.sort_unstable();
             conflicts.push(serde_json::json!({
                 "code": "duplicate_thread",
@@ -3575,7 +3584,13 @@ mod tests {
         }
     }
 
-    fn node(id: &str, node_type: &str, ref_id: i32, lane_id: &str, position: i32) -> ContinuityPlanNode {
+    fn node(
+        id: &str,
+        node_type: &str,
+        ref_id: i32,
+        lane_id: &str,
+        position: i32,
+    ) -> ContinuityPlanNode {
         ContinuityPlanNode {
             id: id.to_string(),
             node_type: node_type.to_string(),
@@ -3599,7 +3614,11 @@ mod tests {
         }
     }
 
-    fn payload(ordering_mode: &str, lanes: Vec<ContinuityPlanLane>, nodes: Vec<ContinuityPlanNode>) -> ContinuityPlanWrite {
+    fn payload(
+        ordering_mode: &str,
+        lanes: Vec<ContinuityPlanLane>,
+        nodes: Vec<ContinuityPlanNode>,
+    ) -> ContinuityPlanWrite {
         ContinuityPlanWrite {
             name: "Plan".to_string(),
             ordering_mode: ordering_mode.to_string(),
@@ -3624,9 +3643,14 @@ mod tests {
         let write = payload(
             "informational",
             vec![lane("l1", 0)],
-            vec![node("n1", "issue", 1, "l1", 0), node("n2", "issue", 1, "l1", 1)],
+            vec![
+                node("n1", "issue", 1, "l1", 0),
+                node("n2", "issue", 1, "l1", 1),
+            ],
         );
-        let err = write.validate_structure().expect_err("duplicate issue must fail");
+        let err = write
+            .validate_structure()
+            .expect_err("duplicate issue must fail");
         assert!(format!("{err:?}").contains("an issue may appear at most once"));
     }
 
@@ -3645,7 +3669,10 @@ mod tests {
         let write = payload(
             "strict_sequential",
             vec![lane("l1", 0)],
-            vec![node("n1", "issue", 1, "l1", 0), node("n2", "issue", 2, "l1", 2)],
+            vec![
+                node("n1", "issue", 1, "l1", 0),
+                node("n2", "issue", 2, "l1", 2),
+            ],
         );
         let err = write.validate_structure().expect_err("gap must fail");
         assert!(format!("{err:?}").contains("contiguous starting at zero"));
@@ -3656,7 +3683,9 @@ mod tests {
         let mut checkpoint = node("n1", "thread", 1, "l1", 0);
         checkpoint.is_checkpoint = true;
         let write = payload("informational", vec![lane("l1", 0)], vec![checkpoint]);
-        let err = write.validate_structure().expect_err("checkpoint must fail");
+        let err = write
+            .validate_structure()
+            .expect_err("checkpoint must fail");
         assert!(format!("{err:?}").contains("only allowed on issue nodes"));
     }
 
@@ -3714,9 +3743,10 @@ mod tests {
             vec![lane("l1", 0)],
             vec![node("n1", "issue", 483801, "l1", 0), second],
         );
-        let (status, Json(created)) = create_continuity_plan(State(state.clone()), user, Json(write))
-            .await
-            .expect("create plan");
+        let (status, Json(created)) =
+            create_continuity_plan(State(state.clone()), user, Json(write))
+                .await
+                .expect("create plan");
         assert_eq!(status, StatusCode::CREATED);
 
         let conn = db::checkout(&state).await.expect("verify connection");
@@ -3751,13 +3781,10 @@ mod tests {
         assert!(edge.is_some(), "checkpoint must compile a canonical edge");
         drop(conn);
 
-        let status = delete_continuity_plan(
-            State(state.clone()),
-            user,
-            axum::extract::Path(created.id),
-        )
-        .await
-        .expect("delete plan");
+        let status =
+            delete_continuity_plan(State(state.clone()), user, axum::extract::Path(created.id))
+                .await
+                .expect("delete plan");
         assert_eq!(status, StatusCode::NO_CONTENT);
 
         let conn = db::checkout(&state).await.expect("verify connection 2");
@@ -3818,10 +3845,9 @@ mod tests {
             vec![lane("l1", 0)],
             vec![node("n1", "issue", 483801, "l1", 0)],
         );
-        let (_, Json(created)) =
-            create_continuity_plan(State(state.clone()), user, Json(write))
-                .await
-                .expect("create plan");
+        let (_, Json(created)) = create_continuity_plan(State(state.clone()), user, Json(write))
+            .await
+            .expect("create plan");
 
         let mut update = payload(
             "informational",
