@@ -33,12 +33,10 @@ from app.models.collection_exclusion import CollectionExclusion
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
+from app.models.custom_cbl_source_link import CustomCBLSourceLink
 from app.models.dependency import Dependency
 from app.models.issue import Issue
-from app.models.reading_plan_dependencies import ReadingPlanDependency
-from app.models.reading_plan_issues import ReadingPlanIssue
-from app.models.reading_plan_release_source import ReadingPlanReleaseSource
-from app.models.reading_plan_sources import ReadingPlanSource
+from app.models.reading_plan_membership import ReadingPlanDependency, ReadingPlanIssue, ReadingPlanSource
 from app.models.reading_session import ReadingSession
 from app.models.thread import Thread
 from app.models.user import User
