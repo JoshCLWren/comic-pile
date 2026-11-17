@@ -1492,14 +1492,20 @@ const ROSTER_PAGE_SIZE: usize = 100;
 const MAX_ROSTER_PAGES: usize = 10;
 
 async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
-    let fetch_page = |offset: usize| {
+    async fn fetch_page(
+        volume_id: i32,
+        key: &str,
+        offset: usize,
+    ) -> Result<Value, ProviderFailure> {
         let extra = format!(
             "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
              &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
         );
-        provider_response("issues", &extra, key)
-    };
-    let first = fetch_page(0).await.map_err(map_provider_failure)?;
+        provider_response("issues", &extra, key).await
+    }
+    let first = fetch_page(volume_id, key, 0)
+        .await
+        .map_err(map_provider_failure)?;
     let mut rows: Vec<Value> = first
         .get("results")
         .and_then(Value::as_array)
@@ -1509,7 +1515,9 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
     let mut offset = rows.len();
     while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
     {
-        let page = fetch_page(offset).await.map_err(map_provider_failure)?;
+        let page = fetch_page(volume_id, key, offset)
+            .await
+            .map_err(map_provider_failure)?;
         let page_rows: Vec<Value> = page
             .get("results")
             .and_then(Value::as_array)
