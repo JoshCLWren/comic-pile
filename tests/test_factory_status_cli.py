@@ -160,3 +160,58 @@ def test_old_dispatcher_page_does_not_claim_recent_cap():
     report = status.collect(fetch_factory([], dispatch, [], []), "org/repo", NOW)
     assert report["dispatch_capped"] is False
     assert "Dispatcher: 0 run(s)" in status.render(report)
+
+
+def test_repeated_failed_entries_outrank_old_checkpoint_merge():
+    old = (NOW - timedelta(days=2)).isoformat()
+    pr = {
+        "number": 5201, "user": {"login": "github-actions[bot]"},
+        "labels": [{"name": "factory"}], "created_at": old,
+        "merged_at": NOW.isoformat(),
+        "body": (
+            "<!-- factory-checkpoint-handoff:v1 run=123 -->\n"
+            "Model: example/catalog-model\nWorker: opencode-free-model-factory-11\n"
+        ),
+    }
+    failed = [
+        run(f"Factory worker {i}", "completed", conclusion="failure",
+            html_url=f"https://github.com/org/repo/actions/runs/{i}")
+        for i in range(status.FAILURE_ALERT_COUNT)
+    ]
+    report = status.collect(fetch_factory(failed, [], [pr], []), "org/repo", NOW)
+    assert report["verdict"] == "DEGRADED: REPEATED FAILED ENTRIES; CURRENT DELIVERY UNPROVEN"
+    assert len(report["model_merged"]) == 1
+    display = status.render(report)
+    assert "MERGED   #5201" in display
+    assert "FAILED   Factory worker" in display
+
+
+def test_running_worker_age_is_visible_without_claiming_stall():
+    older = NOW - timedelta(minutes=45)
+    report = status.collect(
+        fetch_factory([run("Factory 42", "in_progress", run_started_at=older.isoformat())],
+                      [], [], []),
+        "org/repo", NOW,
+    )
+    assert len(report["long_running"]) == 1
+    display = status.render(report)
+    assert "Long-running workers: 1" in display
+    assert "(45m ago)" in display
+    assert "not necessarily hung" in display
+
+
+def test_a_single_failure_does_not_override_checkpoint_merge():
+    earlier = (NOW - timedelta(days=2)).isoformat()
+    pr = {
+        "number": 5, "labels": [{"name": "factory"}],
+        "created_at": earlier, "merged_at": NOW.isoformat(),
+        "body": (
+            "<!-- factory-checkpoint-handoff:v1 run=1 -->\n"
+            "Model: fixture/test\nWorker: opencode-free-model-factory-2\n"
+        ),
+    }
+    report = status.collect(
+        fetch_factory([run("Factory worker", "completed", conclusion="failure")],
+                      [], [pr], []), "org/repo", NOW,
+    )
+    assert report["verdict"] == "FACTORY-ATTRIBUTED PR MERGED (production not verified)"

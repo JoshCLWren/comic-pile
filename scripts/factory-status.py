@@ -18,6 +18,8 @@ DEFAULT_REPO = "JoshCLWren/comic-pile"
 ACTIVE = frozenset({"in_progress", "queued", "pending", "waiting", "requested"})
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SNAPSHOT_MARKER = '<script id="fleet-snapshot" type="application/json">'
+FAILURE_ALERT_COUNT = 3
+LONG_RUNNING_MINUTES = 30
 
 
 def instant(value: object) -> datetime | None:
@@ -159,6 +161,15 @@ def collect(
     active_entries = [r for r in entries if r.get("status") == "in_progress"]
     queued_entries = [r for r in entries if r.get("status") in ACTIVE - {"in_progress"}]
     ended_entries = [r for r in entries if r.get("status") == "completed" and recent(r, cutoff)]
+    failed_entries = [
+        r for r in ended_entries if r.get("conclusion") in {"failure", "timed_out", "cancelled"}
+    ]
+    successful_entries = [r for r in ended_entries if r.get("conclusion") == "success"]
+    long_running = [
+        r for r in active_entries
+        if (started := instant(r.get("run_started_at") or r.get("created_at")))
+        and now - started >= timedelta(minutes=LONG_RUNNING_MINUTES)
+    ]
     launched_dispatches = [r for r in dispatch if recent(r, cutoff)]
     opened = [pr for pr in prs if factory_pr(pr) and recent(pr, cutoff)]
     merged = [pr for pr in prs if factory_pr(pr) and recent(pr, cutoff, "merged_at")]
@@ -174,7 +185,11 @@ def collect(
     freshness, elapsed = snapshot_status(snapshot, now)
 
     # A successful Actions job proves execution, not persisted or deployed code.
-    if merged_from_model:
+    if len(failed_entries) >= FAILURE_ALERT_COUNT and not successful_entries:
+        # A recently merged PR may have been opened days earlier or repaired by
+        # another contributor. Repeated failing Entry runs outrank merge credit.
+        verdict = "DEGRADED: REPEATED FAILED ENTRIES; CURRENT DELIVERY UNPROVEN"
+    elif merged_from_model:
         verdict = "FACTORY-ATTRIBUTED PR MERGED (production not verified)"
     elif bot_merged:
         verdict = "FACTORY BOT PR MERGED; MODEL ATTRIBUTION UNVERIFIED"
@@ -193,6 +208,8 @@ def collect(
         "repo": repo, "now": now.isoformat(), "minutes": minutes,
         "verdict": verdict, "active_entries": active_entries,
         "queued_entries": queued_entries, "ended_entries": ended_entries,
+        "failed_entries": failed_entries, "successful_entries": successful_entries,
+        "long_running": long_running,
         "dispatches": launched_dispatches, "last_dispatch": last_dispatch,
         "opened": opened, "merged": merged, "model_opened": created_by_model,
         "model_merged": merged_from_model,
@@ -220,6 +237,8 @@ def render(data: dict[str, Any]) -> str:
         "",
         f"Workers: {len(data['active_entries'])} running, {len(data['queued_entries'])} queued; "
         f"{successes} successful / {failures} failed recent entry runs",
+        f"Long-running workers: {len(data['long_running'])} running for at least "
+        f"{LONG_RUNNING_MINUTES}m (not necessarily hung)",
         f"Dispatcher: {'at least ' if data['dispatch_capped'] else ''}{len(data['dispatches'])} "
         f"run(s) started; last "
         f"{(data['last_dispatch'] or {}).get('conclusion') or (data['last_dispatch'] or {}).get('status') or 'unknown'}",
@@ -240,7 +259,13 @@ def render(data: dict[str, Any]) -> str:
         lines.append("NOTE: Dashboard snapshot unavailable; live GitHub data remains available.")
     lines.extend(["", "Evidence:"])
     for run in data["active_entries"][:4]:
-        lines.append(f"  RUNNING  {run.get('name') or run.get('id')}  {workflow_link(run)}")
+        started = instant(run.get("run_started_at") or run.get("created_at"))
+        lines.append(
+            f"  RUNNING  {run.get('name') or run.get('id')} "
+            f"({age_string(datetime.fromisoformat(data['now']), started)})  {workflow_link(run)}"
+        )
+    for run in data["failed_entries"][:4]:
+        lines.append(f"  FAILED   {run.get('name') or run.get('id')}  {workflow_link(run)}")
     for pr in data["model_opened"][:3]:
         lines.append(f"  CODE PR  #{pr.get('number')}  {pr_link(pr)}")
     for pr in data["model_merged"][:3]:
