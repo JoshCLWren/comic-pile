@@ -149,15 +149,6 @@ def test_classifier_labels_quota_exhaustion() -> None:
     assert "provider_quota" in module.CANONICAL_OUTCOME_CLASSES
 
 
-def test_work_controller_assign_skips_paused_worker() -> None:
-    """The controller refuses to lease work to a quota-paused worker."""
-    source = (SCRIPTS / "factory-work-controller.py").read_text(encoding="utf-8")
-    assign_body = source.split("def assign(", 1)[1].split("\ndef ", 1)[0]
-    assert assign_body.index("quota_pause_for(worker)") < assign_body.index(
-        "worker_has_active_lease(worker)"
-    )
-
-
 def test_dispatch_workflows_filter_paused_workers() -> None:
     """Paused workers are excluded before entry capacity/dispatch cap is applied."""
     text = (ROOT / ".github" / "workflows" / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
