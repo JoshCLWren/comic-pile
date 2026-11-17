@@ -21,7 +21,7 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -2908,3 +2908,344 @@ fn build_drilldown(
         _ => unreachable!("validated above"),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+fn page_params(
+    limit: Option<i64>,
+    offset: Option<i64>,
+    default_limit: i64,
+    max_limit: i64,
+) -> Result<(usize, usize), ApiError> {
+    let limit = limit.unwrap_or(default_limit);
+    if !(1..=max_limit).contains(&limit) {
+        return Err(ApiError::Unprocessable(format!(
+            "limit must be between 1 and {max_limit}"
+        )));
+    }
+    let offset = offset.unwrap_or(0);
+    if offset < 0 {
+        return Err(ApiError::Unprocessable("offset must be non-negative".to_string()));
+    }
+    Ok((limit as usize, offset as usize))
+}
+
+fn drilldown_page(page: Option<i64>, page_size: Option<i64>) -> Result<(i64, i64), ApiError> {
+    let page = page.unwrap_or(1);
+    let page_size = page_size.unwrap_or(50);
+    if page < 1 {
+        return Err(ApiError::Unprocessable("page must be at least 1".to_string()));
+    }
+    if !(1..=200).contains(&page_size) {
+        return Err(ApiError::Unprocessable(
+            "page_size must be between 1 and 200".to_string(),
+        ));
+    }
+    Ok((page, page_size))
+}
+
+pub async fn list_creators(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(query): Query<CreatorListQuery>,
+) -> Result<Json<CreatorListResponse>, ApiError> {
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let (limit, offset) = page_params(query.limit, query.offset, 20, 50)?;
+    let min_ratings = query.min_ratings.unwrap_or(0).max(0);
+    let sort = query.sort.unwrap_or_else(|| "name".to_string());
+    let search = query.search.map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).map(|value| {
+        if value.chars().count() > 100 {
+            value.chars().take(100).collect()
+        } else {
+            value
+        }
+    });
+    let library = load_library(&state, user_id).await?;
+    Ok(Json(build_list(
+        &library,
+        search.as_deref(),
+        &sort,
+        limit,
+        offset,
+        min_ratings as usize,
+    )))
+}
+
+pub async fn get_summaries(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(query): Query<CreatorKeysQuery>,
+) -> Result<Json<CreatorSummariesResponse>, ApiError> {
+    let keys = validate_summary_keys(query.keys.as_deref())?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    Ok(Json(build_summaries(&library, &keys)))
+}
+
+pub async fn get_detail(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path(creator_key): Path<String>,
+    Query(query): Query<CreatorPageQuery>,
+) -> Result<Json<CreatorDetailResponse>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request("Invalid creator key format"));
+    };
+    let (limit, offset) = page_params(query.limit, query.offset, 50, 100)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    if attribution(&library, creator_id).is_none() {
+        return Err(not_found(format!("Creator {creator_key} not found in your library")));
+    }
+    Ok(Json(build_detail(&library, &creator_key, creator_id, limit, offset)))
+}
+
+pub async fn get_series_issues(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path((creator_key, series_key)): Path<(String, String)>,
+    Query(query): Query<CreatorSeriesIssuesQuery>,
+) -> Result<Json<CreatorSeriesIssueListResponse>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request("Invalid creator key format"));
+    };
+    let Some(thread_id) = parse_series_key(&series_key) else {
+        return Err(bad_request("Invalid series key format"));
+    };
+    let (limit, offset) = page_params(query.limit, query.offset, 50, 100)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    if attribution(&library, creator_id).is_none() {
+        return Err(not_found(format!("Creator {creator_key} not found in your library")));
+    }
+    let response = build_series_issues(&library, creator_id, thread_id, limit, offset)
+        .ok_or_else(|| not_found(format!("Series {series_key} not found in your library")))?;
+    Ok(Json(response))
+}
+
+pub async fn get_comparison(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(query): Query<CreatorKeysQuery>,
+) -> Result<Json<CreatorComparisonResponse>, ApiError> {
+    let keys = validate_comparison_keys(query.keys.as_deref())?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    Ok(Json(build_comparison(&library, &keys)))
+}
+
+pub async fn get_discoveries(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+) -> Result<Json<CreatorDiscoveryResponse>, ApiError> {
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    Ok(Json(build_discoveries(&library)))
+}
+
+pub async fn get_team_chemistry(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+) -> Result<Json<CreatorTeamChemistryResponse>, ApiError> {
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    Ok(Json(build_team_chemistry(&library)))
+}
+
+pub async fn get_metric_drilldown(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path((creator_key, metric_type)): Path<(String, String)>,
+    Query(query): Query<CreatorMetricQuery>,
+) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+    };
+    let (page, page_size) = drilldown_page(query.page, query.page_size)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    let result = build_drilldown(
+        &library,
+        creator_id,
+        &creator_key,
+        &metric_type,
+        query.role.as_deref(),
+        query.rating_value.as_deref(),
+        query.series_key.as_deref(),
+        page,
+        page_size,
+    )?;
+    Ok(Json(result))
+}
+
+pub async fn get_rating_distribution_drilldown(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path((creator_key, rating_value)): Path<(String, String)>,
+    Query(query): Query<CreatorMetricPageQuery>,
+) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+    };
+    let (page, page_size) = drilldown_page(query.page, query.page_size)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    let result = build_drilldown(
+        &library, creator_id, &creator_key, "rating-distribution", None,
+        Some(&rating_value), None, page, page_size,
+    )
+    .map_err(|error| {
+        if error.status() == StatusCode::NOT_FOUND {
+            not_found(format!("Rating distribution {rating_value} not available for creator {creator_key}"))
+        } else {
+            error
+        }
+    })?;
+    Ok(Json(result))
+}
+
+pub async fn get_role_drilldown(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path((creator_key, role)): Path<(String, String)>,
+    Query(query): Query<CreatorMetricPageQuery>,
+) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+    };
+    let (page, page_size) = drilldown_page(query.page, query.page_size)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    let result = build_drilldown(
+        &library, creator_id, &creator_key, "role-stats", Some(&role), None, None, page, page_size,
+    )
+    .map_err(|error| {
+        if error.status() == StatusCode::NOT_FOUND {
+            not_found(format!("Role {role} not available for creator {creator_key}"))
+        } else {
+            error
+        }
+    })?;
+    Ok(Json(result))
+}
+
+pub async fn get_series_drilldown(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Path((creator_key, series_key)): Path<(String, String)>,
+    Query(query): Query<CreatorMetricPageQuery>,
+) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Some(creator_id) = parse_creator_key(&creator_key) else {
+        return Err(bad_request(format!("Invalid creator key format: {creator_key}")));
+    };
+    let (page, page_size) = drilldown_page(query.page, query.page_size)?;
+    let user_id = resolve_user_id(&state, &claims).await?;
+    let library = load_library(&state, user_id).await?;
+    let result = build_drilldown(
+        &library, creator_id, &creator_key, "series-stats", None, None, Some(&series_key), page, page_size,
+    )
+    .map_err(|error| {
+        if error.status() == StatusCode::NOT_FOUND {
+            not_found(format!("Series {series_key} not available for creator {creator_key}"))
+        } else {
+            error
+        }
+    })?;
+    Ok(Json(result))
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI documentation-only operations (registered in openapi.rs)
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(get, path = "/api/v2/creators", tag = "creators",
+    params(CreatorListQuery),
+    responses((status = 200, description = "Creator list", body = CreatorListResponse),
+        (status = 422, description = "Invalid filters"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn list_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/summaries", tag = "creators",
+    params(CreatorKeysQuery),
+    responses((status = 200, description = "Creator summaries", body = CreatorSummariesResponse),
+        (status = 400, description = "Invalid creator keys"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn summaries_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/compare", tag = "creators",
+    params(CreatorKeysQuery),
+    responses((status = 200, description = "Creator comparison", body = CreatorComparisonResponse),
+        (status = 400, description = "Invalid creator keys"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn compare_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/discoveries", tag = "creators",
+    responses((status = 200, description = "Creator discoveries", body = CreatorDiscoveryResponse),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn discoveries_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/team-chemistry", tag = "creators",
+    responses((status = 200, description = "Creator team chemistry", body = CreatorTeamChemistryResponse),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn team_chemistry_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}", tag = "creators",
+    params(CreatorPageQuery),
+    responses((status = 200, description = "Creator detail", body = CreatorDetailResponse),
+        (status = 400, description = "Invalid key"),
+        (status = 404, description = "Creator not found"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn detail_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/series/{series_key}/issues", tag = "creators",
+    params(CreatorSeriesIssuesQuery),
+    responses((status = 200, description = "Creator series issues", body = CreatorSeriesIssueListResponse),
+        (status = 400, description = "Invalid keys"),
+        (status = 404, description = "Series not found"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn series_issues_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/{metric_type}", tag = "creators",
+    params(CreatorMetricQuery),
+    responses((status = 200, description = "Creator metric drilldown", body = CreatorMetricDrilldown),
+        (status = 400, description = "Invalid metric"),
+        (status = 404, description = "Metric not available"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn metric_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}", tag = "creators",
+    params(CreatorMetricPageQuery),
+    responses((status = 200, description = "Rating distribution drilldown", body = CreatorMetricDrilldown),
+        (status = 400, description = "Invalid value"),
+        (status = 404, description = "Not available"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn rating_distribution_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/role-stats/{role}", tag = "creators",
+    params(CreatorMetricPageQuery),
+    responses((status = 200, description = "Role drilldown", body = CreatorMetricDrilldown),
+        (status = 400, description = "Invalid role"),
+        (status = 404, description = "Not available"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn role_documentation() {}
+
+#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}", tag = "creators",
+    params(CreatorMetricPageQuery),
+    responses((status = 200, description = "Series drilldown", body = CreatorMetricDrilldown),
+        (status = 400, description = "Invalid series"),
+        (status = 404, description = "Not available"),
+        (status = 401, description = "Not authenticated")),
+    security(("HTTPBearer" = [])))]
+pub fn series_documentation() {}
