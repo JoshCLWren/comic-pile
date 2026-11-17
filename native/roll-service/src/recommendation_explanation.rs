@@ -389,15 +389,28 @@ pub async fn get_recommendation_explanation(
     }
     let selection_method: Option<String> = row.try_get(1).map_err(db::query_error)?;
     // `recommendation_context` is a JSON column. Historical rows may hold a
-    // JSON string instead of an object; both degrade to no factors, matching
-    // the Python handler's graceful handling of absent/unparseable context.
+    // JSON string instead of an object; parse string values like Python's
+    // `json.loads` path so double-encoded context still projects factors.
     let context: Option<serde_json::Value> = row.try_get(2).map_err(db::query_error)?;
+    let context = parse_context_value(context);
     let factors = project_recommendation_context(context.as_ref(), selection_method.as_deref());
     connection.release();
     Ok(Json(RecommendationExplanationResponse {
         event_id: path.event_id,
         factors,
     }))
+}
+
+/// Normalize the stored recommendation context.
+///
+/// A JSON column can carry a JSON-encoded string for historical rows; parse it
+/// into the inner object/value. Unparseable or non-object string payloads degrade
+/// to `None`, matching Python's graceful handling.
+fn parse_context_value(context: Option<serde_json::Value>) -> Option<serde_json::Value> {
+    match context {
+        Some(serde_json::Value::String(raw)) => serde_json::from_str(&raw).ok(),
+        other => other,
+    }
 }
 
 /// Documentation-only operation for the mounted v1 same-path read.
@@ -516,13 +529,14 @@ mod tests {
     }
 
     #[test]
-    fn a_json_string_context_degrades_to_no_factors() {
-        // Historical rows may store the context as a JSON string. The read must
-        // not fail; it explains only the selection method instead.
+    fn a_json_string_context_is_parsed_before_projection() {
+        // Historical rows may store the context as a JSON string; parse it like
+        // Python's `json.loads` path so factors are preserved.
         let context = json!("{\"bandwidth\": \"band_light\"}");
-        let factors = project_recommendation_context(Some(&context), Some("override"));
-        assert_eq!(factors.len(), 1);
-        assert_eq!(factors[0].code, "override");
+        let parsed = parse_context_value(Some(context));
+        let factors = project_recommendation_context(parsed.as_ref(), Some("override"));
+        let codes: Vec<_> = factors.iter().map(|factor| factor.code.as_str()).collect();
+        assert_eq!(codes, vec!["band_light", "override"]);
     }
 
     #[test]

@@ -68,7 +68,6 @@ pub(crate) struct OverrideThread {
     pub(crate) total_issues: Option<i32>,
     pub(crate) reading_progress: Option<String>,
     pub(crate) status: String,
-    pub(crate) is_blocked: bool,
 }
 
 /// Mirror `app.models.thread.normalize_format_value`.
@@ -201,7 +200,7 @@ async fn fetch_thread_for_update(
     let row = tx
         .query_opt(
             "SELECT id, title, format, total_issues,
-                    reading_progress, status, is_blocked
+                    reading_progress, status
              FROM threads
              WHERE id = $1 AND user_id = $2
              FOR UPDATE",
@@ -217,7 +216,6 @@ async fn fetch_thread_for_update(
             total_issues: row.try_get(3).map_err(db::query_error)?,
             reading_progress: row.try_get(4).map_err(db::query_error)?,
             status: row.try_get(5).map_err(db::query_error)?,
-            is_blocked: row.try_get(6).map_err(db::query_error)?,
         })
     })
     .transpose()
@@ -469,13 +467,15 @@ pub async fn override_roll(
     };
 
     // The same eligibility authority the dice pool uses decides whether a
-    // manual pick is selectable.
+    // manual pick is selectable. When live eligibility exists it is authoritative,
+    // so a stale `threads.is_blocked` flag must not reject a selectable frontier
+    // (Python: `thread_id not in eligibility.candidate_ids()`).
     let frontier = candidates
         .iter()
         .find(|candidate| candidate.thread_id == thread.id);
     let frontier = match frontier {
-        Some(frontier) if !thread.is_blocked => *frontier,
-        _ => {
+        Some(frontier) => *frontier,
+        None => {
             tx.rollback().await.map_err(db::query_error)?;
             return Err(ApiError::Unprocessable(format!(
                 "\"{}\" is blocked and cannot be selected",
@@ -642,7 +642,6 @@ mod tests {
             total_issues: Some(10),
             reading_progress: Some("in_progress".into()),
             status: "active".into(),
-            is_blocked: false,
         }
     }
 
@@ -855,7 +854,6 @@ mod tests {
             total_issues: Some(4),
             reading_progress: Some("in_progress".into()),
             status: "active".into(),
-            is_blocked: false,
         };
 
         let tx = client.transaction().await.unwrap();
@@ -958,7 +956,6 @@ mod tests {
             total_issues: None,
             reading_progress: None,
             status: "active".into(),
-            is_blocked: false,
         };
         let tx = client.transaction().await.unwrap();
         let event_id = persist_override_roll(
