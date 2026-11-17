@@ -467,9 +467,27 @@ jobs:
           CONFIGURED: ${{ steps.lane.outputs.configured }}
           REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
           EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
+        # Informational only: a registry outage must never skip the session.
+        continue-on-error: true
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
+          # Issue #1093 comments are optional visibility only. Authoritative
+          # lease, attempt, transition and outcome state lives in Neon and the
+          # trusted Actions job log. GitHub refuses new comments once a thread
+          # exceeds 2,500 comments (HTTP 403); 404/422/429 and secondary rate
+          # limits are equally non-fatal here. Never let them stop a worker.
+          registry_visibility() {
+            local op="$1" error_file="${RUNNER_TEMP:-/tmp}/factory-registry-visibility-error" status
+            shift
+            if "$@" 2>"$error_file"; then
+              return 0
+            fi
+            status="$(grep -Eo 'HTTP [0-9]{3}' "$error_file" | tail -1 | tr -dc '0-9' || true)"
+            printf '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=%s http=%s detail=%s\n' \
+              "$op" "${status:-none}" "$(tr '\n' ' ' < "$error_file" | cut -c1-200)" >&2
+            return 1
+          }
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [[ "$CONFIGURED" != true ]]; then
@@ -492,19 +510,23 @@ jobs:
             elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
               comment_id=""
             else
-              echo '::error::Cannot verify heartbeat comment; refusing duplicate write or unbounded registry scan'
-              exit 1
+              # Cannot prove absence: skip (never duplicate, never scan history).
+              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-heartbeat-lookup-error" | cut -c1-200)"
+              exit 0
             fi
           else
             comment_id=""
           fi
           if [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
-          else
-            created="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"
-            comment_id="$(jq -er '.id' <<< "$created")"
+            registry_visibility heartbeat-update \
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null || true
+          elif created="$(registry_visibility heartbeat-create \
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"; then
+            comment_id="$(jq -r '.id // empty' <<< "$created" 2>/dev/null || true)"
           fi
-          [[ "$comment_id" =~ ^[1-9][0-9]*$ ]] && echo "FACTORY_HEARTBEAT_COMMENT_ID=$comment_id" >> "$GITHUB_ENV"
+          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "FACTORY_HEARTBEAT_COMMENT_ID=$comment_id" >> "$GITHUB_ENV"
+          fi
 
       # Crouton's OpenCode Zen free route can reject anonymous runner requests.
       # Do not change the anonymous DeepSeek comparison or other model lanes.
@@ -655,9 +677,28 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
           DISCOVERY_OUTCOME_FILE: ${{ runner.temp }}/factory-discovery-outcome
+        # Informational only: the trusted Entry persister classifies the job
+        # log into Neon. A registry write failure must not fail the job.
+        continue-on-error: true
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
+          # Issue #1093 comments are optional visibility only. Authoritative
+          # lease, attempt, transition and outcome state lives in Neon and the
+          # trusted Actions job log. GitHub refuses new comments once a thread
+          # exceeds 2,500 comments (HTTP 403); 404/422/429 and secondary rate
+          # limits are equally non-fatal here. Never let them stop a worker.
+          registry_visibility() {
+            local op="$1" error_file="${RUNNER_TEMP:-/tmp}/factory-registry-visibility-error" status
+            shift
+            if "$@" 2>"$error_file"; then
+              return 0
+            fi
+            status="$(grep -Eo 'HTTP [0-9]{3}' "$error_file" | tail -1 | tr -dc '0-9' || true)"
+            printf '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=%s http=%s detail=%s\n' \
+              "$op" "${status:-none}" "$(tr '\n' ' ' < "$error_file" | cut -c1-200)" >&2
+            return 1
+          }
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # A green wrapper exit is NOT evidence of useful coding. The trusted
@@ -682,16 +723,19 @@ jobs:
             elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-heartbeat-lookup-error"; then
               comment_id=""
             else
-              echo '::error::Cannot verify heartbeat comment; refusing duplicate write or unbounded registry scan'
-              exit 1
+              # Cannot prove absence: skip the write, never duplicate.
+              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-heartbeat-lookup-error" | cut -c1-200)"
+              comment_id="unverifiable"
             fi
           else
             comment_id=""
           fi
-          if [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
+            registry_visibility heartbeat-update \
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null || true
+          elif [[ -z "$comment_id" ]]; then
+            registry_visibility heartbeat-create \
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null || true
           fi
 
           # Publish a conservative attempt result synchronously. The asynchronous
@@ -721,7 +765,7 @@ jobs:
           # Never send a separate inference request just to test the model.
           if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]; then
             retirement_marker='<!-- factory-model-retired-410:v1 -->'
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+            registry_visibility retirement-snapshot gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
               -f body="${retirement_marker}
           Worker: opencode-free-model-factory-${WORKER}
           Model: ${MODEL}
@@ -729,7 +773,7 @@ jobs:
           Attempt outcome: model_retired_410
           Detail: Confirmed HTTP 410 during actual assigned work
           Updated: ${now}
-          Run: ${GITHUB_RUN_ID}" >/dev/null
+          Run: ${GITHUB_RUN_ID}" >/dev/null || true
           fi
           # Keep a run-specific failure snapshot: later successes overwrite the worker record.
           if [[ "$SOURCE" == opencode-free && ( "$attempt_outcome" == model_unavailable || "$attempt_outcome" == provider_quota ) ]]; then
@@ -738,9 +782,10 @@ jobs:
             if [[ "$attempt_outcome" == provider_quota ]]; then marker_type='factory-provider-quota'; fi
             unavailable_marker="<!-- ${marker_type}:v1 run=${GITHUB_RUN_ID} -->"
             snapshot_body="$(printf '%s\n' "$attempt_body" | tail -n +2)"
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+            registry_visibility unavailability-snapshot \
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
               -f body="${unavailable_marker}
-          ${snapshot_body}" >/dev/null
+          ${snapshot_body}" >/dev/null || true
           fi
           attempt_comment_id="${FACTORY_ATTEMPT_COMMENT_ID:-}"
           if [[ ! "$attempt_comment_id" =~ ^[1-9][0-9]*$ ]]; then
@@ -756,8 +801,9 @@ jobs:
               attempt_comment_id=""
               current=""
             else
-              echo '::error::Cannot verify attempt comment; refusing duplicate write or unbounded registry scan'
-              exit 1
+              # Cannot prove absence: never duplicate. Neon stays authoritative.
+              echo "::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup detail=$(tr '\n' ' ' < "$RUNNER_TEMP/factory-attempt-lookup-error" | cut -c1-200)"
+              exit 0
             fi
             validated="$(python3 .github/scripts/factory_registry_verify.py verify --kind attempt --worker "$WORKER" --id "$attempt_comment_id" <<< "$current" 2>/dev/null || true)"
             if [[ -n "$attempt_comment_id" && "$validated" == "$attempt_comment_id" ]]; then
@@ -770,11 +816,13 @@ jobs:
           if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
             echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
           elif [[ -n "$attempt_comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" \
-              -f body="$attempt_body" >/dev/null
+            registry_visibility attempt-update \
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" \
+              -f body="$attempt_body" >/dev/null || true
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-              -f body="$attempt_body" >/dev/null
+            registry_visibility attempt-create \
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="$attempt_body" >/dev/null || true
           fi
 
   release_pre_session_lease:

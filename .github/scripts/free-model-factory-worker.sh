@@ -549,13 +549,33 @@ account_wide_failure() {
   grep -Eqi 'insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package' \
     "/tmp/opencode-factory-$WORKER.log"
 }
+# Issue #1093 comments are informational. GitHub refuses new comments on a
+# thread with more than 2,500 comments (HTTP 403), and 404/422/429 or secondary
+# rate limits are equally possible. Report a structured warning and continue.
+registry_visibility() {
+  local op="$1" error_file status
+  shift
+  error_file="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-registry-visibility.XXXXXX")"
+  if "$@" 2>"$error_file"; then
+    rm -f "$error_file"
+    return 0
+  fi
+  status="$(grep -Eo 'HTTP [0-9]{3}' "$error_file" | tail -1 | tr -dc '0-9' || true)"
+  printf '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=%s http=%s detail=%s\n' \
+    "$op" "${status:-none}" "$(tr '\n' ' ' < "$error_file" | cut -c1-200)" >&2
+  rm -f "$error_file"
+  return 1
+}
 record_model_failover_failure() {
   local failed_source="$1" failed_model="$2" classification="$3" scope="$4" stamp body
   stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   body="$(printf '%s\nWorker: %s\nModel: %s\nSource: %s\nOutcome: failure\nAttempt outcome: %s\nScope: %s\nUpdated: %s\nRun: %s' \
     "<!-- factory-model-failover:v1 run=$GITHUB_RUN_ID -->" \
     "$WORKER_ID" "$failed_model" "$failed_source" "$classification" "$scope" "$stamp" "$GITHUB_RUN_ID")"
-  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" -f body="$body" >/dev/null
+  # Optional #1093 visibility. The timestamped log marker below is the
+  # attested record the trusted Entry persister writes to Neon.
+  registry_visibility model-failover \
+    gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" -f body="$body" >/dev/null || true
   log "FACTORY_TRUSTED_FAILOVER: source=$failed_source model=$failed_model outcome=$classification scope=$scope"
 }
 select_next_eligible_model() {
@@ -602,8 +622,9 @@ select_next_eligible_model() {
         return 1
       fi
     fi
-    # Persist one trusted transition bound to the unchanged assignment before
-    # the next real coding attempt. A failed write must stop the switch.
+    # The trusted FACTORY_FLEET_TRANSITION log marker (attested from the
+    # completed job log into Neon) is the authoritative transition record.
+    # The #1093 comment is optional visibility and can never stop a switch.
     stop_work_checkpoint
     local transition_stamp transition_body
     transition_stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -611,11 +632,9 @@ select_next_eligible_model() {
       "<!-- factory-fleet-transition:v1 run=$GITHUB_RUN_ID -->" \
       "$WORKER_ID" "$MODE" "$NUMBER" "${EXPECTED_HEAD:-}" \
       "$SOURCE" "$next_source" "$next_model" "$next_runtime" "$transition_stamp" "$GITHUB_RUN_ID")"
-    if ! gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
-      -f body="$transition_body" >/dev/null; then
-      record_terminal_outcome control_plane_failure "failed durable fleet-transition provenance"
-      return 1
-    fi
+    registry_visibility fleet-transition \
+      gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
+      -f body="$transition_body" >/dev/null || true
     SOURCE="$next_source"
     MODEL="$next_model"
     RUNTIME_MODEL="$next_runtime"
