@@ -19955,6 +19955,20 @@ export interface operations {
                     "application/json": components["schemas"]["ActivityResponse"];
                 };
             };
+            /** @description Malformed or unrecognized page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     metrics_documentation: {

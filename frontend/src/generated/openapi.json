@@ -30030,6 +30030,12 @@
               }
             },
             "description": "Owner-scoped activity history"
+          },
+          "400": {
+            "description": "Malformed or unrecognized page token"
+          },
+          "401": {
+            "description": "Not authenticated"
           }
         },
         "security": [
