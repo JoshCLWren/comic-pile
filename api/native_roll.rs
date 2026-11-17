@@ -1183,6 +1183,8 @@ mod tests {
                     "/api/v1/threads/21/issues?page_size=0",
                     "/api/v1/threads/21/issues?page_size=101",
                     "/api/v1/threads/21/issues?status=invalid",
+                    // Invalid-UTF-8 path extraction must also use the 422 envelope.
+                    "/api/v1/threads/%FF/issues",
                 ] {
                     let request = Request::builder()
                         .method("GET")
@@ -1211,6 +1213,26 @@ mod tests {
                 .await;
                 assert_eq!(status, StatusCode::BAD_REQUEST, "{text}");
                 assert_eq!(body["detail"], "Invalid page_token format", "{text}");
+
+                // Encoded-but-valid query values are form-decoded before
+                // validation: `2%2C102` is the cursor `2,102` and `%72ead`
+                // is `read`. Neither may fall into the 400/422 paths (#5318).
+                for uri in [
+                    "/api/v1/threads/21/issues?page_token=2%2C102",
+                    "/api/v1/threads/21/issues?status=%72ead",
+                ] {
+                    let (status, body, _, text) = call_app(
+                        Request::builder()
+                            .method("GET")
+                            .uri(uri)
+                            .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                            .body(Body::empty())
+                            .expect("encoded query request"),
+                    )
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{uri}: {text}");
+                    assert_eq!(body["total_count"], 0, "{uri}: {text}");
+                }
             })
             .await;
     }

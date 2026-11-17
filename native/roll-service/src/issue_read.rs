@@ -39,7 +39,7 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, State},
+    extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
     Json,
 };
@@ -320,21 +320,19 @@ fn parse_thread_issue_query(
     let mut seen_page_token = false;
 
     if let Some(raw) = raw {
-        for pair in raw.split('&') {
-            if pair.is_empty() {
-                continue;
-            }
-            let (key, value) = match pair.split_once('=') {
-                Some((k, v)) => (k, v),
-                None => (pair, ""),
-            };
-            match key {
+        // `RawQuery` is not form-decoded, so a valid continuation cursor
+        // arrives as `page_token=2%2C102` and `status=%72ead` means `read`.
+        // Decode keys and values exactly as axum's `Query` extractor would
+        // before matching or validating them; duplicate pairs stay distinct
+        // so the repeated-key 422 contract is preserved.
+        for (key, value) in form_urlencoded::parse(raw.as_bytes()) {
+            match key.as_ref() {
                 "status" => {
                     if seen_status {
                         return Err(validation_failed());
                     }
                     seen_status = true;
-                    status = Some(value.to_string());
+                    status = Some(value.into_owned());
                 }
                 "page_size" => {
                     if seen_page_size {
@@ -352,7 +350,7 @@ fn parse_thread_issue_query(
                         return Err(validation_failed());
                     }
                     seen_page_token = true;
-                    page_token = Some(value.to_string());
+                    page_token = Some(value.into_owned());
                 }
                 _ => {}
             }
@@ -372,9 +370,13 @@ fn parse_thread_issue_query(
 pub async fn list_thread_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(thread_id): Path<String>,
+    thread_id: Result<Path<String>, PathRejection>,
     raw_query: axum::extract::RawQuery,
 ) -> Result<Json<ThreadIssueListResponse>, ApiError> {
+    // An invalid-UTF-8 path segment such as `%FF` is rejected by `Path<String>`
+    // with a plain 400 before the handler runs. Map that rejection to the
+    // Python-shaped 422 validation envelope; valid numeric IDs are unaffected.
+    let Path(thread_id) = thread_id.map_err(|_| validation_failed())?;
     let thread_id: i32 = thread_id.parse().map_err(|_| validation_failed())?;
     let (status, page_size, page_token) = parse_thread_issue_query(raw_query.0.as_deref())?;
     let cursor = page_token
@@ -518,6 +520,34 @@ mod tests {
                 "Invalid page_token format"
             );
         }
+    }
+
+    #[test]
+    fn thread_issue_list_query_form_decodes_keys_and_values() {
+        let (status, page_size, page_token) =
+            parse_thread_issue_query(Some("status=%72ead&page_size=2%35&page_token=2%2C102"))
+                .expect("encoded query");
+        assert_eq!(status.as_deref(), Some("read"));
+        assert_eq!(page_size, 25);
+        assert_eq!(page_token.as_deref(), Some("2,102"));
+
+        // A malformed decoded cursor still takes the existing 400 path.
+        let (_, _, page_token) =
+            parse_thread_issue_query(Some("page_token=%62ad%21")).expect("encoded bad cursor");
+        assert_eq!(
+            decode_thread_issue_cursor(page_token.as_deref().unwrap_or_default())
+                .unwrap_err()
+                .detail(),
+            "Invalid page_token format"
+        );
+
+        // Repeated recognized keys remain a 422 even when encoded differently.
+        assert_eq!(
+            parse_thread_issue_query(Some("status=read&%73tatus=unread"))
+                .unwrap_err()
+                .detail(),
+            "Validation failed"
+        );
     }
 
     #[test]
