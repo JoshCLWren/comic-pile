@@ -360,7 +360,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.dependencies.all,
     })
-    expect(resetQueries).not.toHaveBeenCalled()
+    // The last issue may have completed the series; only the finished cursor is reset.
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
   })
 
   it('limits snooze reconciliation to the exact current session key', async () => {
@@ -520,7 +522,9 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.pages(),
     })
     expect(setQueryData).not.toHaveBeenCalled()
-    expect(resetQueries).not.toHaveBeenCalled()
+    // The completed cursor is the only reset; other resume work remains scoped invalidation.
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
   })
 
   describe('custom CBL cache effects', () => {
