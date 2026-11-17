@@ -21,23 +21,23 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
 }
 
 /** Event type labels for display */
-const EVENT_LABELS: Record<string, string> = {
-  roll: 'Rolled',
-  rate: 'Rated',
-  snooze: 'Snoozed',
-  unsnooze: 'Unsnoozed',
-  dismiss: 'Dismissed',
-  undo: 'Restored',
-  restore: 'Restored',
-  move: 'Moved',
-  shuffle: 'Shuffled',
-  complete: 'Completed',
-  completion: 'Completed',
-  session_mode: 'Session mode',
-}
+const EVENT_LABELS = new Map<string, string>([
+  ['roll', 'Rolled'],
+  ['rate', 'Rated'],
+  ['snooze', 'Snoozed'],
+  ['unsnooze', 'Unsnoozed'],
+  ['dismiss', 'Dismissed'],
+  ['undo', 'Restored'],
+  ['restore', 'Restored'],
+  ['move', 'Moved'],
+  ['shuffle', 'Shuffled'],
+  ['complete', 'Completed'],
+  ['completion', 'Completed'],
+  ['session_mode', 'Session mode'],
+])
 
 function eventLabel(type: string): string {
-  return EVENT_LABELS[type] ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+  return EVENT_LABELS.get(type) ?? type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
 }
 
 /**

@@ -13,8 +13,8 @@ use tower::ServiceExt;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN")?;
-    let uri = std::env::var("RUST_ROLL_TEST_URI")
-        .unwrap_or_else(|_| "/api/v2/activity".to_string());
+    let uri =
+        std::env::var("RUST_ROLL_TEST_URI").unwrap_or_else(|_| "/api/v2/activity".to_string());
     let config = Config::from_env()?;
     let app = router(Arc::new(AppState::new(config)?));
     let before = ACTIVITY_STATEMENTS_ISSUED.load(Ordering::Relaxed);

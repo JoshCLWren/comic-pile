@@ -18,11 +18,8 @@ export function createActivityApi(client: HttpClient) {
      * @returns The paginated activity response.
      */
     list: async (pageToken?: string | null, pageSize: number = 50): Promise<ActivityResponse> => {
-      const params: Record<string, string | number> = { pageSize }
-      if (pageToken) {
-        params.page_token = pageToken
-      }
-      const response = await client.get<ActivityResponse>('/api/v2/activity', {
+      const params = pageToken ? { pageSize, page_token: pageToken } : { pageSize }
+      const response = await client.get<ActivityResponse>('/v2/activity', {
         params,
       })
       return response

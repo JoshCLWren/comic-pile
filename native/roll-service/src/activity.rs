@@ -11,12 +11,11 @@
 //!
 //! Authentication, token-revocation state, the credential epoch and every
 //! activity projection are folded into one owner-scoped PostgreSQL statement.
-use crate::{
-    auth::VerifiedAccessClaims,
-    db,
-    ApiError, AppState,
+use crate::{auth::VerifiedAccessClaims, db, ApiError, AppState};
+use axum::{
+    extract::{Query, State},
+    Json,
 };
-use axum::{extract::{Query, State}, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -245,18 +244,16 @@ pub async fn activity(
     let events = payload
         .events
         .into_iter()
-        .map(|row| {
-            ActivityEvent {
-                event_id: row.event_id,
-                event_type: row.event_type,
-                timestamp: build_timestamp(row.timestamp_sec, row.timestamp_us),
-                die_before: row.die_before,
-                die_after: row.die_after,
-                rating: row.rating,
-                thread_id: row.thread_id,
-                thread_title: row.thread_title,
-                issue_number: row.issue_number,
-            }
+        .map(|row| ActivityEvent {
+            event_id: row.event_id,
+            event_type: row.event_type,
+            timestamp: build_timestamp(row.timestamp_sec, row.timestamp_us),
+            die_before: row.die_before,
+            die_after: row.die_after,
+            rating: row.rating,
+            thread_id: row.thread_id,
+            thread_title: row.thread_title,
+            issue_number: row.issue_number,
         })
         .collect();
 

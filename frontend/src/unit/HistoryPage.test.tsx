@@ -9,11 +9,6 @@ vi.mock('../hooks/useActivity', () => ({ useActivity: vi.fn() }))
 // SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseActivity = vi.mocked(useActivity) as any
 
-const mockActivityResponse = {
-  events: [] as any[],
-  next_page_token: null as string | null,
-}
-
 beforeEach(() => {
   mockedUseActivity.mockReturnValue({
     events: [],

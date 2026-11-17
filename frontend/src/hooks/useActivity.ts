@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { activityApi as defaultActivityApi } from '../services/api-activity'
 import type { ActivityApi } from '../services/apiTypes'
@@ -56,10 +56,24 @@ export function useActivity(api?: ActivityApi) {
         throw new Error('Failed to fetch activity timeline')
       }
     },
-    // Null is the intentional first pageParam; cursor lives in TanStack's pageParam
+    // SAFETY: null is the intentional first pageParam; later pages always receive page tokens.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ActivityResponse) => lastPage.next_page_token ?? undefined,
   })
+
+  // `refetch()` resets React Query's `failureCount` to 0, so keying the bounded
+  // loading state on `failureCount` alone would drop the History page back to the
+  // bare loading splash the instant someone presses Retry, which is the
+  // frozen-splash symptom issue #3429 exists to remove. Latch the first failure
+  // so the affordance survives user-initiated retries until the load succeeds.
+  const [hasFailedLoad, setHasFailedLoad] = useState(false)
+  useEffect(() => {
+    if (query.failureCount > 0) {
+      setHasFailedLoad(true)
+    } else if (query.isSuccess) {
+      setHasFailedLoad(false)
+    }
+  }, [query.failureCount, query.isSuccess])
 
   const events = useMemo(() => normalizeActivityData(query.data?.pages), [query.data?.pages])
 
@@ -72,6 +86,11 @@ export function useActivity(api?: ActivityApi) {
       : query.error 
         ? new Error('Failed to fetch activity timeline') 
         : null,
+    // True while the initial load is still trying after at least one failure,
+    // including the retries a user starts from the Retry affordance. Keyed on
+    // isPending (already observed) rather than isFetching so the retry
+    // affordance never adds a new render subscription of its own.
+    isRetrying: query.isPending && hasFailedLoad,
     refetch: query.refetch,
     // Pagination
     isLoadingMore: query.isFetchingNextPage,
