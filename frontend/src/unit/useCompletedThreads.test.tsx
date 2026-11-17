@@ -39,7 +39,9 @@ describe('useCompletedThreads: finished series are independent of active Queue (
     listCompleted
       .mockResolvedValueOnce({
         threads: [
+          // SAFETY: this fixture stubs only list attributes the hook reads (id and status).
           { id: 1, title: 'Finished A', status: 'completed' } as never,
+          // SAFETY: this fixture stubs only list attributes the hook reads (id and status).
           { id: 2, title: 'Finished B', status: 'completed' } as never,
         ],
         next_page_token: 'finished-next-page',
@@ -47,7 +49,9 @@ describe('useCompletedThreads: finished series are independent of active Queue (
       })
       .mockResolvedValueOnce({
         threads: [
+          // SAFETY: this fixture stubs only list attributes the hook reads (id and status).
           { id: 2, title: 'Finished B', status: 'completed' } as never,
+          // SAFETY: this fixture stubs only list attributes the hook reads (id and status).
           { id: 3, title: 'Finished C', status: 'completed' } as never,
         ],
         next_page_token: null,
