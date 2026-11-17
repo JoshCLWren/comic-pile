@@ -2454,7 +2454,7 @@ async fn do_cbl_adoption_commit(
         _created_new,
         _plan_name,
         _ordering_mode,
-        lanes_json,
+        _lanes_json,
         mut nodes_json,
         _created_at,
         _updated_at,
@@ -2519,20 +2519,16 @@ async fn do_cbl_adoption_commit(
     };
 
     // Merge nodes (simplified but preserves key semantics: reuse existing issue nodes, append new, record provenance and positions)
-    let merge = merge_adoption_nodes_tx(
-        &tx,
+    let merge_ctx = MergeAdoptionCtx {
         user_id,
-        &mut nodes_json,
-        &lanes_json,
-        &planned,
-        &source_path,
-        &entry_bool,
-        &series_bool,
-        &override_bool,
-        target_plan_id.is_some(),
-    )
-    .await
-    .map_err(CommitErr::Unexpected)?;
+        planned: &planned,
+        source_path: &source_path,
+        series_overrides: &override_bool,
+        preserve_existing_order: target_plan_id.is_some(),
+    };
+    let merge = merge_adoption_nodes_tx(&tx, &mut nodes_json, &merge_ctx)
+        .await
+        .map_err(CommitErr::Unexpected)?;
     let nodes_str = serde_json::to_string(&nodes_json).unwrap_or("[]".to_string());
     tx.execute(
         "UPDATE continuity_plans SET nodes_json=$1::jsonb, updated_at=NOW() WHERE id=$2",
@@ -2882,18 +2878,24 @@ async fn find_existing_adopted_plan_tx(
     Ok(None)
 }
 
+struct MergeAdoptionCtx<'a> {
+    user_id: i32,
+    planned: &'a [serde_json::Map<String, JsonValue>],
+    source_path: &'a str,
+    series_overrides: &'a std::collections::HashMap<String, bool>,
+    preserve_existing_order: bool,
+}
+
 async fn merge_adoption_nodes_tx(
     tx: &tokio_postgres::Transaction<'_>,
-    user_id: i32,
     nodes_json: &mut JsonValue,
-    _lanes_json: &JsonValue,
-    planned: &[serde_json::Map<String, JsonValue>],
-    source_path: &str,
-    _entry_decisions: &std::collections::HashMap<String, bool>,
-    _series_decisions: &std::collections::HashMap<String, bool>,
-    series_overrides: &std::collections::HashMap<String, bool>,
-    preserve_existing_order: bool,
+    ctx: &MergeAdoptionCtx<'_>,
 ) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), String> {
+    let user_id = ctx.user_id;
+    let planned = ctx.planned;
+    let source_path = ctx.source_path;
+    let series_overrides = ctx.series_overrides;
+    let preserve_existing_order = ctx.preserve_existing_order;
     let nodes_arr = nodes_json
         .as_array_mut()
         .ok_or_else(|| "invalid nodes_json".to_string())?;
