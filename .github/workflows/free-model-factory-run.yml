@@ -602,9 +602,17 @@ jobs:
           FACTORY_REAL_GH="$(command -v gh)"
           export FACTORY_REAL_GH FACTORY_GH_CALL_LOG="$RUNNER_TEMP/factory-gh-calls.log"
           export PATH="$meter_dir:$PATH"
+          # Hosted VMs have been shut down mid-session, losing the step log.
+          # Push resource snapshots to a hidden ref so the cause survives.
+          cp .github/scripts/factory-vm-sampler.sh "$meter_dir/factory-vm-sampler.sh"
+          setsid bash "$meter_dir/factory-vm-sampler.sh" "$GITHUB_RUN_ID" 15 \
+            </dev/null >/dev/null 2>&1 &
+          vm_sampler_pid=$!
           set +e
           bash .github/scripts/free-model-factory-worker.sh
           worker_status=$?
+          kill -USR1 "$vm_sampler_pid" 2>/dev/null
+          wait "$vm_sampler_pid" 2>/dev/null
           python3 -I "$meter_dir/factory_gh_usage.py" "$FACTORY_GH_CALL_LOG" \
             --label "worker ${FACTORY_WORKER}" --summary "$GITHUB_STEP_SUMMARY"
           set -e
