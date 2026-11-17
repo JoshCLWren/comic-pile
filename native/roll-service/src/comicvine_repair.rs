@@ -110,7 +110,8 @@ pub struct DrainReport {
 }
 
 #[derive(Debug)]
-enum ProviderFailure {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProviderFailure {
     RateLimited(u32),
     Unavailable,
     Timeout,
@@ -270,7 +271,7 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-async fn provider_response(
+pub(crate) async fn provider_response(
     resource: &str,
     extra_query: &str,
     api_key: &str,
