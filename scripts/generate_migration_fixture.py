@@ -14,6 +14,10 @@ The fixture contains no real user records, credentials, comic titles or
 personal data; every value is synthetic or derived from synthetic identities.
 It is applied to a disposable database by :func:`apply_fixture` before the
 migration rehearsal runs ``alembic upgrade head``.
+
+Table ownership follows the repository layering rule: fixture application is
+migration-tooling persistence work, performed against a disposable rehearsal
+database only and never against production.
 """
 
 from __future__ import annotations
@@ -24,30 +28,49 @@ from typing import Any
 from sqlalchemy import insert
 from sqlalchemy.engine import Engine
 
-from app.models.cbl_adoption_receipt import CBLAdoptionReceipt
+from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
-from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLSourceLink
-from app.models.custom_cbl_source_link import CustomCBLSourceLink as CustomCBLSourceLinkAlias  # noqa: F401
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.reading_plan_dependencies import ReadingPlanDependency
 from app.models.reading_plan_issues import ReadingPlanIssue
 from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.reading_plan_sources import ReadingPlanSource
+from app.models.reading_session import ReadingSession
 from app.models.thread import Thread
 from app.models.user import User
 
-FIXTURE_OWNER_USERNAME = "reader-alpha"
 SYNTHETIC_EMAIL_DOMAIN = "example.invalid"
+
+_TABLES: dict[str, Any] = {
+    "users": User.__table__,
+    "threads": Thread.__table__,
+    "issues": Issue.__table__,
+    "dependencies": Dependency.__table__,
+    "continuity_plans": ContinuityPlan.__table__,
+    "reading_plan_issues": ReadingPlanIssue.__table__,
+    "reading_plan_sources": ReadingPlanSource.__table__,
+    "reading_plan_dependencies": ReadingPlanDependency.__table__,
+    "continuity_rules": ContinuityRule.__table__,
+    "custom_cbl_lists": CustomCBLList.__table__,
+    "custom_cbl_entries": CustomCBLEntry.__table__,
+    "custom_cbl_source_links": CustomCBLSourceLink.__table__,
+    "cbl_adoption_receipts": CblAdoptionReceipt.__table__,
+    "collection_exclusions": CollectionExclusion.__table__,
+    "sessions": ReadingSession.__table__,
+}
 
 
 def _utc_now() -> datetime:
+    """Return a single UTC timestamp shared by all synthetic fixture rows."""
     return datetime.now(UTC)
 
 
 def _user_rows() -> list[dict[str, Any]]:
+    """Synthetic users; no real identities or credentials are ever stored."""
     now = _utc_now()
     return [
         {
@@ -72,6 +95,7 @@ def _user_rows() -> list[dict[str, Any]]:
 
 
 def _thread_rows() -> list[dict[str, Any]]:
+    """Threads covering active, blocked, snoozed and legacy NULL-heavy shapes."""
     now = _utc_now()
     return [
         {
@@ -144,6 +168,7 @@ def _thread_rows() -> list[dict[str, Any]]:
 
 
 def _issue_rows() -> list[dict[str, Any]]:
+    """Issue rows with unread/NULL-heavy legacy shapes."""
     now = _utc_now()
     return [
         {
@@ -190,6 +215,7 @@ def _issue_rows() -> list[dict[str, Any]]:
 
 
 def _dependency_rows() -> list[dict[str, Any]]:
+    """Canonical edges plus a legacy ``cbl-order:%`` inert row."""
     now = _utc_now()
     return [
         {
@@ -244,7 +270,7 @@ def _reading_plan_issue_rows() -> list[dict[str, Any]]:
             "reader_optional": False,
             "is_checkpoint": False,
             "source_metadata_json": {"source": "synthetic"},
-        },
+        }
     ]
 
 
@@ -327,7 +353,7 @@ def _custom_cbl_entry_rows() -> list[dict[str, Any]]:
             "is_checkpoint": False,
             "checkpoint_target_issue_ids": None,
             "created_at": _utc_now(),
-        },
+        }
     ]
 
 
@@ -356,7 +382,7 @@ def _cbl_adoption_receipt_rows() -> list[dict[str, Any]]:
             "plan_id": 940001,
             "request_fingerprint": "synthetic-fingerprint-0001",
             "created_at": _utc_now(),
-        },
+        }
     ]
 
 
@@ -375,17 +401,18 @@ def _collection_exclusion_rows() -> list[dict[str, Any]]:
 
 
 def _session_rows() -> list[dict[str, Any]]:
+    now = _utc_now()
     return [
         {
             "id": 993001,
-            "started_at": _utc_now(),
+            "started_at": now,
             "ended_at": None,
             "start_die": 6,
             "manual_die": None,
             "user_id": 900001,
             "pending_thread_id": 910001,
             "pending_issue_id": 920002,
-            "pending_thread_updated_at": _utc_now(),
+            "pending_thread_updated_at": now,
             "snoozed_thread_ids": None,
             "skipped_thread_ids": None,
             "timezone": "America/Chicago",
@@ -394,7 +421,7 @@ def _session_rows() -> list[dict[str, Any]]:
             "bandwidth_confidence": 0.9,
             "bandwidth_source": "manual",
             "bandwidth_version": "synthetic-1",
-            "bandwidth_updated_at": _utc_now(),
+            "bandwidth_updated_at": now,
             "reading_bandwidth": "wifi",
             "reading_intent": "read",
             "reading_mode_source": "manual",
@@ -406,7 +433,7 @@ def _session_rows() -> list[dict[str, Any]]:
             "intent_version": None,
             "intent_updated_at": None,
             "session_mode_correction_guidance": None,
-        },
+        }
     ]
 
 
@@ -444,37 +471,10 @@ def apply_fixture(engine: Engine) -> None:
     Raises:
         RuntimeError: When a fixture row violates a constraint.
     """
-    from sqlalchemy.orm import Session
-
     fixture = build_fixture()
-    with Session(engine) as session:
+    with engine.begin() as connection:
         for table_name, rows in fixture.items():
             if not rows:
                 continue
-            table = {
-                model.__tablename__: model.__table__
-                for model in (
-                    User,
-                    Thread,
-                    Issue,
-                    Dependency,
-                    ContinuityPlan,
-                    ReadingPlanIssue,
-                    ReadingPlanSource,
-                    ReadingPlanDependency,
-                    ContinuityRule,
-                    CustomCBLList,
-                    CustomCBLEntry,
-                    CustomCBLSourceLink,
-                    CBLAdoptionReceipt,
-                    CollectionExclusion,
-                    Session,
-                )
-            }[table_name]
-            session.execute(insert(table).values(rows))
-        session.commit()
-
-
-def _unused_session_alias() -> None:  # pragma: no cover - documentation helper
-    """Keep mypy/ruff quiet about the sync Session import used by apply_fixture."""
-    session: Session | None = None
+            table = _TABLES[table_name]
+            connection.execute(insert(table).values(rows))
