@@ -43,8 +43,41 @@ describe('useCompletedThreads: finished series are independent of active Queue (
     // While the dedicated collection is in flight the shelf must read as
     // loading, not as settled-empty (the original #5171 disappearance).
     await waitFor(() => expect(result.current.isLoading).toBe(true))
-    await waitFor(() => expect(result.current.threads).toEqual([]))
-    expect(result.current.isLoading).toBe(false)
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.threads).toEqual([])
+  })
+
+  it('retries the failed continuation cursor rather than restarting at page one', async () => {
+    listCompleted
+      .mockResolvedValueOnce({
+        threads: [{ id: 1, title: 'Finished A', status: 'completed' } as never],
+        next_page_token: 'page-two',
+        active_count: 0,
+      })
+      .mockRejectedValueOnce(new Error('page two temporarily unavailable'))
+      .mockResolvedValueOnce({
+        threads: [{ id: 2, title: 'Finished B', status: 'completed' } as never],
+        next_page_token: null,
+        active_count: 0,
+      })
+
+    const { result } = renderHook(() => useCompletedThreads(true, api), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true))
+
+    await act(async () => { await result.current.loadMore() })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.threads.map((item) => item.id)).toEqual([1])
+
+    await act(async () => { await result.current.retry() })
+    await waitFor(() => expect(result.current.threads.map((item) => item.id)).toEqual([1, 2]))
+    expect(listCompleted).toHaveBeenNthCalledWith(
+      2, undefined, 'created', 'page-two', COMPLETED_PAGE_SIZE,
+    )
+    expect(listCompleted).toHaveBeenNthCalledWith(
+      3, undefined, 'created', 'page-two', COMPLETED_PAGE_SIZE,
+    )
   })
 
   it('separately paginates finished rows and leaves active rows out', async () => {
