@@ -172,7 +172,8 @@ cursor_bounds AS (
 page_events AS (
     SELECT e.id AS event_id,
            e.type AS event_type,
-           e.timestamp AS event_timestamp,
+           extract(epoch FROM e.timestamp) AS timestamp_sec,
+           (extract(epoch FROM e.timestamp) - floor(extract(epoch FROM e.timestamp))) * 1000000 AS timestamp_us,
            e.die AS die_before,
            e.die_after,
            e.rating,
@@ -193,7 +194,8 @@ SELECT jsonb_agg(jsonb_build_object(
     'events', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
         'event_id', event_id,
         'type', event_type,
-        'timestamp', to_char(event_timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.USZ'),
+        'timestamp_sec', timestamp_sec,
+        'timestamp_us', timestamp_us,
         'die_before', die_before,
         'die_after', die_after,
         'rating', rating,
@@ -203,7 +205,7 @@ SELECT jsonb_agg(jsonb_build_object(
     ) FILTER (WHERE event_id IS NOT NULL), '[]')) FROM page_events),
     'has_more', (SELECT COUNT(*) > $4 FROM page_events),
     'last_id', (SELECT event_id FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4),
-    'last_ts_us', (SELECT to_char(event_timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.USZ') FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
+    'last_ts_us', (SELECT timestamp_sec FROM page_events WHERE event_id IS NOT NULL LIMIT 1 OFFSET $4)
 )::text
 FROM page_events
 LIMIT 1;
