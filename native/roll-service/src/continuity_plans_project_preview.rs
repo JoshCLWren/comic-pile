@@ -220,7 +220,7 @@ pub async fn preview_plan_projection_handler(
     if request.reading_order_id < 1 {
         return Err(invalid_request());
     }
-    let connection = db::checkout(&state).await.map_err(|error| ApiError::into_response(db::query_error(error)))?;
+    let connection = db::checkout(&state).await.map_err(ApiError::into_response)?;
 
     let plan_row = connection
         .query_opt(

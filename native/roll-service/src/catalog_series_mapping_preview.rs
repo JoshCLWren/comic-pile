@@ -267,6 +267,7 @@ pub async fn preview_series_mapping_handler(
             origin_issue_id: scope
                 .get("origin_issue_id")
                 .and_then(Value::as_i64)
+                .and_then(|value| i32::try_from(value).ok())
                 .unwrap_or(request.origin_issue_id),
             series_label: scope
                 .get("series_label")

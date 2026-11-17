@@ -354,6 +354,7 @@ pub async fn api_cbl_adoption_preview_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     fn entry() -> SourceEntry {
         SourceEntry {
