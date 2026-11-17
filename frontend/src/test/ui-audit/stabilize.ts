@@ -11,6 +11,13 @@ function stableIso(offsetMinutes: number): string {
   return new Date(Date.parse(AUDIT_FIXED_NOW) + offsetMinutes * 60_000).toISOString()
 }
 
+function normalizeActivityRecord(record: JsonRecord, index: number) {
+  return {
+    ...record,
+    timestamp: stableIso(index),
+  } satisfies JsonRecord
+}
+
 function normalizeSessionRecord(record: JsonRecord, index: number) {
   const normalized = {
     ...record,
@@ -37,6 +44,18 @@ function normalizeSessionRecord(record: JsonRecord, index: number) {
 export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
   if (pathname === '/api/v2/auth/me' && isJsonRecord(payload)) {
     return { ...payload, username: AUDIT_FIXED_USERNAME }
+  }
+
+  if (pathname === '/api/v2/activity' && isJsonRecord(payload)) {
+    const stabilized: JsonRecord = { ...payload }
+    for (const key of ['activities', 'events', 'items']) {
+      const entries = payload[key]
+      if (!Array.isArray(entries)) continue
+      stabilized[key] = entries.map((entry, index) =>
+        isJsonRecord(entry) ? normalizeActivityRecord(entry, index) : entry,
+      )
+    }
+    return stabilized
   }
 
   if (pathname === '/api/v1/sessions/' && isJsonRecord(payload) && Array.isArray(payload.sessions)) {
