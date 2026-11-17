@@ -1234,8 +1234,9 @@ pub async fn get_current_session(
     })?;
 
     // Snapshot count
+    let snapshot_count_sql = SNAPSHOT_COUNT_SQL.replace("session_id = ANY($1)", "session_id = $1");
     let snapshot_count: i32 = connection
-        .query_one(SNAPSHOT_COUNT_SQL.replace("session_id = ANY($1)", "session_id = $1"), &[&session_id])
+        .query_one(&snapshot_count_sql, &[&session_id])
         .await
         .map_err(db::query_error)?
         .try_get(0)
@@ -1248,8 +1249,9 @@ pub async fn get_current_session(
         })?;
 
     // Ladder path
+    let ladder_sql = LADDER_SQL.replace("session_id = ANY($1)", "session_id = $1");
     let ladder_rows = connection
-        .query(LADDER_SQL.replace("session_id = ANY($1)", "session_id = $1"), &[&session_id])
+        .query(&ladder_sql, &[&session_id])
         .await
         .map_err(db::query_error)?;
     let ladder_values: Vec<i32> = ladder_rows
@@ -1265,8 +1267,9 @@ pub async fn get_current_session(
     let ladder = ladder_path(start_die, &ladder_values);
 
     // Current die
+    let current_die_sql = CURRENT_DIE_SQL.replace("session_id = ANY($1)", "session_id = $1");
     let die_row = connection
-        .query_opt(CURRENT_DIE_SQL.replace("session_id = ANY($1)", "session_id = $1"), &[&session_id])
+        .query_opt(&current_die_sql, &[&session_id])
         .await
         .map_err(db::query_error)?;
     let resolved_die = match die_row {
@@ -1296,8 +1299,9 @@ pub async fn get_current_session(
     };
 
     // Latest action event
+    let latest_action_sql = LATEST_ACTION_SQL.replace("session_id = ANY($1)", "session_id = $1");
     let action_row = connection
-        .query_opt(LATEST_ACTION_SQL.replace("session_id = ANY($1)", "session_id = $1"), &[&session_id])
+        .query_opt(&latest_action_sql, &[&session_id])
         .await
         .map_err(db::query_error)?;
     let (action_type, selected_thread_id, roll_result) = match action_row {
