@@ -18,6 +18,8 @@ on:
       - '.github/scripts/validate-free-model-factories.py'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/workflows/fixed-model-factory-dispatch.yml'
+      - '.github/workflows/fixed-model-runtime-observer.yml'
+      - 'tests/test_factory_registry_visibility_optional.py'
       - '.github/workflows/factory-model-contracts.yml'
       - 'tests/test_factory_catalog_slot_migration.py'
       - 'tests/test_factory_published_model_catalog.py'
@@ -62,7 +64,9 @@ jobs:
             tests/test_factory_trusted_policy_staging.py \
             tests/test_factory_work_policy.py \
             tests/test_factory_heartbeat_health.py \
-            tests/test_generate_factory_status_dashboard.py
+            tests/test_generate_factory_status_dashboard.py \
+            tests/test_factory_registry_visibility_optional.py \
+            tests/test_factory_executor_selection_workflow.py
       - name: Verify worker identities in JavaScript
         run: node --test .github/scripts/factory-expected-workers.test.cjs
       - name: Verify dynamic factory wiring and safety contracts

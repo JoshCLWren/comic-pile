@@ -139,8 +139,9 @@ jobs:
             else
               # A transient auth/quota error cannot establish that a marker
               # is absent. Do not create a duplicate or scan full history.
-              echo '::error::Unable to verify attempt marker; leaving trusted Neon completion intact'
-              exit 1
+              # The #1093 marker is optional visibility; Neon stays authoritative.
+              echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup; leaving trusted Neon completion intact'
+              exit 0
             fi
           else
             comment_id=''
@@ -162,10 +163,16 @@ jobs:
           if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > RUN_ID )); then
             echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
           elif [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+            if ! gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null; then
+              echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-update; Neon stays authoritative'
+              exit 0
+            fi
+          elif created="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"; then
+            comment_id="$(jq -r '.id // empty' <<< "$created")"
           else
-            created="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"
-            comment_id="$(jq -er '.id' <<< "$created")"
+            # GitHub refuses new comments on threads over 2,500 comments (403).
+            echo '::warning::FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-create; Neon stays authoritative'
+            exit 0
           fi
           if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
             gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
