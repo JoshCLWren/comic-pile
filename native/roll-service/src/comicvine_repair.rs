@@ -403,7 +403,7 @@ pub(crate) async fn provider_response(
         })?
 }
 
-async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+pub(crate) async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
     provider_response(
         &format!("issue/4000-{id}"),
         &format!("&field_list={FIELDS}"),
