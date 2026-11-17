@@ -212,9 +212,11 @@ def test_factory_merge_requires_successful_exact_head_python_checks(
     python_ci_rows(missing="Factory Tests (complete)"),
     python_ci_rows(missing="Factory Workflow Syntax (actionlint)"),
     python_ci_rows(missing="Factory Shell Scripts (shellcheck)"),
+    python_ci_rows(missing="CI Summary"),
     python_ci_rows(fail="Factory Tests (complete)"),
     python_ci_rows(fail="Factory Workflow Syntax (actionlint)"),
     python_ci_rows(fail="Factory Shell Scripts (shellcheck)"),
+    python_ci_rows(fail="CI Summary"),
     python_ci_rows(fail="Python Lint (ruff)"),
     python_ci_rows(fail="Python Type Check (ty)"),
     python_ci_rows(head="b" * 40),
@@ -455,7 +457,7 @@ def test_inert_docs_can_still_fast_merge() -> None:
 def test_complete_factory_gates_are_required_on_both_paths() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert all(name in gate.REQUIRED_FAST_CHECKS for name in (
-        "Factory Tests (complete)", "Factory Workflow Syntax (actionlint)",
+        "CI Summary", "Factory Tests (complete)", "Factory Workflow Syntax (actionlint)",
         "Factory Shell Scripts (shellcheck)",
     ))
     assert "tests/test_factory_*.py .github/scripts/test_*.py" in ci

@@ -38,7 +38,9 @@ BLOCKED_LABELS = frozenset(
 )
 TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 # These job names come from .github/workflows/ci.yml, not a provider roster.
+# CI Summary prevents an owner-bypass token from skipping other required jobs.
 REQUIRED_FAST_CHECKS = frozenset({
+    "CI Summary",
     "Python Lint (ruff)",
     "Python Type Check (ty)",
     "Factory Tests (complete)",
