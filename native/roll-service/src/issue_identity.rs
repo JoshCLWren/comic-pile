@@ -551,13 +551,14 @@ pub async fn discover_cbl_source_lists(
     
     let mut param_count = 0;
     let mut params_vec: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![];
+    let pattern_storage: String;
     
     if let Some(ref q) = params.q {
         if !q.is_empty() {
             param_count += 1;
             query.push_str(&format!(" AND (csl.name ILIKE ${} OR csl.source_path ILIKE ${})", param_count, param_count));
-            let pattern = format!("%{}%", q);
-            params_vec.push(&pattern);
+            pattern_storage = format!("%{}%", q);
+            params_vec.push(&pattern_storage);
         }
     }
     

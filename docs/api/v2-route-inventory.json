@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 57,
-    "native_rust": 57,
+    "total_live_operations": 59,
+    "native_rust": 59,
     "python_fastapi": 0,
-    "native_rust_status": 57,
+    "native_rust_status": 59,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -159,6 +159,34 @@
       "owning_issue": 4843,
       "method": "POST",
       "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4843,
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reconciliation",
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
