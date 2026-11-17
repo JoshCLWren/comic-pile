@@ -10638,7 +10638,94 @@
         ],
         "type": "object"
       },
+      "NativeCanonicalCorrection2": {
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "provider_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "field_name",
+          "canonical_value",
+          "provenance",
+          "created_by",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "NativeComicVineIssueCandidate": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeComicVineIssueCandidate2": {
         "properties": {
           "comicvine_issue_id": {
             "format": "int32",
@@ -10734,7 +10821,116 @@
         ],
         "type": "object"
       },
+      "NativeComicVineResolveResponse2": {
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "issue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeComicVineResolvedIssue2"
+              }
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeComicVineIssueCandidate2"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "validation_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeComicVineSeriesResult2"
+              }
+            ]
+          }
+        },
+        "required": [
+          "input",
+          "kind",
+          "issues"
+        ],
+        "type": "object"
+      },
       "NativeComicVineResolvedIssue": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeComicVineResolvedIssue2": {
         "properties": {
           "comicvine_issue_id": {
             "format": "int32",
@@ -10818,7 +11014,78 @@
         ],
         "type": "object"
       },
+      "NativeComicVineSeriesIssuesResponse2": {
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeComicVineIssueCandidate2"
+            },
+            "type": "array"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "issues"
+        ],
+        "type": "object"
+      },
       "NativeComicVineSeriesResult": {
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NativeComicVineSeriesResult2": {
         "properties": {
           "comicvine_volume_id": {
             "format": "int32",
@@ -10912,6 +11179,52 @@
         ],
         "type": "object"
       },
+      "NativeComicVineSeriesSearchResponse2": {
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_offset": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/NativeComicVineSeriesResult2"
+            },
+            "type": "array"
+          },
+          "total_available": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query",
+          "results",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "type": "object"
+      },
       "NativeConfirmIdentityRequest": {
         "properties": {
           "comicvine_issue_id": {
@@ -10924,7 +11237,62 @@
         ],
         "type": "object"
       },
+      "NativeConfirmIdentityRequest2": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
       "NativeImportIssueRequest": {
+        "properties": {
+          "anchor_after_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "anchor_before_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeImportIssueRequest2": {
         "properties": {
           "anchor_after_thread_id": {
             "format": "int32",
@@ -11010,6 +11378,49 @@
         ],
         "type": "object"
       },
+      "NativeImportIssueResponse2": {
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "position": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_items": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "issue_id",
+          "external_identity_id"
+        ],
+        "type": "object"
+      },
       "NativeImportSeriesIssueResult": {
         "properties": {
           "comicvine_issue_id": {
@@ -11049,7 +11460,83 @@
         ],
         "type": "object"
       },
+      "NativeImportSeriesIssueResult2": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "conflict_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hydration": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "outcome",
+          "hydration"
+        ],
+        "type": "object"
+      },
       "NativeImportSeriesRequest": {
+        "properties": {
+          "already_read_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "anchor_after_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "anchor_before_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id"
+        ],
+        "type": "object"
+      },
+      "NativeImportSeriesRequest2": {
         "properties": {
           "already_read_count": {
             "format": "int32",
@@ -11159,7 +11646,123 @@
         ],
         "type": "object"
       },
+      "NativeImportSeriesResponse2": {
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_results": {
+            "items": {
+              "$ref": "#/components/schemas/NativeImportSeriesIssueResult2"
+            },
+            "type": "array"
+          },
+          "issues_adopted": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issues_conflict": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issues_skipped": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "position": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "thread_created": {
+            "type": "boolean"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues_in_series": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_items": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "series_name",
+          "comicvine_volume_id",
+          "total_issues_in_series",
+          "issues_adopted",
+          "issues_skipped",
+          "issues_conflict",
+          "issue_results",
+          "thread_created"
+        ],
+        "type": "object"
+      },
       "NativeIssueIdentityMapping": {
+        "properties": {
+          "comicvine_id": {
+            "type": "string"
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_identity_id",
+          "provider",
+          "comicvine_id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeIssueIdentityMapping2": {
         "properties": {
           "comicvine_id": {
             "type": "string"
@@ -11251,7 +11854,77 @@
         ],
         "type": "object"
       },
+      "NativeIssueIdentityResponse2": {
+        "properties": {
+          "candidate_mappings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueIdentityMapping2"
+            },
+            "type": "array"
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmed_mappings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueIdentityMapping2"
+            },
+            "type": "array"
+          },
+          "has_confirmed_identity": {
+            "type": "boolean"
+          },
+          "has_unresolved": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "has_confirmed_identity",
+          "confirmed_mappings",
+          "candidate_mappings",
+          "has_unresolved"
+        ],
+        "type": "object"
+      },
       "NativeMetadataCorrectionRequest": {
+        "properties": {
+          "canonical_value": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "field_name",
+          "canonical_value"
+        ],
+        "type": "object"
+      },
+      "NativeMetadataCorrectionRequest2": {
         "properties": {
           "canonical_value": {
             "type": "string"
@@ -11284,11 +11957,42 @@
         ],
         "type": "object"
       },
+      "NativeMetadataCorrectionRevertRequest2": {
+        "properties": {
+          "correction_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "correction_id"
+        ],
+        "type": "object"
+      },
       "NativeMetadataCorrectionsResponse": {
         "properties": {
           "corrections": {
             "items": {
               "$ref": "#/components/schemas/NativeCanonicalCorrection"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "corrections"
+        ],
+        "type": "object"
+      },
+      "NativeMetadataCorrectionsResponse2": {
+        "properties": {
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCanonicalCorrection2"
             },
             "type": "array"
           },
@@ -11325,7 +12029,47 @@
         ],
         "type": "object"
       },
+      "NativeMetadataRefreshResponse2": {
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "refreshed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "issue_id",
+          "refreshed"
+        ],
+        "type": "object"
+      },
       "NativeReplaceIdentityRequest": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeReplaceIdentityRequest2": {
         "properties": {
           "comicvine_issue_id": {
             "format": "int32",
@@ -29942,7 +30686,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeIssueIdentityResponse"
+                  "$ref": "#/components/schemas/NativeIssueIdentityResponse2"
                 }
               }
             },
@@ -29983,7 +30727,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeIssueIdentityResponse"
+                  "$ref": "#/components/schemas/NativeIssueIdentityResponse2"
                 }
               }
             },
@@ -30025,7 +30769,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeConfirmIdentityRequest"
+                "$ref": "#/components/schemas/NativeConfirmIdentityRequest2"
               }
             }
           },
@@ -30036,7 +30780,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeIssueIdentityResponse"
+                  "$ref": "#/components/schemas/NativeIssueIdentityResponse2"
                 }
               }
             },
@@ -30078,7 +30822,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeReplaceIdentityRequest"
+                "$ref": "#/components/schemas/NativeReplaceIdentityRequest2"
               }
             }
           },
@@ -30089,7 +30833,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeIssueIdentityResponse"
+                  "$ref": "#/components/schemas/NativeIssueIdentityResponse2"
                 }
               }
             },
@@ -30131,7 +30875,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeMetadataCorrectionRequest"
+                "$ref": "#/components/schemas/NativeMetadataCorrectionRequest2"
               }
             }
           },
@@ -30142,7 +30886,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse"
+                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse2"
                 }
               }
             },
@@ -30185,7 +30929,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse"
+                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse2"
                 }
               }
             },
@@ -30228,7 +30972,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeMetadataRefreshResponse"
+                  "$ref": "#/components/schemas/NativeMetadataRefreshResponse2"
                 }
               }
             },
@@ -30270,7 +31014,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeMetadataCorrectionRevertRequest"
+                "$ref": "#/components/schemas/NativeMetadataCorrectionRevertRequest2"
               }
             }
           },
@@ -30281,7 +31025,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse"
+                  "$ref": "#/components/schemas/NativeMetadataCorrectionsResponse2"
                 }
               }
             },
@@ -30311,7 +31055,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeImportIssueRequest"
+                "$ref": "#/components/schemas/NativeImportIssueRequest2"
               }
             }
           },
@@ -30322,7 +31066,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeImportIssueResponse"
+                  "$ref": "#/components/schemas/NativeImportIssueResponse2"
                 }
               }
             },
@@ -30367,7 +31111,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeComicVineResolveResponse"
+                  "$ref": "#/components/schemas/NativeComicVineResolveResponse2"
                 }
               }
             },
@@ -30426,7 +31170,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeComicVineSeriesSearchResponse"
+                  "$ref": "#/components/schemas/NativeComicVineSeriesSearchResponse2"
                 }
               }
             },
@@ -30448,7 +31192,7 @@
     },
     "/api/v2/comicvine/series/{comicvine_volume_id}/import-status": {
       "get": {
-        "operationId": "series_import_status_documentation",
+        "operationId": "series_import_status_v2_documentation",
         "parameters": [
           {
             "description": "ComicVine volume ID",
@@ -30515,7 +31259,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeComicVineSeriesIssuesResponse"
+                  "$ref": "#/components/schemas/NativeComicVineSeriesIssuesResponse2"
                 }
               }
             },
@@ -30542,7 +31286,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeImportSeriesRequest"
+                "$ref": "#/components/schemas/NativeImportSeriesRequest2"
               }
             }
           },
@@ -30553,7 +31297,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeImportSeriesResponse"
+                  "$ref": "#/components/schemas/NativeImportSeriesResponse2"
                 }
               }
             },
