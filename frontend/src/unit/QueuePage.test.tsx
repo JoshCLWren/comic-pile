@@ -30,6 +30,13 @@ import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
+
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useCreateThread: vi.fn(),
