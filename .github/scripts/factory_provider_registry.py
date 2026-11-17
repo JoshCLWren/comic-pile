@@ -27,6 +27,8 @@ class ProviderSpec:
 
 
 # Provider IDs, credential names, and endpoints belong here, not in workflows.
+# Retired 2026-11-17 (owner rule: drop a provider only when ALL its models are
+# paid-only): requesty refused every model (555x "balance is too low").
 # This is declarative integration metadata, not a model-name guesser.
 PROVIDERS: Mapping[str, ProviderSpec] = {
     "nvidia": ProviderSpec("nvidia", "NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "NVIDIA published API models"),
@@ -35,7 +37,6 @@ PROVIDERS: Mapping[str, ProviderSpec] = {
     "vercel-ai-gateway": ProviderSpec("vercel", "AI_GATEWAY_API_KEY", "https://ai-gateway.vercel.sh/v1", "Vercel AI Gateway free capacity"),
     "mistral": ProviderSpec("mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1", "Mistral Codestral"),
     "orcarouter": ProviderSpec("orcarouter", "ORCAROUTER_API_KEY", "https://api.orcarouter.ai/v1", "OrcaRouter free capacity"),
-    "requesty": ProviderSpec("requesty", "REQUESTY_API_KEY", "https://router.requesty.ai/v1", "Requesty router"),
     "pollinations": ProviderSpec("pollinations", "POLLINATIONS_API_KEY", "https://gen.pollinations.ai/v1", "Pollinations AI"),
     "gemini-free": ProviderSpec("google", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "Google Gemini API Free", headers=(("x-goog-api-client", "comic-pile-factory-oai/1.0"),)),
     "groq-free": ProviderSpec("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1", "GroqCloud Free"),
