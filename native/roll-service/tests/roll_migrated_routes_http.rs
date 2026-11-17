@@ -30,6 +30,7 @@ async fn setup_user(
 ) -> (
     Arc<AppState>,
     String,
+    String,
     i32,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
@@ -48,70 +49,48 @@ async fn setup_user(
     );
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
-    let (status, body) = send(
-        &state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/auth/register")
-            .header(
-                "x-forwarded-for",
-                format!(
-                    "2001:db8::{:x}",
-                    NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
-                ),
-            )
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                json!({
-                    "username": username,
-                    "email": format!("{username}@example.com"),
-                    "password": "correct-horse-battery"
-                })
-                .to_string(),
-            ))
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    let token = body["access_token"].as_str().unwrap().to_owned();
-    let user_id: i32 = state
-        .pool
-        .get()
-        .await
-        .unwrap()
-        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
-        .await
-        .unwrap()
-        .get(0);
-    (state, token, user_id, guard)
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    (state, token, csrf, user_id, guard)
 }
 
-async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, i32) {
-    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
-    let (status, body) = send(
-        state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/auth/register")
-            .header(
-                "x-forwarded-for",
-                format!(
-                    "2001:db8::{:x}",
-                    NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
-                ),
-            )
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                json!({
-                    "username": username,
-                    "email": format!("{username}@example.com"),
-                    "password": "correct-horse-battery"
-                })
-                .to_string(),
-            ))
-            .unwrap(),
-    )
-    .await;
+async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|cookie| cookie.to_str().ok())
+        .find_map(|cookie| cookie.strip_prefix("csrf_token="))
+        .and_then(|cookie| cookie.split(';').next())
+        .expect("csrf cookie")
+        .to_owned();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let token = body["access_token"].as_str().unwrap().to_owned();
     let user_id: i32 = state
@@ -123,7 +102,12 @@ async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, i3
         .await
         .unwrap()
         .get(0);
-    (token, user_id)
+    (token, csrf, user_id)
+}
+
+async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, String, i32) {
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    register_user(state, &username).await
 }
 
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
@@ -136,11 +120,19 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Val
     )
 }
 
-fn authed(method: &str, path: &str, token: &str, body: Option<Value>) -> Request<Body> {
+fn authed(
+    method: &str,
+    path: &str,
+    token: &str,
+    csrf: &str,
+    body: Option<Value>,
+) -> Request<Body> {
     let builder = Request::builder()
         .method(method)
         .uri(path)
-        .header(header::AUTHORIZATION, format!("Bearer {token}"));
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"));
     if let Some(body) = body {
         builder
             .header(header::CONTENT_TYPE, "application/json")
@@ -153,7 +145,7 @@ fn authed(method: &str, path: &str, token: &str, body: Option<Value>) -> Request
 
 #[tokio::test]
 async fn recommendation_explanation_requires_auth() {
-    let (state, _token, _user_id, _guard) = setup_user("recauth").await;
+    let (state, _token, _csrf, _user_id, _guard) = setup_user("recauth").await;
     let (status, body) = send(
         &state,
         Request::builder()
@@ -168,7 +160,7 @@ async fn recommendation_explanation_requires_auth() {
 
 #[tokio::test]
 async fn override_requires_auth() {
-    let (state, _token, _user_id, _guard) = setup_user("ovrauth").await;
+    let (state, _token, _csrf, _user_id, _guard) = setup_user("ovrauth").await;
     let (status, body) = send(
         &state,
         Request::builder()
@@ -184,7 +176,7 @@ async fn override_requires_auth() {
 
 #[tokio::test]
 async fn switch_prerequisite_requires_auth() {
-    let (state, _token, _user_id, _guard) = setup_user("swauth").await;
+    let (state, _token, _csrf, _user_id, _guard) = setup_user("swauth").await;
     let (status, body) = send(
         &state,
         Request::builder()
@@ -202,13 +194,14 @@ async fn switch_prerequisite_requires_auth() {
 
 #[tokio::test]
 async fn recommendation_explanation_returns_404_for_missing_event() {
-    let (state, token, _user_id, _guard) = setup_user("rec404").await;
+    let (state, token, csrf, _user_id, _guard) = setup_user("rec404").await;
     let (status, body) = send(
         &state,
         authed(
             "GET",
             "/api/v1/roll/events/999999/recommendation-explanation",
             &token,
+            &csrf,
             None,
         ),
     )
@@ -218,8 +211,8 @@ async fn recommendation_explanation_returns_404_for_missing_event() {
 
 #[tokio::test]
 async fn recommendation_explanation_hides_other_users_event() {
-    let (state, token, user_id, _guard) = setup_user("recown1").await;
-    let (_token2, user2) = register_extra_user(&state, "recown2").await;
+    let (state, token, csrf, user_id, _guard) = setup_user("recown1").await;
+    let (_token2, _csrf2, user2) = register_extra_user(&state, "recown2").await;
     let conn = state.pool.get().await.unwrap();
     let session_id: i32 = conn
         .query_one(
@@ -245,6 +238,7 @@ async fn recommendation_explanation_hides_other_users_event() {
             "GET",
             &format!("/api/v1/roll/events/{event_id}/recommendation-explanation"),
             &token,
+            &csrf,
             None,
         ),
     )
@@ -254,7 +248,7 @@ async fn recommendation_explanation_hides_other_users_event() {
 
 #[tokio::test]
 async fn recommendation_explanation_rejects_non_roll_event() {
-    let (state, token, user_id, _guard) = setup_user("rec422").await;
+    let (state, token, csrf, user_id, _guard) = setup_user("rec422").await;
     let conn = state.pool.get().await.unwrap();
     let session_id: i32 = conn
         .query_one(
@@ -279,6 +273,7 @@ async fn recommendation_explanation_rejects_non_roll_event() {
             "GET",
             &format!("/api/v1/roll/events/{event_id}/recommendation-explanation"),
             &token,
+            &csrf,
             None,
         ),
     )
@@ -288,20 +283,21 @@ async fn recommendation_explanation_rejects_non_roll_event() {
 
 #[tokio::test]
 async fn override_returns_404_for_missing_or_other_users_thread() {
-    let (state, token, _user_id, _guard) = setup_user("ovr404").await;
+    let (state, token, csrf, _user_id, _guard) = setup_user("ovr404").await;
     let (status, body) = send(
         &state,
         authed(
             "POST",
             "/api/v1/roll/override",
             &token,
+            &csrf,
             Some(json!({"thread_id": 999999})),
         ),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 
-    let (_token2, user2) = register_extra_user(&state, "ovrown2").await;
+    let (_token2, _csrf2, user2) = register_extra_user(&state, "ovrown2").await;
     let conn = state.pool.get().await.unwrap();
     let thread_id: i32 = conn
         .query_one(
@@ -318,6 +314,7 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
             "POST",
             "/api/v1/roll/override",
             &token,
+            &csrf,
             Some(json!({"thread_id": thread_id})),
         ),
     )
@@ -327,8 +324,14 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
 
 #[tokio::test]
 async fn override_returns_422_for_non_selectable_thread() {
-    let (state, token, user_id, _guard) = setup_user("ovr422").await;
+    let (state, token, csrf, user_id, _guard) = setup_user("ovr422").await;
     let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
     // Active thread with no unread issue/frontier is not a selectable candidate.
     let thread_id: i32 = conn
         .query_one(
@@ -345,6 +348,7 @@ async fn override_returns_422_for_non_selectable_thread() {
             "POST",
             "/api/v1/roll/override",
             &token,
+            &csrf,
             Some(json!({"thread_id": thread_id})),
         ),
     )
@@ -354,13 +358,14 @@ async fn override_returns_422_for_non_selectable_thread() {
 
 #[tokio::test]
 async fn switch_prerequisite_returns_404_for_missing_or_other_users_issue() {
-    let (state, token, _user_id, _guard) = setup_user("sw404").await;
+    let (state, token, csrf, _user_id, _guard) = setup_user("sw404").await;
     let (status, body) = send(
         &state,
         authed(
             "POST",
             "/api/v1/roll/switch-prerequisite",
             &token,
+            &csrf,
             Some(json!({"node_type":"issue","node_id":999999})),
         ),
     )
@@ -370,13 +375,14 @@ async fn switch_prerequisite_returns_404_for_missing_or_other_users_issue() {
 
 #[tokio::test]
 async fn switch_prerequisite_rejects_unsupported_node_type() {
-    let (state, token, _user_id, _guard) = setup_user("sw422").await;
+    let (state, token, csrf, _user_id, _guard) = setup_user("sw422").await;
     let (status, body) = send(
         &state,
         authed(
             "POST",
             "/api/v1/roll/switch-prerequisite",
             &token,
+            &csrf,
             Some(json!({"node_type":"crossover","node_id":1})),
         ),
     )
