@@ -3,14 +3,14 @@
  * rolled result instead of retaining the pre-roll scroll offset.
  *
  * Before the fix, entering the rating view in place (no navigation) kept the
- * prior `window.scrollY`, dropping the reader partway through Reading Context.
+ * prior `#root.scrollTop`, dropping the reader partway through Reading Context.
  * These specs start from a non-zero scroll offset, complete a fresh roll, and
  * verify the rating surface start lands at the top of the viewport at every
  * supported viewport class.
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, readAppScrollState, scrollAppTo, waitForRollPageReady } from './helpers'
 
 const VIEWPORTS = [
   { name: 'phone portrait', width: 390, height: 844 },
@@ -40,16 +40,14 @@ test.describe('issue #2286: fresh roll anchors the viewport to the rating surfac
       await gotoRollPage(page)
       await waitForRollPageReady(page)
 
-      // The page must actually be scrollable, otherwise the retained-offset
-      // precondition cannot be modeled.
-      const isScrollable = await page.evaluate(
-        () => document.documentElement.scrollHeight > window.innerHeight,
-      )
-      expect(isScrollable).toBe(true)
+      // Verify that the real app scroller can move. The document itself is
+      // intentionally non-scrollable; #root owns the scroll position.
+      const initialScroll = await readAppScrollState(page)
+      expect(initialScroll.rootScrollHeight).toBeGreaterThan(initialScroll.rootClientHeight)
 
       // Start from a non-zero scroll position.
-      await page.evaluate(() => window.scrollTo(0, 380))
-      const preRollOffset = await page.evaluate(() => window.scrollY)
+      await scrollAppTo(page, 380)
+      const preRollOffset = (await readAppScrollState(page)).rootScrollTop
       expect(preRollOffset).toBeGreaterThan(0)
 
       // Dispatch the click without Playwright's auto-scroll normalization so
