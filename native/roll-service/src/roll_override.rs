@@ -791,8 +791,9 @@ mod tests {
         )
         .await;
         let tx = client.transaction().await.unwrap();
-        let (pending, snoozed, skipped, timezone) =
-            fetch_session_state(&tx, 1, 1).await.expect("canonical session read");
+        let (pending, snoozed, skipped, timezone) = fetch_session_state(&tx, 1, 1)
+            .await
+            .expect("canonical session read");
         tx.rollback().await.unwrap();
         assert_eq!(pending, Some(10));
         assert_eq!(snoozed, Some(vec![5]));
@@ -809,8 +810,9 @@ mod tests {
             .await
             .unwrap();
         let tx = client.transaction().await.unwrap();
-        let (pending, snoozed, skipped, timezone) =
-            fetch_session_state(&tx, 2, 1).await.expect("empty session read");
+        let (pending, snoozed, skipped, timezone) = fetch_session_state(&tx, 2, 1)
+            .await
+            .expect("empty session read");
         tx.rollback().await.unwrap();
         assert_eq!(pending, None);
         assert_eq!(snoozed, None);

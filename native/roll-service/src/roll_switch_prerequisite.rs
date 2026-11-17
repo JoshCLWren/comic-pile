@@ -516,7 +516,9 @@ mod tests {
         )
         .await;
         let tx = client.transaction().await.unwrap();
-        let (pending, snoozed) = fetch_pending(&tx, 1, 1).await.expect("canonical pending read");
+        let (pending, snoozed) = fetch_pending(&tx, 1, 1)
+            .await
+            .expect("canonical pending read");
         assert_eq!(pending, Some(10));
         assert_eq!(snoozed, Some(vec![20]));
         let (pending, snoozed) = fetch_pending(&tx, 2, 1).await.expect("plain pending read");

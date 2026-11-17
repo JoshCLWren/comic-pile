@@ -435,20 +435,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/roll/override$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/sessions/[0-9]+$",
       "methods": [
         "GET"
@@ -662,27 +648,6 @@
       "src": "^/api/v1/releases/source$",
       "methods": [
         "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/roll/override$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/roll/switch\\-prerequisite$",
-      "methods": [
-        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -1488,6 +1453,22 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/roll/override$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/bootstrap\\-alias\\-metrics$",
       "methods": [
         "GET",
@@ -1771,6 +1752,30 @@
       "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
       "methods": [
         "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/roll/override$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/roll/switch\\-prerequisite$",
+      "methods": [
+        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
