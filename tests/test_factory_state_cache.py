@@ -400,10 +400,15 @@ def test_runtime_worker_never_paginates_full_registry_on_missing_marker() -> Non
     assert '--paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' not in workflow
     assert "FACTORY_HEARTBEAT_COMMENT_ID:" in workflow
     assert "FACTORY_ATTEMPT_COMMENT_ID:" in workflow
-    assert "refusing duplicate write or unbounded registry scan" in workflow
+    # An unverifiable locator skips the optional write; it never duplicates
+    # or scans history, and never fails the worker (#1093 is visibility only).
+    assert "Cannot prove absence: skip (never duplicate, never scan history)." in workflow
+    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED op=heartbeat-lookup" in workflow
+    assert "FACTORY_REGISTRY_VISIBILITY_SKIPPED op=attempt-lookup" in workflow
     assert "factory_registry_verify.py verify --kind heartbeat" in workflow
     assert "factory_registry_verify.py verify --kind attempt" in workflow
-    assert workflow.count("factory-heartbeat-lookup-error") == 4
+    # Two heartbeat lookups: write, 404 check, and structured skip diagnostic.
+    assert workflow.count("factory-heartbeat-lookup-error") == 6
     assert "factory-attempt-lookup-error" in workflow
     # A missing marker is created through an ordinary targeted POST,
     # not reconstructed from a historical cache or unauthenticated list.
