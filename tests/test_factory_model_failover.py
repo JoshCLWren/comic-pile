@@ -336,7 +336,7 @@ def test_opencode_v2_fleet_discovery_and_selection(tmp_path, monkeypatch):
     import shutil
 
     called = []
-    catalog = "opencode/generated-free\\nother-provider/unrelated\\n"
+    catalog = "opencode/generated-free\nother-provider/unrelated\n"
     def fake_run(args, **kwargs):
         called.append(list(args))
         return subprocess.CompletedProcess(args, 0, stdout=catalog)
