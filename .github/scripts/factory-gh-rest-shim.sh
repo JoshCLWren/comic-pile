@@ -16,7 +16,53 @@ if [[ -f "$METER" ]]; then
   factory_gh_meter_record "$@"
 else
   factory_gh_real() { "$REAL_GH" "$@"; }
+  factory_gh_is_read() { return 1; }
 fi
+
+# Run-local read cache (dispatcher jobs only; FACTORY_DISCOVERY_DIR is the
+# job's scheduling memory). One dispatcher pass re-ran the same reads from
+# many controller processes: 66x `gh pr checks` and 26+26 paginated Entry/
+# fork run listings in a single push-triggered pass (run 44097292205). Only
+# these repetitive status reads are cached, for a short TTL, and ANY write
+# made through this shim (labels, comments, merges, workflow dispatches)
+# drops the whole cache so later reads in the job are live again.
+eval "$(declare -f factory_gh_real | sed '1s/factory_gh_real/factory_gh_live/')"
+FACTORY_GH_READ_CACHE="${FACTORY_DISCOVERY_DIR:+$FACTORY_DISCOVERY_DIR/gh-read-cache}"
+factory_gh_cacheable() {
+  [[ -n "$FACTORY_GH_READ_CACHE" ]] || return 1
+  factory_gh_is_read "$@" || return 1
+  [[ "${1:-} ${2:-}" == "pr checks" ]] && return 0
+  [[ "${1:-}" == api && "$*" =~ actions/(workflows/[^/?\ ]+/runs|runs/[0-9]+/jobs) ]]
+}
+factory_gh_real() {
+  local key file now age status=0
+  if ! factory_gh_cacheable "$@"; then
+    if [[ -n "$FACTORY_GH_READ_CACHE" ]] && ! factory_gh_is_read "$@"; then
+      rm -rf "$FACTORY_GH_READ_CACHE"
+    fi
+    factory_gh_live "$@"
+    return
+  fi
+  key="$(printf '%s\0' "$@" | sha256sum | cut -c1-40)"
+  file="$FACTORY_GH_READ_CACHE/$key"
+  now="$(date +%s)"
+  if [[ -f "$file" ]]; then
+    age=$(( now - $(stat -c %Y "$file") ))
+    if (( age >= 0 && age < ${FACTORY_GH_READ_CACHE_TTL:-45} )); then
+      cat "$file"
+      return 0
+    fi
+  fi
+  mkdir -p "$FACTORY_GH_READ_CACHE"
+  factory_gh_live "$@" > "$file.$$" || status=$?
+  cat "$file.$$"
+  if (( status == 0 )); then
+    mv "$file.$$" "$file"
+  else
+    rm -f "$file.$$"
+  fi
+  return "$status"
+}
 
 original=("$@")
 command_group="${1:-}"

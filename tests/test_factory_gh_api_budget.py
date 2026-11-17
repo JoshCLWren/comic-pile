@@ -172,3 +172,57 @@ def test_read_token_is_optional_and_verified_before_use() -> None:
         assert all(v == "read" for k, v in mint["with"].items() if k.startswith("permission-"))
         verify = next(s for s in steps if s.get("name") == "Verify and enable read-only factory App token")
         assert verify["run"].index("gh api") < verify["run"].index("FACTORY_READ_TOKEN=")
+
+
+SHIM = ROOT / ".github/scripts/factory-gh-rest-shim.sh"
+
+
+def _shim(tmp_path: Path, *args: str, ttl: str = "45") -> str:
+    calls = tmp_path / "live-calls"
+    fake = tmp_path / "real-gh"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$*" >> {calls}\n'
+        'echo "live:$(wc -l < ' + str(calls) + ')"\n'
+    )
+    fake.chmod(0o755)
+    env = {**os.environ, "FACTORY_REAL_GH": str(fake), "GITHUB_WORKSPACE": str(ROOT),
+           "FACTORY_DISCOVERY_DIR": str(tmp_path / "discovery"),
+           "FACTORY_GH_READ_CACHE_TTL": ttl, "GITHUB_REPOSITORY": "o/r"}
+    for name in ("FACTORY_GH_CALL_LOG", "FACTORY_READ_TOKEN"):
+        env.pop(name, None)
+    return subprocess.run(["bash", str(SHIM), *args], env=env, text=True,
+                          capture_output=True, check=True).stdout.strip()
+
+
+def _live(tmp_path: Path) -> int:
+    calls = tmp_path / "live-calls"
+    return len(calls.read_text().splitlines()) if calls.exists() else 0
+
+
+def test_dispatcher_reuses_repeated_status_reads_within_one_job(tmp_path: Path) -> None:
+    checks = ("pr", "checks", "5", "--repo", "o/r", "--required", "--json", "state")
+    runs = ("api", "--paginate", "--slurp",
+            "repos/o/r/actions/workflows/free-model-factory-entry.yml/runs?status=queued&per_page=100")
+    assert _shim(tmp_path, *checks) == "live:1"
+    assert _shim(tmp_path, *checks) == "live:1"
+    assert _shim(tmp_path, *runs) == "live:2"
+    assert _shim(tmp_path, *runs) == "live:2"
+    assert _live(tmp_path) == 2
+
+
+def test_any_write_drops_the_read_cache(tmp_path: Path) -> None:
+    checks = ("pr", "checks", "5", "--repo", "o/r", "--required", "--json", "state")
+    _shim(tmp_path, *checks)
+    _shim(tmp_path, "api", "-X", "PUT", "repos/o/r/issues/5/labels")
+    assert _shim(tmp_path, *checks) == "live:3"
+    _shim(tmp_path, "workflow", "run", "free-model-factory-entry.yml")
+    assert _shim(tmp_path, *checks) == "live:5"
+
+
+def test_ownership_reads_and_expired_entries_stay_live(tmp_path: Path) -> None:
+    assert _shim(tmp_path, "api", "repos/o/r/issues/5") == "live:1"
+    assert _shim(tmp_path, "api", "repos/o/r/issues/5") == "live:2"
+    checks = ("pr", "checks", "5", "--repo", "o/r", "--required", "--json", "state")
+    _shim(tmp_path, *checks, ttl="0")
+    assert _shim(tmp_path, *checks, ttl="0") == "live:4"
