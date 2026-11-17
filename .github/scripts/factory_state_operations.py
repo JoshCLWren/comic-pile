@@ -268,25 +268,33 @@ def historical_failure_streak(
 
 async def _recent_streak(
     conn: Any, run_id: int, source: str, model: str, *,
-    worker: str | None = None, model_independent: bool = False,
+    repo: str, worker: str | None = None, model_independent: bool = False,
 ) -> int:
-    """Only query history once, while a new durable retry row is initialized."""
+    """Read prior attempts after the latest manual health reset in one query."""
     if worker is None:
         rows = await conn.fetch(
             """SELECT event_type,detail FROM public.factory_state_events
                WHERE subject_type='worker'
                  AND event_type IN ('worker_failed','worker_completed')
                  AND detail->>'source'=$1 AND detail->>'model'=$2
-                 AND created_at>now()-interval '7 days'
-               ORDER BY id DESC LIMIT 64""", source, model,
+                 AND created_at>GREATEST(
+                     now()-interval '7 days',
+                     COALESCE((SELECT updated_at FROM public.factory_state_kv
+                               WHERE cache_key=$3), '-infinity'::timestamptz))
+               ORDER BY id DESC LIMIT 64""",
+            source, model, f"factory-model-health-reset-v1:{repo}",
         )
     else:
         rows = await conn.fetch(
             """SELECT event_type,detail FROM public.factory_state_events
                WHERE subject_type='worker' AND subject_number=$1::bigint
                  AND event_type IN ('worker_failed','worker_completed')
-                 AND created_at>now()-interval '7 days'
-               ORDER BY id DESC LIMIT 64""", int(worker),
+                 AND created_at>GREATEST(
+                     now()-interval '7 days',
+                     COALESCE((SELECT updated_at FROM public.factory_state_kv
+                               WHERE cache_key=$2), '-infinity'::timestamptz))
+               ORDER BY id DESC LIMIT 64""",
+            int(worker), f"factory-model-health-reset-v1:{repo}",
         )
     return historical_failure_streak(
         rows, run_id, source, model, model_only=worker is None,
@@ -474,7 +482,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             prior_run = int(prior_state.get("run_id") or 0) if isinstance(prior_state, dict) else 0
             if prior_run <= run_id:
                 streak = (int(prior_state.get("streak") or 0) if previous
-                          else await _recent_streak(conn, run_id, failed_source, failed_model)) + 1
+                          else await _recent_streak(conn, run_id, failed_source, failed_model, repo=repo)) + 1
                 suspended = False
                 retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
@@ -526,7 +534,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 )
                 streak = (int(old.get("streak") or 0) if same_pin else
                           await _recent_streak(
-                              conn, run_id, source, model, worker=worker,
+                              conn, run_id, source, model, repo=repo, worker=worker,
                               model_independent=catalog_slot,
                           )) + 1
                 suspended = False
@@ -575,7 +583,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             if prior_model_run <= run_id:
                 prior_streak = (
                     int(model_old.get("streak") or 0) if previous_model else
-                    await _recent_streak(conn, run_id, source, model)
+                    await _recent_streak(conn, run_id, source, model, repo=repo)
                 )
                 streak = prior_streak + 1
                 suspended = False
@@ -1221,6 +1229,15 @@ async def _reset_model_health(conn: Any, repo: str, include_retired: bool = Fals
                  WHERE repo=$1 AND (cooldown_until IS NOT NULL OR quota_reset_at IS NOT NULL)
                  RETURNING 1)
                SELECT count(*) FROM cleared""", repo)
+        # Preserve the event ledger but never rehydrate failures from before reset.
+        await conn.execute(
+            """INSERT INTO public.factory_state_kv
+                 (cache_key,payload,fetched_at,expires_at,updated_at)
+                 VALUES($1,'[]'::jsonb,now(),now()+interval '30 days',now())
+                 ON CONFLICT(cache_key) DO UPDATE SET
+                   payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                   expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+            f"factory-model-health-reset-v1:{repo}")
     return {"model_health_rows": int(health or 0), "backoff_rows": int(backoffs or 0),
             "provider_cooldowns": int(providers or 0)}
 

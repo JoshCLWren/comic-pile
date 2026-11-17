@@ -772,6 +772,9 @@ def test_reset_is_scoped_and_preserves_usage_and_runtime_history():
         async def fetchval(self, sql, *args):
             calls.append((sql, args))
             return len(calls)
+        async def execute(self, sql, *args):
+            calls.append((sql, args))
+            return "INSERT 0 1"
 
     assert run(operations._reset_model_health(Conn(), REPO)) == {
         "model_health_rows": 1, "backoff_rows": 2, "provider_cooldowns": 3}
@@ -781,6 +784,29 @@ def test_reset_is_scoped_and_preserves_usage_and_runtime_history():
     assert "daily_used" not in calls[2][0]
     assert "factory_provider_reservation" not in str(calls)
     assert "factory_state_events" not in str(calls)
+    assert calls[3][1] == (f"factory-model-health-reset-v1:{REPO}",)
+    assert "30 days" in calls[3][0]
     calls.clear()
     run(operations._reset_model_health(Conn(), REPO, True))
     assert calls[0][1] == (REPO, True)
+
+
+def test_reset_cutoff_prevents_old_failures_rebuilding_fibonacci():
+    calls = []
+    class Conn:
+        async def fetch(self, sql, *args):
+            calls.append((sql, args))
+            return []
+
+    assert run(operations._recent_streak(
+        Conn(), 9001, "nvidia", "generated/model", repo=REPO)) == 0
+    assert run(operations._recent_streak(
+        Conn(), 9002, "nvidia", "generated/model", repo=REPO,
+        worker="41", model_independent=True)) == 0
+    marker = f"factory-model-health-reset-v1:{REPO}"
+    assert calls[0][1] == ("nvidia", "generated/model", marker)
+    assert calls[1][1] == (41, marker)
+    for sql, _ in calls:
+        assert "created_at>GREATEST" in sql
+        assert "SELECT updated_at FROM public.factory_state_kv" in sql
+        assert "'-infinity'::timestamptz" in sql
