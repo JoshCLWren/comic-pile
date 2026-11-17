@@ -332,6 +332,14 @@ fn app() -> Router {
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
         .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(native_dispatch),
+        )
+        .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )

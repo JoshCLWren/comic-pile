@@ -74,7 +74,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::session_detail::SessionDetailApi::openapi())
-        .merge_from(crate::threads::ThreadsApi::openapi());
+        .merge_from(crate::threads::ThreadsApi::openapi())
+        .merge_from(crate::cbl_catalog::CblCatalogApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.

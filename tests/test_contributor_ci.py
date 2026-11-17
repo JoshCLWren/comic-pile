@@ -26,20 +26,21 @@ def test_fork_build_is_read_only_and_cannot_publish() -> None:
     assert "head.repo.full_name == github.repository" in trusted["if"]
     assert trusted["permissions"]["packages"] == "write"
     assert any(step.get("with", {}).get("push") is True for step in trusted["steps"])
-    coverage = jobs["coverage-gate"]
-    assert coverage["needs"] == ["build", "build-fork", "test-unit"]
-    assert "needs.test-unit.result == 'success'" in coverage["if"]
-    assert "needs.build-fork.result == 'success'" in coverage["if"]
-    assert any(
-        step.get("uses") == "./.github/actions/fork-ci-toolchain"
-        for step in coverage["steps"]
-    )
+    # The Rust cutover retired legacy Python suite/coverage jobs.
+    assert "coverage-gate" not in jobs
+    assert "test-unit" not in jobs
     for name in (
         "frontend-typecheck", "python-lint", "python-typecheck",
-        "frontend-unit-tests", "migration-health", "test-unit", "ui-audit",
+        "frontend-unit-tests", "migration-health", "ui-audit",
     ):
         job = jobs[name]
-        assert job["needs"] == ["build", "build-fork"]
+        expected_needs = ["build", "build-fork"]
+        if name in ("ui-audit", "frontend-unit-tests"):
+            expected_needs.append("rust-ingress")
+            assert "needs.rust-ingress.result == 'success'" in job["if"]
+        if name == "ui-audit":
+            assert job["runs-on"] == "ubuntu-24.04"
+        assert job["needs"] == expected_needs
         assert "always()" in job["if"]
         assert "needs.build-fork.result == 'success'" in job["if"]
         if name != "ui-audit":
@@ -51,13 +52,18 @@ def test_fork_build_is_read_only_and_cannot_publish() -> None:
 
 
 @pytest.mark.parametrize("fork", [False, True])
-@pytest.mark.parametrize("failed", [None, "test-unit", "python-typecheck", "coverage-gate", "build"])
+@pytest.mark.parametrize(
+    "failed",
+    [None] + yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"][
+        "check-all-jobs"
+    ]["needs"],
+)
 def test_ci_summary_requires_real_checks(fork: bool, failed: str | None) -> None:
     """Execute the actual summary shell for each build path and failed gate."""
     jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
     results = dict.fromkeys(jobs["check-all-jobs"]["needs"], "success")
     results["build" if fork else "build-fork"] = "skipped"
-    if failed == "build":
+    if failed in ("build", "build-fork"):
         results["build-fork" if fork else "build"] = "failure"
     elif failed:
         results[failed] = "failure"
