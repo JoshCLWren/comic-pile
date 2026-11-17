@@ -21,7 +21,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::{Row, Transaction};
 
@@ -416,4 +416,769 @@ fn map_provider_failure(error: ProviderFailure) -> ApiError {
             ApiError::ServiceUnavailable("provider_invalid_payload".to_owned())
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Owner-scoped database helpers. Every caller passes the authenticated user
+// id as a bind parameter, never as interpolated SQL.
+// ---------------------------------------------------------------------------
+
+/// Resolve an owned issue to its thread id and title, or 404.
+async fn owned_issue(tx: &Transaction<'_>, user: i32, issue_id: i32) -> Result<(i32, String), ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT t.id, t.title FROM issues i \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = $1 AND t.user_id = $2",
+            &[&issue_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?;
+    row.map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+        .ok_or_else(|| not_found(format!("Issue {issue_id} not found")))
+}
+
+const CREATED_AT_SQL: &str =
+    "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
+
+/// Read the full identity state for one owned issue. The caller has already
+/// verified ownership; this helper still keeps the issue predicate explicit.
+async fn identity_state(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<IssueIdentityResponse, ApiError> {
+    let (thread_id, thread_title) = owned_issue(tx, user, issue_id).await?;
+    let rows = tx
+        .query(
+            &format!(
+                "SELECT e.id, e.provider, e.external_id, m.status, m.confidence, \
+                        m.evidence_source, {CREATED_AT_SQL} \
+                 FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE m.issue_id = $1 \
+                 ORDER BY m.confidence DESC NULLS LAST, m.id ASC"
+            ),
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut confirmed = Vec::new();
+    let mut candidates = Vec::new();
+    let mut has_unresolved = false;
+    for row in &rows {
+        let mapping = IssueIdentityMapping {
+            external_identity_id: row.get(0),
+            provider: row.get(1),
+            comicvine_id: row.get(2),
+            status: row.get(3),
+            confidence: row.get(4),
+            evidence_source: row.get(5),
+            created_at: row.get(6),
+        };
+        match mapping.status.as_str() {
+            "confirmed" => confirmed.push(mapping),
+            "candidate" => candidates.push(mapping),
+            "unresolved" => has_unresolved = true,
+            _ => {}
+        }
+    }
+
+    let comicvine_issue_id = confirmed.first().map(|m| m.comicvine_id.clone());
+    Ok(IssueIdentityResponse {
+        issue_id,
+        thread_id,
+        thread_title,
+        has_confirmed_identity: !confirmed.is_empty(),
+        comicvine_issue_id,
+        confirmed_mappings: confirmed,
+        candidate_mappings: candidates,
+        has_unresolved,
+    })
+}
+
+/// Return the active (non-reverted) corrections for an owned issue.
+async fn corrections_list(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+) -> Result<MetadataCorrectionsResponse, ApiError> {
+    owned_issue(tx, user, issue_id).await?;
+    let rows = tx
+        .query(
+            &format!(
+                "SELECT c.id, c.field_name, c.provider_value, c.canonical_value, \
+                        c.provenance, c.created_by, {CREATED_AT_SQL} \
+                 FROM issue_metadata_corrections c \
+                 JOIN issues i ON i.id = c.issue_id \
+                 JOIN threads t ON t.id = i.thread_id \
+                 WHERE c.issue_id = $1 AND t.user_id = $2 AND c.reverted_at IS NULL \
+                 ORDER BY c.created_at ASC, c.id ASC"
+            ),
+            &[&issue_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let corrections = rows
+        .iter()
+        .map(|row| CanonicalCorrection {
+            id: row.get(0),
+            field_name: row.get(1),
+            provider_value: row.get(2),
+            canonical_value: row.get(3),
+            provenance: row.get(4),
+            created_by: row.get(5),
+            created_at: row.get(6),
+        })
+        .collect();
+    Ok(MetadataCorrectionsResponse {
+        issue_id,
+        corrections,
+    })
+}
+
+/// Upsert the canonical ComicVine comic identity and return its id.
+async fn upsert_issue_identity(
+    tx: &Transaction<'_>,
+    comicvine_issue_id: i32,
+) -> Result<i32, ApiError> {
+    let external_id = comicvine_issue_id.to_string();
+    let external_url = format!("https://comicvine.gamespot.com/issue/4000-{comicvine_issue_id}/");
+    let row = tx
+        .query_one(
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2, '{}'::jsonb, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET external_url = EXCLUDED.external_url, updated_at = now() \
+             RETURNING id",
+            &[&external_id, &external_url],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.get(0))
+}
+
+/// Confirm (or re-confirm) one provider mapping for an issue.
+async fn link_confirmed(
+    tx: &Transaction<'_>,
+    user: i32,
+    issue_id: i32,
+    comicvine_issue_id: i32,
+) -> Result<i32, ApiError> {
+    owned_issue(tx, user, issue_id).await?;
+    let identity_id = upsert_issue_identity(tx, comicvine_issue_id).await?;
+    tx.execute(
+        "INSERT INTO issue_external_identity_mappings \
+            (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+             confidence, created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'user_confirmed', '{}'::jsonb, 1.0, now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_issue_external_identity_mapping \
+         DO UPDATE SET status = 'confirmed', evidence_source = 'user_confirmed', \
+                       confidence = 1.0, rejection_reason = NULL, updated_at = now()",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    // Best-effort hydration: enqueue the existing native repair worker so deep
+    // metadata is filled outside this request, exactly as the Python handler
+    // did via refresh_issue_metadata. Failure never rolls back the confirmation.
+    let _ = tx
+        .execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+             VALUES ($1, 'pending', 0, now(), now(), now()) \
+             ON CONFLICT (external_identity_id) DO NOTHING",
+            &[&identity_id],
+        )
+        .await;
+    Ok(identity_id)
+}
+
+/// Extract the canonical series name from a volume provider payload.
+fn volume_name(value: &Value) -> Option<String> {
+    value
+        .get("results")
+        .and_then(Value::as_object)
+        .and_then(|result| result.get("name"))
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_owned)
+}
+
+// ---------------------------------------------------------------------------
+// Identity and metadata mutation handlers.
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v2/comicvine/issues/{issue_id}/identity`.
+pub async fn get_issue_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/identity:confirm`.
+pub async fn confirm_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<ConfirmIdentityRequest>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    if request.comicvine_issue_id <= 0 {
+        return Err(bad_request("comicvine_issue_id must be positive"));
+    }
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/identity:replace`.
+pub async fn replace_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<ReplaceIdentityRequest>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    if request.comicvine_issue_id <= 0 {
+        return Err(bad_request("comicvine_issue_id must be positive"));
+    }
+    if request.reason.as_deref().is_some_and(|r| r.len() > 500) {
+        return Err(unprocessable("reason is too long"));
+    }
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let reason = request
+        .reason
+        .filter(|r| !r.is_empty())
+        .unwrap_or_else(|| "replaced by user".to_owned());
+    tx.execute(
+        "UPDATE issue_external_identity_mappings m \
+         SET status = 'rejected', rejection_reason = $3, updated_at = now() \
+         FROM external_identities e \
+         WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+           AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+        &[&issue_id, &user.id(), &reason],
+    )
+    .await
+    .map_err(db::query_error)?;
+    link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `DELETE /api/v2/comicvine/issues/{issue_id}/identity`.
+pub async fn remove_identity(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let updated = tx
+        .execute(
+            "UPDATE issue_external_identity_mappings m \
+             SET status = 'unresolved', evidence_source = NULL, confidence = NULL, \
+                 updated_at = now() \
+             FROM external_identities e \
+             WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+               AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated == 0 {
+        return Err(bad_request(format!(
+            "No confirmed ComicVine identity mapping found for issue {issue_id}"
+        )));
+    }
+    let response = identity_state(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `GET /api/v2/comicvine/issues/{issue_id}/metadata:corrections`.
+pub async fn list_corrections(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:correct`.
+pub async fn apply_correction(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<MetadataCorrectionRequest>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    if request.field_name.is_empty() || request.field_name.len() > 100 {
+        return Err(unprocessable("Invalid field name"));
+    }
+    if request.canonical_value.is_empty() {
+        return Err(unprocessable("Invalid canonical value"));
+    }
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+
+    let provider_value: Option<String> = tx
+        .query_opt(
+            "SELECT e.metadata_json ->> $2 \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' AND e.provider = 'comicvine' \
+             LIMIT 1",
+            &[&issue_id, &request.field_name],
+        )
+        .await
+        .map_err(db::query_error)?
+        .and_then(|row| row.get::<_, Option<String>>(0))
+        .filter(|value| !value.is_empty());
+
+    tx.execute(
+        "INSERT INTO issue_metadata_corrections \
+            (issue_id, field_name, provider_value, canonical_value, provenance, \
+             created_by, reverted_at, created_at, updated_at) \
+         VALUES ($1, $2, $3, $4, 'user_correction', $5, NULL, now(), now())",
+        &[
+            &issue_id,
+            &request.field_name,
+            &provider_value,
+            &request.canonical_value,
+            &user.id(),
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:revert`.
+pub async fn revert_correction(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+    Json(request): Json<MetadataCorrectionRevertRequest>,
+) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let updated = tx
+        .execute(
+            "UPDATE issue_metadata_corrections c \
+             SET reverted_at = now(), updated_at = now() \
+             FROM issues i JOIN threads t ON t.id = i.thread_id \
+             WHERE c.id = $1 AND c.issue_id = $2 AND i.id = c.issue_id \
+               AND t.user_id = $3 AND c.reverted_at IS NULL",
+            &[&request.correction_id, &issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated == 0 {
+        return Err(bad_request(format!(
+            "Correction {} not found",
+            request.correction_id
+        )));
+    }
+    let response = corrections_list(&tx, user.id(), issue_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(response))
+}
+
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh`.
+pub async fn refresh_metadata(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(issue_id): Path<i32>,
+) -> Result<Json<MetadataRefreshResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let mut tx = connection.transaction().await.map_err(db::query_error)?;
+    owned_issue(&tx, user.id(), issue_id).await?;
+    let comicvine_id: Option<String> = tx
+        .query_opt(
+            "SELECT e.external_id \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = $1 AND t.user_id = $2 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' \
+             LIMIT 1",
+            &[&issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .and_then(|row| row.get::<_, Option<String>>(0));
+    let refreshed = comicvine_id.is_some();
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(MetadataRefreshResponse {
+        issue_id,
+        refreshed,
+        comicvine_issue_id: comicvine_id,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Provider-backed read handlers.
+// ---------------------------------------------------------------------------
+
+fn provider_key() -> Option<String> {
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .map(|key| key.trim().to_owned())
+        .filter(|key| !key.is_empty())
+}
+
+fn series_result(value: &Value, fallback_id: Option<i32>) -> Option<ComicVineSeriesResult> {
+    let object = value.as_object()?;
+    let id = fallback_id.or_else(|| coerce_provider_int(object.get("id")))?;
+    let name = object.get("name").and_then(Value::as_str)?;
+    let publisher = match object.get("publisher") {
+        Some(Value::Object(map)) => map.get("name").and_then(Value::as_str).map(str::to_owned),
+        Some(Value::String(text)) => Some(text.clone()),
+        _ => None,
+    };
+    Some(ComicVineSeriesResult {
+        comicvine_volume_id: id,
+        name: name.to_owned(),
+        publisher,
+        start_year: coerce_provider_int(object.get("start_year")),
+        issue_count: coerce_provider_int(object.get("count_of_issues")),
+        site_detail_url: provider_string(object.get("site_detail_url")),
+        image_url: match object.get("image") {
+            Some(Value::Object(map)) => map
+                .get("medium_url")
+                .and_then(Value::as_str)
+                .or_else(|| map.get("small_url").and_then(Value::as_str))
+                .map(str::to_owned),
+            _ => None,
+        },
+    })
+}
+
+fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
+    let object = value.as_object()?;
+    let id = coerce_provider_int(object.get("id"))?;
+    let issue_number = object
+        .get("issue_number")
+        .map(|value| match value {
+            Value::String(text) => text.clone(),
+            Value::Number(number) => number.to_string(),
+            _ => value.to_string(),
+        })
+        .filter(|text| !text.is_empty());
+    Some(ComicVineIssueCandidate {
+        comicvine_issue_id: id,
+        issue_number,
+        name: provider_string(object.get("name")),
+        cover_date: provider_string(object.get("cover_date")),
+        store_date: provider_string(object.get("store_date")),
+        image_url: candidate_image_url(object.get("image")),
+        site_detail_url: provider_string(object.get("site_detail_url")),
+    })
+}
+
+/// `GET /api/v2/comicvine/search/series`.
+pub async fn search_series(
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
+    let limit = query.limit.clamp(1, 50);
+    let offset = query.offset.max(0);
+    let page = offset / limit + 1;
+    if query.q.trim().is_empty() {
+        return Ok(Json(ComicVineSeriesSearchResponse {
+            query: query.q,
+            results: Vec::new(),
+            total_available: Some(0),
+            offset,
+            limit,
+            has_more: false,
+            next_offset: None,
+        }));
+    }
+    let Some(key) = provider_key() else {
+        return Ok(Json(ComicVineSeriesSearchResponse {
+            query: query.q,
+            results: Vec::new(),
+            total_available: Some(0),
+            offset,
+            limit,
+            has_more: false,
+            next_offset: None,
+        }));
+    };
+    let extra = format!(
+        "&query={}&resources=volume&limit={limit}&page={page}\
+         &field_list=id,name,publisher,start_year,count_of_issues,site_detail_url,image",
+        encode_query(query.q.trim())
+    );
+    let payload = provider_response("search", &extra, &key)
+        .await
+        .map_err(map_provider_failure)?;
+    let results: Vec<ComicVineSeriesResult> = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|row| series_result(row, None))
+        .collect();
+    let total = coerce_provider_int(payload.get("number_of_total_results"))
+        .unwrap_or_else(|| results.len() as i32);
+    let loaded = offset + results.len() as i32;
+    let has_more = loaded < total;
+    Ok(Json(ComicVineSeriesSearchResponse {
+        query: query.q,
+        results,
+        total_available: Some(total),
+        offset,
+        limit,
+        has_more,
+        next_offset: has_more.then_some(loaded),
+    }))
+}
+
+/// `GET /api/v2/comicvine/series/{comicvine_volume_id}/issues`.
+pub async fn series_issues(
+    Path(comicvine_volume_id): Path<i32>,
+    Query(query): Query<SeriesIssuesQuery>,
+) -> Result<Json<ComicVineSeriesIssuesResponse>, ApiError> {
+    let mut series_name = query.series_name;
+    let Some(key) = provider_key() else {
+        return Ok(Json(ComicVineSeriesIssuesResponse {
+            comicvine_volume_id,
+            series_name: if series_name.is_empty() {
+                format!("Volume {comicvine_volume_id}")
+            } else {
+                series_name
+            },
+            issues: Vec::new(),
+        }));
+    };
+    let roster = provider_response(
+        "issue",
+        &format!(
+            "&filter=volume:{comicvine_volume_id}&limit=100\
+             &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
+        ),
+        &key,
+    )
+    .await
+    .ok();
+    let issues: Vec<ComicVineIssueCandidate> = roster
+        .as_ref()
+        .and_then(|payload| payload.get("results"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(issue_candidate)
+        .collect();
+    if series_name.is_empty() {
+        let volume = provider_issue_volume(comicvine_volume_id, &key).await.ok();
+        series_name = volume
+            .as_deref()
+            .and_then(|name| volume_name(&json!({ "results": { "name": name } })))
+            .unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
+    }
+    Ok(Json(ComicVineSeriesIssuesResponse {
+        comicvine_volume_id,
+        series_name,
+        issues,
+    }))
+}
+
+/// Fetch a volume's canonical display name. Returns the raw name so callers
+/// can apply their own empty-name fallback.
+async fn provider_issue_volume(volume_id: i32, key: &str) -> Option<String> {
+    let payload = provider_response(&format!("volume/4050-{volume_id}"), "", key)
+        .await
+        .ok()?;
+    volume_name(&payload)
+}
+
+/// `GET /api/v2/comicvine/resolve`.
+pub async fn resolve_input(
+    Query(query): Query<ResolveQuery>,
+) -> Result<Json<ComicVineResolveResponse>, ApiError> {
+    if query.input.is_empty() || query.input.len() > 1000 {
+        return Err(unprocessable("Invalid resolve input"));
+    }
+    let trimmed = query.input.trim();
+    if trimmed.is_empty() {
+        return Ok(Json(ComicVineResolveResponse::search(query.input, None)));
+    }
+    let Some(parsed) = parse_comicvine_url(trimmed) else {
+        let validation_error = looks_like_url(trimmed).then(|| {
+            "That doesn't look like a ComicVine issue or volume URL. Paste a \
+             comicvine.gamespot.com link or search by title instead."
+                .to_owned()
+        });
+        return Ok(Json(ComicVineResolveResponse::search(query.input, validation_error)));
+    };
+    let Some(key) = provider_key() else {
+        return Ok(Json(ComicVineResolveResponse {
+            input: query.input,
+            kind: match parsed {
+                ParsedResource::Issue(_) => "issue".to_owned(),
+                ParsedResource::Volume(_) => "volume".to_owned(),
+            },
+            validation_error: Some(
+                "ComicVine is not configured on this server, so pasted links cannot \
+                 be resolved. Search by title instead."
+                    .to_owned(),
+            ),
+            issue: None,
+            volume: None,
+            issues: Vec::new(),
+        }));
+    };
+    let failure = || {
+        Json(ComicVineResolveResponse {
+            input: query.input.clone(),
+            kind: match parsed {
+                ParsedResource::Issue(_) => "issue".to_owned(),
+                ParsedResource::Volume(_) => "volume".to_owned(),
+            },
+            validation_error: Some(
+                "We couldn't resolve that ComicVine link right now. Check the link \
+                 or search by title instead."
+                    .to_owned(),
+            ),
+            issue: None,
+            volume: None,
+            issues: Vec::new(),
+        })
+    };
+    match parsed {
+        ParsedResource::Issue(id) => {
+            let Ok(result) = provider_issue(id as u32, &key).await else {
+                return Ok(failure());
+            };
+            let volume = result.get("volume").and_then(Value::as_object);
+            let resolved = ComicVineResolvedIssue {
+                comicvine_issue_id: id,
+                series_name: volume
+                    .and_then(|v| v.get("name"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                volume_id: volume.and_then(|v| coerce_provider_int(v.get("id"))),
+                issue_number: result
+                    .get("issue_number")
+                    .map(|value| match value {
+                        Value::String(text) => text.clone(),
+                        Value::Number(number) => number.to_string(),
+                        _ => value.to_string(),
+                    })
+                    .filter(|text| !text.is_empty()),
+                name: provider_string(result.get("name")),
+                cover_date: provider_string(result.get("cover_date")),
+                store_date: provider_string(result.get("store_date")),
+                image_url: provider_image_url(result.get("image")),
+                site_detail_url: provider_string(result.get("site_detail_url")),
+            };
+            Ok(Json(ComicVineResolveResponse {
+                input: query.input,
+                kind: "issue".to_owned(),
+                validation_error: None,
+                issue: Some(resolved),
+                volume: None,
+                issues: Vec::new(),
+            }))
+        }
+        ParsedResource::Volume(id) => {
+            let Ok(payload) = provider_response(&format!("volume/4050-{id}"), "", &key).await else {
+                return Ok(failure());
+            };
+            let Some(series) = series_result(
+                payload.get("results").unwrap_or(&Value::Null),
+                Some(id),
+            ) else {
+                return Ok(failure());
+            };
+            let roster = provider_response(
+                "issue/",
+                &format!(
+                    "&filter=volume:{id}&limit=100\
+                     &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url"
+                ),
+                &key,
+            )
+            .await
+            .ok();
+            let issues: Vec<ComicVineIssueCandidate> = roster
+                .as_ref()
+                .and_then(|p| p.get("results"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(issue_candidate)
+                .collect();
+            Ok(Json(ComicVineResolveResponse {
+                input: query.input,
+                kind: "volume".to_owned(),
+                validation_error: None,
+                issue: None,
+                volume: Some(series),
+                issues,
+            }))
+        }
+    }
+}
+
+/// `GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status`.
+pub async fn series_import_status(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(comicvine_volume_id): Path<i32>,
+) -> Result<Json<SeriesImportStatusResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let volume_id = comicvine_volume_id.to_string();
+    let row = connection
+        .query_opt(
+            "SELECT t.id, t.title, t.total_issues FROM threads t \
+             JOIN thread_external_series_mappings m ON m.thread_id = t.id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE t.user_id = $1 AND m.status = 'confirmed' \
+               AND e.entity_type = 'series' AND e.provider = 'comicvine' \
+               AND e.external_id = $2 ORDER BY m.id LIMIT 1",
+            &[&user.id(), &volume_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let response = match row {
+        Some(row) => SeriesImportStatusResponse {
+            comicvine_volume_id,
+            imported: true,
+            thread_id: Some(row.get(0)),
+            series_name: Some(row.get(1)),
+            issue_count: row.get(2),
+        },
+        None => SeriesImportStatusResponse {
+            comicvine_volume_id,
+            imported: false,
+            thread_id: None,
+            series_name: None,
+            issue_count: None,
+        },
+    };
+    Ok(Json(response))
 }
