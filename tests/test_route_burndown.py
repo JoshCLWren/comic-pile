@@ -445,11 +445,13 @@ def _fragment_named(name: str) -> RouteFragment:
     raise AssertionError(f"missing fragment {name}")
 
 
-def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None:
-    """The creators pilot owns all of its v1 route declarations."""
+def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> None:
+    """The creators pilot owns its native v2 routes plus creator-adjacent v1 metadata."""
     fragment = _fragment_named("creators")
     paths = {operation["path"] for operation in fragment.operations}
-    assert "/api/v1/creators" in paths
+    assert "/api/v2/creators" in paths
+    assert "/api/v2/creators/{creator_key}" in paths
+    assert "/api/v2/creators/{creator_key}/series/{series_key}/issues" in paths
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
 
 
@@ -576,14 +578,15 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
     ) -> set[tuple[str, str]]:
         full = merged["full_surface"]
         assert isinstance(full, dict)
-        v1 = full["v1_operations"]
-        assert isinstance(v1, list)
         found: set[tuple[str, str]] = set()
-        for operation in v1:
-            assert isinstance(operation, dict)
-            key = (str(operation["method"]), str(operation["path"]))
-            if key in keys:
-                found.add(key)
+        for bucket in ("operations", "v1_operations", "unversioned_operations"):
+            operations = full[bucket]
+            assert isinstance(operations, list)
+            for operation in operations:
+                assert isinstance(operation, dict)
+                key = (str(operation["method"]), str(operation["path"]))
+                if key in keys:
+                    found.add(key)
         return found
 
     creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations if not op.get("exclude_from_inventory")}
