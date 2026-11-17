@@ -97,7 +97,7 @@ def test_intermediate_model_outcomes_preserve_exact_failure_type() -> None:
         {"source": "nvidia", "model": names[2], "outcome": "model_unavailable", "scope": "model"},
     ]
     assert validate_intermediate_model_failures(failures, "nvidia") == [
-        ("nvidia", names[0], "provider_quota", "account"),
+        ("nvidia", names[0], "provider_quota", "model"),
         ("nvidia", names[2], "model_unavailable", "model"),
         ("requesty", names[1], "provider_throttle", "model"),
     ]
@@ -328,3 +328,33 @@ def test_proven_models_reads_only_real_work_outcomes() -> None:
     assert proven_models(snapshot) == {("nvidia", "a"), ("nvidia", "b")}
     assert proven_models("not json") == set()
     assert proven_models("") == set()
+
+
+def test_opencode_v2_fleet_discovery_and_selection(tmp_path, monkeypatch):
+    from factory_model_failover import discover_fleet_catalogs, select_next_fleet
+    import subprocess
+    import shutil
+
+    called = []
+    catalog = "opencode/generated-free\nother-provider/unrelated\n"
+    def fake_run(args, **kwargs):
+        called.append(list(args))
+        return subprocess.CompletedProcess(args, 0, stdout=catalog)
+    monkeypatch.setattr(shutil, "which", lambda _: "/tmp/opencode")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    catalogs = discover_fleet_catalogs(
+        {"opencode-free"}, cache=tmp_path / "catalog.json", env={})
+    assert called == [["opencode", "models", "--standalone"]]
+    picked = select_next_fleet(
+        "77", "opencode-free", set(), set(), {}, catalogs, {"opencode-free"},
+        proven=set())
+    assert picked["runtime_model"] == "opencode/generated-free"
+
+
+def test_worker_never_blocks_provider_for_model_credit_error():
+    worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
+    clause = worker.split('attempted_pairs+=("$(jq -nc --arg source "$SOURCE"', 1)[1]
+    clause = clause.split("record_model_failover_failure", 1)[0]
+    assert "failure_scope=model" in clause
+    assert "failure_scope=account" not in clause
+    assert 'blocked_providers+=("$SOURCE")' not in clause

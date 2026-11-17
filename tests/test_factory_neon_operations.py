@@ -314,7 +314,7 @@ def test_fibonacci_retry_progresses_and_caps():
     fib = operations.fibonacci_worker_delay
     assert [fib(i) for i in range(1, 8)] == [300, 300, 600, 900, 1500, 2400, 3900]
     assert fib(20) == 86400
-    assert operations.WORKER_SUSPEND_AFTER == 14
+    assert fib(50) == 86400
 
 
 def test_retry_time_and_retained_streak_are_independent_of_ttl():
@@ -332,7 +332,7 @@ def test_retry_time_and_retained_streak_are_independent_of_ttl():
     assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "new-pin", now) is None
 
 
-def test_suspended_worker_is_excluded_but_other_models_stay_eligible():
+def test_legacy_suspension_no_longer_excludes_worker():
     db = FakeConnection(backoffs=[{
         "cache_key": f"factory-worker-backoff-v1:{REPO}:worker:139",
         "payload": [{"source": "vercel-ai-gateway", "model": "reflection/beam-free",
@@ -344,7 +344,7 @@ def test_suspended_worker_is_excluded_but_other_models_stay_eligible():
         "41": ("kilo-auto", "kilo-auto/free"),
     }):
         kept, denied = run(operations._eligibility(db, REPO, ["139", "41"]))
-    assert kept == ["41"] and any("suspended" in reason for reason in denied)
+    assert kept == ["139", "41"] and not denied
 
 
 def test_missing_credentials_are_not_inference_failures():
@@ -738,3 +738,53 @@ def test_account_backoff_records_account_class_and_grows_fibonacci(monkeypatch):
         kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
     assert kept == ["42"]
     assert any(account_source in reason for reason in rejected)
+
+
+def test_legacy_account_failure_is_now_model_scoped():
+    rows = [{"source": "nvidia", "model": "generated/paid",
+             "outcome": "provider_quota", "scope": "account"}]
+    assert operations.validate_intermediate_model_failures(rows, "nvidia") == [
+        ("nvidia", "generated/paid", "provider_quota", "model")]
+
+
+def test_fibonacci_never_suspends_and_model_health_starts_at_five_minutes():
+    import inspect
+    body = inspect.getsource(operations.project_runtime)
+    assert "suspended = streak >=" not in body
+    assert body.count("suspended = False") == 3
+    assert body.count("fibonacci_worker_delay(streak))).isoformat()") == 3
+    assert '_provider_cooldown(failed_source, failed_outcome, observed)' not in body
+    assert 'status, until = "cooling", observed + timedelta(seconds=fibonacci_worker_delay(1))' in body
+    now = datetime.now(UTC)
+    old = {"payload": [{"source": "nvidia", "model": "generated/paid",
+                        "streak": 20, "suspended": True, "next_retry_at": None}],
+           "expires_at": now + timedelta(days=90)}
+    assert operations.worker_backoff_reason(old, "nvidia", "generated/paid", now) is None
+
+
+def test_reset_is_scoped_and_preserves_usage_and_runtime_history():
+    calls = []
+
+    class Conn:
+        def transaction(self):
+            class Tx:
+                async def __aenter__(self):
+                    return None
+                async def __aexit__(self, *exc):
+                    return False
+            return Tx()
+        async def fetchval(self, sql, *args):
+            calls.append((sql, args))
+            return len(calls)
+
+    assert run(operations._reset_model_health(Conn(), REPO)) == {
+        "model_health_rows": 1, "backoff_rows": 2, "provider_cooldowns": 3}
+    assert calls[0][1] == (REPO, False)
+    assert "status != 'retired'" in calls[0][0]
+    assert all(key.endswith(f"{REPO}:") for key in calls[1][1])
+    assert "daily_used" not in calls[2][0]
+    assert "factory_provider_reservation" not in str(calls)
+    assert "factory_state_events" not in str(calls)
+    calls.clear()
+    run(operations._reset_model_health(Conn(), REPO, True))
+    assert calls[0][1] == (REPO, True)

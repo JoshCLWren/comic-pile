@@ -124,7 +124,6 @@ WORKER_RETRY_CLASSES = frozenset({
     "model_unavailable", "model_policy_violation", "environment_failure",
     "control_plane_failure", "unknown_failure", "work_failure",
 })
-WORKER_SUSPEND_AFTER = 14
 
 
 def fibonacci_worker_delay(streak: int) -> int:
@@ -158,9 +157,10 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
         return None
     if model and model != "@catalog" and state.get("model") != model:
         return None
-    if state.get("suspended") is True:
-        return "suspended after repeated failures (new pin or TTL will reenable)"
     retry_at = state.get("next_retry_at")
+    # Legacy suspended rows without a not-before timestamp must not gate for 90 days.
+    if retry_at is None and "suspended" in state:
+        return None
     if retry_at is not None:
         try:
             if datetime.fromisoformat(str(retry_at)) > now:
@@ -207,7 +207,8 @@ def validate_intermediate_model_failures(
                 or scope not in {"account", "model"}
                 or (scope == "account" and classification not in {"provider_quota", "provider_failure"})):
             raise ValueError("invalid trusted intermediate model failure identity")
-        seen[(failure_source, model)] = (classification, scope)
+        # Old account-labelled credit refusals must not suppress healthy peers.
+        seen[(failure_source, model)] = (classification, "model")
     return [
         (s, model, *seen[(s, model)]) for s, model in sorted(seen)
     ]
@@ -262,8 +263,6 @@ def historical_failure_streak(
             # Old unconfigured workers were incorrectly classified this way.
             continue
         streak += 1
-        if streak >= WORKER_SUSPEND_AFTER:
-            break
     return streak
 
 
@@ -361,7 +360,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
         elif classification in MODEL_COOLDOWNS:
             status, until = "unavailable", observed + timedelta(seconds=MODEL_COOLDOWNS[classification])
         elif model_scoped_transient(source, classification):
-            status, until = "cooling", _provider_cooldown(source, classification, observed)
+            status, until = "cooling", observed + timedelta(seconds=fibonacci_worker_delay(1))
         elif proven:
             status, until = "healthy", None
         else:
@@ -442,7 +441,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 None if failed_status == "retired"
                 else observed + timedelta(seconds=MODEL_COOLDOWNS[failed_outcome])
                 if failed_outcome in MODEL_COOLDOWNS
-                else _provider_cooldown(failed_source, failed_outcome, observed)
+                else observed + timedelta(seconds=fibonacci_worker_delay(1))
             )
             await conn.execute(
                 """INSERT INTO public.factory_model_health
@@ -476,11 +475,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             if prior_run <= run_id:
                 streak = (int(prior_state.get("streak") or 0) if previous
                           else await _recent_streak(conn, run_id, failed_source, failed_model)) + 1
-                suspended = streak >= WORKER_SUSPEND_AFTER
-                retry_at = (
-                    None if suspended else
-                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
-                )
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                        (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -533,11 +529,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                               conn, run_id, source, model, worker=worker,
                               model_independent=catalog_slot,
                           )) + 1
-                suspended = streak >= WORKER_SUSPEND_AFTER
-                retry_at = (
-                    None if suspended else
-                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
-                )
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -585,11 +578,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                     await _recent_streak(conn, run_id, source, model)
                 )
                 streak = prior_streak + 1
-                suspended = streak >= WORKER_SUSPEND_AFTER
-                retry_at = (
-                    None if suspended else
-                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
-                )
+                suspended = False
+                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -1026,7 +1016,7 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
             retry_at = datetime.fromisoformat(str(state.get("next_retry_at")))
         except (ValueError, TypeError):
             retry_at = None
-        if state.get("suspended") is True or (retry_at is not None and retry_at > now):
+        if retry_at is not None and retry_at > now:
             if model not in excluded.setdefault(source, []):
                 excluded[source].append(model)
     # The worker identity is validated for the trusted caller; issue #1093
@@ -1208,18 +1198,50 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
     return _run(_export_model_exclusions, repo, worker)
 
 
+async def _reset_model_health(conn: Any, repo: str, include_retired: bool = False) -> dict[str, int]:
+    """Clear learned failure/cooldown state; retain delivery, lease and budget usage."""
+    if not REPO_RE.fullmatch(repo):
+        raise ValueError("invalid repository")
+    async with conn.transaction():
+        health = await conn.fetchval(
+            """WITH deleted AS (DELETE FROM public.factory_model_health
+                 WHERE repo=$1 AND ($2::boolean OR status != 'retired') RETURNING 1)
+               SELECT count(*) FROM deleted""", repo, include_retired)
+        backoffs = await conn.fetchval(
+            """WITH deleted AS (DELETE FROM public.factory_state_kv
+                 WHERE starts_with(cache_key,$1) OR starts_with(cache_key,$2)
+                    OR starts_with(cache_key,$3) RETURNING 1)
+               SELECT count(*) FROM deleted""",
+            f"factory-model-backoff-v1:{repo}:",
+            f"factory-worker-backoff-v1:{repo}:",
+            f"factory-provider-backoff-v1:{repo}:")
+        providers = await conn.fetchval(
+            """WITH cleared AS (UPDATE public.factory_provider_budget
+                 SET cooldown_until=NULL,quota_reset_at=NULL,updated_at=now()
+                 WHERE repo=$1 AND (cooldown_until IS NOT NULL OR quota_reset_at IS NOT NULL)
+                 RETURNING 1)
+               SELECT count(*) FROM cleared""", repo)
+    return {"model_health_rows": int(health or 0), "backoff_rows": int(backoffs or 0),
+            "provider_cooldowns": int(providers or 0)}
+
+
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","export-model-exclusions","export-candidate-health","export-fleet-failover-sources"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","export-model-exclusions","export-candidate-health","export-fleet-failover-sources","reset-model-health"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
     parser.add_argument("--worker",default="")
     parser.add_argument("--cursor",default="")
+    parser.add_argument("--include-retired",action="store_true")
     args=parser.parse_args()
     if not REPO_RE.fullmatch(args.repo):
         parser.error("invalid repo")
-    if args.command=="bootstrap":
+    if args.command=="reset-model-health":
+        if not enabled():
+            raise SystemExit("Neon is required for model health reset")
+        print(json.dumps(_run(_reset_model_health,args.repo,args.include_retired),sort_keys=True))
+    elif args.command=="bootstrap":
         if not enabled():
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))

@@ -214,7 +214,7 @@ def discover_fleet_catalogs(
             if not shutil.which("opencode"):
                 raise ValueError("OpenCode CLI missing")
             run = subprocess.run(
-                ["opencode", "models", "opencode", "--refresh"],
+                ["opencode", "models", "--standalone"],
                 check=True, capture_output=True, text=True, timeout=35,
             )
             return source, run.stdout
