@@ -28,6 +28,7 @@ async fn native_health() -> Response {
         "build": {
             "revision": env!("COMICPILE_SOURCE_REVISION"),
             "compiler": env!("COMICPILE_COMPILER"),
+            "lock_sha256": env!("COMICPILE_LOCK_SHA256"),
             "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION")
         },
@@ -1067,6 +1068,11 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("rustc "));
+        assert_eq!(
+            health["build"]["lock_sha256"],
+            env!("COMICPILE_LOCK_SHA256")
+        );
+        assert_eq!(health["build"]["lock_sha256"].as_str().unwrap().len(), 64);
         assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
         let executable = std::env::current_exe().expect("current executable");
         assert_eq!(
