@@ -1098,3 +1098,494 @@ fn rating_distribution(ratings: &[f64]) -> Option<CreatorRatingDistribution> {
         max_rating: ratings.iter().copied().fold(f64::NEG_INFINITY, f64::max),
     })
 }
+
+// ---------------------------------------------------------------------------
+// Series aggregation, issue projection, detail and drilldown
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct SeriesAggregate {
+    thread_id: i64,
+    thread_title: String,
+    attributed_issue_count: i64,
+    rated_issue_ids: Vec<i64>,
+    ratings: Vec<f64>,
+    roles: BTreeSet<String>,
+    unread_issue_count: i64,
+    read_unrated_issue_count: i64,
+    metadata_complete: bool,
+}
+
+impl SeriesAggregate {
+    fn rated_issue_count(&self) -> i64 {
+        self.rated_issue_ids.len() as i64
+    }
+
+    fn average_rating(&self) -> Option<f64> {
+        (!self.ratings.is_empty()).then(|| round2(mean(&self.ratings)))
+    }
+
+    fn lowest_rating(&self) -> Option<f64> {
+        self.ratings.iter().copied().fold1(f64::min)
+    }
+
+    fn highest_rating(&self) -> Option<f64> {
+        self.ratings.iter().copied().fold1(f64::max)
+    }
+}
+
+trait FoldFirst {
+    fn fold1(self, function: fn(f64, f64) -> f64) -> Option<f64>;
+}
+
+impl<T: Iterator<Item = f64>> FoldFirst for T {
+    fn fold1(mut self, function: fn(f64, f64) -> f64) -> Option<f64> {
+        self.next().map(|first| self.fold(first, function))
+    }
+}
+
+fn series_sort_key(thread_id: i64) -> String {
+    format!("thread:{thread_id}")
+}
+
+fn aggregate_series(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    attribution: &Attribution,
+) -> Vec<SeriesAggregate> {
+    let mut completeness: HashMap<i64, bool> = HashMap::new();
+    for issue in &library.issues {
+        let covered = library.metadata_issues.contains(&issue.id);
+        completeness
+            .entry(issue.thread_id)
+            .and_modify(|value| *value = *value && covered)
+            .or_insert(covered);
+    }
+
+    let mut groups: BTreeMap<i64, SeriesAggregate> = BTreeMap::new();
+    for issue_id in attribution.issue_ids.iter().copied() {
+        let Some(issue) = library.issue(issue_id) else {
+            continue;
+        };
+        let aggregate = groups.entry(issue.thread_id).or_insert_with(|| SeriesAggregate {
+            thread_id: issue.thread_id,
+            thread_title: issue.thread_title.clone(),
+            attributed_issue_count: 0,
+            rated_issue_ids: Vec::new(),
+            ratings: Vec::new(),
+            roles: BTreeSet::new(),
+            unread_issue_count: 0,
+            read_unrated_issue_count: 0,
+            metadata_complete: completeness.get(&issue.thread_id).copied().unwrap_or(true),
+        });
+        aggregate.attributed_issue_count += 1;
+        aggregate.roles.extend(roles_on_issue(library, creator_id, issue_id));
+        if issue.status == "unread" {
+            aggregate.unread_issue_count += 1;
+        }
+        if let Some(rating) = library.ratings.get(&issue_id) {
+            aggregate.rated_issue_ids.push(issue_id);
+            aggregate.ratings.push(*rating);
+        } else if issue.status == "read" {
+            aggregate.read_unrated_issue_count += 1;
+        }
+    }
+
+    let mut aggregates: Vec<SeriesAggregate> = groups
+        .into_values()
+        .filter(|aggregate| !aggregate.rated_issue_ids.is_empty())
+        .collect();
+    aggregates.sort_by(|a, b| {
+        b.rated_issue_count()
+            .cmp(&a.rated_issue_count())
+            .then_with(|| a.thread_title.to_lowercase().cmp(&b.thread_title.to_lowercase()))
+            .then_with(|| a.thread_title.cmp(&b.thread_title))
+            .then_with(|| a.thread_id.cmp(&b.thread_id))
+    });
+    aggregates
+}
+
+fn build_series_group(aggregate: &SeriesAggregate) -> CreatorSeriesGroup {
+    CreatorSeriesGroup {
+        series_key: series_sort_key(aggregate.thread_id),
+        thread_id: aggregate.thread_id,
+        thread_title: aggregate.thread_title.clone(),
+        rated_issue_count: aggregate.rated_issue_count(),
+        average_rating: aggregate.average_rating(),
+        lowest_rating: aggregate.lowest_rating(),
+        highest_rating: aggregate.highest_rating(),
+        roles: aggregate.roles.iter().cloned().collect(),
+        unread_issue_count: aggregate.unread_issue_count,
+        read_unrated_issue_count: aggregate.read_unrated_issue_count,
+        metadata_complete: aggregate.metadata_complete,
+        sort_key: format!("{:012}", aggregate.thread_id),
+        population_scope: "all_verified_credits".to_string(),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IssueRowOrder {
+    Recent,
+    Upcoming,
+}
+
+fn issue_row(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    issue: &OwnedIssue,
+    order: IssueRowOrder,
+) -> CreatorIssueRow {
+    let sort_key = match order {
+        IssueRowOrder::Recent => issue.id.to_string(),
+        IssueRowOrder::Upcoming => format!(
+            "{:07}:{:07}:{}",
+            issue.queue_position, issue.position, issue.id
+        ),
+    };
+    CreatorIssueRow {
+        issue_id: issue.id,
+        issue_number: issue.issue_number.clone(),
+        thread_id: issue.thread_id,
+        thread_title: issue.thread_title.clone(),
+        status: issue.status.clone(),
+        roles: roles_on_issue(library, creator_id, issue.id),
+        effective_rating: library.ratings.get(&issue.id).copied(),
+        rating_timestamp: library.rating_timestamps.get(&issue.id).map(iso_timestamp),
+        sort_key,
+    }
+}
+
+fn recent_rows(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    ids: &BTreeSet<i64>,
+    page_offset: usize,
+    limit: usize,
+) -> Vec<CreatorIssueRow> {
+    ids.iter()
+        .copied()
+        .filter_map(|id| library.issue(id))
+        .filter(|issue| library.credits.contains_key(&issue.id))
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .skip(page_offset)
+        .take(limit)
+        .map(|issue| issue_row(library, creator_id, issue, IssueRowOrder::Recent))
+        .collect()
+}
+
+fn filter_aggregate_to_headline(
+    aggregate: &SeriesAggregate,
+    rated_issue_ids: &BTreeSet<i64>,
+) -> Option<SeriesAggregate> {
+    let headline_ids: Vec<i64> = aggregate
+        .rated_issue_ids
+        .iter()
+        .copied()
+        .filter(|id| rated_issue_ids.contains(id))
+        .collect();
+    if headline_ids.len() < MIN_SERIES_SAMPLE {
+        return None;
+    }
+    let id_to_rating: HashMap<i64, f64> = aggregate
+        .rated_issue_ids
+        .iter()
+        .copied()
+        .zip(aggregate.ratings.iter().copied())
+        .collect();
+    let headline_ratings: Vec<f64> = headline_ids
+        .iter()
+        .filter_map(|id| id_to_rating.get(id).copied())
+        .collect();
+    Some(SeriesAggregate {
+        thread_id: aggregate.thread_id,
+        thread_title: aggregate.thread_title.clone(),
+        attributed_issue_count: aggregate.attributed_issue_count,
+        rated_issue_ids: headline_ids,
+        ratings: headline_ratings,
+        roles: aggregate.roles.clone(),
+        unread_issue_count: aggregate.unread_issue_count,
+        read_unrated_issue_count: aggregate.read_unrated_issue_count,
+        metadata_complete: aggregate.metadata_complete,
+    })
+}
+
+fn series_insight(aggregate: &SeriesAggregate) -> CreatorSeriesInsight {
+    let group = build_series_group(aggregate);
+    CreatorSeriesInsight {
+        series_key: group.series_key,
+        thread_id: group.thread_id,
+        thread_title: group.thread_title,
+        rated_issue_count: group.rated_issue_count,
+        average_rating: aggregate.average_rating().unwrap_or(0.0),
+        lowest_rating: aggregate.lowest_rating().unwrap_or(0.0),
+        highest_rating: aggregate.highest_rating().unwrap_or(0.0),
+        roles: group.roles,
+        metadata_complete: group.metadata_complete,
+        sort_key: series_sort_key(group.thread_id),
+    }
+}
+
+fn compute_insights(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    attribution: &Attribution,
+    headline_rated: &BTreeSet<i64>,
+    aggregates: &[SeriesAggregate],
+) -> Option<CreatorInsights> {
+    if headline_rated.is_empty() {
+        return None;
+    }
+    let filtered: Vec<SeriesAggregate> = aggregates
+        .iter()
+        .filter(|aggregate| aggregate.metadata_complete)
+        .filter_map(|aggregate| filter_aggregate_to_headline(aggregate, headline_rated))
+        .collect();
+    let qualifying: Vec<&SeriesAggregate> = filtered.iter().collect();
+    let excluded_incomplete = aggregates
+        .iter()
+        .filter(|aggregate| !aggregate.metadata_complete && !aggregate.rated_issue_ids.is_empty())
+        .count() as i64;
+
+    let pick = |key: fn(&SeriesAggregate) -> (f64, String)| -> Option<&SeriesAggregate> {
+        qualifying
+            .iter()
+            .copied()
+            .min_by(|a, b| key(a).partial_cmp(&key(b)).unwrap_or(Ordering::Equal))
+    };
+    let strongest = pick(|aggregate| (-(aggregate.average_rating().unwrap_or(0.0)), series_sort_key(aggregate.thread_id)));
+    let weakest = pick(|aggregate| (aggregate.average_rating().unwrap_or(0.0), series_sort_key(aggregate.thread_id)));
+    let most_rated = pick(|aggregate| (-(aggregate.rated_issue_count() as f64), series_sort_key(aggregate.thread_id)));
+
+    let mut issue_insights: Vec<CreatorIssueInsight> = headline_rated
+        .iter()
+        .copied()
+        .filter_map(|id| library.issue(id))
+        .map(|issue| CreatorIssueInsight {
+            issue_id: issue.id,
+            issue_number: issue.issue_number.clone(),
+            thread_id: issue.thread_id,
+            thread_title: issue.thread_title.clone(),
+            effective_rating: *library.ratings.get(&issue.id).unwrap_or(&0.0),
+            roles: roles_on_issue(library, creator_id, issue.id),
+            sort_key: issue.id.to_string(),
+        })
+        .collect();
+    issue_insights.sort_by_key(|insight| insight.issue_id);
+
+    let mut highest: Vec<CreatorIssueInsight> = issue_insights
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    highest.sort_by(|a, b| {
+        b.effective_rating
+            .partial_cmp(&a.effective_rating)
+            .unwrap_or(Ordering::Equal)
+            .then(a.thread_id.cmp(&b.thread_id))
+            .then(a.issue_id.cmp(&b.issue_id))
+    });
+    highest.truncate(INDIVIDUAL_ISSUE_LIMIT);
+    let highest_ids: HashSet<i64> = highest.iter().map(|insight| insight.issue_id).collect();
+    let mut lowest: Vec<CreatorIssueInsight> = issue_insights
+        .iter()
+        .filter(|insight| !highest_ids.contains(&insight.issue_id))
+        .cloned()
+        .collect();
+    lowest.sort_by(|a, b| {
+        a.effective_rating
+            .partial_cmp(&b.effective_rating)
+            .unwrap_or(Ordering::Equal)
+            .then(a.thread_id.cmp(&b.thread_id))
+            .then(a.issue_id.cmp(&b.issue_id))
+    });
+    lowest.truncate(INDIVIDUAL_ISSUE_LIMIT);
+    let combined = lowest.is_empty();
+
+    let message = if !qualifying.is_empty() {
+        None
+    } else {
+        let sample_sized: Vec<&SeriesAggregate> = aggregates
+            .iter()
+            .filter(|aggregate| aggregate.rated_issue_count() >= MIN_SERIES_SAMPLE as i64)
+            .collect();
+        if sample_sized.iter().any(|aggregate| !aggregate.metadata_complete) {
+            Some(INCOMPLETE_METADATA_SERIES_MESSAGE.to_string())
+        } else if !sample_sized.is_empty() {
+            Some(NON_HEADLINE_SERIES_MESSAGE.to_string())
+        } else {
+            Some(INSUFFICIENT_SERIES_MESSAGE.to_string())
+        }
+    };
+
+    let _ = attribution;
+    Some(CreatorInsights {
+        min_series_sample: MIN_SERIES_SAMPLE as i64,
+        series_sample_met: !qualifying.is_empty(),
+        series_message: message,
+        excluded_incomplete_series_count: excluded_incomplete,
+        individual_issue_limit: INDIVIDUAL_ISSUE_LIMIT as i64,
+        individual_issues_combined: combined,
+        strongest_series: strongest.map(series_insight),
+        weakest_series: weakest.map(series_insight),
+        most_rated_series: most_rated.map(series_insight),
+        highest_rated_issues: highest,
+        lowest_rated_issues: lowest,
+    })
+}
+
+fn build_detail(
+    library: &CreatorLibrary,
+    creator_key: &str,
+    creator_id: i64,
+    limit: usize,
+    offset: usize,
+) -> CreatorDetailResponse {
+    let attribution = attribution(library, creator_id).expect("creator was resolved");
+    let mut headline_rated: BTreeSet<i64> = BTreeSet::new();
+    let mut read_unrated: BTreeSet<i64> = BTreeSet::new();
+    let mut upcoming: BTreeSet<i64> = BTreeSet::new();
+    for issue_id in attribution.issue_ids.iter().copied() {
+        let Some(issue) = library.issue(issue_id) else {
+            continue;
+        };
+        let rated = library.ratings.contains_key(&issue_id)
+            && library
+                .credits
+                .get(&issue_id)
+                .into_iter()
+                .flatten()
+                .any(|credit| credit.external_id == creator_id && has_headline_role(credit));
+        if rated {
+            headline_rated.insert(issue_id);
+        }
+        if issue.status == "read" && !library.ratings.contains_key(&issue_id) {
+            read_unrated.insert(issue_id);
+        }
+        if issue.status == "unread" {
+            upcoming.insert(issue_id);
+        }
+    }
+    let headline_ratings: Vec<f64> = headline_rated
+        .iter()
+        .filter_map(|id| library.ratings.get(id).copied())
+        .collect();
+    let summary = CreatorSummaryItem {
+        canonical_creator_key: creator_key.to_string(),
+        display_name: attribution.display_name.clone(),
+        normalized_roles: attribution.roles.iter().cloned().collect(),
+        average_rating: (!headline_ratings.is_empty()).then(|| round2(mean(&headline_ratings))),
+        ratings_count: headline_ratings.len() as i64,
+        read_unrated_count: read_unrated.len() as i64,
+        upcoming_count: upcoming.len() as i64,
+    };
+    let role_stats: Vec<CreatorRoleStat> = attribution
+        .roles
+        .iter()
+        .map(|role| {
+            let mut issue_ids = Vec::new();
+            for issue_id in attribution.issue_ids.iter().copied() {
+                if library
+                    .credits
+                    .get(&issue_id)
+                    .into_iter()
+                    .flatten()
+                    .any(|credit| credit.external_id == creator_id && credit.roles.contains(role))
+                {
+                    issue_ids.push(issue_id);
+                }
+            }
+            let role_ratings: Vec<f64> = issue_ids
+                .iter()
+                .filter_map(|id| library.ratings.get(id).copied())
+                .collect();
+            CreatorRoleStat {
+                role: role.clone(),
+                issue_count: issue_ids.len() as i64,
+                rated_issue_count: role_ratings.len() as i64,
+                average_rating: (!role_ratings.is_empty()).then(|| round2(mean(&role_ratings))),
+            }
+        })
+        .collect();
+
+    let aggregates = aggregate_series(library, creator_id, &attribution);
+    let series_groups_total = aggregates.len();
+    let series_groups: Vec<CreatorSeriesGroup> = aggregates
+        .iter()
+        .skip(offset)
+        .take(limit)
+        .map(build_series_group)
+        .collect();
+    let series_groups_complete = offset + series_groups.len() >= series_groups_total;
+
+    let rated_rows = recent_rows(library, creator_id, &headline_rated, offset, limit);
+    let read_unrated_rows = recent_rows(library, creator_id, &read_unrated, offset, limit);
+    let upcoming_rows: Vec<CreatorIssueRow> = upcoming
+        .iter()
+        .copied()
+        .filter_map(|id| library.issue(id))
+        .filter(|issue| library.credits.contains_key(&issue.id))
+        .collect::<Vec<_>>()
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .map(|issue| issue_row(library, creator_id, issue, IssueRowOrder::Upcoming))
+        .collect();
+
+    let has_next = headline_rated.len() > offset + rated_rows.len()
+        || read_unrated.len() > offset + read_unrated_rows.len()
+        || upcoming.len() > offset + upcoming_rows.len()
+        || series_groups_total > offset + series_groups.len();
+    let next_cursor = has_next.then(|| (offset + limit).to_string());
+
+    CreatorDetailResponse {
+        summary,
+        coverage: coverage(library),
+        role_stats,
+        series_groups,
+        series_groups_total: series_groups_total as i64,
+        series_groups_complete,
+        rated_issues: rated_rows,
+        rated_population_scope: "headline_roles_only".to_string(),
+        headline_roles: HEADLINE_ROLES.iter().map(|role| role.to_string()).collect::<BTreeSet<_>>().into_iter().collect(),
+        read_unrated_issues: read_unrated_rows,
+        upcoming_issues: upcoming_rows,
+        next_cursor,
+        rating_distribution: rating_distribution(&headline_ratings),
+        insights: compute_insights(library, creator_id, &attribution, &headline_rated, &aggregates),
+    }
+}
+
+fn build_series_issues(
+    library: &CreatorLibrary,
+    creator_id: i64,
+    thread_id: i64,
+    limit: usize,
+    offset: usize,
+) -> Option<CreatorSeriesIssueListResponse> {
+    let attribution = attribution(library, creator_id)?;
+    let aggregates = aggregate_series(library, creator_id, &attribution);
+    let aggregate = aggregates.iter().find(|aggregate| aggregate.thread_id == thread_id)?;
+    let group_ids: BTreeSet<i64> = aggregate.rated_issue_ids.iter().copied().collect();
+    let rows = recent_rows(library, creator_id, &group_ids, offset, limit);
+    let group = build_series_group(aggregate);
+    let total = group.rated_issue_count;
+    Some(CreatorSeriesIssueListResponse {
+        series_key: group.series_key,
+        thread_id: group.thread_id,
+        thread_title: group.thread_title,
+        roles: group.roles,
+        rated_issue_count: total,
+        average_rating: group.average_rating,
+        lowest_rating: group.lowest_rating,
+        highest_rating: group.highest_rating,
+        metadata_complete: group.metadata_complete,
+        population_scope: group.population_scope,
+        total,
+        limit: limit as i64,
+        offset: offset as i64,
+        issues: rows.clone(),
+        next_cursor: (total > offset as i64 + rows.len() as i64)
+            .then(|| (offset + limit).to_string()),
+    })
+}
