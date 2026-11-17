@@ -605,6 +605,7 @@ jobs:
             case "$kind" in
               none)
                 echo "Factory ${worker}: no executable control-plane assignment"
+                consecutive_idle=$((consecutive_idle + 1))
                 return 0
                 ;;
               issue|pr) ;;
@@ -615,6 +616,7 @@ jobs:
                 ;;
             esac
 
+            consecutive_idle=0
             echo "Factory ${worker} assignment: ${assignment}"
             while (( attempt <= 3 )); do
               echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
@@ -746,6 +748,12 @@ jobs:
           echo "Dispatching workers through centralized assignment: $workers"
           dispatched_count=0
           dispatch_failures=0
+          # Each `assign` re-evaluates the whole executable pool (~20 GitHub
+          # reads). Once several differently-sourced workers in a row find
+          # nothing, the shared pool is empty for this tick; stop instead of
+          # repeating the same reads for every remaining slot.
+          consecutive_idle=0
+          idle_stop="${FACTORY_IDLE_ASSIGN_STOP:-3}"
           budget_deferred=false
           budget_unreadable=false
           while IFS= read -r worker; do
@@ -764,6 +772,10 @@ jobs:
             if (( remaining_core < 450 )); then
               echo "::warning::REST quota reached worker reserve; deferring remaining workers"
               budget_deferred=true
+              break
+            fi
+            if (( consecutive_idle >= idle_stop )); then
+              echo "${consecutive_idle} consecutive workers found no executable work; ending this tick's batch"
               break
             fi
             dispatch_assigned_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))
