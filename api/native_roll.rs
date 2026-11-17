@@ -372,10 +372,7 @@ fn app() -> Router {
             "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
             post(native_dispatch),
         )
-        .route(
-            "/api/v2/comicvine/search/series",
-            get(native_dispatch),
-        )
+        .route("/api/v2/comicvine/search/series", get(native_dispatch))
         .route("/api/v2/comicvine/resolve", get(native_dispatch))
         .route(
             "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
