@@ -22,6 +22,10 @@ FACTORY_PATHS = tuple(
     for pattern in (
         r"^\.github/scripts/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.(?:py|sh|cjs)$",
         r"^\.github/scripts/(?:local-ollama-review|local_review_contract|nvidia-factory-worker|omniroute-factory-worker|stale_pr_decay|hourly_coderabbit_review)\.(?:py|sh|cjs)$",
+        # Owner sign-off (2026-11-16, #1093 retirement): the factory status
+        # dashboard generator and its test are factory-only telemetry code.
+        r"^\.github/scripts/generate_factory_status_dashboard\.py$",
+        r"^tests/test_generate_factory_status_dashboard\.py$",
         r"^\.github/workflows/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.ya?ml$",
         r"^\.github/workflows/local-ollama-review\.ya?ml$",
         r"^\.github/actions/factory-syntax/[A-Za-z0-9_./-]+$",
@@ -109,16 +113,17 @@ def factory_candidate(
         or changed != len(files)
     ):
         return False, "Changed file listing is incomplete"
-    # A roster edit is one atomic, validated unit. The generator must never
-    # fast-merge a standalone lock/snapshot that describes different workers.
-    changed_paths = {file.get("filename") for file in files if isinstance(file, dict)}
-    roster_files = {
+    # Never permit a recreated source-controlled model inventory.
+    retired_inventory = {
         ".github/free-model-factories.tsv",
         ".github/factory-expected-workers.json",
         ".github/factory-roster-snapshot.json",
     }
-    if changed_paths & roster_files and not roster_files <= changed_paths:
-        return False, "Factory roster manifest, lock and snapshot must change together"
+    if any(
+        item.get("filename") in retired_inventory and item.get("status") != "removed"
+        for item in files
+    ):
+        return False, "Source-controlled factory model inventories are forbidden"
     for file in files:
         if not isinstance(file, dict):
             return False, "Malformed changed-file entry"

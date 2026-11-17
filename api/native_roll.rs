@@ -246,6 +246,7 @@ fn app() -> Router {
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
+        .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/sessions/{session_id}", get(native_dispatch))
@@ -271,6 +272,8 @@ fn app() -> Router {
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
+        .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
+        .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
@@ -328,6 +331,14 @@ fn app() -> Router {
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(native_dispatch),
+        )
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
@@ -432,6 +443,7 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(native_dispatch),
@@ -556,6 +568,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v1_taste_discovery_list_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/taste/discoveries")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "taste discovery list must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
     async fn v1_taste_dismiss_ingress_preserves_same_path_and_requires_auth() {
         let mut router = app();
         let response = router
@@ -633,6 +670,26 @@ mod tests {
                 response.status() == StatusCode::UNAUTHORIZED
                     || response.status() == StatusCode::SERVICE_UNAVAILABLE,
                 "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn activity_ingress_reaches_authenticated_native_dispatch() {
+        for uri in ["/api/v2/activity"] {
+            let response = app()
+                .call(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach authenticated native dispatch, got {}",
                 response.status()
             );
             assert_eq!(

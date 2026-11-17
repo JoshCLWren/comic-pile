@@ -20,7 +20,7 @@ def dispatch_script() -> str:
     source = DISPATCHER.read_text(encoding="utf-8")
     step = source.split(
         "      - name: Offer one unclaimed PR to local Ollama reviewer\n", 1,
-    )[1].split("      - name: Queue roster successor outside assignment lease lock\n", 1)[0]
+    )[1].split("\n      - name:", 1)[0]
     return textwrap.dedent(step.split("        run: |\n", 1)[1])
 
 

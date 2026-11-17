@@ -194,15 +194,15 @@ class TestPerformanceBudgetAppIntegration:
         # Reset the performance budget manager
         get_performance_budget_manager().clear_all()
     
-    def test_ping_endpoint_fast(self):
-        """Test that the ping endpoint is fast and doesn't trigger budgets."""
+    def test_health_probe_endpoint_fast(self):
+        """Test that the health probe is fast and doesn't trigger budgets."""
         with patch(
             "app.middleware.request_logging.time.perf_counter",
             side_effect=_measured_request_duration(0.01),
         ):
-            response = self.client.get("/api/ping")
+            response = self.client.get("/health")
         
-        # Ping should be very fast, no warnings or violations
+        # Health probe should be very fast, no warnings or violations
         budget_manager = get_performance_budget_manager()
         assert len(budget_manager.get_request_warnings()) == 0
         assert len(budget_manager.get_request_violations()) == 0
@@ -253,7 +253,7 @@ class TestPerformanceBudgetAppIntegration:
     def test_non_production_startup_degrades_instead_of_failing(self):
         """A long-lived test process records telemetry but still becomes ping-ready."""
         with TestClient(self.app) as client:
-            assert client.get("/api/ping").status_code == 200
+            assert client.get("/health").status_code == 200
 
 
 class TestStartupHardBudgetEnforcement:
@@ -283,7 +283,7 @@ class TestStartupHardBudgetEnforcement:
         app = create_app(serve_frontend=False, defer_router_imports=True)
         try:
             with TestClient(app) as client:
-                assert client.get("/api/ping").status_code == 200
+                assert client.get("/health").status_code == 200
 
             violations = get_performance_budget_manager().get_startup_violations()
             assert len(violations) == 1
@@ -319,7 +319,7 @@ class TestStartupHardBudgetEnforcement:
         app = create_app(serve_frontend=False, defer_router_imports=True)
         try:
             with TestClient(app) as client:
-                assert client.get("/api/ping").status_code == 200
+                assert client.get("/health").status_code == 200
 
             assert get_performance_budget_manager().get_startup_violations() == []
         finally:

@@ -56,13 +56,13 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V27 policy, protocol, and runtime prompts."""
+        """Accept the current V28 policy, protocol, and runtime prompts."""
         self.validate()
         CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V27 and issue-backlog closure as the prime directive."""
-        self.assert_policy_change_fails("Version: 27", "Version: 26")
+        """Require V28 and issue-backlog closure as the prime directive."""
+        self.assert_policy_change_fails("Version: 28", "Version: 27")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",

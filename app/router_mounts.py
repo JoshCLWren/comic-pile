@@ -119,10 +119,9 @@ def _register_health(app: FastAPI) -> None:
 
 
 def _register_threads(app: FastAPI) -> None:
-    """Register thread routers."""
+    """Register versioned thread routers; unused bare aliases are retired."""
     from app.api import thread
 
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     # New client resources (e.g. paginated completed threads for issue #2567)
     # are versioned-only: no bare /api/* twin.
@@ -188,22 +187,20 @@ def _register_cron(app: FastAPI) -> None:
 
 
 def _register_sessions(app: FastAPI) -> None:
-    """Register session routers."""
+    """Register versioned reading-session routers."""
     from app.api import session
 
-    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
     # Versioned-only new client resources (e.g. the #2744 correction-sheet
     # examples) have no bare /api/* twin. The v1 router is registered before the
-    # legacy twin so its literal paths resolve ahead of /{session_id}.
+    # shared router so its literal paths resolve ahead of /{session_id}.
     app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
 
 
 def _register_undo(app: FastAPI) -> None:
-    """Register undo routers."""
+    """Register versioned undo routers."""
     from app.api import undo
 
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
 
 

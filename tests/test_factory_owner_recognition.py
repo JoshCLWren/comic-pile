@@ -85,26 +85,20 @@ def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() 
         assert not pattern.fullmatch(label), f"{label} must not be a valid owner"
 
 
-def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_workers() -> None:
-    """Known three-digit workers are in the roster, not merely matched by a regex."""
-    roster_file = ROOT / ".github" / "free-model-factories.tsv"
-    roster_ids: set[str] = set()
-    roster_sources: dict[str, str] = {}
-    for raw in roster_file.read_text(encoding="utf-8").splitlines():
-        if not raw or raw.startswith("#"):
-            continue
-        fields = raw.split("\t")
-        if len(fields) < 2:
-            continue
-        roster_ids.add(fields[0])
-        roster_sources[fields[0]] = fields[1]
+def test_generated_slot_ids_are_authorized_without_widening_to_unknown_workers() -> None:
+    """Generated provider slots are authorized; unknown decimal IDs are not.
 
-    # Derive the actual current three-digit active workers from the roster
-    # instead of freezing a retired numeric range (101/104/107 are retired).
-    three_digit_workers = sorted(
-        int(worker) for worker in roster_ids
-        if worker.isdigit() and int(worker) >= 100
-    )
+    The TSV roster was removed (#5213); slot identities are derived from the
+    provider integration registry by factory_worker_slots.
+    """
+    import sys
+
+    sys.path.insert(0, str(SCRIPTS))
+    import factory_worker_slots
+
+    roster_sources = {slot.worker: slot.source for slot in factory_worker_slots.slots()}
+    roster_ids = set(roster_sources)
+    three_digit_workers = sorted(int(worker) for worker in roster_ids)
     assert three_digit_workers
 
     # Load the controller with the established importlib test pattern and bind
@@ -175,8 +169,10 @@ def test_shared_factory_wrapper_rejects_omniroute_while_incident_dark() -> None:
     assert "FACTORY_SOURCE}" in text
     assert "== 'omniroute-free'" in text
     assert "GitHub factory execution is OmniRoute-only" not in text
-    # Multi-provider Entry pins the leased model; do not revive OmniRoute route adaptation.
-    assert "refusing to switch models" in text
+    # Model/provider switching is the trusted wrapper's fleet failover within
+    # the same lease (#5280), never agent-initiated route adaptation.
+    assert "select_next_eligible_model" in text
+    assert "Do not switch models, providers, or routes." in text
 
 
 def test_factory_persistence_pushes_and_verifies_current_head() -> None:

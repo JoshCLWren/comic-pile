@@ -32,7 +32,8 @@ def test_pruned_diagnostics_absent_from_openapi() -> None:
 
 
 @pytest.mark.asyncio
-async def test_retained_ping_still_available(client: AsyncClient) -> None:
-    """The eager ``/api/ping`` heartbeat route is retained and unaffected."""
-    response = await client.get("/api/ping")
+async def test_retained_health_probe_still_available(client: AsyncClient) -> None:
+    """The eager ``/health`` liveness probe remains available."""
+    response = await client.get("/health")
     assert response.status_code == 200
+    assert response.json() == {"status": "alive"}

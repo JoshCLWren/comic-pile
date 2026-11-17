@@ -83,6 +83,9 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     # This retry-history fixture explicitly simulates retired worker 48.
     # Production dispatch must still require real roster membership.
     monkeypatch.setattr(CONTROLLER, "worker_sources", lambda: {"46": "kilo-auto", "48": "nvidia", "53": "nvidia"})
+    # Simulated NVIDIA workers are credentialed, so a None result for 48 is
+    # caused by retry history, not by a missing credential.
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     monkeypatch.setattr(CONTROLLER, "quota_pause_for", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "runtime_quota_block_reason", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "worker_has_active_lease", lambda worker: False)
@@ -249,3 +252,47 @@ def test_dispatcher_creates_a_new_runner_local_cache_for_its_assignment_step() -
     assert 'export FACTORY_ATTEMPT_HISTORY_CACHE="$history_cache_dir/comments.json"' in script
     assert script.index("export FACTORY_ATTEMPT_HISTORY_CACHE") < script.index('assign --worker "$worker"')
     assert 'FACTORY_ATTEMPT_HISTORY_CACHE' not in str(step.get("env", {}))
+
+
+def test_targeted_pr_retry_history_reads_only_its_own_comment_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR wakeup must not paginate all repository comments."""
+    monkeypatch.delenv("FACTORY_ATTEMPT_HISTORY_CACHE", raising=False)
+    endpoints: list[str] = []
+    def github(args: list[str]) -> object:
+        endpoints.append(args[-1])
+        other = dict(_attempt(2, NOW - 8))
+        other["body"] = str(other["body"]).replace("pr-2264:", "pr-2700:")
+        return [[_attempt(1, NOW - 10), other]]
+    monkeypatch.setattr(CONTROLLER, "gh_json", github)
+    records = CONTROLLER.load_no_diff_attempt_records(NOW, target_pr=2264)
+    assert len(records) == 1
+    assert records[0].number == 2264
+    assert records[0].kind == "pr"
+    assert len(endpoints) == 1
+    assert "repos/JoshCLWren/comic-pile/issues/2264/comments?since=" in endpoints[0]
+    assert "repos/JoshCLWren/comic-pile/issues/comments?" not in endpoints[0]
+
+
+def test_targeted_pr_snapshot_does_not_masquerade_as_full_retry_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FACTORY_ATTEMPT_HISTORY_CACHE", str(tmp_path / "history.json"))
+    endpoints: list[str] = []
+    def github(args: list[str]) -> object:
+        endpoints.append(args[-1])
+        return [[_attempt(len(endpoints), NOW - 10)]]
+    monkeypatch.setattr(CONTROLLER, "gh_json", github)
+    CONTROLLER.recent_factory_comments(NOW, target_pr=2264)
+    CONTROLLER.recent_factory_comments(NOW)
+    assert len(endpoints) == 2
+    assert "/issues/2264/comments?" in endpoints[0]
+    assert "/issues/comments?" in endpoints[1]
+
+
+def test_targeted_pr_assignments_use_pr_scoped_retry_history() -> None:
+    source = (SCRIPTS / "factory-work-controller.py").read_text()
+    assert "load_no_diff_attempt_records(target_pr=target[1])" in source
+    assert "if target is not None and target[0] == 'pr'" in source
+    assert "else load_no_diff_attempt_records()" in source

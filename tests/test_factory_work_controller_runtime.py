@@ -350,6 +350,7 @@ def test_assign_respects_pr_no_diff_retry_budget(
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     attempts += controller.FACTORY_NO_DIFF_RETRY_LIMIT
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     # Live CI is covered separately; these are deterministic retry/selection tests.
     monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -428,6 +429,7 @@ def test_assign_skips_a_head_the_requesting_worker_contributed_to(
     # Exercise the selected PR/lease branch, not the Actions identity gate.
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     # Live CI is covered separately; these are deterministic retry/selection tests.
     monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     head = "cccccccccccccccccccccccccccccccccccccccc"
@@ -487,6 +489,7 @@ def test_assign_wakes_exhausted_pr_after_new_head(
     # Exercise the selected PR/lease branch, not the Actions identity gate.
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     # Live CI is covered separately; these are deterministic retry/selection tests.
     monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -1096,6 +1099,7 @@ def test_worker_accepts_in_progress_pr_handoff_from_controller() -> None:
 def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     """A manual issue request follows the linked PR and cannot select its producer."""
     issue_number, pr_number = 812, 813
     head = "a" * 40
@@ -1140,30 +1144,46 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     )
 
 
-@pytest.mark.parametrize("worker", ["54", "82", "97"])
 def test_shared_provider_quota_uses_trusted_neon_projection(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Source-level quota is enforced for every pin without comments."""
+    """Provider cooldown applies to every dynamic slot for the same source."""
     import importlib
+
+    slots = importlib.import_module("factory_worker_slots")
     operations = importlib.import_module("factory_state_operations")
+    provider_workers = [
+        item.worker for item in slots.slots()
+        if item.source == "z-ai"
+    ]
+    assert len(provider_workers) > 1
     monkeypatch.setattr(operations, "enabled", lambda: True)
-    monkeypatch.setattr(operations, "filter_workers",
-                        lambda _repo, _workers: ([], ["provider z-ai cooling"]))
-    assert "cooling" in controller.runtime_quota_block_reason(worker)
-    monkeypatch.setattr(operations, "filter_workers",
-                        lambda _repo, workers: (workers, []))
-    assert controller.runtime_quota_block_reason(worker) is None
+    monkeypatch.setattr(
+        operations, "filter_workers",
+        lambda _repo, _workers: ([], ["provider z-ai cooling"]),
+    )
+    for worker in provider_workers[:3]:
+        assert "cooling" in (controller.runtime_quota_block_reason(worker) or "")
+    monkeypatch.setattr(
+        operations, "filter_workers",
+        lambda _repo, workers: (workers, []),
+    )
+    for worker in provider_workers[:3]:
+        assert controller.runtime_quota_block_reason(worker) is None
 
 
 def test_provider_health_database_outage_fails_closed(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import importlib
+
+    slots = importlib.import_module("factory_worker_slots")
     operations = importlib.import_module("factory_state_operations")
+    z_ai = next(item.worker for item in slots.slots() if item.source == "z-ai")
+    nvidia = next(item.worker for item in slots.slots() if item.source == "nvidia")
     monkeypatch.setattr(operations, "enabled", lambda: False)
-    assert "deferred" in controller.runtime_quota_block_reason("97")
-    assert controller.runtime_quota_block_reason("20") is None
+    assert "deferred" in (controller.runtime_quota_block_reason(z_ai) or "")
+    assert controller.runtime_quota_block_reason(nvidia) is None
 
 
 def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
@@ -1199,6 +1219,7 @@ def test_live_blocker_lookup_explicitly_bypasses_neon_cache(
 def test_batch_assignment_omits_redundant_reconciliation(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     """Only the trusted reconciled batch skips global sweeps; manual calls keep them."""
     sweeps: list[str] = []
     monkeypatch.setattr(controller, "quota_pause_for", lambda _worker: None)

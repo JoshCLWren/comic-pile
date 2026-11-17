@@ -9,6 +9,13 @@ import { useCreateThread, useUpdateThread, useReactivateThread } from '../hooks/
 import { useQueueThreads, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 
+vi.mock('../hooks/useCompletedThreads', () => ({
+  useCompletedThreads: vi.fn(() => ({
+    threads: [], hasNextPage: false, isLoadingMore: false, isError: false,
+    loadMore: vi.fn(), retry: vi.fn(),
+  })),
+}))
+
 vi.mock('../components/QueueBulkMapSeriesDialog', () => ({
   default: vi.fn(() => null),
 }))

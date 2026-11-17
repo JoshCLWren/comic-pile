@@ -36,12 +36,12 @@ The gate requires **all** of the following:
 - Same-repository head, not a fork; trusted author association (`OWNER`, `MEMBER`, `COLLABORATOR`) or `github-actions[bot]`. Dependabot and Renovate are excluded.
 - Both `factory` and `factory:unowned` labels. No `factory:local` or `factory:<number>` active owner; no `factory:blocked`, `needs-human`, `do-not-merge`, or `security-review` hold.
 - Every changed path matches the **explicit factory-only allowlist** in the Python controller, including both sides of renames. Complete file enumeration required; unknown or mixed product paths fail closed.
-- If one of the three roster artifacts is modified, all three must be in the same PR: `.github/free-model-factories.tsv`, `.github/factory-expected-workers.json`, `.github/factory-roster-snapshot.json`.
+- The retired roster TSV, generated expected-worker lock and roster snapshot cannot be added or modified. Deleting these artifacts is permitted. Provider slots are derived at runtime.
 - GitHub accepts the SHA-pinned merge with the selected token. A branch-rule rejection becomes a visible `skipped` reason, never a synthetic approval/check.
 
 **No CI / review eligibility requirement exists in this lane.** `factory:changes-requested` status does not by itself prevent this authorized factory-only merge. The controller never executes PR-head code with a write credential, only trusted `main`.
 
-The allowlist covers selected factory scripts, workflows, factory tests, factory docs/skills and atomic roster changes. It does **not** include arbitrary `.github/**` changes. The fast-lane control files themselves are excluded to prevent self-authorized policy edits: `.github/factory-fast-merge.json`, `.github/workflows/factory-fast-merge.yml`, `.github/scripts/factory-fast-merge.py`, and `tests/test_factory_fast_merge.py`. Changes to those controls follow the normal protected path; subsequent ordinary factory-only PRs can demonstrate the newly installed lane.
+The allowlist covers selected factory scripts, workflows, factory tests, factory docs/skills and runtime provider-discovery changes. It does **not** include arbitrary `.github/**` changes. The fast-lane control files themselves are excluded to prevent self-authorized policy edits: `.github/factory-fast-merge.json`, `.github/workflows/factory-fast-merge.yml`, `.github/scripts/factory-fast-merge.py`, and `tests/test_factory_fast_merge.py`. Changes to those controls follow the normal protected path; subsequent ordinary factory-only PRs can demonstrate the newly installed lane.
 
 ## Regression proof: real automatic merge before CI
 

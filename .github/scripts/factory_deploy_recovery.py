@@ -16,13 +16,19 @@ DEPLOY_JOB_NAME = "Migrate Neon and deploy exact main SHA"
 RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 
 
+class GitHubQuotaDeferredError(RuntimeError):
+    """GitHub cannot provide trustworthy evidence until its API quota resets."""
+
+
 def fetch_run_jobs(run_id: int, *, repository: str) -> list[Mapping[str, object]] | None:
     """Fetch jobs for a completed deployment run."""
     try:
         payload = gh_json(["run", "view", str(run_id), "--repo", repository, "--json", "jobs"])
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
-    return mappings(payload.get("jobs")) if isinstance(payload, Mapping) else None
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("jobs"), list):
+        return None
+    return mappings(payload["jobs"])
 
 
 def latest_attempted_deploy_run(
@@ -48,7 +54,9 @@ def latest_attempted_deploy_run(
             if jobs is not None:
                 run["jobs"] = jobs
         if jobs is None:
-            return run
+            # Without job evidence we cannot prove this run attempted deploy.
+            # Preserve existing incidents and retry on the next scheduled pass.
+            return None
         if any(job.get("name") == DEPLOY_JOB_NAME for job in mappings(jobs)):
             return run
     return None
@@ -62,9 +70,17 @@ SMOKES = frozenset(
 
 def gh_json(arguments: list[str]) -> object:
     """Read GitHub JSON, raising on API errors rather than inventing state."""
-    result = subprocess.run(
-        ["gh", *arguments], check=True, capture_output=True, text=True, timeout=120
-    )
+    try:
+        result = subprocess.run(
+            ["gh", *arguments], check=True, capture_output=True, text=True, timeout=120
+        )
+    except subprocess.CalledProcessError as exc:
+        message = f"{exc.stderr or ''}\n{exc.stdout or ''}".lower()
+        if any(marker in message for marker in (
+            "rate limit exceeded", "secondary rate limit", "abuse detection"
+        )):
+            raise GitHubQuotaDeferredError("GitHub API quota exhausted") from None
+        raise
     return json.loads(result.stdout)
 
 
@@ -142,7 +158,7 @@ def merged_repair(failed: Mapping[str, object], repository: str) -> int | None:
 
 def successful_smokes(run: Mapping[str, object]) -> bool:
     """Require actual successful migration/deploy and both post-deploy probes."""
-    for job in mappings(run.get("jobs")):
+    for job in mappings(run.get("jobs") or []):
         if job.get("name") != DEPLOY_JOB_NAME or job.get("conclusion") != "success":
             continue
         passed = {
@@ -196,7 +212,7 @@ def attempt_revision(run: Mapping[str, object], repository: str) -> str | None:
 def incident_body(run: Mapping[str, object], selected_sha: str | None = None) -> str:
     """Build sanitized repair instructions from run metadata, never raw logs."""
     failures: list[str] = []
-    for job in mappings(run.get("jobs")):
+    for job in mappings(run.get("jobs") or []):
         for step in mappings(job.get("steps", [])):
             if step.get("conclusion") in RED_CONCLUSIONS:
                 failures.append(str(step.get("name")))
@@ -224,14 +240,10 @@ def incident_body(run: Mapping[str, object], selected_sha: str | None = None) ->
 
 def reconcile(repository: str) -> None:
     """Create/update one repair incident or close it after proven recovery."""
+    # Bounded current evidence, not the entire historical deployment ledger.
+    # The former --paginate --slurp loop exhausted installation REST quota.
     payload = gh_json(
-        [
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/workflows/deploy-production.yml/runs"
-            "?per_page=100",
-        ]
+        ["api", f"repos/{repository}/actions/workflows/deploy-production.yml/runs?per_page=20"]
     )
     latest = latest_attempted_deploy_run(
         payload, jobs_loader=lambda run_id: fetch_run_jobs(run_id, repository=repository)
@@ -358,7 +370,12 @@ def main() -> None:
     """Reconcile using the repository selected by the trusted workflow."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
-    reconcile(os.environ["GITHUB_REPOSITORY"])
+    try:
+        reconcile(os.environ["GITHUB_REPOSITORY"])
+    except GitHubQuotaDeferredError:
+        # No issue mutation or deployment-success assertion without evidence.
+        # The 15-minute scheduled recovery will retry after quota reset.
+        print("Production recovery deferred: GitHub API rate limited; existing incidents unchanged")
 
 
 if __name__ == "__main__":

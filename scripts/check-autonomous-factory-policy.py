@@ -17,7 +17,7 @@ LEGACY_PIPELINE = ROOT / "scripts/opencode_pipeline.sh"
 
 def require(text: str, needle: str, source: Path) -> None:
     """Require one invariant string in a policy source."""
-    if needle in {"Version: 22", "FACTORY POLICY V22", "Version: 23", "FACTORY POLICY V23", "Version: 24", "FACTORY POLICY V24", "Version: 25", "FACTORY POLICY V25", "Version: 26", "FACTORY POLICY V26", "Version: 27", "FACTORY POLICY V27"}:
+    if needle in {"Version: 22", "FACTORY POLICY V22", "Version: 23", "FACTORY POLICY V23", "Version: 24", "FACTORY POLICY V24", "Version: 25", "FACTORY POLICY V25", "Version: 26", "FACTORY POLICY V26", "Version: 27", "FACTORY POLICY V27", "Version: 28", "FACTORY POLICY V28"}:
         pattern = rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])"
         present = re.search(pattern, text) is not None
     else:
@@ -52,7 +52,7 @@ def require_order(text: str, before: str, after: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate factory control-plane texts against canonical invariants."""
     for needle in (
-        "Version: 27",
+        "Version: 28",
         "ruff check .",
         "ty check --error-on-warning",
         "Path-filtered ruff or ty is not a valid CI substitute",
@@ -62,8 +62,10 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "release the lease when active work stops",
         "A controller claim is not durable until the worker reaches an executable session",
         "Exact-head review assignments use the multi-provider Entry path",
-        "FACTORY_OMNIROUTE_ENABLED=off",
-        "do not restore the temporary `auto/best-free` capacity bridge",
+        # #5213 (policy V28) replaced the OmniRoute kill-switch wording with
+        # provider-health control; the auto/* smoke ban remains.
+        "OmniRoute can remain disabled by its existing provider-health control",
+        "they must not smoke `auto/reasoning:free` or `auto/coding:free`",
         "truthful no-work completion",
         "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
         "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
@@ -192,8 +194,8 @@ def validate_local_guidance() -> None:
         require(text, "factory-resume:v1", source)
 
     scheduled = SCHEDULED_PROMPT.read_text(encoding="utf-8")
-    require(scheduled, "Version: 27", SCHEDULED_PROMPT)
-    require(scheduled, "FACTORY POLICY V27", SCHEDULED_PROMPT)
+    require(scheduled, "Version: 28", SCHEDULED_PROMPT)
+    require(scheduled, "FACTORY POLICY V28", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 21", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "Version: 220", SCHEDULED_PROMPT)
     forbid_marker(scheduled, "FACTORY POLICY V21", SCHEDULED_PROMPT)
@@ -203,6 +205,8 @@ def validate_local_guidance() -> None:
     require(scheduled, "one full atomic label-set replacement", SCHEDULED_PROMPT)
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
+    # #1093 is retired as a registry (policy V28); prompts must not revive it.
+    forbid(scheduled, "heartbeat comment on registry issue #1093", SCHEDULED_PROMPT)
     require(scheduled, "FROZEN-SCOPE GOVERNANCE.", SCHEDULED_PROMPT)
     require(scheduled, "<!-- factory-execution:manual-only -->", SCHEDULED_PROMPT)
 

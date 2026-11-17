@@ -1379,6 +1379,8 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
     """Jev must affect assign() itself, not just an advisory report."""
     # Legacy test worker 6 is intentionally simulated, not in today's roster.
     monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
+    # The simulated worker is credentialed; assign() checks this flag.
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     numbers = [33001, 33002, 33003]
     issues = [
         {
@@ -1463,6 +1465,8 @@ def test_real_assign_falls_back_when_jev_file_is_invalid(
 ) -> None:
     """Malformed model output must not stop the normal factory claim."""
     monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
+    # The simulated worker is credentialed; assign() checks this flag.
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     bad = tmp_path / "bad-jev.json"
     bad.write_text("{not-json", encoding="utf-8")
     monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(bad))
@@ -1528,6 +1532,8 @@ def _completion_assign_env(
 ) -> None:
     # These Jev unit fixtures use legacy worker 6, not a live roster worker.
     monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
+    # The simulated worker is credentialed; assign() checks this flag.
+    monkeypatch.setenv("FACTORY_HAS_NVIDIA_API_KEY", "true")
     report_path = tmp_path / "jev.json"
     report_path.write_text(json.dumps(report), encoding="utf-8")
     monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(report_path))
@@ -2123,11 +2129,18 @@ def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
     assert len(writes) == 1
 
 
-@pytest.mark.parametrize('worker,preferred', [('54', 'issue'), ('46', 'pr')])
-def test_starter_finisher_preferences_keep_normal_fallback(
-    controller: types.ModuleType, worker: str, preferred: str,
+@pytest.mark.parametrize('worker', ['54', '46'])
+def test_worker_ordering_is_role_neutral_with_protected_lanes(
+    controller: types.ModuleType, worker: str,
 ) -> None:
-    """Specialists prefer their measured strength but still accept other eligible work."""
+    """No provider/model pin dictates intake preferences (#5213).
+
+    Former starter/finisher specialists order work exactly like any worker,
+    while urgent and protected-review lanes still lead.
+    """
+    import factory_work_policy
+
+    assert factory_work_policy.worker_delivery_role(worker) == ''
     candidates = [
         controller.Candidate('issue', 1001, 3, 4, '2026-11-01T00:00:00Z'),
         controller.Candidate('pr', 1002, 3, 0, '2026-11-01T00:00:00Z',
@@ -2136,9 +2149,7 @@ def test_starter_finisher_preferences_keep_normal_fallback(
                              stage='factory:review'),
     ]
     ordered = controller.order_candidates_for_worker(candidates, worker)
-    assert ordered[0].kind == preferred
-    fallback = [candidate for candidate in candidates if candidate.kind != preferred]
-    assert controller.order_candidates_for_worker(fallback, worker) == fallback
+    assert sorted(c.number for c in ordered) == [1001, 1002, 1004]
     urgent = controller.Candidate('issue', 1003, 0, 4, '2026-11-07T00:00:00Z')
     assert controller.order_candidates_for_worker([*candidates, urgent], worker)[0] == urgent
     # A protected review must not be demoted by review-capacity or role preferences.

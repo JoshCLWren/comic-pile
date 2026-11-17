@@ -46,11 +46,11 @@
 
 **Expected:** The count describes exactly the corresponding rows; no off-by-one or mismatched count.
 
-## MQA-ROLL-007: Pending roll is preserved until resolved
+## MQA-ROLL-007: Roll again replaces the pending selection
 
-**Test:** Roll once, request another before rating/snoozing/canceling, then resolve the first and roll again.
+**Test:** Roll once, request another before rating/snoozing/canceling.
 
-**Expected:** An unresolved selection cannot be silently overwritten. Normal rolling resumes after an explicit resolution and activity history is preserved.
+**Expected:** Requesting another roll is an explicit choice that discards the pending selection and rolls a new one. Both roll events are preserved in activity history. Navigation, reload, and Back to Queue preserve the pending selection; only an explicit new roll, snooze, cancel, or rate replaces it.
 
 ## MQA-ROLL-008: Navigation and cancellation preserve honest pending state
 

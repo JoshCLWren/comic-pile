@@ -78,6 +78,22 @@ jobs:
               echo "Check is stale or PR is no longer eligible: #${pr}"
               continue
             fi
+            # A live worker lease already owns the next action; its own
+            # handoff (and a later check completion) wakes the PR. Every
+            # dispatcher pass costs hundreds of shared installation requests.
+            if jq -e '[.labels[].name | select(test("^factory:([0-9]+|local)$"))] | length > 0' \
+              <<< "$current" >/dev/null; then
+              echo "PR #${pr} is leased by an active worker; no wakeup"
+              continue
+            fi
+            # Several workflows complete per head (CI, guards, review). Wake
+            # once, when the last check run on this exact head has finished.
+            pending="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.status != "completed")] | length')"
+            if [[ "$pending" != 0 ]]; then
+              echo "PR #${pr} still has ${pending} running check(s) on ${sha}; the last completion wakes it"
+              continue
+            fi
             gh workflow run fixed-model-factory-dispatch.yml \
               --repo "$GITHUB_REPOSITORY" --ref main -f "target=pr:${pr}" -f mode=roster
             echo "Queued targeted factory check wakeup for PR #${pr}"

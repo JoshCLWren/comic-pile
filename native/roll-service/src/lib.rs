@@ -1,11 +1,13 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod activity;
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -42,6 +44,7 @@ pub mod reading_mode;
 pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
+pub mod reading_plan_sync;
 pub mod reading_session;
 pub mod releases;
 pub mod roll_exclusions;
@@ -549,6 +552,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_orders::insert_reading_order_item),
         )
         .route(
+            "/api/v1/reading-plan-sync/status",
+            get(reading_plan_sync::get_sync_status),
+        )
+        .route(
+            "/api/v1/reading-plan-sync/sync",
+            post(reading_plan_sync::sync_released_issues_endpoint),
+        )
+        .route(
             "/api/v2/queue-entries/{thread_id}",
             get(queue::get_queue_entry),
         )
@@ -668,6 +679,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(legacy_dependencies::delete),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
             "/api/v1/identity-inbox/search/issues",
@@ -701,6 +713,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(cbl_catalog::browse_cbl_source_catalog),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(cbl_catalog::list_cbl_source_folders),
         )
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
@@ -771,6 +791,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(continuity_rules::get)
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
+        )
+        .route(
+            "/api/v1/taste/discoveries",
+            get(taste_discoveries::list_taste_discoveries),
         )
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",

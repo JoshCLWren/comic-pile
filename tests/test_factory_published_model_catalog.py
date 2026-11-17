@@ -1,4 +1,4 @@
-"""Catalog-backed free route selection never trusts a manually typed TSV ID."""
+"""Published discovery must not reject candidates for their price."""
 
 from __future__ import annotations
 
@@ -25,60 +25,63 @@ def catalog_module():
     return module
 
 
-def model(model_id: str, prompt: str, completion: str) -> dict:
-    return {"id": model_id, "pricing": {"prompt": prompt, "completion": completion}}
+def model(model_id: str, prompt: str | None = None, completion: str | None = None) -> dict:
+    row = {"id": model_id, "supported_parameters": ["tools"],
+           "endpoints": ["/api/v1/chat/completions"]}
+    if prompt is not None:
+        row["pricing"] = {"prompt": prompt, "completion": completion}
+    return row
 
 
-def test_openrouter_uses_published_free_ids_and_rejects_paid(catalog_module) -> None:
+def test_published_price_does_not_block_candidate(catalog_module) -> None:
     catalog = {"data": [
-        model("vendor/paid", "0.01", "0.02"),
-        model("vendor/free-lying", "0", "0"),
-        model("vendor/verified:free", "0", "0"),
-        model("vendor/paid:free", "0", "1"),
-        {"id": "vendor/unknown:free"},
+        model("example/no-price"),
+        model("example/paid", "0.01", "0.02"),
+        model("example/zero:free", "0", "0"),
+        model("example/new:free", "0", "0"),
+        {**model("example/no-tools"), "supported_parameters": []},
+        {**model("example/no-chat"), "endpoints": ["/api/v1/messages"]},
+        {"id": "example/metadata-unknown"},
     ]}
-    assert catalog_module.free_model_ids("openrouter-free", catalog) == ["vendor/verified:free"]
-    for worker in ("51", "108", "129"):
-        assert catalog_module.choose_model("openrouter-free", worker, catalog) == "vendor/verified:free"
+    assert catalog_module.catalog_model_ids("openrouter-free", catalog) == [
+        "example/new:free", "example/zero:free",
+    ]
 
 
-def test_vercel_requires_zero_price_on_both_sides(catalog_module) -> None:
+def test_vercel_filters_modality_not_price(catalog_module) -> None:
     catalog = {"data": [
-        {"id": "vendor/zero", "pricing": {"input": "0", "output": 0}},
-        {"id": "vendor/unknown", "pricing": {"input": "0"}},
-        {"id": "vendor/paid", "pricing": {"input": 0, "output": "0.0001"}},
+        {"id": "example/zero", "type": "language", "supported_parameters": ["tools"],
+         "pricing": {"input": "0", "output": 0}},
+        {"id": "example/paid", "type": "language", "supported_parameters": ["tools"],
+         "pricing": {"input": 1, "output": 2}},
+        {"id": "example/no-price", "type": "language"},
+        {"id": "example/image", "type": "image", "supported_parameters": ["tools"]},
+        {"id": "example/no-tools", "type": "language", "supported_parameters": []},
     ]}
-    assert catalog_module.free_model_ids("vercel-ai-gateway", catalog) == ["vendor/zero"]
+    assert catalog_module.catalog_model_ids("vercel-ai-gateway", catalog) == [
+        "example/no-price", "example/paid", "example/zero",
+    ]
 
 
-def test_selection_filters_neon_exclusions_and_is_deterministic(catalog_module) -> None:
-    catalog = {"data": [
-        model("vendor/a:free", "0", "0"),
-        model("vendor/b:free", "0", "0"),
-        model("vendor/c:free", "0", "0"),
-    ]}
+def test_selection_filters_cooldown_and_is_deterministic(catalog_module) -> None:
+    catalog = {"data": [model("example/a:free"), model("example/b:free"), model("example/c:free")]}
     first = catalog_module.choose_model("openrouter-free", "51", catalog)
     assert first == catalog_module.choose_model("openrouter-free", "51", catalog)
-    excluded = {"vendor/a:free", "vendor/b:free"}
-    assert catalog_module.choose_model("openrouter-free", "51", catalog, excluded) == "vendor/c:free"
+    assert catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a:free", "example/b:free"}) == "example/c:free"
     with pytest.raises(catalog_module.PublishedCatalogUnavailableError):
-        catalog_module.choose_model(
-            "openrouter-free", "51", catalog,
-            {"vendor/a:free", "vendor/b:free", "vendor/c:free"},
-        )
+        catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a:free", "example/b:free", "example/c:free"})
 
 
 @pytest.mark.parametrize("catalog", [{}, {"data": {}}, {"data": None}])
 def test_invalid_catalog_is_not_success(catalog_module, catalog: dict) -> None:
     with pytest.raises(catalog_module.PublishedCatalogUnavailableError):
-        catalog_module.free_model_ids("openrouter-free", catalog)
+        catalog_module.catalog_model_ids("openrouter-free", catalog)
 
 
-def test_cli_accepts_fixture_and_preserves_real_published_id(tmp_path: Path) -> None:
+def test_cli_accepts_fixture_with_published_price(tmp_path: Path) -> None:
     fixture = tmp_path / "upstream.json"
     fixture.write_text(json.dumps({"data": [
-        model("example/real:free", "0", "0"),
-        model("example/not-free", "1", "0"),
+        model("example/paid", "4", "2"), model("example/free:free", "0", "0")
     ]}))
     out = subprocess.run(
         [sys.executable, str(SCRIPT), "--source", "openrouter-free", "--worker", "51",
@@ -86,20 +89,27 @@ def test_cli_accepts_fixture_and_preserves_real_published_id(tmp_path: Path) -> 
         capture_output=True, text=True, check=True,
     )
     assert json.loads(out.stdout) == {
-        "source": "openrouter-free",
-        "model": "example/real:free",
-        "catalog_verified": True,
+        "source": "openrouter-free", "model": "example/free:free",
+        "runtime_model": "openrouter/example/free:free", "catalog_listed": True,
     }
 
 
-def test_workflow_uses_real_catalog_before_open_code_execution() -> None:
+def test_execution_workflow_has_no_published_price_gate() -> None:
     workflow = RUNNER.read_text()
-    selection = workflow.split(
-        "      - name: Select execution candidate at dispatch time", 1
-    )[1].split("      - name: Configure OpenAI-compatible factory provider", 1)[0]
-    assert selection.count("factory_published_model_catalog.py") == 2
-    assert "runtime_model=vercel/$model" in selection
-    assert "runtime_model=openrouter/$model" in selection
-    assert '--exclusions-file "$exclusions_file"' in selection
-    assert "selected-from-published-zero-price-catalog" in selection
-    assert "required cost" not in selection  # No inference-token probes.
+    selection = workflow.split("      - name: Select execution candidate at dispatch time", 1)[1]
+    assert selection.count("factory_published_model_catalog.py") == 1
+    assert "factory_runtime_model_select.py" in selection
+    assert "factory_live_opencode.py" in selection
+    assert "selected-from-live-runtime-catalog" in selection
+    assert "Require Vercel model to remain zero-price" not in workflow
+
+
+def test_prior_retirement_is_not_permanent_ban(tmp_path: Path) -> None:
+    fixture = tmp_path / "provider.json"
+    fixture.write_text(json.dumps({"data": [model("example/previously-failed:free")]}))
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--source", "openrouter-free",
+         "--worker", "128", "--catalog-json", str(fixture)],
+        text=True, capture_output=True, check=True,
+    )
+    assert json.loads(result.stdout)["model"] == "example/previously-failed:free"

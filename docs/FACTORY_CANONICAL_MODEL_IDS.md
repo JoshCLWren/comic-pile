@@ -1,36 +1,34 @@
-# Canonical OpenCode provider/model resolution
+# Canonical provider and model identity
 
-**One source of truth:** .github/scripts/factory_provider_registry.py is the
-typed registry of executable OpenCode provider IDs, credential environment
-variable names, compatible API endpoints, and adapter requirements. The
-factory TSV retains only the provider's *published upstream model ID* and the
-factory-specific budget/lease source key. Do not derive OpenCode provider IDs
-from factory source strings, and do not duplicate provider mappings in YAML.
+There are two independent identities in the ComicPile factory.
 
-At slot resolution, the registry emits the canonical OpenCode selector,
-credential eligibility, and whether an explicit compatible adapter is needed.
-At adapter configuration, the same registry emits the OpenCode JSON with
-modelID equal to the unmodified published upstream ID. No secret values are
-written to the config. The existing OpenCode catalog preflight then validates
-the exact selector before execution.
+1. **Worker/lease identity** is a stable numeric slot derived from the
+   provider source and slot index by
+   `.github/scripts/factory_worker_slots.py`. A model changing or disappearing
+   never causes a worker to be retired or renumbered.
+2. **Execution model identity** is the exact model ID published by the
+   connected provider catalog or the installed OpenCode/Kilo CLI. The model
+   is selected after provider authentication and capacity checks, immediately
+   before running useful work. It is recorded as execution telemetry.
 
-A slash inside an upstream model ID is not a second OpenCode provider:
-groq/openai/gpt-oss-120b and nvidia/nvidia/nemotron-3.5-bolt-e4b are
-correct selectors. NVIDIA's two newly published IDs are explicitly registered
-until they appear in the built-in OpenCode catalog. Existing NVIDIA models
-continue using the native catalog path.
+`.github/scripts/factory_provider_registry.py` is the provider integration
+registry: endpoints, credential environment names and canonical OpenCode
+provider identifiers. It does not contain an allowed-model list.
+`.github/scripts/factory_provider_candidates.py`,
+`.github/scripts/factory_runtime_model_select.py`, and
+`.github/scripts/factory_published_model_catalog.py` discover model
+candidates at runtime. A slash in an upstream ID belongs to that upstream
+ID; no code should split it into an unapproved second provider.
 
-Adding a provider means adding one ProviderSpec entry and the approved roster
-models; no new workflow case branch or per-provider configuration script.
-Free-tier policy and approved model sets remain in factory_roster.py, daily
-dispatch caps in factory-source-budgets.json, and live Vercel $0 verification
-in the runner. These are separate policy boundaries, not executable provider
-identity mappings.
+Pricing is metadata for observability only, never a filter. A catalog entry
+does not guarantee chat compatibility, tools, working authentication or useful
+code delivery. Incompatible advertised capabilities may be excluded, while
+uncertain capabilities require actual execution evidence. Failed executions
+use bounded retries/backoffs; neither an old failure nor a price label
+permanently removes a model.
 
-Sources:
-- https://opencode.ai/docs/providers/
-- https://opencode.ai/docs/models/
-- https://build.nvidia.com/mistralai/mistral-large-4-1t-a52b
+No committed TSV, model pin list, expected-worker JSON, or roster snapshot
+should exist. Tests use synthetic models and verify the behavioral contract.
 
-Account-level callability still requires a credential and real bounded
-inference; catalog resolution alone does not prove free quota or tool support.
+Relevant references: https://opencode.ai/docs/providers/ and
+https://opencode.ai/docs/models/.
