@@ -31,6 +31,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
@@ -164,7 +165,7 @@ def run_migration_rehearsal(
         nonlocal final_revision
         config = _alembic_config(database_url, alembic_config_path)
         command.upgrade(config, "head")
-        final_revision = command.current_head(config)
+        final_revision = ScriptDirectory.from_config(config).get_current_head()
 
     def _downgrade_base() -> None:
         command.downgrade(_alembic_config(database_url, alembic_config_path), base_revision)
