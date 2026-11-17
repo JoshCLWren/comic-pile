@@ -785,10 +785,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v1/continuity-plans/release-sources/{source_id}",
-            get(continuity_plans::get_release_source),
-        )
-        .route(
-            "/api/v1/continuity-plans/release-sources/{source_id}",
             patch(continuity_plans::update_release_source),
         )
         .route(
