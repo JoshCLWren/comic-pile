@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -428,3 +430,49 @@ def test_jev_worker_selection_abstains_without_reordering() -> None:
     ordered, report = shadow.choose_worker_order(workers, {"workers": []}, "key", client=choose)
     assert ordered == workers
     assert report["status"] == "abstained"
+
+
+def test_worker_mode_cli_does_not_require_pr_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The production dispatcher calls --workers without --prs.
+
+    Worker ranking must parse its own arguments and fall back to the original
+    order when the dedicated provider key is absent.
+    """
+    workers = ["91", "92", "93"]
+    worker_file = tmp_path / "workers.json"
+    health_file = tmp_path / "health.json"
+    worker_file.write_text(json.dumps(workers), encoding="utf-8")
+    health_file.write_text(
+        json.dumps({"workers": [], "cooling": []}), encoding="utf-8"
+    )
+    monkeypatch.delenv("OPENROUTER_JEV_API_KEY", raising=False)
+
+    completed = subprocess.run(
+        [
+            sys.executable, str(SCRIPTS / "factory_jev_shadow.py"),
+            "--workers", str(worker_file),
+            "--factory-health", str(health_file),
+        ],
+        capture_output=True, text=True, check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == workers
+    assert json.loads(completed.stderr)["status"] == "unchanged"
+
+
+def test_issue_selection_cli_still_requires_issues_and_prs(
+    tmp_path: Path,
+) -> None:
+    """A worker-only fix must not permit incomplete work-selection inputs."""
+    issue_file = tmp_path / "issues.json"
+    issue_file.write_text("[]", encoding="utf-8")
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPTS / "factory_jev_shadow.py"),
+         "--issues", str(issue_file)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 2
+    assert "--issues and --prs are required for work selection" in completed.stderr

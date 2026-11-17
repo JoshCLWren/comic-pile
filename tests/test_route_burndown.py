@@ -64,6 +64,31 @@ def _operation(
     raise AssertionError(f"missing operation {method} {path}")
 
 
+IDENTITY_INBOX_OPERATIONS = {
+    ("GET", "/api/v1/identity-inbox"),
+    ("GET", "/api/v1/identity-inbox/search/issues"),
+    ("GET", "/api/v1/identity-inbox/{mapping_id}"),
+    ("POST", "/api/v1/identity-inbox/{mapping_id}/confirm"),
+    ("POST", "/api/v1/identity-inbox/{mapping_id}/defer"),
+    ("POST", "/api/v1/identity-inbox/{mapping_id}/reject"),
+    ("POST", "/api/v1/identity-inbox/{mapping_id}/skip"),
+}
+RETAINED_NATIVE_UNVERSIONED = ("GET", "/api/auth/login")
+
+
+def _assert_no_python_surface_operations(
+    v1_ops: list[dict[str, object]],
+    unversioned_ops: list[dict[str, object]],
+    operations: set[tuple[str, str]],
+) -> None:
+    """Fail when a native-only operation reappears in the Python inventory."""
+    present = {
+        (str(item.get("method")), str(item.get("path")))
+        for item in [*v1_ops, *unversioned_ops]
+    } & operations
+    assert not present, f"native-only operations reappeared in Python surface: {sorted(present)}"
+
+
 def test_burndown_summary_matches_deployed_ingress() -> None:
     """Inventory burndown reports the current native and Python v2 surface."""
     inventory = load_json(INVENTORY_PATH)
@@ -202,12 +227,10 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert not any(item.get("path") == "/api/v1/roll/dismiss-pending" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/auth/login" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/taste/discoveries/{signal_id}/dismiss" for item in v1_ops)
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/taste/discoveries"
-        and item.get("burndown_status") == "live transitional Python with callers"
-        for item in v1_ops
-    )
+    discoveries = _operation(v1_ops, "GET", "/api/v1/taste/discoveries")
+    assert discoveries["burndown_status"] == "native Rust"
+    assert discoveries["runtime"] == "native-rust"
+    assert discoveries["ingress_destination"] == "/api/native_roll.rs"
     assert not any(
         item.get("method") == "GET" and item.get("path") == "/api/v1/threads/{thread_id}"
         for item in v1_ops
@@ -241,11 +264,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     for item in live_v1:
         assert item.get("ingress_destination") == "/api/index.py"
         assert item.get("consumers")
-    assert all(
-        item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-        if str(item.get("path", "")).startswith("/api/v1/identity-inbox")
-    )
+    _assert_no_python_surface_operations(v1_ops, unversioned_ops, IDENTITY_INBOX_OPERATIONS)
     assert all(
         item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
@@ -315,6 +334,27 @@ def test_full_surface_matches_deployed_ingress() -> None:
             assert item.get("runtime") == "python-fastapi"
 
 
+def test_identity_inbox_native_contract_covers_retired_operations() -> None:
+    """All seven retired identity-inbox operations keep a native same-path contract."""
+    native = load_json(ROOT / "native" / "contracts" / "same-path-runtime.openapi.json")
+    paths = native["paths"]
+    assert isinstance(paths, dict)
+    for method, path in IDENTITY_INBOX_OPERATIONS:
+        declaration = paths[path][method.lower()]
+        assert declaration["operationId"]
+        assert any(code.startswith("2") for code in declaration["responses"])
+
+
+def test_python_surface_guard_rejects_deliberate_regressions() -> None:
+    """The guard flags a reintroduced identity-inbox and unversioned native route."""
+    with pytest.raises(AssertionError, match="reappeared"):
+        _assert_no_python_surface_operations(
+            [{"method": "GET", "path": "/api/v1/identity-inbox"}],
+            [{"method": "GET", "path": "/api/auth/login"}],
+            IDENTITY_INBOX_OPERATIONS | {RETAINED_NATIVE_UNVERSIONED},
+        )
+
+
 def test_dependencies_slice_routes_native_after_python_retirement() -> None:
     """Retired v1 dependency handlers stay absent; live v2 contracts stay native."""
     inventory = load_json(INVENTORY_PATH)
@@ -361,6 +401,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
     assert [fragment.name for fragment in fragments] == [
+        "activity",
         "bug-reports",
         "catalog",
         "comicvine",
@@ -370,6 +411,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "custom-cbl",
         "demo",
         "dependencies",
+        "issue-identity-cbl-catalog",
         "issues",
         "metrics",
         "preferences",
