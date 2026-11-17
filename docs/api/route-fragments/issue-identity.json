@@ -232,6 +232,48 @@
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
       ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue-identity/cbl/[^/]+/adoption-preview$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue-identity/cbl/[^/]+/reading-graph-preview$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/preview-consolidation",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issue-identity/preview-consolidation$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
     }
   ]
 }

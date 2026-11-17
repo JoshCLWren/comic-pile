@@ -58,11 +58,14 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 57 (57 native-rust + 0 python-fastapi).
+- Live v2 operations: 60 (57 native-rust + 3 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
 - Full Python-handler surface: 134 operations (v1 114 + unversioned 20); v1 active 103 live Python / 1 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
+- Python transitional: `GET /api/v1/issue-identity/cbl/{list_id}/adoption-preview -> python-fastapi` via `/api/index.py` (owner #4842).
+- Python transitional: `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview -> python-fastapi` via `/api/index.py` (owner #4842).
+- Python transitional: `POST /api/v1/issue-identity/preview-consolidation -> python-fastapi` via `/api/index.py` (owner #4842).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
 
 Deployed runtime by cutover owner (`METHOD path -> runtime`):
@@ -75,6 +78,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4595 (2): `GET /api/v2/roll/die-state -> native-rust`; `GET /api/v2/roll/eligible-issue-ids -> native-rust`
 - #4623 (1): `GET /api/v2/issues/{issue_id}/comicvine -> native-rust`
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
+- #4842 (3): `GET /api/v1/issue-identity/cbl/{list_id}/adoption-preview -> python-fastapi`; `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview -> python-fastapi`; `POST /api/v1/issue-identity/preview-consolidation -> python-fastapi`
 - #4843 (16): `POST /api/v1/cbl/{list_id}/adoption-commit -> native-rust`; `POST /api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit -> native-rust`; `GET /api/v1/issue-identity/anomalies -> native-rust`; `GET /api/v1/issue-identity/canonical/{comicvine_issue_id} -> native-rust`; `GET /api/v1/issue-identity/cbl-sources -> native-rust`; `GET /api/v1/issue-identity/cbl-sources/browse -> native-rust`; `GET /api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id} -> native-rust`; `POST /api/v1/issue-identity/cbl-sources/compare -> native-rust`; `GET /api/v1/issue-identity/cbl-sources/folders -> native-rust`; `GET /api/v1/issue-identity/cbl-sources/{list_id} -> native-rust`; `POST /api/v1/issue-identity/cbl/{list_id}/adoption-plan -> native-rust`; `GET /api/v1/issue-identity/cbl/{list_id}/reconciliation -> native-rust`; `GET /api/v1/issue-identity/conflicts -> native-rust`; `POST /api/v1/issue-identity/consolidate -> native-rust`; `GET /api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates -> native-rust`; `GET /api/v1/issue-identity/report -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 <!-- route-burndown:end -->
