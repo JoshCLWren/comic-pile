@@ -105,7 +105,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
       },
     }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({
       json: {
         issue_id: 1,

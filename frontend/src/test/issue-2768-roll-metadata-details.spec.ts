@@ -93,7 +93,7 @@ async function installRoutes(page: Page, intelligence: ComicVineIssueIntelligenc
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: intelligence }),
   )
-  await page.route('**/v1/comicvine/issues/*/identity', (route) =>
+  await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: confirmedIdentity() }),
   )
 }
