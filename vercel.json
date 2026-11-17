@@ -881,7 +881,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/sessions/[^/]+/details$",
@@ -889,7 +889,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
@@ -897,7 +897,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/sessions/current/$",
@@ -905,7 +905,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/threads/$",
@@ -1287,7 +1287,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/sessions/[^/]+/details$",
@@ -1295,7 +1295,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
@@ -1303,7 +1303,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/sessions/correction\\-examples$",
@@ -1319,7 +1319,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/taste/discoveries$",
@@ -1544,7 +1544,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/undo/[^/]+/undo/[^/]+$",
@@ -1552,7 +1552,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/bootstrap\\-alias\\-metrics$",
@@ -1896,7 +1896,7 @@
         "GET",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
@@ -1904,7 +1904,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",
