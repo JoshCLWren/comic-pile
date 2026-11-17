@@ -2031,14 +2031,15 @@ mod tests {
         seed_cron_owner(&connection, 2).await;
         drop(connection);
 
-        // A 1ms budget is exhausted before the first owner can start, so the
-        // run must return a 200 truncated report (never a 503) and defer the
-        // remaining owners, matching the Python cron contract.
+        // A zero budget is exhausted at the very first owner check, so the run
+        // must return a 200 truncated report (never a 503) and defer every
+        // owner, matching the Python cron contract. This is deterministic — no
+        // wall-clock timing is involved.
         let response = run_scheduled_release_sync(
             &state,
             &cron_headers("a-very-secret-value"),
             Some("a-very-secret-value"),
-            Duration::from_millis(1),
+            Duration::ZERO,
         )
         .await
         .expect("scheduled sync response");
@@ -2055,6 +2056,17 @@ mod tests {
         assert_eq!(payload["result"]["users_total"], 2);
         assert_eq!(payload["result"]["users_deferred"], 2);
         assert_eq!(payload["result"]["users_processed"], 0);
+        assert_eq!(
+            payload["result"]["users_processed"]
+                .as_i64()
+                .expect("processed count")
+                + payload["result"]["users_deferred"]
+                    .as_i64()
+                    .expect("deferred count"),
+            payload["result"]["users_total"]
+                .as_i64()
+                .expect("total count")
+        );
         assert!(payload["message"]
             .as_str()
             .expect("message")
