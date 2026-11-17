@@ -2545,9 +2545,281 @@ mod tests {
         assert_eq!(d, "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3");
     }
 
-    /// A token minted by the production Python `_generate_preview_token`
-    /// (serialization via `json.dumps(payload, sort_keys=True)`, HMAC-SHA256
-    /// over that exact text) must verify against the Rust commit path.
+    /// #5170: the commit path must accept the 33-issue "New Teen Titans (1980)"
+    /// bootstrap preview end to end. The preview token below was minted by the
+    /// production Python implementation for this exact fixture (see the
+    /// `plan_digest_matches_python_with_inventory_rows` vector); the commit
+    /// revalidates against a rebuilt plan, so any digest drift fails as
+    /// `preview_stale`.
+    const NTT_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "b889befb2648dca8e9fdaef1119701328a8533fa73ce0a7851955859cb8637ca"}"#;
+
+    /// Same fixture plus an owned "Annual 1" row (issue 1040) that classifies as
+    /// `excluded_special`; minted by the production Python implementation.
+    const NTT_WITH_ANNUAL_PREVIEW_TOKEN: &str = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "Annual 1"], "classification_digest": "2f3ab052b3edd5cca76a9f3540ebd19c89fe2b72c6bb9bf43061e7b8e82279de", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "f45b7d41bfcaefefc7c6f6ecc1c47c6f927193e66040e089fd070b305378e521"}"#;
+
+    fn teen_titans_series_info() -> Value {
+        serde_json::json!({
+            "id": "4321",
+            "name": "New Teen Titans (1980)",
+            "publisher": {"id": 9, "name": "DC Comics"},
+            "start_year": 1980,
+            "count_of_issues": 35,
+            "site_detail_url": "https://comicvine.gamespot.com/volume/4050-4321/",
+            "image": null,
+        })
+    }
+
+    fn teen_titans_roster() -> Vec<Value> {
+        let mut roster = Vec::new();
+        for n in 1..=33_i32 {
+            let pid = 5000 + n;
+            roster.push(serde_json::json!({
+                "issue_id": pid,
+                "issue_number": n.to_string(),
+                "title": format!("Issue {n}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {"name": format!("Issue {n}"), "issue_number": n.to_string()},
+            }));
+        }
+        for (pid, number) in [(6001_i32, "34"), (6002_i32, "35")] {
+            roster.push(serde_json::json!({
+                "issue_id": pid,
+                "issue_number": number,
+                "title": format!("Issue {number}"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": {"name": format!("Issue {number}"), "issue_number": number},
+            }));
+        }
+        roster
+    }
+
+    async fn seed_teen_titans(connection: &tokio_postgres::Client) {
+        connection
+            .batch_execute(
+                r#"INSERT INTO users (id, username, created_at, is_admin)
+                 VALUES (1, 'ntt-commit-test', now(), false);
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, queue_position, status,
+                      total_issues, created_at, is_blocked, is_test, manual_creator_credits,
+                      queue_position_is_manual)
+                 VALUES (77, 1, 'New Teen Titans', 'Comic', 0, 1, 'active', 33, now(), false,
+                         false, '[]', false);"#,
+            )
+            .await
+            .expect("seed teen titans thread");
+        for n in 1..=33_i32 {
+            connection
+                .execute(
+                    "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                     VALUES ($1, 77, $2, 'unread', now(), $3)",
+                    &[&(1000 + n), &n.to_string(), &n],
+                )
+                .await
+                .expect("seed teen titans issue");
+        }
+    }
+
+    fn commit_request(token: &str, idempotency_key: &str, approved_row_ids: Vec<String>) -> CommitRequest {
+        CommitRequest {
+            preview_token: token.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            approved_row_ids,
+        }
+    }
+
+    async fn commit(
+        state: &std::sync::Arc<AppState>,
+        request: CommitRequest,
+    ) -> Result<Json<CommitResponse>, ApiError> {
+        commit_series_mapping_handler(
+            State(state.clone()),
+            crate::auth::AuthenticatedUser::for_test(1),
+            AxumJson(request),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn bootstrap_clean_preview_commits_replays_and_stays_confirmed() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("connection");
+        seed_teen_titans(&connection).await;
+        crate::test_support::install_test_volume_roster(
+            "4321",
+            teen_titans_series_info(),
+            teen_titans_roster(),
+        );
+
+        let approved: Vec<String> = (1001..=1033).map(|id| format!("issue:{id}")).collect();
+        let response = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", approved.clone()),
+        )
+        .await;
+        let Json(response) = match response {
+            Ok(ok) => ok,
+            Err(err) => panic!("clean 33-issue preview must commit, got {}", err.detail()),
+        };
+        let expected_ids: Vec<i32> = (1001..=1033).collect();
+        assert_eq!(response.confirmed_issue_ids, expected_ids);
+        assert_eq!(response.needs_review_issue_ids, Vec::<i32>::new());
+        assert_eq!(response.series_mapping.status, "confirmed");
+        assert_eq!(response.series_mapping.evidence_source, "user_series_confirmation");
+
+        // Reload: confirmed mappings and the thread-series link survive.
+        let confirmed: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings m
+                 JOIN issues i ON i.id = m.issue_id
+                 WHERE i.thread_id = 77 AND m.status = 'confirmed'",
+                &[],
+            )
+            .await
+            .expect("reload mappings")
+            .get(0);
+        assert_eq!(confirmed, 33);
+        let series_link: bool = connection
+            .query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM thread_external_series_mappings tsm
+                   JOIN external_identities e ON e.id = tsm.external_identity_id
+                   WHERE tsm.thread_id = 77 AND tsm.status = 'confirmed'
+                     AND e.entity_type = 'series' AND e.external_id = '4321'
+                 )",
+                &[],
+            )
+            .await
+            .expect("reload series link")
+            .get(0);
+        assert!(series_link);
+
+        // Retry with the same key and rows: replay returns the same logical result.
+        let replay = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", approved.clone()),
+        )
+        .await;
+        let Json(replay) = match replay {
+            Ok(ok) => ok,
+            Err(err) => panic!("identical replay must succeed, got {}", err.detail()),
+        };
+        assert_eq!(
+            serde_json::to_value(&response).expect("original response JSON"),
+            serde_json::to_value(&replay).expect("replay response JSON"),
+        );
+
+        // Same key with a changed material request conflicts and keeps the
+        // original receipt.
+        let mut shortened = approved.clone();
+        shortened.pop();
+        let changed = commit(
+            &state,
+            commit_request(NTT_PREVIEW_TOKEN, "ntt-clean-commit", shortened),
+        )
+        .await;
+        assert!(matches!(
+            changed,
+            Err(ApiError::Conflict(code)) if code == ERROR_IDEMPOTENCY_CONFLICT
+        ));
+
+        crate::test_support::clear_test_volume_roster("4321");
+    }
+
+    #[tokio::test]
+    async fn bootstrap_commit_rejects_unapproved_rows_with_zero_writes() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("connection");
+        seed_teen_titans(&connection).await;
+        connection
+            .execute(
+                "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (1040, 77, 'Annual 1', 'unread', now(), 40)",
+                &[],
+            )
+            .await
+            .expect("seed annual issue");
+        crate::test_support::install_test_volume_roster(
+            "4321",
+            teen_titans_series_info(),
+            teen_titans_roster(),
+        );
+
+        // Approving the excluded_special annual alongside safe rows is rejected
+        // before any write: unsafe rows must never be bulk-confirmed.
+        let mut with_annual: Vec<String> = (1001..=1033).map(|id| format!("issue:{id}")).collect();
+        with_annual.push("issue:1040".to_string());
+        let rejected = commit(
+            &state,
+            commit_request(NTT_WITH_ANNUAL_PREVIEW_TOKEN, "ntt-annual-reject", with_annual),
+        )
+        .await;
+        assert!(matches!(
+            rejected,
+            Err(ApiError::Unprocessable(code)) if code == ERROR_INVALID_APPROVED_ROW
+        ));
+        let writes: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings m
+                 JOIN issues i ON i.id = m.issue_id
+                 WHERE i.thread_id = 77",
+                &[],
+            )
+            .await
+            .expect("count mappings")
+            .get(0);
+        assert_eq!(writes, 0, "rejected commit must not persist any mapping");
+
+        // Provider inventory rows can never be approved either.
+        let rejected_inventory = commit(
+            &state,
+            commit_request(
+                NTT_WITH_ANNUAL_PREVIEW_TOKEN,
+                "ntt-inventory-reject",
+                vec!["roster:6001".to_string()],
+            ),
+        )
+        .await;
+        assert!(matches!(
+            rejected_inventory,
+            Err(ApiError::Unprocessable(code)) if code == ERROR_INVALID_APPROVED_ROW
+        ));
+
+        // The clean approvable subset still carries a valid token, and the
+        // annual remains unmapped: unsafe rows are never bulk-confirmed.
+        let annual_flag: bool = connection
+            .query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM issue_external_identity_mappings m
+                   WHERE m.issue_id = 1040
+                 )",
+                &[],
+            )
+            .await
+            .expect("annual unmapped")
+            .get(0);
+        assert!(!annual_flag);
+
+        crate::test_support::clear_test_volume_roster("4321");
+    }
+
     #[test]
     fn python_preview_token_verifies_in_rust() {
         let token = r#"{"payload": {"user_id": 1, "provider": "comicvine", "provider_series_external_id": "4321", "origin_issue_id": 1010, "scope_key": "exact:1010:1", "issue_numbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"], "classification_digest": "17ea328f47d86dd188f55764fe21f460eaa88650656c7ab7657c7550bf3de0a3", "scope_mode": "queue_thread_bootstrap", "issued_at": 1700000000.0, "expires_at": 4100000000.0}, "signature": "b889befb2648dca8e9fdaef1119701328a8533fa73ce0a7851955859cb8637ca"}"#;
