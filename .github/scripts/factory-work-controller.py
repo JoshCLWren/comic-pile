@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1771,6 +1772,30 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
+# GitHub installation rate limits and 5xx responses are transient. Trusted
+# exit cleanup retries them with a bounded backoff (about 22s in total, well
+# inside the 5-minute release job) instead of stranding the lease until TTL.
+TRANSIENT_GITHUB_RE = re.compile(
+    r"rate limit|abuse detection|HTTP (?:429|50[0-9])|\b(?:502|503|504)\b|"
+    r"timed out|connection reset|unexpected EOF|temporarily unavailable",
+    re.I,
+)
+GITHUB_RETRY_DELAYS: tuple[float, ...] = (2.0, 5.0, 15.0)
+
+
+def _retry_transient_github[T](operation: Callable[[], T]) -> T:
+    """Run one GitHub read/write, retrying only transient rate-limit/5xx errors."""
+    for delay in (*GITHUB_RETRY_DELAYS, None):
+        try:
+            return operation()
+        except RuntimeError as exc:
+            if delay is None or not TRANSIENT_GITHUB_RE.search(str(exc)):
+                raise
+            print(f'[factory-controller] transient GitHub failure; retrying in {delay:g}s', file=sys.stderr)
+            time.sleep(delay)
+    raise AssertionError('unreachable')
+
+
 def release_worker(worker: str, reason: str = 'controller-release', *, details=None, expected_claim: str = '') -> list[int]:
     """Release an exiting worker's exact Neon claim, never a later assignment.
 
@@ -1805,12 +1830,14 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
         already_released: list[int] = []
         deferred: list[int] = []
         failed: list[str] = []
+        labels_pending: list[int] = []
         claim_released = False
         if original_claim is not None:
             token, claim_numbers = original_claim
             for number in sorted(set(claim_numbers)):
                 try:
-                    current = target_json(number)  # authoritative GitHub, not Neon discovery
+                    # authoritative GitHub, not Neon discovery
+                    current = _retry_transient_github(lambda n=number: target_json(n))
                     active_owners = {
                         label['name'] for label in current.get('labels', [])
                         if OWNER_RE.fullmatch(label.get('name', ''))
@@ -1829,10 +1856,15 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         continue
                     # This call itself re-reads live labels with expected_owner,
                     # just before the single atomic GitHub label-set mutation.
-                    if not replace_factory_labels(
-                        number, 'factory:unowned', expected_owner=owner
-                    ):
-                        deferred.append(number)
+                    if not _retry_transient_github(lambda n=number: replace_factory_labels(
+                        n, 'factory:unowned', expected_owner=owner
+                    )):
+                        # A retried write may have landed before its response
+                        # was lost; then the owner guard refuses the repeat.
+                        if not _retry_transient_github(lambda n=number: target_owned_by(n, owner)):
+                            already_released.append(number)
+                        else:
+                            deferred.append(number)
                         continue
                     released.append(number)
                     kind = 'pr' if 'pull_request' in current else 'issue'
@@ -1844,11 +1876,30 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         print(f'[factory-controller] release marker #{number} unavailable ({type(exc).__name__})', file=sys.stderr)
                 except Exception as exc:
                     failed.append(f'{number}:{type(exc).__name__}')
+            labels_pending = [
+                int(item.split(':', 1)[0]) for item in failed
+                if item.split(':', 1)[0].isdigit()
+            ]
+            if labels_pending and not deferred and len(labels_pending) == len(failed):
+                # GitHub stayed unavailable after bounded retries. The worker
+                # has exited, so discharge its exact Neon claim anyway rather
+                # than holding capacity until the TTL. Labels left on these
+                # targets keep the worker busy for dispatch (GitHub ownership
+                # is checked separately) until stale-lease reconciliation runs.
+                try:
+                    claim_released = release_lease(REPO, worker, token, reason)
+                    if not claim_released and worker_claim(REPO, worker) is None:
+                        claim_released = True
+                except Exception as exc:
+                    failed.append(f'neon_release:{type(exc).__name__}')
             if not deferred and not failed:
                 try:
                     # Only discharge the exact original UUID when ALL its
                     # linked GitHub labels are verified no longer owned.
-                    if all(not target_owned_by(number, owner) for number in claim_numbers):
+                    if all(
+                        not _retry_transient_github(lambda n=number: target_owned_by(n, owner))
+                        for number in claim_numbers
+                    ):
                         claim_released = release_lease(REPO, worker, token, reason)
                         if not claim_released:
                             later = worker_claim(REPO, worker)
@@ -1871,6 +1922,8 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
             'released' if claim_released else
             'already_released'
         )
+        if status == 'failed' and claim_released:
+            status = 'labels_pending'
         summary = {
             'status': status,
             'claim_id': original_claim[0] if original_claim else None,
@@ -1879,6 +1932,7 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
             'already_released': already_released,
             'deferred': sorted(set(deferred)),
             'failed': failed,
+            'labels_pending': labels_pending,
         }
         if details is not None:
             details.update(summary)
@@ -2422,7 +2476,9 @@ def main() -> int:
     released = release_worker(args.worker, reason=args.reason, details=outcome, expected_claim=args.claim_id)
     print(json.dumps(outcome if outcome else {'released': released}))
     # A live, actionable claim must never make a cleanup job green.
-    return 1 if outcome.get('status') in ('failed', 'deferred', 'missing_claim') else 0
+    # labels_pending: the Neon claim is discharged but GitHub labels still need
+    # stale-lease reconciliation; keep the job red so the gap stays visible.
+    return 1 if outcome.get('status') in ('failed', 'deferred', 'missing_claim', 'labels_pending') else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
