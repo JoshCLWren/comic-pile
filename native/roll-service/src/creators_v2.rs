@@ -3251,3 +3251,237 @@ pub fn role_documentation() {}
         (status = 401, description = "Not authenticated")),
     security(("HTTPBearer" = [])))]
 pub fn series_documentation() {}
+
+// ---------------------------------------------------------------------------
+// Focused unit tests for the pure, wire-shaping analytics
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn credit(external_id: i64, role: &str, name: &str) -> CreatorCredit {
+        CreatorCredit {
+            external_id,
+            roles: vec![role.to_string()],
+            display_name: name.to_string(),
+        }
+    }
+
+    fn fixture_library() -> CreatorLibrary {
+        let issues = vec![
+            OwnedIssue { id: 1, status: "read".into(), thread_id: 10, thread_title: "Series A".into(), issue_number: "1".into(), queue_position: 1, position: 1 },
+            OwnedIssue { id: 2, status: "read".into(), thread_id: 10, thread_title: "Series A".into(), issue_number: "2".into(), queue_position: 1, position: 2 },
+            OwnedIssue { id: 3, status: "read".into(), thread_id: 11, thread_title: "Series B".into(), issue_number: "1".into(), queue_position: 2, position: 1 },
+            OwnedIssue { id: 4, status: "read".into(), thread_id: 11, thread_title: "Series B".into(), issue_number: "2".into(), queue_position: 2, position: 2 },
+            OwnedIssue { id: 5, status: "unread".into(), thread_id: 12, thread_title: "Series C".into(), issue_number: "1".into(), queue_position: 3, position: 1 },
+        ];
+        let issue_index = issues.iter().enumerate().map(|(index, issue)| (issue.id, index)).collect();
+        let credits = HashMap::from([
+            (1, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]),
+            (2, vec![credit(7, "writer", "Writer Seven")]),
+            (3, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]),
+            (4, vec![credit(7, "writer", "Writer Seven")]),
+            (5, vec![credit(7, "writer", "Writer Seven")]),
+        ]);
+        let ratings = HashMap::from([(1, 4.0), (2, 5.0), (3, 3.0)]);
+        let rating_timestamps = HashMap::from([
+            (1, Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()),
+            (2, Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap()),
+            (3, Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap()),
+        ]);
+        let metadata_issues = HashSet::from([1, 2, 3, 4, 5]);
+        CreatorLibrary { issues, issue_index, credits, ratings, rating_timestamps, metadata_issues }
+    }
+
+    #[test]
+    fn creator_and_series_keys_follow_the_python_contract() {
+        assert_eq!(parse_creator_key("creator:117106"), Some(117106));
+        assert_eq!(parse_creator_key("creator:007"), Some(7));
+        assert_eq!(parse_creator_key("creator:abc"), None);
+        assert_eq!(parse_creator_key("creator:1:2"), None);
+        assert_eq!(parse_series_key("thread:10"), Some(10));
+        assert_eq!(parse_series_key("creator:10"), None);
+        assert_eq!(parse_series_key("thread:"), None);
+    }
+
+    #[test]
+    fn rounding_uses_python_half_to_even() {
+        assert_eq!(round_half_even(2.5, 0), 2.0);
+        assert_eq!(round_half_even(3.5, 0), 4.0);
+        assert_eq!(round_half_even(0.125, 2), 0.12);
+        assert_eq!(round_half_even(0.135, 2), 0.14);
+        assert_eq!(round2(4.0), 4.0);
+        assert_eq!(median(&[3.0, 4.0, 5.0]), 4.0);
+        assert_eq!(median(&[3.0, 5.0]), 4.0);
+    }
+
+    #[test]
+    fn rating_distribution_exposes_every_bucket_and_rounded_statistics() {
+        let distribution = rating_distribution(&[4.0, 5.0, 3.0]).expect("rated sample");
+        assert_eq!(distribution.sample_count, 3);
+        assert_eq!(distribution.buckets.len(), 10);
+        assert_eq!(distribution.mean_rating, 4.0);
+        assert_eq!(distribution.median_rating, 4.0);
+        assert_eq!(distribution.min_rating, 3.0);
+        assert_eq!(distribution.max_rating, 5.0);
+        let filled: Vec<(f64, i64)> = distribution.buckets.iter().filter(|bucket| bucket.count > 0).map(|bucket| (bucket.rating, bucket.count)).collect();
+        assert_eq!(filled, vec![(3.0, 1), (4.0, 1), (5.0, 1)]);
+        assert!(rating_distribution(&[]).is_none());
+        assert_eq!(distribution_key(4.0), "4");
+        assert_eq!(distribution_key(3.5), "3.5");
+    }
+
+    #[test]
+    fn detail_preserves_headline_population_coverage_and_pagination() {
+        let library = fixture_library();
+        let detail = build_detail(&library, "creator:7", 7, 50, 0);
+        assert_eq!(detail.summary.ratings_count, 3);
+        assert_eq!(detail.summary.average_rating, Some(4.0));
+        assert_eq!(detail.summary.read_unrated_count, 1);
+        assert_eq!(detail.summary.upcoming_count, 1);
+        assert_eq!(detail.coverage.rated_issues_total, 3);
+        assert_eq!(detail.rated_issues.len(), 3);
+        assert_eq!(detail.rated_issues[0].issue_id, 3);
+        assert_eq!(detail.headline_roles, vec!["artist", "colorist", "inker", "letterer", "penciler", "writer"]);
+        assert_eq!(detail.series_groups_total, 2);
+        assert_eq!(detail.series_groups[0].thread_id, 10);
+        assert_eq!(detail.series_groups[0].sort_key, "000000000010");
+        assert_eq!(detail.series_groups[0].population_scope, "all_verified_credits");
+        assert_eq!(detail.rated_population_scope, "headline_roles_only");
+        assert_eq!(detail.next_cursor, None);
+        let insights = detail.insights.expect("insights");
+        assert_eq!(insights.individual_issue_limit, 3);
+        assert_eq!(insights.highest_rated_issues[0].issue_id, 2);
+        assert!(insights.series_message.is_some());
+        let page = build_detail(&library, "creator:7", 7, 1, 0);
+        assert_eq!(page.next_cursor, Some("1".to_string()));
+    }
+
+    #[test]
+    fn series_issue_drilldown_reports_all_verified_credit_population() {
+        let library = fixture_library();
+        let response = build_series_issues(&library, 7, 10, 50, 0).expect("series");
+        assert_eq!(response.series_key, "thread:10");
+        assert_eq!(response.rated_issue_count, 2);
+        assert_eq!(response.total, 2);
+        assert_eq!(response.population_scope, "all_verified_credits");
+        assert_eq!(response.issues.iter().map(|row| row.issue_id).collect::<Vec<_>>(), vec![2, 1]);
+        assert!(build_series_issues(&library, 7, 999, 50, 0).is_none());
+    }
+
+    #[test]
+    fn list_summaries_and_comparison_share_one_owner_scope() {
+        let library = fixture_library();
+        let list = build_list(&library, None, "name", 20, 0, 0);
+        assert_eq!(list.total, 2);
+        assert!(list.items.iter().any(|item| item.canonical_creator_key == "creator:7"));
+        let filtered = build_list(&library, Some("Penciler"), "ratings_count", 20, 0, 2);
+        assert_eq!(filtered.total, 1);
+        assert_eq!(filtered.items[0].canonical_creator_key, "creator:12");
+        let summaries = build_summaries(&library, &["creator:7".to_string(), "creator:999".to_string()]);
+        assert_eq!(summaries.summaries.len(), 1);
+        assert_eq!(summaries.summaries["creator:7"].ratings_count, 3);
+        let comparison = build_comparison(&library, &["creator:7".to_string(), "creator:12".to_string()]);
+        assert_eq!(comparison.comparisons["creator:7"].average_rating, Some(4.0));
+        assert_eq!(comparison.comparisons["creator:7"].median_rating, Some(4.0));
+        assert_eq!(comparison.comparisons["creator:7"].rating_distribution["4"], 1);
+        assert_eq!(comparison.comparisons["creator:12"].ratings_count, 2);
+        assert_eq!(comparison.insufficient_data_keys, vec!["creator:7", "creator:12"]);
+        assert_eq!(comparison.coverage.rated_issues_total, 3);
+    }
+
+    #[test]
+    fn discovery_and_team_chemistry_are_bounded_and_deterministic() {
+        let library = fixture_library();
+        let discoveries = build_discoveries(&library);
+        assert_eq!(discoveries.views.len(), 7);
+        assert_eq!(discoveries.minimum_reliable_sample, 5);
+        assert_eq!(discoveries.max_entries_per_view, 10);
+        let most_read = discoveries.views.iter().find(|view| view.mode == "most_read").expect("view");
+        assert_eq!(most_read.entries[0].canonical_creator_key, "creator:7");
+        let loved_unread = discoveries.views.iter().find(|view| view.mode == "loved_with_unread").expect("view");
+        assert_eq!(loved_unread.entries[0].canonical_creator_key, "creator:7");
+        // Two shared rated issues are below the three-issue ranking floor.
+        let team = build_team_chemistry(&library);
+        assert!(team.pairs.is_empty());
+        assert_eq!(team.pairs_total, 0);
+        // A third shared rated issue promotes the pair.
+        let mut team_library = fixture_library();
+        team_library.issues.push(OwnedIssue {
+            id: 6,
+            status: "read".into(),
+            thread_id: 13,
+            thread_title: "Series D".into(),
+            issue_number: "1".into(),
+            queue_position: 4,
+            position: 1,
+        });
+        team_library.issue_index.insert(6, 5);
+        team_library.credits.insert(6, vec![credit(7, "writer", "Writer Seven"), credit(12, "penciler", "Penciler Twelve")]);
+        team_library.ratings.insert(6, 4.5);
+        team_library.metadata_issues.insert(6);
+        let team = build_team_chemistry(&team_library);
+        assert_eq!(team.pairs_total, 1);
+        assert_eq!(team.pairs[0].pair_key, "creator:7|creator:12");
+        assert_eq!(team.pairs[0].shared_rated_issue_count, 3);
+        assert_eq!(team.min_shared_team_sample, 3);
+        assert_eq!(team.max_ranked_pairs, 10);
+    }
+
+    #[test]
+    fn metric_drilldowns_preserve_calculation_and_pagination_semantics() {
+        let library = fixture_library();
+        let average = build_drilldown(&library, 7, "creator:7", "average-rating", None, None, None, 1, 50).expect("average");
+        assert_eq!(average.total_count, 3);
+        assert_eq!(average.calculation.formula, "12 total rating points ÷ 3 rated issues = 4.00★");
+        assert!(average.calculation.percentage.is_some());
+        let median = build_drilldown(&library, 7, "creator:7", "median-rating", None, None, None, 1, 50).expect("median");
+        assert_eq!(median.calculation.formula, "3 rated issues sorted by rating\nmiddle value (#2) = 4★");
+        assert_eq!(median.included_issues.iter().filter(|row| row.exclusion_reason.as_deref() == Some("Median observation")).count(), 1);
+        let five_star = build_drilldown(&library, 7, "creator:7", "five-star-rate", None, None, None, 1, 50).expect("five star");
+        assert_eq!(five_star.total_count, 1);
+        assert_eq!(five_star.calculation.formula, "1 five-star ratings ÷ 3 rated issues = 33.3%");
+        let distribution = build_drilldown(&library, 7, "creator:7", "rating-distribution", None, Some("4.0"), None, 1, 50).expect("distribution");
+        assert_eq!(distribution.rating_value.as_deref(), Some("4.0"));
+        assert_eq!(distribution.bucket_count, Some(1));
+        assert_eq!(distribution.bucket_percentage, Some(33.33));
+        let unread = build_drilldown(&library, 7, "creator:7", "unread-count", None, None, None, 1, 50).expect("unread");
+        assert_eq!(unread.total_count, 1);
+        let role = build_drilldown(&library, 7, "creator:7", "role-stats", Some("writer"), None, None, 1, 50).expect("role");
+        assert_eq!(role.role_issue_count, Some(5));
+        assert_eq!(role.role_rated_issue_count, Some(3));
+        let series = build_drilldown(&library, 7, "creator:7", "series-stats", None, None, Some("thread:10"), 1, 50).expect("series");
+        assert_eq!(series.series_issue_count, Some(2));
+        assert_eq!(series.series_title.as_deref(), Some("Series A"));
+        let second_page = build_drilldown(&library, 7, "creator:7", "average-rating", None, None, None, 2, 1).expect("paged");
+        assert_eq!(second_page.pagination.total_pages, 3);
+        assert_eq!(second_page.pagination.next_page_token, Some(3));
+        assert!(build_drilldown(&library, 7, "creator:7", "not-a-metric", None, None, None, 1, 50).is_err());
+    }
+
+    #[test]
+    fn validation_errors_use_the_python_contract() {
+        assert_eq!(
+            validate_comparison_keys(Some("creator:7")).unwrap_err().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            validate_summary_keys(Some("creator:not-a-number")).unwrap_err().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            build_drilldown(&library_fixture_without_creator(), 7, "creator:7", "average-rating", None, None, None, 1, 50)
+                .unwrap_err()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    fn library_fixture_without_creator() -> CreatorLibrary {
+        let mut library = fixture_library();
+        library.credits.clear();
+        library
+    }
+}
