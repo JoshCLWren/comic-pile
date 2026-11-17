@@ -91,6 +91,7 @@ struct ActivityPayload {
 #[derive(Debug, Deserialize)]
 struct ActivityRawRow {
     event_id: i32,
+    #[serde(rename = "type")]
     event_type: String,
     timestamp_sec: f64,
     timestamp_us: Option<f64>,
