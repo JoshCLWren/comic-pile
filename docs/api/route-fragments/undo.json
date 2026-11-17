@@ -1,0 +1,29 @@
+{
+  "family": "undo",
+  "owned_path_patterns": [
+    "^/api/undo(?:/.*)?$",
+    "^/api/v1/undo(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-undo.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/undo/{session_id}/snapshots",
+      "dest": "/api/index.py"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+      "dest": "/api/index.py"
+    }
+  ]
+}
