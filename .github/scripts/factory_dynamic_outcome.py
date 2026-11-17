@@ -30,7 +30,10 @@ _COOLING = re.compile(
     r"factory catalog: [^\n]+: catalog contained no eligible candidates outside cooldown", re.I
 )
 _ACCOUNT_CREDITS = re.compile(
-    r"add usage credits or subscribe|api key budget (?:limit )?exceeded|insufficient balance or no resource package|please recharge", re.I
+    r"add usage credits or subscribe|api key budget (?:limit )?exceeded|insufficient balance or no resource package|please recharge|"
+    # Pollinations: OpenCode prints this refusal and still exits 0.
+    r"(?:does(?:n't|n\u2019t| not)|do(?:n't|n\u2019t| not)) have enough credits",
+    re.I,
 )
 _MODEL_ACCESS = re.compile(
     r"free tier users do not have access to this model|"
@@ -38,6 +41,14 @@ _MODEL_ACCESS = re.compile(
     # NIMs) whose chat function is absent for this account.
     r"function id \S+ version \S+: specified function .*not found",
     re.I,
+)
+# A semantic review that ended without an authoritative verdict is the PR's
+# work failure (so project_runtime applies the exact-head PR retry backoff),
+# never a healthy idle model. The status names come from
+# factory-semantic-verdict.sh.
+_MISSING_VERDICT = re.compile(
+    r"\]\s+semantic_review_(?:missing_verdict|recovery_failed|conflicting_verdict): "
+    r"review model did not produce an authoritative terminal verdict for PR #(?P<pr>\d+)\b"
 )
 # GitHub Actions echoes each step's `env:`/`with:` block as indented
 # `NAME: value` lines. They carry trusted history snapshots such as
@@ -84,6 +95,19 @@ def classify(log: str) -> dict[str, Any]:
     # dispatch-time source or an earlier candidate's log.
     boundary = log.rfind("FACTORY_EXECUTION_CANDIDATE: source=")
     execution_log = log[boundary:] if boundary >= 0 else log
+    # The worker logs "checked out <kind> #N" once, *before* the first
+    # FACTORY_EXECUTION_CANDIDATE marker. Without it the canonical classifier
+    # loses the target: exact-model proof, delivered-PR detection and the
+    # per-PR exact-head retry backoff all silently disappear (#5275 regression).
+    if boundary >= 0 and not canonical.TARGET_RE.search(execution_log):
+        marker = f"[factory:{worker}]"
+        target_line = next(
+            (line for line in reversed(log[:boundary].splitlines())
+             if marker in line and canonical.TARGET_RE.search(line)),
+            "",
+        )
+        if target_line:
+            execution_log = target_line + "\n" + execution_log
     model_event = next(
         (event for event in reversed(list(_MODEL.finditer(execution_log)))
          if event["worker"] == worker),
@@ -123,6 +147,18 @@ def classify(log: str) -> dict[str, Any]:
     elif _MODEL_ACCESS.search(executed_lines):
         result = replace(result, outcome="MODEL MISSING", outcome_class="model_unavailable",
                          detail="provider account tier denied this model; other models remain eligible")
+    elif (
+        result.outcome_class in {"no_work", "unknown_failure"}
+        and result.selected_kind == "pr"
+        and result.delivery_outcome == "none"
+        and any(
+            m["pr"] == result.selected_number and f"[factory:{worker}]" in
+            executed_lines[executed_lines.rfind("\n", 0, m.start()) + 1:m.start()]
+            for m in _MISSING_VERDICT.finditer(executed_lines)
+        )
+    ):
+        result = replace(result, outcome="WORK FAILURE", outcome_class="work_failure",
+                         detail="semantic review ended without an authoritative terminal verdict")
     return asdict(result)
 
 
