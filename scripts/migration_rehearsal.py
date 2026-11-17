@@ -31,6 +31,8 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 #: Ordered rehearsal steps executed against the disposable database.
 REHEARSAL_STEPS: tuple[str, ...] = (
@@ -133,15 +135,16 @@ def run_migration_rehearsal(
     database_url: str,
     *,
     alembic_config_path: Path = ALEMBIC_CONFIG_PATH,
-    fixture_applier: Callable[[], object] | None = None,
+    fixture_applier: Callable[[Engine], None] | None = None,
 ) -> MigrationRehearsalResult:
     """Run the disposable-Postgres migration rehearsal cycle.
 
     Args:
         database_url: Disposable rehearsal database URL (throwaway container).
         alembic_config_path: Repository ``alembic.ini`` path.
-        fixture_applier: Optional callable that loads the prod-shaped fixture
-            before the upgrade step. When omitted, only the migration cycle runs.
+        fixture_applier: Optional callable that receives the disposable sync
+            engine and loads the prod-shaped fixture before the upgrade step.
+            When omitted, only the migration cycle runs.
 
     Returns:
         The per-step results and the final revision reached by the cycle.
@@ -149,8 +152,11 @@ def run_migration_rehearsal(
     Raises:
         MigrationRehearsalError: When any rehearsal step fails.
     """
+    from sqlalchemy import create_engine
+
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
+    engine = create_engine(_sync_database_url(database_url)) if fixture_applier is not None else None
 
     def _upgrade_base() -> None:
         command.upgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
@@ -165,12 +171,14 @@ def run_migration_rehearsal(
         command.downgrade(_alembic_config(database_url, alembic_config_path), BASE_REVISION)
 
     steps.append(_run_step("upgrade_base", _upgrade_base))
-    if fixture_applier is not None:
-        steps.append(_run_step("apply_fixture", fixture_applier))
+    if fixture_applier is not None and engine is not None:
+        steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
     steps.append(_run_step("upgrade_head", _upgrade_head))
     steps.append(_run_step("downgrade_base", _downgrade_base))
     steps.append(_run_step("upgrade_head", _upgrade_head))
 
+    if engine is not None:
+        engine.dispose()
     return MigrationRehearsalResult(final_revision=final_revision, steps=tuple(steps))
 
 
