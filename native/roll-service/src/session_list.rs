@@ -36,7 +36,7 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 
 /// Query parameters for session history pagination.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct SessionListParams {
     #[schema(default = 50, minimum = 1, maximum = 200)]
     pub page_size: Option<i32>,
