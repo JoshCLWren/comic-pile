@@ -420,7 +420,7 @@ class WipCapTests(unittest.TestCase):
         return [
             factory_pr(
                 200 + offset,
-                stage="factory:review",
+                stage="factory:building",
                 worker=20 + offset,
                 owner=f"factory:{20 + offset}",
             )

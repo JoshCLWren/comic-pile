@@ -405,6 +405,20 @@ def test_only_reference_docs_are_fast_merge_eligible(path: str) -> None:
     assert target.is_file() and not target.is_symlink()
 
 
+def references_inert_doc(contents: str, path: str) -> bool:
+    """Treat basename-only reads and constructed paths as doc consumers."""
+    return path in contents or Path(path).name in contents
+
+
+@pytest.mark.parametrize("expression", [
+    'Path("docs") / "FACTORY_NEON_STATE.md"',
+    'chdir("docs"); read_text("FACTORY_NEON_STATE.md")',
+    'open("docs/FACTORY_NEON_STATE.md")',
+])
+def test_inert_doc_consumer_scan_detects_constructed_paths(expression: str) -> None:
+    assert references_inert_doc(expression, "docs/FACTORY_NEON_STATE.md")
+
+
 @pytest.mark.parametrize("path", sorted(gate.FACTORY_PATHS))
 def test_reference_docs_not_consumed_by_code_or_prompts(path: str) -> None:
     """An allowlisted document cannot be read by a model or a privileged job."""
@@ -427,7 +441,9 @@ def test_reference_docs_not_consumed_by_code_or_prompts(path: str) -> None:
                 contents = source.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
-            assert path not in contents, f"{path} is referenced by {source.relative_to(ROOT)}"
+            assert not references_inert_doc(contents, path), (
+                f"{path} is referenced by {source.relative_to(ROOT)}"
+            )
 
 
 def test_inert_docs_can_still_fast_merge() -> None:
@@ -445,7 +461,7 @@ def test_complete_factory_gates_are_required_on_both_paths() -> None:
     ))
     assert "tests/test_factory_*.py .github/scripts/test_*.py" in ci
     assert "node --test .github/scripts/*.test.cjs" in ci
-    assert "actionlint@v1.7.11" in ci
+    assert "actionlint.kjanat.dev/cmd/actionlint@v1.17.1" in ci
     assert "xargs -0 -r shellcheck --severity=error" in ci
     assert "needs.factory-complete-tests.result" in ci
     assert "needs.factory-actionlint.result" in ci
