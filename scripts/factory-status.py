@@ -19,10 +19,12 @@ DEFAULT_REPO = "JoshCLWren/comic-pile"
 ACTIVE = frozenset({"in_progress", "queued", "pending", "waiting", "requested"})
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SNAPSHOT_MARKER = '<script id="fleet-snapshot" type="application/json">'
+FAILURE_ALERT_COUNT = 3
+LONG_RUNNING_MINUTES = 30
 
 
 def instant(value: object) -> datetime | None:
-    """Parse an ISO timestamp into a timezone-aware UTC datetime."""
+    """Parse timezone-aware GitHub timestamps into UTC."""
     if not isinstance(value, str) or not value:
         return None
     try:
@@ -82,7 +84,7 @@ def public_snapshot(repo: str) -> tuple[dict[str, Any] | None, str | None]:
 
 
 def age_string(now: datetime, date: datetime | None) -> str:
-    """Render a short human-readable age for a timestamp."""
+    """Render an observed event age without implying liveness."""
     if date is None:
         return "unknown age"
     minutes = max(0, int((now - date).total_seconds() // 60))
@@ -90,13 +92,13 @@ def age_string(now: datetime, date: datetime | None) -> str:
 
 
 def recent(row: dict[str, Any], cutoff: datetime, field: str = "created_at") -> bool:
-    """Return whether a row's timestamp falls at or after the cutoff."""
+    """Check whether a timestamped GitHub record falls within the selected window."""
     when = instant(row.get(field))
     return when is not None and when >= cutoff
 
 
 def factory_pr(pr: dict[str, Any]) -> bool:
-    """Return whether a PR carries the factory workflow label."""
+    """Identify PRs carrying the repository's factory label."""
     return any(
         isinstance(label, dict) and label.get("name") == "factory"
         for label in pr.get("labels") or []
@@ -104,15 +106,32 @@ def factory_pr(pr: dict[str, Any]) -> bool:
 
 
 def model_produced_pr(pr: dict[str, Any]) -> bool:
-    """Attribution marker is not proof of merged deployment."""
-    return factory_pr(pr) and "Produced by fixed-model Factory" in str(pr.get("body") or "")
+    """Accept both fixed-model attribution and trusted-looking handoff metadata.
+
+    PR descriptions may be rewritten during review. A marker is supporting
+    metadata, not proof that the model authored the final reviewed changes.
+    """
+    if not factory_pr(pr):
+        return False
+    body = str(pr.get("body") or "")
+    return "Produced by fixed-model Factory" in body or (
+        "<!-- factory-checkpoint-handoff:v1 " in body
+        and "Worker: opencode-free-model-factory-" in body
+        and "Model: " in body
+    )
+
+
+def bot_authored_factory_pr(pr: dict[str, Any]) -> bool:
+    """Bot ownership is a separate, broader category than model attribution."""
+    user = pr.get("user")
+    return factory_pr(pr) and isinstance(user, dict) and user.get("login") == "github-actions[bot]"
 
 
 def workflow_runs(
     fetch: Callable[[str], Any], repo: str, workflow: str, limit: int,
     *, branch: str = "",
 ) -> list[dict[str, Any]]:
-    """Read a bounded page of workflow runs through the injected fetcher."""
+    """Fetch workflow executions through the read-only GitHub API."""
     params = f"branch={branch}&" if branch else ""
     payload = fetch(f"repos/{repo}/actions/workflows/{workflow}/runs?{params}per_page={limit}")
     rows = payload.get("workflow_runs") if isinstance(payload, dict) else None
@@ -122,7 +141,7 @@ def workflow_runs(
 
 
 def snapshot_status(snapshot: dict[str, Any] | None, now: datetime) -> tuple[str, str]:
-    """Classify dashboard snapshot freshness and explain the classification."""
+    """Classify dashboard freshness without affecting live execution counts."""
     if snapshot is None:
         return "UNAVAILABLE", "no dashboard evidence"
     generated = instant(snapshot.get("generated_at"))
@@ -149,20 +168,40 @@ def collect(
     active_entries = [r for r in entries if r.get("status") == "in_progress"]
     queued_entries = [r for r in entries if r.get("status") in ACTIVE - {"in_progress"}]
     ended_entries = [r for r in entries if r.get("status") == "completed" and recent(r, cutoff)]
+    failed_entries = [
+        r for r in ended_entries if r.get("conclusion") in {"failure", "timed_out", "cancelled"}
+    ]
+    successful_entries = [r for r in ended_entries if r.get("conclusion") == "success"]
+    long_running = [
+        r for r in active_entries
+        if (started := instant(r.get("run_started_at") or r.get("created_at")))
+        and now - started >= timedelta(minutes=LONG_RUNNING_MINUTES)
+    ]
     launched_dispatches = [r for r in dispatch if recent(r, cutoff)]
     opened = [pr for pr in prs if factory_pr(pr) and recent(pr, cutoff)]
     merged = [pr for pr in prs if factory_pr(pr) and recent(pr, cutoff, "merged_at")]
     created_by_model = [pr for pr in opened if model_produced_pr(pr)]
     merged_from_model = [pr for pr in merged if model_produced_pr(pr)]
+    bot_opened = [pr for pr in opened if bot_authored_factory_pr(pr)]
+    bot_merged = [pr for pr in merged if bot_authored_factory_pr(pr)]
+    # When the newest 40 dispatch runs all fall inside the window, the
+    # reported count is a lower bound, not the total dispatch rate.
+    dispatch_capped = len(dispatch) == 40 and bool(launched_dispatches) and recent(dispatch[-1], cutoff)
     main_ci = next((r for r in ci if r.get("head_branch") == "main"), None)
     last_dispatch = next(iter(dispatch), None)
     freshness, elapsed = snapshot_status(snapshot, now)
 
     # A successful Actions job proves execution, not persisted or deployed code.
-    if merged_from_model:
-        verdict = "FACTORY PR MERGED (production not verified)"
+    if len(failed_entries) >= FAILURE_ALERT_COUNT and not successful_entries:
+        # A recently merged PR may have been opened days earlier or repaired by
+        # another contributor. Repeated failing Entry runs outrank merge credit.
+        verdict = "DEGRADED: REPEATED FAILED ENTRIES; CURRENT DELIVERY UNPROVEN"
+    elif merged_from_model:
+        verdict = "FACTORY-ATTRIBUTED PR MERGED (production not verified)"
+    elif bot_merged:
+        verdict = "FACTORY BOT PR MERGED; MODEL ATTRIBUTION UNVERIFIED"
     elif created_by_model:
-        verdict = "CODE PR CREATED (merge/deploy unverified)"
+        verdict = "FACTORY-ATTRIBUTED PR OPENED (merge/deploy unverified)"
     elif active_entries:
         verdict = "WORKERS RUNNING; DELIVERY NOT PROVEN"
     elif queued_entries:
@@ -176,16 +215,20 @@ def collect(
         "repo": repo, "now": now.isoformat(), "minutes": minutes,
         "verdict": verdict, "active_entries": active_entries,
         "queued_entries": queued_entries, "ended_entries": ended_entries,
+        "failed_entries": failed_entries, "successful_entries": successful_entries,
+        "long_running": long_running,
         "dispatches": launched_dispatches, "last_dispatch": last_dispatch,
         "opened": opened, "merged": merged, "model_opened": created_by_model,
-        "model_merged": merged_from_model, "main_ci": main_ci,
+        "model_merged": merged_from_model,
+        "bot_opened": bot_opened, "bot_merged": bot_merged,
+        "dispatch_capped": dispatch_capped, "main_ci": main_ci,
         "snapshot_freshness": freshness, "snapshot_age": elapsed,
         "snapshot_error": snapshot_error, "pr_window_limited": len(prs) == 100,
     }
 
 
 def render(data: dict[str, Any]) -> str:
-    """Render the collected factory-health evidence as readable text."""
+    """Render a console-readable status report with evidence links."""
     def workflow_link(row: dict[str, Any] | None) -> str:
         return str((row or {}).get("html_url") or "not available")
 
@@ -202,26 +245,41 @@ def render(data: dict[str, Any]) -> str:
         "",
         f"Workers: {len(data['active_entries'])} running, {len(data['queued_entries'])} queued; "
         f"{successes} successful / {failures} failed recent entry runs",
-        f"Dispatcher: {len(data['dispatches'])} run(s) started; last "
+        f"Long-running workers: {len(data['long_running'])} running for at least "
+        f"{LONG_RUNNING_MINUTES}m (not necessarily hung)",
+        f"Dispatcher: {'at least ' if data['dispatch_capped'] else ''}{len(data['dispatches'])} "
+        f"run(s) started; last "
         f"{(data['last_dispatch'] or {}).get('conclusion') or (data['last_dispatch'] or {}).get('status') or 'unknown'}",
         f"Factory PRs: {len(data['opened'])} opened, {len(data['merged'])} merged "
         "(last 100 updated PRs; local and remote contributors included)",
-        f"Model-origin PRs: {len(data['model_opened'])} created, {len(data['model_merged'])} merged "
+        f"Checkpoint-attributed PRs: {len(data['model_opened'])} created, {len(data['model_merged'])} merged "
         "(metadata evidence, not independent code/deploy validation)",
+        f"Bot-authored factory PRs: {len(data['bot_opened'])} created, {len(data['bot_merged'])} merged "
+        "(may include human-authored fixes)",
         f"Main CI: {(data['main_ci'] or {}).get('conclusion') or (data['main_ci'] or {}).get('status') or 'unknown'}",
         f"Dashboard: {data['snapshot_freshness']} ({data['snapshot_age']})",
     ]
     if data["pr_window_limited"]:
         lines.append("NOTE: PR list capped at 100, counts may understate activity.")
+    if data["dispatch_capped"]:
+        lines.append("NOTE: Dispatcher list capped at 40; actual dispatch count may be higher.")
     if data["snapshot_error"]:
         lines.append("NOTE: Dashboard snapshot unavailable; live GitHub data remains available.")
     lines.extend(["", "Evidence:"])
     for run in data["active_entries"][:4]:
-        lines.append(f"  RUNNING  {run.get('name') or run.get('id')}  {workflow_link(run)}")
+        started = instant(run.get("run_started_at") or run.get("created_at"))
+        lines.append(
+            f"  RUNNING  {run.get('name') or run.get('id')} "
+            f"({age_string(datetime.fromisoformat(data['now']), started)})  {workflow_link(run)}"
+        )
+    for run in data["failed_entries"][:4]:
+        lines.append(f"  FAILED   {run.get('name') or run.get('id')}  {workflow_link(run)}")
     for pr in data["model_opened"][:3]:
         lines.append(f"  CODE PR  #{pr.get('number')}  {pr_link(pr)}")
     for pr in data["model_merged"][:3]:
         lines.append(f"  MERGED   #{pr.get('number')}  {pr_link(pr)}")
+    for pr in [p for p in data["bot_merged"] if p not in data["model_merged"]][:3]:
+        lines.append(f"  BOT PR   #{pr.get('number')}  {pr_link(pr)}")
     if data["last_dispatch"]:
         lines.append(f"  DISPATCH {workflow_link(data['last_dispatch'])}")
     if data["main_ci"]:
@@ -235,7 +293,7 @@ def render(data: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    """Parse CLI options and emit one read-only factory-health report."""
+    """Run a bounded, read-only status probe or interval watch."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--minutes", type=int, default=60)
