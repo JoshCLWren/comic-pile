@@ -44,36 +44,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ping": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ping
-         * @description Return a minimal alive response.
-         *
-         *     This endpoint has zero database, ORM, or heavy dependency
-         *     initialization overhead. Lifespan startup is intentionally lightweight
-         *     and heavy initialization (database connectivity, durable cache
-         *     accounting, cache provider) is deferred until the first non-ping
-         *     request. A cold ``GET /api/ping`` therefore never opens a
-         *     PostgreSQL connection or reserves a cache block.
-         *
-         *     Returns:
-         *         Simple status dict with no external dependencies.
-         */
-        get: operations["ping_api_ping_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -13429,28 +13399,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartupMetricsResponse"];
-                };
-            };
-        };
-    };
-    ping_api_ping_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };
