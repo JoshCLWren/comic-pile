@@ -139,10 +139,10 @@ fn continuity_rule_body() -> Value {
         "target_type": "issue",
         "target_id": 3002,
         "satisfaction_type": "item_read",
-        "checkpoint_issue_id": None,
+        "checkpoint_issue_id": serde_json::Value::Null,
         "convergence_targets": [],
         "selected_member_issue_ids": [],
-        "note": None
+        "note": serde_json::Value::Null,
     })
 }
 
