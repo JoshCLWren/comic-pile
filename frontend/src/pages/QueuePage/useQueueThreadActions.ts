@@ -58,6 +58,7 @@ export interface UseQueueThreadActionsDeps {
   moveToPositionHook?: typeof useMoveToPosition
   shuffleHook?: typeof useShuffleQueue
   reroll?: typeof rollApi.reroll
+  unsnooze?: typeof rollApi.unsnooze
   toastHook?: typeof useToast
   setPending?: typeof threadsApi.setPending
 }
@@ -117,6 +118,7 @@ export function useQueueThreadActions(
     moveToPositionHook = useMoveToPosition,
     shuffleHook = useShuffleQueue,
     reroll = rollApi.reroll,
+    unsnooze = rollApi.unsnooze,
     toastHook = useToast,
     setPending = threadsApi.setPending,
   } = deps
@@ -332,8 +334,11 @@ export function useQueueThreadActions(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
         if (isSnoozed) {
-          // Queue unsnooze is client-only: remove the thread from the browser snooze cookie
-          removeRollSnooze(thread.id)
+          // Queue unsnooze calls the server endpoint to restore the previous
+          // pending roll and revert the die. The endpoint also clears the
+          // browser snooze cookie.
+          await unsnooze(thread.id)
+          showToast(`Restored "${thread.title}" as the pending roll.`, 'success')
         } else {
           // The canonical Rust offer atomically records the pending reroll
           // snooze, advances the die, and selects the replacement. The legacy
@@ -342,11 +347,11 @@ export function useQueueThreadActions(
           const offer = await reroll(thread.id)
           showToast(`Snoozed "${thread.title}" and rolled "${offer.title}". Open Roll to read it.`, 'success')
         }
-        // Native reroll does not own a session query refresh, so Queue must
+        // Native reroll/unsnooze do not own a session query refresh, so Queue must
         // invalidate it here. Legacy unsnooze still refreshes that key in its
         // own hook, and must not issue a duplicate GET (#4276).
         await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: isSnoozed })
-        // Snooze resets the paginated queue cache, so the row remounts; the
+        // Snooze/unsnooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)
       } catch (error: unknown) {
@@ -360,7 +365,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [reroll, restoreSeriesActionsFocus, showToast],
+    [reroll, unsnooze, restoreSeriesActionsFocus, showToast],
   )
 
   return {
