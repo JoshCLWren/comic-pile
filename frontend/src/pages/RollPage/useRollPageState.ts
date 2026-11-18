@@ -7,6 +7,7 @@ export interface RollPageState {
   rolledResult: number | null
   selectedThreadId: number | null
   isOverrideOpen: boolean
+  isDirectIssueOpen: boolean
   overrideThreadId: string
   overrideErrorMessage: string
   snoozedExpanded: boolean
