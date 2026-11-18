@@ -39,7 +39,7 @@ function ListEditor() {
   return <div>Reading List editor {id}</div>
 }
 
-function renderEditRoute(planId = '29') {
+function renderEditRoute(planId = '29', search = '') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -47,7 +47,7 @@ function renderEditRoute(planId = '29') {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
   return render(
-    <MemoryRouter initialEntries={['/continuity-plans/' + planId + '/edit']}>
+    <MemoryRouter initialEntries={['/continuity-plans/' + planId + '/edit' + search]}>
       <Routes>
         <Route
           path="/continuity-plans/:id/edit"
@@ -117,6 +117,30 @@ describe('ReadingPlanEditRoute', () => {
     } as ReturnType<typeof useReadingPlanReader>)
     renderEditRoute()
     expect(screen.getByText(/Could not determine this Plan/)).toBeInTheDocument()
+    expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
+  })
+
+  it('opens the saved Plan editor from the recovery authoring link when authority is missing', () => {
+    // An orphaned plan still returns 409 from the reader. The recovery screen
+    // hands the owner an explicit opt-in link so the saved plan can be authored.
+    // SAFETY: Only isError, isPending, and data are read by the route here; the
+    // remaining React Query result properties are irrelevant to this branch.
+    vi.mocked(useReadingPlanReader).mockReturnValue({
+      isError: true,
+      isPending: false,
+      data: undefined,
+    } as ReturnType<typeof useReadingPlanReader>)
+    renderEditRoute('29', '?authoring=1')
+    expect(screen.getByText('Legacy Plan editor')).toBeInTheDocument()
+    expect(screen.queryByText(/Could not determine this Plan/)).not.toBeInTheDocument()
+  })
+
+  it('still redirects a linked Option E plan from the authoring link', async () => {
+    getReader.mockResolvedValue(response('option_e', [
+      { raw_source_path: 'custom-cbl:1000018', display_name: 'Planetary / Authority' },
+    ]))
+    renderEditRoute('29', '?authoring=1')
+    expect(await screen.findByText('Reading List editor 1000018')).toBeInTheDocument()
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 

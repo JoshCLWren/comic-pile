@@ -4,8 +4,9 @@
 //! Historic plan membership and provenance are never projected as authority.
 //! Reads share the exact Rust Reading List evaluation used by Roll and Queue.
 //!
-//! Empty plans with no authoritative Reading List and no retained membership or
-//! source provenance open as editable legacy plans instead of recovery errors.
+//! Plans that never had an authoritative Reading List open as editable legacy
+//! plans, including after issues are authored into them. A plan whose owned
+//! List link was removed still requires explicit owner recovery.
 
 use crate::{auth::AuthenticatedUser, db, reading_list, ApiError, AppState};
 use axum::{
@@ -14,7 +15,7 @@ use axum::{
 };
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -153,7 +154,7 @@ pub async fn read(
     let conn = db::checkout(&state).await?;
     let plan = conn
         .query_opt(
-            "SELECT p.name, p.ordering_mode
+            "SELECT p.name, p.ordering_mode, p.lanes_json::text
              FROM continuity_plans p WHERE p.id=$1 AND p.user_id=$2",
             &[&plan_id, &user.id()],
         )
@@ -162,6 +163,7 @@ pub async fn read(
         .ok_or_else(|| ApiError::NotFound("Reading Plan not found".to_string()))?;
     let plan_name: String = plan.get(0);
     let plan_ordering_mode: String = plan.get(1);
+    let plan_lanes_json: String = plan.get(2);
 
     let source_rows = conn
         .query(
@@ -176,8 +178,17 @@ pub async fn read(
         .await
         .map_err(db::query_error)?;
     let mut source_list_ids = BTreeSet::new();
+    // An owned Reading List is recorded as `custom-cbl:<id>`. When that List is
+    // deleted the FK sets custom_cbl_list_id to NULL but the raw path survives,
+    // so this marker distinguishes a plan that once had an authority (recovery)
+    // from an authored plan that never had one (editable legacy mode).
+    let mut had_authoritative_list_source = false;
     let mut sources = Vec::new();
     for row in source_rows {
+        let raw_source_path: String = row.get(1);
+        if raw_source_path.starts_with("custom-cbl:") {
+            had_authoritative_list_source = true;
+        }
         let link: Option<i32> = row.get(8);
         let resolved: Option<String> = row.get(9);
         if let (Some(id), Some(_)) = (link, resolved.as_ref()) {
@@ -185,7 +196,7 @@ pub async fn read(
         }
         sources.push(PlanReaderSource {
             id: row.get(0),
-            raw_source_path: row.get(1),
+            raw_source_path,
             repository: row.get(2),
             source_path: row.get(3),
             revision_sha: row.get(4),
@@ -197,42 +208,140 @@ pub async fn read(
     }
     let mut source_ids = source_list_ids.iter().copied();
     let (Some(list_id), None) = (source_ids.next(), source_ids.next()) else {
-        if source_list_ids.is_empty() {
-            let retained_issue_count: i64 = conn
-                .query_one(
-                    "SELECT count(*) FROM reading_plan_issues WHERE plan_id=$1",
-                    &[&plan_id],
-                )
-                .await
-                .map_err(db::query_error)?
-                .get(0);
-            if retained_issue_count == 0 && sources.is_empty() {
-                drop(conn);
-                return Ok(Json(PlanReaderResponse {
-                    execution_mode: "legacy".to_string(),
-                    plan_id,
-                    name: plan_name,
-                    ordering_mode: plan_ordering_mode,
-                    progress: PlanReaderProgress {
-                        total_issues: 0,
-                        read_issues: 0,
-                    },
-                    available_now: Vec::new(),
-                    blocked_next: Vec::new(),
-                    lanes: Vec::new(),
-                    sources: Vec::new(),
-                    release_sources: Vec::new(),
-                    release_candidates: Vec::new(),
-                }));
-            }
+        if !source_list_ids.is_empty() {
+            return Err(ApiError::Conflict(
+                "Ambiguous Reading List association. No Plan membership was changed.".to_string(),
+            ));
+        }
+        if had_authoritative_list_source {
             return Err(ApiError::Conflict(
                 "Reading Plan has no linked authoritative Reading List. Open recovery to relink."
                     .to_string(),
             ));
         }
-        return Err(ApiError::Conflict(
-            "Ambiguous Reading List association. No Plan membership was changed.".to_string(),
-        ));
+
+        // This plan never recorded an owned Reading List. It is authored state,
+        // so keep it open and editable even after issues are saved into it.
+        // Retained membership is shown as a reference with no hard blockers:
+        // only a real Reading List drives availability in Option E.
+        let retained = conn
+            .query(
+                "SELECT r.occurrence_id, r.issue_id, r.lane_id, r.display_position,
+                        r.is_checkpoint, COALESCE(i.issue_number::text, '#' || r.issue_id::text),
+                        COALESCE(i.status::text, 'unread'), COALESCE(t.id, 0),
+                        COALESCE(t.title, 'Unknown series')
+                 FROM reading_plan_issues r
+                 LEFT JOIN issues i ON i.id = r.issue_id
+                 LEFT JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
+                 WHERE r.plan_id = $1
+                 ORDER BY r.lane_id, r.display_position, r.occurrence_id",
+                &[&plan_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let placements = conn
+            .query(
+                "SELECT sp.occurrence_id, s.raw_source_path
+                 FROM reading_plan_source_placements sp
+                 JOIN reading_plan_sources s ON s.id = sp.plan_source_id
+                 WHERE sp.plan_id = $1
+                 ORDER BY sp.occurrence_id, sp.source_position NULLS LAST, s.id",
+                &[&plan_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut source_paths: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for row in &placements {
+            let occurrence: String = row.get(0);
+            source_paths.entry(occurrence).or_default().push(row.get(1));
+        }
+        let steps: Vec<PlanReaderIssue> = retained
+            .iter()
+            .map(|row| {
+                let occurrence: String = row.get(0);
+                let status: String = row.get(6);
+                PlanReaderIssue {
+                    occurrence_id: occurrence.clone(),
+                    issue_id: row.get(1),
+                    lane_id: row.get(2),
+                    display_position: row.get(3),
+                    issue_number: row.get(5),
+                    thread_id: row.get(7),
+                    thread_title: row.get(8),
+                    status: status.clone(),
+                    is_checkpoint: row.get(4),
+                    availability: if status == "read" { "read" } else { "later" }.to_string(),
+                    blockers: Vec::new(),
+                    source_paths: source_paths.get(&occurrence).cloned().unwrap_or_default(),
+                }
+            })
+            .collect();
+        let total_issues = steps.len();
+        let read_issues = steps.iter().filter(|step| step.status == "read").count();
+        let mut by_lane: BTreeMap<String, Vec<PlanReaderIssue>> = BTreeMap::new();
+        for step in steps {
+            by_lane.entry(step.lane_id.clone()).or_default().push(step);
+        }
+        let mut lane_meta: Vec<(String, String, i32)> =
+            serde_json::from_str::<Vec<serde_json::Value>>(&plan_lanes_json)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|value| {
+                    Some((
+                        value.get("id")?.as_str()?.to_string(),
+                        value
+                            .get("name")
+                            .and_then(|name| name.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        i32::try_from(
+                            value
+                                .get("order")
+                                .and_then(|order| order.as_i64())
+                                .unwrap_or(0),
+                        )
+                        .unwrap_or(0),
+                    ))
+                })
+                .collect();
+        lane_meta.sort_by_key(|(_, _, order)| *order);
+        let mut lanes = Vec::new();
+        for (id, name, order) in lane_meta {
+            if let Some(issues) = by_lane.remove(&id) {
+                lanes.push(PlanReaderLane {
+                    id,
+                    name,
+                    order,
+                    issues,
+                });
+            }
+        }
+        for (id, issues) in by_lane {
+            lanes.push(PlanReaderLane {
+                id: id.clone(),
+                name: id,
+                order: i32::MAX,
+                issues,
+            });
+        }
+
+        drop(conn);
+        return Ok(Json(PlanReaderResponse {
+            execution_mode: "legacy".to_string(),
+            plan_id,
+            name: plan_name,
+            ordering_mode: plan_ordering_mode,
+            progress: PlanReaderProgress {
+                total_issues,
+                read_issues,
+            },
+            available_now: Vec::new(),
+            blocked_next: Vec::new(),
+            lanes,
+            sources,
+            release_sources: Vec::new(),
+            release_candidates: Vec::new(),
+        }));
     };
     drop(conn);
 

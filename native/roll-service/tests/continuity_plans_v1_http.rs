@@ -529,9 +529,8 @@ async fn plan_updated_at_is_iso_and_version_check_is_timezone_aware() {
 }
 
 /// Issue #5462: an empty authored plan (0 lanes, 0 nodes) saves but must open
-/// and be editable. The v2 reader must not return 409 recovery for a plan with
-/// no authoritative Reading List, no retained membership, and no source
-/// provenance.
+/// and be editable. A plan that never recorded an owned Reading List stays
+/// editable after its first issue is saved too (Greptile finding on #5467).
 #[tokio::test]
 async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
     let (state, _db) = database().await;
@@ -572,4 +571,110 @@ async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
     assert_eq!(reader["blocked_next"], json!([]), "{reader}");
     assert_eq!(reader["lanes"], json!([]), "{reader}");
     assert_eq!(reader["sources"], json!([]), "{reader}");
+
+    // Save an issue through the same authoring path the legacy editor uses.
+    // It creates retained membership but no Reading List link; reopening must
+    // still yield the editable legacy plan, never a 409 recovery conflict.
+    let user_id = user_id_for(&state, "cp-empty-reader").await;
+    seed_thread_issue(&state, user_id, 546201, 546211, "QA Series", "1").await;
+    let (status, saved) = authed_json(
+        &state,
+        "PUT",
+        &format!("/api/v1/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        Some(json!({
+            "name": "QA empty plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [{
+                "id": "issue-546211",
+                "node_type": "issue",
+                "ref_id": 546211,
+                "lane_id": "main",
+                "position": 0,
+                "label": "QA Series #1"
+            }],
+            "expected_updated_at": created["updated_at"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+
+    let (status, reopened) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reopened}");
+    assert_eq!(reopened["execution_mode"], "legacy", "{reopened}");
+    assert_eq!(reopened["progress"]["total_issues"], 1, "{reopened}");
+    assert_eq!(
+        reopened["lanes"].as_array().map(Vec::len),
+        Some(1),
+        "{reopened}"
+    );
+    assert_eq!(reopened["lanes"][0]["id"], "main", "{reopened}");
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_id"], 546211,
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_number"], "1",
+        "{reopened}"
+    );
+}
+
+/// A plan whose owned Reading List link was removed must still require the
+/// explicit recovery flow. The FK sets custom_cbl_list_id to NULL on list
+/// deletion while the immutable `custom-cbl:<id>` provenance survives.
+#[tokio::test]
+async fn plan_with_removed_list_authority_still_requires_recovery() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-orphaned-reader").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA orphaned plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let conn = db::checkout(&state).await.expect("seed connection");
+    conn.execute(
+        "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
+         VALUES ($1, 'custom-cbl:999999', NOW())",
+        &[&plan_id_i32],
+    )
+    .await
+    .expect("seed removed-list provenance");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reader}");
+    assert!(
+        reader.to_string().contains("Open recovery to relink"),
+        "{reader}"
+    );
 }

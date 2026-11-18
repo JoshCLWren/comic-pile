@@ -88,7 +88,7 @@ describe('orphaned Reading Plan recovery', () => {
     expect(screen.getByText(/Creating another list with the same name does not restore its identity/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'open the Plan authoring UI' })).toHaveAttribute(
       'href',
-      '/continuity-plans/1000096/edit',
+      '/continuity-plans/1000096/edit?authoring=1',
     )
     expect(relinkApi).not.toHaveBeenCalled()
 

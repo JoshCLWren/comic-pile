@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { useReadingPlanReader } from '../hooks/useReadingPlans'
 
 /**
  * Keep old edit bookmarks useful after the Option E single-authority cutover.
  *
  * A linked Plan must be edited through its owned Reading List. The legacy Plan
- * editor is only available when the reader explicitly reports legacy mode.
- * Failure to resolve the authority must never fall back to a stale Plan edit.
+ * editor is available when the reader reports legacy mode, or when the owner
+ * follows the recovery screen's explicit authoring link (?authoring=1) for a
+ * plan with no resolvable authority. An unsolicited authority failure never
+ * falls back to a stale Plan edit.
  */
 export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: ReactNode }) {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const authoring = searchParams.get('authoring') === '1'
   const parsedId = Number(id)
   const planId = id && Number.isSafeInteger(parsedId) && parsedId > 0 ? parsedId : null
   const reader = useReadingPlanReader(planId)
@@ -24,6 +28,11 @@ export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: R
   }
 
   if (reader.isError || !reader.data) {
+    // The recovery screen explicitly offers authoring as an alternative to
+    // relinking an orphaned plan. That link opts into the legacy editor, which
+    // loads the owned Plan directly and can save a fresh authored order. A
+    // linked Option E plan still resolves below and is sent to its List.
+    if (authoring) return <>{legacyEditor}</>
     return (
       <div role="alert">
         Could not determine this Plan's reading-order authority. No legacy edits were made.{' '}
