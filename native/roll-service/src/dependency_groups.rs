@@ -1411,9 +1411,15 @@ async fn set_group_order_tx(
         }
     }
     for item in &request.items {
-        let membership_id = *member_by_issue
-            .get(&item.issue_id)
-            .expect("ordered issue must have a membership");
+        let membership_id = match member_by_issue.get(&item.issue_id) {
+            Some(mid) => *mid,
+            None => {
+                return Err(ApiError::NotFound(format!(
+                    "Issue {} is not a member of this crossover",
+                    item.issue_id
+                )))
+            }
+        };
         tx.execute(
             "UPDATE dependency_group_memberships SET sequence_order = $2 WHERE id = $1",
             &[&membership_id, &item.sequence_order],
