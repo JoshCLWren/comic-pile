@@ -467,7 +467,7 @@ async fn load_issue_progress(
 }
 
 async fn owned_group(
-    connection: &impl tokio_postgres::GenericClient,
+    connection: &deadpool_postgres::Object,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -483,7 +483,7 @@ async fn owned_group(
 }
 
 async fn owned_thread_id(
-    connection: &impl tokio_postgres::GenericClient,
+    connection: &deadpool_postgres::Object,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -495,7 +495,7 @@ async fn owned_thread_id(
 }
 
 async fn owned_issue_thread_id(
-    connection: &impl tokio_postgres::GenericClient,
+    connection: &deadpool_postgres::Object,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -881,7 +881,7 @@ pub async fn get_group(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&*connection, group_id, user.id())
+    let group = owned_group(&connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let memberships = memberships(&connection, group_id).await?;
@@ -896,7 +896,7 @@ pub async fn get_group_detail(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&*connection, group_id, user.id())
+    let group = owned_group(&connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let memberships = memberships(&connection, group_id).await?;
@@ -1369,7 +1369,7 @@ pub async fn set_group_order(
     match result {
         Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
-            let group = owned_group(&*connection, group_id, user.id())
+            let group = owned_group(&connection, group_id, user.id())
                 .await?
                 .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
             let memberships = memberships(&connection, group_id).await?;
@@ -1470,7 +1470,7 @@ pub async fn list_crossover_plans(
     Path(group_id): Path<i32>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&*connection, group_id, user.id())
+    let group = owned_group(&connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let _ = group;
