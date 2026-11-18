@@ -30,6 +30,13 @@
   ],
   "routes": [
     {
+      "src": "/api/v2/analytics/metrics",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "/api/v2/dependencies/",
       "methods": [
         "POST"
@@ -354,6 +361,13 @@
       "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-plan$",
       "methods": [
         "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-preview$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -758,7 +772,15 @@
     {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/issues:reorder$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -792,6 +814,27 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
       "methods": [
         "POST"
       ],
@@ -1160,96 +1203,8 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/creators/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/[^/]+/metrics/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/[^/]+/metrics/rating\\-distribution/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/[^/]+/metrics/role\\-stats/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/[^/]+/metrics/series\\-stats/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/[^/]+/series/[^/]+/issues$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/compare$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/discoveries$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators/team\\-chemistry$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/correction\\-examples$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/taste/discoveries$",
       "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/issues$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1263,41 +1218,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issues:reorder$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
       "methods": [
         "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
