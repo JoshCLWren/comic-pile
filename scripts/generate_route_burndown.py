@@ -468,7 +468,11 @@ def _fragment_vercel_groups(
                     )
                 dest = previous.dest
             if src is None:
-                if previous is not None and previous.src is not None:
+                if (
+                    previous is not None
+                    and previous.src is not None
+                    and previous.src != CATCH_ALL_SRC
+                ):
                     src = previous.src
                 else:
                     src = route_regex_for_path(route_path)
@@ -613,7 +617,12 @@ def _slim_native_roll_routes(
     scripts/vercel_slim_routes.mjs; keep the two in sync.
     """
     catch_index = next(
-        (i for i, route in enumerate(routes) if route.get("src") == CATCH_ALL_SRC), -1
+        (
+            i
+            for i, route in enumerate(routes)
+            if route.get("src") == CATCH_ALL_SRC and not route.get("methods")
+        ),
+        -1,
     )
     limit = len(routes) if catch_index == -1 else catch_index
     removable_ids = {id(route) for route in removable}

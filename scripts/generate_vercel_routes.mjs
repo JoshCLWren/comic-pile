@@ -125,7 +125,9 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
         dest = previous.dest;
       }
       if (!src) {
-        src = (previous && previous.src) || routeRegex(path);
+        // The catch-all is never a fragment's own ingress src (slim vercel.json
+        // relies on it instead of explicit native_roll entries).
+        src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
       }
       if (dest !== PYTHON && !NATIVE.has(dest)) {
         throw new Error(`unknown destination ${dest} for ${method} ${path}`);

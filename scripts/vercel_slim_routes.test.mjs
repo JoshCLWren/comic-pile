@@ -113,3 +113,25 @@ test('character-class escapes are unknown shapes, so the roll route is kept', ()
   const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
   assert.deepEqual(slimNativeRollRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
 });
+
+test('regenerating from an already-slim vercel.json is stable and still equivalent', () => {
+  const fragments = _loadRouteFragments('docs/api/route-fragments');
+  const slimDocument = _generateVercelDocument(json('vercel.json'), fragments, {slim: true});
+  const again = _generateVercelDocument(slimDocument, fragments, {slim: true});
+  assert.deepEqual(again.routes, slimDocument.routes);
+  const fullFromSlim = _generateVercelDocument(slimDocument, fragments, {slim: false}).routes;
+  const fullFromOriginal = _generateVercelDocument(json('vercel.json'), fragments, {slim: false}).routes;
+  for (const template of allTemplates(json('docs/api/v2-route-inventory.json'), fragments)) {
+    for (const concrete of concretePaths(template)) {
+      for (const method of METHODS) {
+        assert.equal(
+          resolve(fullFromSlim, method, concrete),
+          resolve(fullFromOriginal, method, concrete),
+          `${method} ${concrete} changed after regenerating from slim input`,
+        );
+      }
+    }
+  }
+  // A fragment operation without its own src must never inherit the catch-all.
+  assert.ok(!fullFromSlim.some(route => route.src === '/api(?:/.*)?' && route.methods));
+});

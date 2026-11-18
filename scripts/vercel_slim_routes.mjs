@@ -95,7 +95,9 @@ export function routesMayOverlap(a, b) {
 }
 
 export function slimNativeRollRoutes(routes, removable) {
-  const catchIndex = routes.findIndex(route => route.src === CATCH_ALL_SRC);
+  const catchIndex = routes.findIndex(
+    route => route.src === CATCH_ALL_SRC && !(route.methods && route.methods.length),
+  );
   const limit = catchIndex === -1 ? routes.length : catchIndex;
   return routes.filter((route, index) => {
     if (!removable.has(route) || route.dest !== ROLL_DESTINATION) return true;

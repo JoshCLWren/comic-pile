@@ -320,7 +320,12 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
         dest = previous.dest;
       }
       if (src === null) {
-        if (previous !== null && previous.src !== null && previous.src !== undefined) {
+        if (
+          previous !== null &&
+          previous.src !== null &&
+          previous.src !== undefined &&
+          previous.src !== CATCH_ALL_SRC
+        ) {
           src = previous.src;
         } else {
           src = routeRegexForPath(routePath);
