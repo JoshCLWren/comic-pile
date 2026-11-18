@@ -186,7 +186,9 @@ mod tests {
     #[test]
     fn same_path_contract_documents_thread_dependency_schemas() {
         let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
-        let schemas = document["components"]["schemas"].as_object().expect("schemas");
+        let schemas = document["components"]["schemas"]
+            .as_object()
+            .expect("schemas");
         for name in [
             "BatchBlockingExplanationResponse",
             "ConnectedThreadInfo",
