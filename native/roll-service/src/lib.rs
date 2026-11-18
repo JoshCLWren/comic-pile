@@ -68,6 +68,7 @@ pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod threads_extra;
 pub mod undo_apply;
 pub mod undo_snapshots;
 
@@ -712,6 +713,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
+        )
+        .route(
+            "/api/v1/threads/excluded/threads",
+            get(threads_extra::list_excluded_threads),
+        )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(threads_extra::list_thread_groups_batch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(threads_extra::get_thread_connected),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(threads_extra::get_thread_issue_creators),
         )
         .route(
             "/api/v2/reading-lists",
