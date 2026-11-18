@@ -978,18 +978,21 @@ async fn delete_refused_by_the_database_is_a_400_and_changes_nothing() {
     let ctx = setup("lcdelref").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Referenced", "active", 1, 2).await;
     let pool = ctx.state.pool.get().await.unwrap();
-    let order: i32 = pool
-        .query_one(
-            "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'Order') RETURNING id",
-            &[&ctx.user_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
+    // Force the delete transaction to fail after pruning plan nodes, so the
+    // handler reports "Cannot delete thread..." and rolls everything back.
+    // Deleting the thread removes its plan node, leaving a malformed surviving
+    // node that cannot be rebuilt.
     pool.execute(
-        "INSERT INTO reading_order_items (reading_order_id, thread_id, position)
-         VALUES ($1, $2, 1)",
-        &[&order, &thread],
+        "INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES ($1, 'Refusal', 'strict_sequential', $2::jsonb, $3::jsonb, NOW(), NOW())",
+        &[
+            &ctx.user_id,
+            &json!([{"id": "main", "name": "Main", "order": 0}]),
+            &json!([
+                {"id": "gone", "node_type": "thread", "ref_id": thread, "lane_id": "main", "position": 0},
+                {"id": "bad", "node_type": "issue"}
+            ]),
+        ],
     )
     .await
     .unwrap();
