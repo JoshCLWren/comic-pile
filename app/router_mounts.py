@@ -187,13 +187,6 @@ def _register_issue_identity(app: FastAPI) -> None:
     app.include_router(issue_identity.router, tags=["issue-identity"])
 
 
-def _register_cbl_adoption(app: FastAPI) -> None:
-    """Register CBL adoption-commit routers (absolute ``/api/v1`` paths)."""
-    from app.api import cbl_plan_adoption
-
-    app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
@@ -232,7 +225,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     ),
     RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
-    RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
 )
 
 
