@@ -7,9 +7,7 @@ sibling repositories; HTTP status mapping lives in routers.
 
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
 
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread
@@ -18,7 +16,6 @@ from app.services.dependency_cycle import (
     build_reading_order_graph,
     find_thread_cycle_issue_ids,
 )
-from app.services.ownership_guard import require_dependency_endpoints_owned
 from app.services.reading_eligibility_service import (
     get_execution_eligibility,
     project_blocking_explanation,
@@ -36,13 +33,10 @@ from app.schemas.dependency import (
 from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from comic_pile.dependencies import (
     BlockingDependency as InternalBlockingDependency,
-    detect_circular_dependency,
-    find_dependency_cycle_path,
     format_blocking_reason,
     get_blocked_thread_ids,
     get_blocking_explanations_batch,
     get_dependency_order_conflicts,
-    refresh_user_blocked_status,
 )
 
 
@@ -322,169 +316,6 @@ async def get_blocking_details(
             )
 
     return result
-
-
-async def create_dependency(
-    source_issue_id: int, target_issue_id: int, user_id: int, db: AsyncSession
-) -> tuple[DependencyResponse | None, str | None]:
-    """Create a hard-block dependency between owned threads or owned issues."""
-    from app.repositories import issue_repository, thread_repository
-    
-    # Both endpoints must belong to the requesting reader. Shared catalog
-    # links (issues.catalog_issue_id) are never consulted here: two readers
-    # may reference one CatalogIssue while their personal Issue rows stay
-    # distinct, so catalog identity can never authorize a cross-user edge.
-    try:
-        source_issue, target_issue = await require_dependency_endpoints_owned(
-            db, user_id, source_issue_id, target_issue_id
-        )
-    except HTTPException:
-        return None, "Issue not found"
-
-    source_thread = await thread_repository.find_owned(db, user_id, source_issue.thread_id)
-    target_thread = await thread_repository.find_owned(db, user_id, target_issue.thread_id)
-    if not source_thread or not target_thread:
-        return None, "Issue not found"
-
-    # Check for circular dependency
-    if await detect_circular_dependency(
-        source_issue_id, target_issue_id, "issue", db
-    ):
-        cycle_path_ids = await find_dependency_cycle_path(
-            source_issue_id, target_issue_id, "issue", db
-        )
-        if cycle_path_ids:
-            # Build human-readable cycle description
-            # Cycle path is target -> ... -> source; prepend source to close loop
-            full_path_ids = [source_issue_id] + cycle_path_ids
-            # Fetch issues and threads for the path
-            from sqlalchemy import select
-            result = await db.execute(
-                select(Issue).where(Issue.id.in_(full_path_ids))
-            )
-            issues_map = {i.id: i for i in result.scalars()}
-            thread_ids = {issues_map[i].thread_id for i in full_path_ids if i in issues_map}
-            thread_result = await db.execute(
-                select(Thread).where(Thread.id.in_(thread_ids))
-            )
-            threads_map = {t.id: t for t in thread_result.scalars()}
-
-            labels = []
-            for iid in full_path_ids:
-                issue = issues_map.get(iid)
-                if not issue:
-                    continue
-                thread = threads_map.get(issue.thread_id)
-                if thread:
-                    labels.append(f"{thread.title} #{issue.issue_number}")
-                else:
-                    labels.append(f"Issue {iid}")
-            # Build cycle string, avoid duplicate trailing element
-            # The path may end with source again; keep it to show loop
-            cycle_desc = " → ".join(labels)
-            # Ensure loop is explicit: if last label equals first, it's fine
-            return None, f"Cannot create dependency: would create circular dependency: {cycle_desc}"
-        return None, "Cannot create dependency: would create circular dependency"
-
-    # Check if dependency already exists
-    existing = await dependency_repository.get_dependency_by_ids(db, source_issue_id, target_issue_id)
-    if existing:
-        return None, "Dependency already exists"
-
-    warning: str | None = None
-    if target_thread.next_unread_issue_id is not None:
-        next_unread_issue = await issue_repository.get_issue(db, target_thread.next_unread_issue_id)
-        if next_unread_issue is not None and target_issue.position < next_unread_issue.position:
-            return None, (
-                f"Target issue #{target_issue.issue_number} has already been read"
-                f" in {target_thread.title} (current next unread:"
-                f" #{next_unread_issue.issue_number}). This dependency would"
-                f" never activate. Did you mean to target issue"
-                f" #{next_unread_issue.issue_number}?"
-            )
-        if next_unread_issue is not None and target_issue.position > next_unread_issue.position:
-            issues_ahead = target_issue.position - next_unread_issue.position
-            issue_word = "issue" if issues_ahead == 1 else "issues"
-            warning = (
-                f"Target issue #{target_issue.issue_number} is not yet the next"
-                f" unread (current next unread: #{next_unread_issue.issue_number})."
-                f" This dependency will block when the target thread reaches it in"
-                f" {issues_ahead} {issue_word}."
-            )
-
-    try:
-        dependency = await dependency_repository.create_dependency(
-            db, source_issue_id, target_issue_id
-        )
-
-        await refresh_user_blocked_status(user_id, db)
-
-        await db.commit()
-    except IntegrityError as error:
-        await db.rollback()
-        if "uq_dependency_issue_edge" in str(error.orig):
-            return None, "Dependency already exists"
-        raise
-
-    dependency = await dependency_repository.get_dependency_by_ids(
-        db, source_issue_id, target_issue_id
-    )
-
-    enriched = await enrich_dependencies([dependency], db)
-    response = enriched[0]
-    response.warning = warning
-    return response, warning
-
-
-async def get_dependency(
-    dependency_id: int, user_id: int, db: AsyncSession
-) -> DependencyResponse | None:
-    """Fetch a single dependency owned by the current user."""
-    dependency = await dependency_repository.get_dependency(db, dependency_id)
-    if not dependency:
-        return None
-    
-    is_owned = await dependency_repository.is_dependency_owned_by_user(dependency, user_id, db)
-    if not is_owned:
-        return None
-    
-    enriched = await enrich_dependencies([dependency], db)
-    return enriched[0]
-
-
-async def update_dependency_note(
-    dependency_id: int, note: str | None, user_id: int, db: AsyncSession
-) -> DependencyResponse | None:
-    """Update the note on a dependency owned by the current user."""
-    dependency = await dependency_repository.get_dependency(db, dependency_id)
-    if not dependency:
-        return None
-    
-    is_owned = await dependency_repository.is_dependency_owned_by_user(dependency, user_id, db)
-    if not is_owned:
-        return None
-
-    await dependency_repository.update_dependency_note(db, dependency_id, note)
-    await db.commit()
-    dependency = await dependency_repository.get_dependency(db, dependency_id)
-    enriched = await enrich_dependencies([dependency], db)
-    return enriched[0]
-
-
-async def delete_dependency(dependency_id: int, user_id: int, db: AsyncSession) -> bool:
-    """Delete a dependency and refresh denormalized blocked flags."""
-    dependency = await dependency_repository.get_dependency(db, dependency_id)
-    if not dependency:
-        return False
-    
-    is_owned = await dependency_repository.is_dependency_owned_by_user(dependency, user_id, db)
-    if not is_owned:
-        return False
-
-    await dependency_repository.delete_dependency(db, dependency_id)
-    await refresh_user_blocked_status(user_id, db)
-    await db.commit()
-    return True
 
 
 async def check_thread_dependency_order(
