@@ -77,7 +77,7 @@ export function useQueueThreadCards({
   // instead of being invalidated by a fresh array on every session snapshot.
   const snoozedThreadIds = useMemo(
     () => Array.from(new Set([
-      ...(rollState?.snoozed_threads?.map((t) => t.id) ?? []),
+      ...(rollState?.snoozed_thread_ids ?? []),
       ...activeThreads
         .map((thread) => thread.id)
         .filter((threadId) => rollApi.isTemporarilySnoozed(threadId)),

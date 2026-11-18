@@ -419,6 +419,7 @@ mod tests {
                 "last_read",
                 "snoozed_threads",
                 "snoozed_count",
+                "snoozed_thread_ids",
                 "skipped_thread_ids",
                 "skipped_threads",
                 "timezone",

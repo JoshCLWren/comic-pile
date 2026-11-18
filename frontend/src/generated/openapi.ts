@@ -9644,6 +9644,45 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        /**
+         * @description Full live `GET /api/v2/roll/bootstrap` payload.
+         *
+         *     This is the actual handler response type, so the generated contract and the
+         *     runtime share one authority. It is retained only until the bootstrap
+         *     retirement work removes the route; it is not a new feature surface.
+         */
+        NativeBootstrapResponseV2: {
+            active_thread?: components["schemas"]["BootstrapActiveThread"] | null;
+            bandwidth: components["schemas"]["BootstrapBandwidth"];
+            last_read?: components["schemas"]["BootstrapLastRead"] | null;
+            /** Format: int64 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            pending_thread_id?: number | null;
+            pool_reason: components["schemas"]["PoolReason"];
+            roll_recovery?: components["schemas"]["BootstrapRollRecovery"] | null;
+            rollable: components["schemas"]["BootstrapRollableItem"][];
+            /** Format: int32 */
+            session_id: number;
+            session_mode: components["schemas"]["BootstrapSessionMode"];
+            skipped_thread_ids: number[];
+            skipped_threads: components["schemas"]["BootstrapThreadSummary"][];
+            /** Format: int64 */
+            snoozed_count: number;
+            /**
+             * @description Every owned thread the session currently has snoozed, uncapped, so
+             *     consumers such as Queue can resolve per-row snooze state.
+             */
+            snoozed_thread_ids: number[];
+            /**
+             * @description Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+             *     for the complete snooze set.
+             */
+            snoozed_threads: components["schemas"]["BootstrapThreadSummary"][];
+            timezone?: string | null;
+            /** Format: int32 */
+            user_id: number;
+        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -21364,7 +21403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BootstrapResponseV2"];
+                    "application/json": components["schemas"]["NativeBootstrapResponseV2"];
                 };
             };
             /** @description Not authenticated */

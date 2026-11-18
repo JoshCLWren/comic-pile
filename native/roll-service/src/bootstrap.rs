@@ -190,8 +190,13 @@ pub struct BootstrapResponseV2 {
     pub rollable: Vec<BootstrapRollableItem>,
     pub pool_reason: crate::reading_constraints::PoolReason,
     pub last_read: Option<BootstrapLastRead>,
+    /// Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+    /// for the complete snooze set.
     pub snoozed_threads: Vec<BootstrapThreadSummary>,
     pub snoozed_count: i64,
+    /// Every owned thread the session currently has snoozed, uncapped, so
+    /// consumers such as Queue can resolve per-row snooze state.
+    pub snoozed_thread_ids: Vec<i32>,
     pub skipped_thread_ids: Vec<i32>,
     pub skipped_threads: Vec<BootstrapThreadSummary>,
     pub timezone: Option<String>,
@@ -1082,6 +1087,11 @@ pub async fn bootstrap_v2(
     };
     let mut snoozed_threads = summary(&snoozed);
     let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count() as i64;
+    let snoozed_thread_ids: Vec<i32> = snoozed
+        .iter()
+        .filter(|id| known.contains_key(id))
+        .copied()
+        .collect();
     let mut skipped_threads = summary(&skipped);
 
     let roll_recovery = pending_roll_recovery(
@@ -1149,6 +1159,7 @@ pub async fn bootstrap_v2(
         last_read,
         snoozed_threads,
         snoozed_count,
+        snoozed_thread_ids,
         skipped_thread_ids: skipped,
         skipped_threads,
         timezone: session.timezone.clone(),

@@ -46,7 +46,24 @@ describe('useRollPendingSync', () => {
     )
 
     expect(result.current.rollState?.pending_thread_id).toBe(99)
-    expect(result.current.rollState?.snoozed_threads.map((thread) => thread.id)).toEqual([5])
+    expect(result.current.rollState?.snoozed_thread_ids).toEqual([5])
+  })
+
+  it('uses the complete snoozed id list rather than the 20-row display summary', () => {
+    const displayed = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      title: `Series ${index + 1}`,
+      format: 'Comic',
+    }))
+    const allIds = Array.from({ length: 25 }, (_, index) => index + 1)
+    const { result } = renderHook(() =>
+      useRollPendingSync({
+        rollBootstrap: bootstrap({ snoozed_threads: displayed, snoozed_thread_ids: allIds, snoozed_count: 25 }),
+        refetchQueue: vi.fn(),
+      }),
+    )
+
+    expect(result.current.rollState?.snoozed_thread_ids).toEqual(allIds)
   })
 
   it('treats a null pending_thread_id as authoritative (post-dismiss scenario)', () => {

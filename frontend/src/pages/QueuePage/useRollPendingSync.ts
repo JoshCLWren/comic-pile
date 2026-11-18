@@ -8,7 +8,8 @@ import { queryClient } from '../../query/queryClient'
  */
 export interface QueueRollState {
   pending_thread_id: number | null
-  snoozed_threads: Array<{ id: number }>
+  /** Complete set of snoozed series ids (not the 20-row display summary). */
+  snoozed_thread_ids: number[]
 }
 
 interface UseRollPendingSyncParams {
@@ -29,9 +30,13 @@ export function useRollPendingSync({
   // Bootstrap is authoritative, including when pending_thread_id is null.
   const rollState = useMemo<QueueRollState | undefined>(() => {
     if (rollBootstrap == null) return undefined
+    // `snoozed_threads` is capped at 20 display rows; the id list is complete.
+    // The summary ids are merged for payloads that predate the id list.
+    const snoozedIds = new Set<number>(rollBootstrap.snoozed_thread_ids ?? [])
+    for (const thread of rollBootstrap.snoozed_threads ?? []) snoozedIds.add(thread.id)
     return {
       pending_thread_id: rollBootstrap.pending_thread_id,
-      snoozed_threads: rollBootstrap.snoozed_threads ?? [],
+      snoozed_thread_ids: Array.from(snoozedIds),
     }
   }, [rollBootstrap])
 
