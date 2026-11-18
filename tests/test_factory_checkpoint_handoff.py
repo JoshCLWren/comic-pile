@@ -222,7 +222,7 @@ def test_named_and_legacy_checkpoint_metadata_remain_recoverable(
     refs = [{"ref": f"refs/heads/{BRANCH}", "object": {"sha": HEAD}}]
     message = (f"checkpoint(factory): worker 46 run {RUN} pr #5152 (unreviewed recovery only)\n\n"
                f"Issue: 4853\nModel: kilo-auto/free\nBase-commit: {BASE}\n")
-    monkeypatch.setattr(handoff, "pages", lambda *_: refs)
+    monkeypatch.setattr(handoff, "checkpoint_refs", lambda *_: refs)
     monkeypatch.setattr(handoff, "obj", lambda path: (
         {"status": "ahead"} if "/compare/" in path else
         {"message": message, "tree": {"sha": "c" * 40}, "parents": [{"sha": BASE}]}
@@ -271,7 +271,7 @@ def test_failed_publication_still_records_saved_code_without_masking_failure(
 def test_empty_sweep_is_a_successful_noop(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr(handoff, "pages", lambda *_: [])
+    monkeypatch.setattr(handoff, "checkpoint_refs", lambda *_: [])
     monkeypatch.setattr(sys, "argv", ["handoff", "--repo", REPO, "--sweep"])
     assert handoff.main() == 0
     assert json.loads(capsys.readouterr().out) == []
@@ -284,7 +284,7 @@ def test_ordinary_commit_tip_keeps_immutable_origin_and_never_resets(
     origin = (f'checkpoint(factory): worker 46 run {RUN} issue #4853 '
               f'(persisted work; validation pending)\n\nIssue: 4853\n'
               f'Model: kilo-auto/free\nBase-commit: {BASE}\n')
-    monkeypatch.setattr(handoff, 'pages', lambda *_: [
+    monkeypatch.setattr(handoff, 'checkpoint_refs', lambda *_: [
         {'ref': f'refs/heads/{BRANCH}', 'object': {'sha': later}},
     ])
     def read(path: str) -> dict:
@@ -359,3 +359,80 @@ def test_completed_failed_source_with_missing_stage_becomes_repair_pickup(harnes
     handoff.publish(REPO, RUN)
     assert handoff.labels_of(harness['pr']) == {'factory', 'factory:unowned', 'factory:changes-requested'}
     assert 'factory:unowned' in handoff.labels_of(harness['issue'])
+
+
+def test_checkpoint_cursor_pagination_recovers_101_refs_and_targeted_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """101 refs previously repeated REST page 1 until the 100-page limit."""
+    branches = [
+        f"{handoff.PREFIX}issue-4853/generated-{i}/{10000+i}"
+        for i in range(100)
+    ] + [BRANCH]
+    requests: list[tuple[str | None, str | None]] = []
+
+    def graphql(endpoint: str, method: str = "GET", **fields: object) -> dict:
+        assert endpoint == "graphql" and method == "POST"
+        variables = fields["variables"]
+        assert isinstance(variables, dict)
+        search = variables["run"]
+        after = variables["after"]
+        requests.append((search, after))
+        matched = [branch for branch in branches
+                   if search is None or search in branch]
+        start = int(after) if after else 0
+        batch = matched[start:start + 100]
+        end = start + len(batch)
+        return {"data": {"repository": {"refs": {
+            "nodes": [{"name": branch, "target": {"oid": HEAD}} for branch in batch],
+            "pageInfo": {"hasNextPage": end < len(matched),
+                         "endCursor": str(end) if end < len(matched) else None},
+        }}}}
+
+    monkeypatch.setattr(handoff, "api", graphql)
+    first = handoff.checkpoint_refs(REPO)
+    assert len(first) == 101 and first[-1]["ref"] == "refs/heads/" + BRANCH
+    assert requests == [(None, None), (None, "100")]
+    assert handoff.checkpoint_refs(REPO) == first
+    assert requests[-2:] == [(None, None), (None, "100")]
+
+    requests.clear()
+    targeted = handoff.checkpoint_refs(REPO, RUN)
+    assert len(targeted) == 1 and targeted[0]["ref"] == "refs/heads/" + BRANCH
+    assert requests == [(RUN, None)]
+
+    published: list[str] = []
+    monkeypatch.setattr(handoff, "publish", lambda _repo, run_id, **_:
+                        published.append(run_id) or {"saved": True, "published": True})
+    monkeypatch.setattr(sys, "argv", ["handoff", "--repo", REPO, "--sweep"])
+    assert handoff.main() == 0
+    assert len(published) == 101 and RUN in published
+    assert len(json.loads(capsys.readouterr().out)) == 101
+
+
+def test_checkpoint_cursor_repetition_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str | None] = []
+
+    def graphql(_endpoint: str, _method: str = "GET", **fields: object) -> dict:
+        variables = fields["variables"]
+        assert isinstance(variables, dict)
+        calls.append(variables["after"])
+        return {"data": {"repository": {"refs": {
+            "nodes": [{"name": BRANCH, "target": {"oid": HEAD}}] if len(calls) == 1 else [],
+            "pageInfo": {"hasNextPage": True, "endCursor": "stuck"},
+        }}}}
+
+    monkeypatch.setattr(handoff, "api", graphql)
+    with pytest.raises(RuntimeError, match="cursor did not advance"):
+        handoff.checkpoint_refs(REPO)
+    assert calls == [None, "stuck"]
+
+
+def test_checkpoint_malformed_graphql_result_never_publishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(handoff, "api", lambda *_args, **_kwargs: {"errors": [
+        {"message": "Resource limit exceeded"},
+    ]})
+    with pytest.raises(RuntimeError, match="GraphQL ref query failed"):
+        handoff.checkpoint_refs(REPO)
