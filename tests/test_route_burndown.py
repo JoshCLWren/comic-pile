@@ -544,6 +544,45 @@ def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
         )
 
 
+def test_taste_discoveries_fragment_routes_both_operations_to_native_rust() -> None:
+    """The taste-discoveries family owns both browser-called ops as native.
+
+    The same-path Rust cutover (#4896 dismiss, #5178 listing, issue #4853)
+    plus the Python handler retirement exclude both operations from the
+    Python inventory surface while keeping their exact method/path on native
+    ingress. The OPTIONS preflight stays on Python for CORS.
+    """
+    fragment = _fragment_named("taste-discoveries")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    assert ("GET", "/api/v1/taste/discoveries") in operations
+    assert ("POST", "/api/v1/taste/discoveries/{signal_id}/dismiss") in operations
+    for key in (
+        ("GET", "/api/v1/taste/discoveries"),
+        ("POST", "/api/v1/taste/discoveries/{signal_id}/dismiss"),
+    ):
+        operation = operations[key]
+        assert operation["dest"] == "/api/native_roll.rs", key
+        assert operation["exclude_from_inventory"] is True, key
+        assert operation["owning_issue"] == 4853, key
+    options = operations[("OPTIONS", "/api/v1/taste/discoveries")]
+    assert options["dest"] == "/api/index.py"
+    assert options["exclude_from_inventory"] is True
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    for bucket in ("v1_operations", "unversioned_operations"):
+        raw_operations = full_surface[bucket]
+        assert isinstance(raw_operations, list)
+        assert not any(
+            "taste/discoveries" in str(item.get("path", ""))
+            for item in raw_operations
+            if isinstance(item, dict)
+        )
+
+
 def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     """The sessions and undo fragments cut the supported cutover ops to Rust.
 
