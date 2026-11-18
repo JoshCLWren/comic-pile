@@ -12,18 +12,25 @@ import type { IssueCard } from '../services/issueCardsApi'
 function StepNames({ steps, cardsByIssue }: { steps: RecoveryStep[]; cardsByIssue: Map<number, IssueCard> }) {
   return (
     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[var(--theme-text-muted)]">
-      {steps.map((step) => (
-        <li key={step.issue_id} className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0">{step.label}</span>
-          <CompactIssueCardTrigger
-            issueId={step.issue_id}
-            threadTitle={step.label}
-            issueNumber="?"
-            card={cardsByIssue.get(step.issue_id) ?? null}
-            hideTitle
-          />
-        </li>
-      ))}
+      {steps.map((step) => {
+        // Labels arrive as "Series #number"; split for a truthful identity hint
+        // instead of a bare "?" issue number.
+        const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(step.label)
+        const title = match?.groups?.title ?? step.label
+        const number = match?.groups?.number ?? '?'
+        return (
+          <li key={step.issue_id} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0">{step.label} <span className="text-xs">(issue ID {step.issue_id})</span></span>
+            <CompactIssueCardTrigger
+              issueId={step.issue_id}
+              threadTitle={title}
+              issueNumber={number}
+              card={cardsByIssue.get(step.issue_id) ?? null}
+              hideTitle
+            />
+          </li>
+        )
+      })}
     </ul>
   )
 }

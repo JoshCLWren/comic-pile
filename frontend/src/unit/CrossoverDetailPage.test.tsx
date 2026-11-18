@@ -254,7 +254,9 @@ describe('CrossoverDetailPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue Reading' })).toHaveAttribute('href', '/thread/101')
-    expect(screen.getByRole('link', { name: 'Read Now' })).toHaveAttribute('href', '/thread/101')
+    // The Next Up panel acts on the exact owned issue through the shared
+    // direct-read control rather than routing to Thread first.
+    expect(screen.getByRole('button', { name: 'Read now' })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByRole('link', { name: 'View First Series' })).toHaveAttribute('href', '/thread/22')
 
     const rows = screen.getAllByTestId('crossover-member-row')

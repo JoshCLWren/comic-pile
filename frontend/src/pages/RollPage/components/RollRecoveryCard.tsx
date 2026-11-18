@@ -17,6 +17,15 @@ const diagnosticMessages = {
   node_limit_exceeded: 'This dependency graph is larger than ComicPile can safely traverse at once.',
 } as const
 
+/** Labels arrive as "Series #number"; split for a truthful identity hint. */
+function splitPrerequisiteLabel(label: string): { title: string; number: string } {
+  const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(label)
+  return {
+    title: match?.groups?.title ?? label,
+    number: match?.groups?.number ?? '?',
+  }
+}
+
 /** Explain a blocked pending roll without replacing the original selection. */
 export function RollRecoveryCard({
   recovery,
@@ -172,6 +181,7 @@ export function RollRecoveryCard({
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
             const isIssue = prerequisite.node_type === 'issue'
+            const splitLabel = isIssue ? splitPrerequisiteLabel(prerequisite.label) : null
             return (
               <div key={`${prerequisite.node_type}-${prerequisite.node_id}`} className="space-y-1">
                 {isClickable ? (
@@ -194,8 +204,8 @@ export function RollRecoveryCard({
                   <div className="pl-4">
                     <CompactIssueCardTrigger
                       issueId={prerequisite.node_id}
-                      threadTitle={prerequisite.label}
-                      issueNumber="?"
+                      threadTitle={splitLabel?.title ?? prerequisite.label}
+                      issueNumber={splitLabel?.number ?? '?'}
                       card={cardsByIssue.get(prerequisite.node_id) ?? null}
                       hideTitle
                       actionLabel="Read directly"
