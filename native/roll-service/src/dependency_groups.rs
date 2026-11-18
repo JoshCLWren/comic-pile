@@ -724,7 +724,7 @@ pub async fn create_group(
     match result {
         Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
-            let memberships = memberships(&connection, group.id).await?;
+            let memberships = memberships(&*connection, group.id).await?;
             let response = group_response(&connection, &group, &memberships).await?;
             Ok((StatusCode::CREATED, Json(response)))
         }
@@ -876,10 +876,10 @@ pub async fn get_group(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
-    let memberships = memberships(&connection, group_id).await?;
+    let memberships = memberships(&*connection, group_id).await?;
     let response = group_response(&connection, &group, &memberships).await?;
     Ok(Json(response))
 }
