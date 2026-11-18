@@ -540,13 +540,23 @@ jobs:
       # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
       # token, so no extra workflows are ever triggered. Absent or
       # under-permissioned Apps are a silent no-op.
+      # Resolve the existing App's client ID from authenticated GitHub metadata.
+      - name: Resolve existing read-only App client ID
+        id: read_app_identity
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          FACTORY_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
+          FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
+        run: python3 .github/scripts/factory_app_client_id.py
       - name: Mint optional read-only factory App token
         id: read_token
-        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        if: ${{ steps.read_app_identity.outputs.client_id != '' }}
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
+          client-id: ${{ steps.read_app_identity.outputs.client_id }}
           private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
@@ -586,8 +596,8 @@ jobs:
           FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
@@ -625,7 +635,7 @@ jobs:
         if: always() && vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
@@ -704,8 +714,14 @@ jobs:
           {
             echo "### Factory ${WORKER} attempt"
             echo
+          # Markdown backticks in this printf format are intentional.
+          # shellcheck disable=SC2016
             printf -- '- Source/model: `%s` / `%s`\n' "$SOURCE" "$MODEL"
+          # Markdown backticks in this printf format are intentional.
+          # shellcheck disable=SC2016
             printf -- '- Job status: `%s`\n' "$JOB_STATUS"
+          # Markdown backticks in this printf format are intentional.
+          # shellcheck disable=SC2016
             printf -- '- Provisional attempt outcome: `%s`\n' "$attempt_outcome"
             printf -- '- Detail: %s\n' "$attempt_detail"
             echo

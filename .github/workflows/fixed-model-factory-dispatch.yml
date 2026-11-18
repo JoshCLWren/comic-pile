@@ -208,13 +208,23 @@ jobs:
       # repository's shared GITHUB_TOKEN budget. Writes keep the workflow
       # token, so no extra workflows are ever triggered. Absent or
       # under-permissioned Apps are a silent no-op.
+      # Resolve the existing App's client ID from authenticated GitHub metadata.
+      - name: Resolve existing read-only App client ID
+        id: read_app_identity
+        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          FACTORY_APP_ID: ${{ secrets.FACTORY_READER_APP_ID }}
+          FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
+        run: python3 .github/scripts/factory_app_client_id.py
       - name: Mint optional read-only factory App token
         id: read_token
-        if: ${{ env.FACTORY_READER_APP_ID != '' }}
+        if: ${{ steps.read_app_identity.outputs.client_id != '' }}
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.FACTORY_READER_APP_ID }}
+          client-id: ${{ steps.read_app_identity.outputs.client_id }}
           private-key: ${{ secrets.FACTORY_READER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
@@ -450,7 +460,7 @@ jobs:
           fi
 
           for candidate in "${ready_prs[@]}"; do
-            IFS=$'\t' read -r pr head pr_labels <<< "$candidate"
+            IFS=$'\t' read -r pr head _ <<< "$candidate"
             [[ -n "$pr" && -n "$head" ]] || continue
             if ! authorization="$(python3 "$review_controller" authorized --pr "$pr")"; then
               echo "Unable to verify semantic authorization for PR #${pr}; leaving it open" >&2

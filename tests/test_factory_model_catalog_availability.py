@@ -93,7 +93,7 @@ def test_catalog_preflight_hands_selected_model_directly_to_real_work() -> None:
     assert "max_candidates=5" not in prework
     assert "opencode run" not in prework
     assert "Smoke exact pinned model through OpenCode" not in workflow
-    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
+    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
     selector = _failover_selector()
     assert 'RUNTIME_MODEL="$next_runtime"' in selector
     assert "FACTORY_FLEET_TRANSITION" in selector
