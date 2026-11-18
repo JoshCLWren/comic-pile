@@ -97,10 +97,21 @@ export function optimisticallyUpdateThreadCache(
   }
 }
 
+export interface ApplyRatedThreadCacheOptions {
+  /**
+   * When false, mark the Roll bootstrap stale without refetching active
+   * observers. Roll rating flows that fetch/publish the authoritative
+   * bootstrap themselves should disable auto-refetch to avoid duplicates.
+   */
+  refetchRollBootstrap?: boolean
+}
+
 export async function applyRatedThreadCache(
   client: QueryClient,
   thread: RateResponsePayload,
+  options: ApplyRatedThreadCacheOptions = {},
 ): Promise<void> {
+  const { refetchRollBootstrap = true } = options
   // The native PATCH writer returns issue/thread progress, not a complete
   // ThreadResponse. The compatibility adapter fills other fields solely for
   // legacy callers. Never overwrite real cached thread metadata, queue rank,
@@ -155,7 +166,7 @@ export async function applyRatedThreadCache(
     // Rating/read progress must reconcile every open view (Queue counts/rows,
     // Roll pool/bootstrap, History/activity, and plan/list reader blockers)
     // without requiring a hard reload.
-    invalidateAfterReaderProgress(client),
+    invalidateAfterReaderProgress(client, { refetchRollBootstrap }),
   ])
 }
 
@@ -257,6 +268,10 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
+    // Open issue cards/thread views must not keep stale read/rating state
+    // after resume recovery across tabs (#5264).
+    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.all }),
   ])
 }
 
@@ -956,8 +971,22 @@ export async function invalidateAfterTagMutation(
   ])
 }
 
+interface ReadingEligibilityInvalidationOptions {
+  includeAuthoringLists?: boolean
+  /**
+   * When false, mark the Roll bootstrap stale without refetching active
+   * observers. Use when the caller will fetch and publish the authoritative
+   * bootstrap itself (e.g. Roll rating flow) to avoid duplicate requests.
+   */
+  refetchRollBootstrap?: boolean
+}
+
 /** A global read can release requirements in other series and overlapping lists. */
-async function invalidateReadingEligibility(client: QueryClient, includeAuthoringLists = false): Promise<void> {
+async function invalidateReadingEligibility(
+  client: QueryClient,
+  options: ReadingEligibilityInvalidationOptions = {},
+): Promise<void> {
+  const { includeAuthoringLists = false, refetchRollBootstrap = true } = options
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
     // Legacy read/unread and direct v2 writes change the shared card status too.
@@ -967,7 +996,17 @@ async function invalidateReadingEligibility(client: QueryClient, includeAuthorin
     // boundary and can leave the excluded library view stale across open tabs.
     client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
-    client.invalidateQueries({ queryKey: queryKeys.roll.all }),
+    // Keep other Roll surfaces actively refreshed; bootstrap may be owned by an
+    // explicit authoritative fetch in some rating flows.
+    client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.dieState(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.lastRead(), exact: true }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+      ...(refetchRollBootstrap ? {} : { refetchType: 'none' as const }),
+    }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
@@ -979,8 +1018,14 @@ async function invalidateReadingEligibility(client: QueryClient, includeAuthorin
 }
 
 /** Refresh global read state without refetching a just-saved authoring draft. */
-export async function invalidateAfterReaderProgress(client: QueryClient): Promise<void> {
-  await invalidateReadingEligibility(client, true)
+export async function invalidateAfterReaderProgress(
+  client: QueryClient,
+  options: { refetchRollBootstrap?: boolean } = {},
+): Promise<void> {
+  await invalidateReadingEligibility(client, {
+    includeAuthoringLists: true,
+    refetchRollBootstrap: options.refetchRollBootstrap,
+  })
 }
 
 /**
@@ -1054,6 +1099,6 @@ export async function invalidateAfterReadingGraphRepair(
 ): Promise<void> {
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.readingGraph.all }),
-    invalidateReadingEligibility(client, true),
+    invalidateReadingEligibility(client, { includeAuthoringLists: true }),
   ])
 }

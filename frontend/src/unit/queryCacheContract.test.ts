@@ -263,12 +263,28 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     // Regression (#5264): open views must reconcile without a hard reload.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.lastRead(), exact: true })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.all })
+  })
+
+  it('can mark roll bootstrap stale without refetch when the caller owns the authoritative fetch (#5264)', async () => {
+    const { client, invalidateQueries } = createSpiedClient()
+
+    await applyRatedThreadCache(client, thread, { refetchRollBootstrap: false })
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+      refetchType: 'none',
+    })
   })
 
   it('seeds the session last-read cache and the bootstrap projection from a committed rate', async () => {
@@ -372,7 +388,10 @@ describe('targeted cache effects', () => {
     // Regression (#5264): read/progress edits must reconcile Queue, Roll,
     // History/activity, and plan/list reader state across open views.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
@@ -550,6 +569,8 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.thread.all })
     expect(setQueryData).not.toHaveBeenCalled()
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
@@ -586,7 +607,10 @@ describe('targeted cache effects', () => {
       await applyUpdatedCustomCBL(client, customCBL)
 
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.readers() })
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.all })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
       // Saving a list changes the confirmed identities its CBL candidates were
       // compared with, so the candidate query must not serve the stale match set.
