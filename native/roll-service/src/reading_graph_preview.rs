@@ -253,7 +253,6 @@ pub async fn preview_cbl_reading_graph(
     let entry_positions: BTreeSet<i32> = entries
         .iter()
         .filter_map(|row| row.get::<_, Option<i32>>(0))
-        .collect()
         .collect();
 
     // Validate selected positions.
