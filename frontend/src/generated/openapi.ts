@@ -284,11 +284,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Cbl Adoption Commit
-         * @description Adopt a CBL source into a Reading Plan in one decision. Creates the plan from the source when this source has no adopted plan yet, or merges into the existing source-backed plan otherwise.
-         */
-        post: operations["api_cbl_adoption_commit_api_v1_cbl__list_id__adoption_commit_post"];
+        /** Documentation-only operation for committing an adoption plan. */
+        post: operations["cbl_adoption_commit_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -304,11 +301,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Targeted Cbl Adoption Commit
-         * @description Commit reviewed CBL material into the exact existing Reading Plan.
-         */
-        post: operations["api_targeted_cbl_adoption_commit_api_v1_cbl__list_id__reading_plans__plan_id__adoption_commit_post"];
+        /** Documentation-only operation for targeted adoption into an existing plan. */
+        post: operations["cbl_targeted_adoption_commit_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1637,20 +1631,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Discover Cbl Source Lists
-         * @description Return bounded active CBL lists for the Reading Plan Add-material flow.
-         *
-         *     Args:
-         *         current_user: Authenticated reader.
-         *         db: Async database session.
-         *         q: Optional case-insensitive match against list name or source path.
-         *         limit: Maximum number of lists to return.
-         *
-         *     Returns:
-         *         Bounded summaries of the matching active CBL source lists.
-         */
-        get: operations["discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get"];
+        /** Documentation-only operation for CBL source discovery. */
+        get: operations["discover_cbl_source_lists_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1683,33 +1665,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Find Cbl Sources By Comicvine Issue
-         * @description Return every CBL source position that holds one exact Comic Vine issue.
-         *
-         *     The match is exact on the Comic Vine issue identity, so a shared series
-         *     title, a shared volume, or the same issue number in another volume never
-         *     produces a false positive. Repeated occurrences inside one source list
-         *     stay separate rows, and the same identity in several source lists is
-         *     reported once per list. The answer is shared catalog data: it never
-         *     depends on the calling reader's owned Issues.
-         *
-         *     Args:
-         *         comicvine_issue_id: Exact Comic Vine issue external ID.
-         *         current_user: Authenticated reader. Unused: the shared catalog answer
-         *             must not vary by reader.
-         *         db: Async database session.
-         *         offset: Zero-based index of the first returned source occurrence.
-         *         limit: Maximum number of source occurrences to return.
-         *
-         *     Returns:
-         *         The matching source occurrences with the total occurrence count and
-         *         the number of distinct source lists containing the identity.
-         *
-         *     Raises:
-         *         HTTPException: 422 when the supplied Comic Vine issue ID is blank.
-         */
-        get: operations["find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get"];
+        /** Documentation-only operation for Comic Vine occurrence lookup. */
+        get: operations["find_cbl_sources_by_comicvine_issue_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1727,27 +1684,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Compare Cbl Sources
-         * @description Rank shared CBL sources by exact coverage and relative order.
-         *
-         *     The comparison receives confirmed Comic Vine issue IDs, never reader Issue
-         *     IDs. It reads only the shared catalog, so one reader's owned collection
-         *     cannot change the answer. Coverage counts distinct exact identities while
-         *     repeated source occurrences remain visible, and same-titled volumes never
-         *     match by title or issue number.
-         *
-         *     Args:
-         *         payload: Distinct confirmed Comic Vine issue IDs in intended order.
-         *         current_user: Authenticated reader. Unused: the shared catalog answer
-         *             must not vary by reader.
-         *         db: Async database session.
-         *         limit: Maximum number of ranked source lists to return.
-         *
-         *     Returns:
-         *         Ranked source comparisons with coverage, duplicate, and order evidence.
-         */
-        post: operations["compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post"];
+        /** Documentation-only operation for CBL source comparison. */
+        post: operations["compare_cbl_sources_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1778,29 +1716,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Cbl Source List
-         * @description Return every ordered source occurrence for one CBL list (read-only).
-         *
-         *     Source occurrences keep their original position, including repeated
-         *     positions for duplicated issues. Large lists are returned as a bounded page
-         *     so no list is silently truncated; ``entries_total`` reports the full count
-         *     so callers can page through every occurrence.
-         *
-         *     Args:
-         *         list_id: CBL source list identifier.
-         *         current_user: Authenticated reader.
-         *         db: Async database session.
-         *         offset: Zero-based index of the first returned source occurrence.
-         *         limit: Maximum number of source occurrences to return.
-         *
-         *     Returns:
-         *         One CBL source list with its ordered source occurrences.
-         *
-         *     Raises:
-         *         HTTPException: 404 when the list does not exist or is inactive.
-         */
-        get: operations["get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get"];
+        /** Documentation-only operation for one CBL source list. */
+        get: operations["get_cbl_source_list_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1818,11 +1735,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Cbl Adoption Plan
-         * @description Calculate a dry-run CBL adoption plan with explicit selection overrides.
-         */
-        post: operations["api_cbl_adoption_plan_api_v1_issue_identity_cbl__list_id__adoption_plan_post"];
+        /** Documentation-only operation for the CBL adoption preview. */
+        post: operations["cbl_adoption_plan_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1891,26 +1805,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Find Cbl Candidates For Reading List
-         * @description Find shared CBL sources that cover one owned Reading List.
-         *
-         *     Only distinct confirmed Comic Vine issue IDs from the reader's Issues are
-         *     used to query the shared catalog. Entries without a confirmed ID, and
-         *     entries with conflicting confirmed IDs, are returned as explicit gaps so
-         *     the caller never substitutes a title/issue-number guess or claims that no
-         *     CBL exists.
-         *
-         *     Args:
-         *         list_id: Owned Reading List identifier.
-         *         current_user: Authenticated owner of the Reading List.
-         *         db: Async database session.
-         *         limit: Maximum number of ranked source lists to return.
-         *
-         *     Returns:
-         *         Every list entry's identity state plus ranked source comparisons.
-         */
-        get: operations["find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get"];
+        /** Documentation-only operation for reading-list CBL candidates. */
+        get: operations["find_cbl_candidates_for_reading_list_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4907,15 +4803,15 @@ export interface components {
          *     retirement work removes the route; it is not a new feature surface.
          */
         BootstrapResponseV2: {
-            active_thread?: null | components["schemas"]["BootstrapActiveThread"];
+            active_thread?: components["schemas"]["BootstrapActiveThread"] | null;
             bandwidth: components["schemas"]["BootstrapBandwidth"];
-            last_read?: null | components["schemas"]["BootstrapLastRead"];
+            last_read?: components["schemas"]["BootstrapLastRead"] | null;
             /** Format: int64 */
             last_rolled_result?: number | null;
             /** Format: int32 */
             pending_thread_id?: number | null;
             pool_reason: components["schemas"]["PoolReason"];
-            roll_recovery?: null | components["schemas"]["BootstrapRollRecovery"];
+            roll_recovery?: components["schemas"]["BootstrapRollRecovery"] | null;
             rollable: components["schemas"]["BootstrapRollableItem"][];
             /** Format: int32 */
             session_id: number;
@@ -5072,7 +4968,7 @@ export interface components {
         /** @description Request schema for creating a bug report or feature request. */
         BugReportCreate: {
             description: string;
-            diagnostics?: null | components["schemas"]["BugReportDiagnostics"];
+            diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
             report_type?: components["schemas"]["ReportType"];
             title: string;
         };
@@ -6030,6 +5926,265 @@ export interface components {
             /** Provider Value */
             provider_value?: string | null;
         };
+        CblAdoptionCommitRequest: {
+            content_hash: string;
+            entry_decisions?: {
+                [key: string]: string;
+            };
+            revision_sha: string;
+            series_decisions?: components["schemas"]["CommitSeriesDecision"][];
+            series_overrides?: components["schemas"]["CommitEntryOverride"][];
+        };
+        CblAdoptionCommitResponseWire: {
+            created_at: string;
+            created_positions: number[];
+            excluded_positions: number[];
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
+            ordering_mode: string;
+            reused_positions: number[];
+            unresolved_positions: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        CblAdoptionEntryResponse: {
+            adopted: boolean;
+            adoption_class: string;
+            adoption_decision: string;
+            /** Format: int32 */
+            canonical_issue_id?: number | null;
+            /** Format: int32 */
+            cbl_entry_id: number;
+            /** Format: int32 */
+            cbl_position: number;
+            collection_excluded: boolean;
+            collection_exclusion_ids: number[];
+            collection_exclusion_reason?: string | null;
+            comicvine_issue_id?: string | null;
+            comicvine_series_id?: string | null;
+            is_duplicate_identity: boolean;
+            issue_number: string;
+            /** Format: int32 */
+            publication_year?: number | null;
+            read_at?: string | null;
+            read_status?: string | null;
+            resolution_status: string;
+            /** Format: int32 */
+            resolved_issue_id?: number | null;
+            series_external_id?: string | null;
+            series_group_id: string;
+            series_name: string;
+            series_provider?: string | null;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblAdoptionPlanRequest: {
+            entry_decisions?: {
+                [key: string]: boolean;
+            };
+            series_decisions?: {
+                [key: string]: boolean;
+            };
+        };
+        CblAdoptionPreviewResponse: {
+            entries: components["schemas"]["CblAdoptionEntryResponse"][];
+            source: components["schemas"]["CblSourceFingerprintResponse"];
+            summary: components["schemas"]["CblAdoptionSummaryResponse"];
+            /** Format: int32 */
+            total_positions: number;
+        };
+        CblAdoptionSummaryResponse: {
+            /** Format: int32 */
+            awaiting_opt_in_count: number;
+            awaiting_opt_in_positions: number[];
+            /** Format: int32 */
+            excluded_count: number;
+            excluded_positions: number[];
+            /** Format: int32 */
+            final_adopted_count: number;
+            final_adopted_order: number[];
+            /** Format: int32 */
+            missing_would_create_count: number;
+            missing_would_create_positions: number[];
+            /** Format: int32 */
+            reused_existing_count: number;
+            reused_existing_positions: number[];
+            /** Format: int32 */
+            unresolved_count: number;
+            unresolved_positions: number[];
+        };
+        /** @description One Comic Vine occurrence in the shared CBL catalog. */
+        CblComicvineOccurrence: {
+            comicvine_issue_id: string;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            revision_sha: string;
+            series_name: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        /** @description A page of Comic Vine occurrences with shared-catalog totals. */
+        CblComicvineOccurrencePage: {
+            comicvine_issue_id: string;
+            /** Format: int32 */
+            lists_total: number;
+            occurrences: components["schemas"]["CblComicvineOccurrence"][];
+            /** Format: int32 */
+            occurrences_limit: number;
+            /** Format: int32 */
+            occurrences_offset: number;
+            /** Format: int32 */
+            occurrences_total: number;
+        };
+        CblReadingListCandidatesResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            entries: components["schemas"]["CblReadingListInputEntry"][];
+            /** Format: int32 */
+            input_confirmed_total: number;
+            /** Format: int32 */
+            input_conflict_count: number;
+            /** Format: int32 */
+            input_entry_count: number;
+            input_ids: string[];
+            /** Format: int32 */
+            input_missing_count: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+        };
+        CblReadingListInputEntry: {
+            comicvine_issue_id?: string | null;
+            comicvine_issue_ids: string[];
+            identity_status: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+        };
+        CblSourceComparisonMatch: {
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            distinct_source_issues: number;
+            /** Format: int32 */
+            duplicate_match_count: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            input_coverage_percentage: number;
+            /** Format: int32 */
+            input_total: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            matched_input_count: number;
+            matched_input_ids: string[];
+            /** Format: int32 */
+            matched_occurrence_count: number;
+            missing_input_ids: string[];
+            /** Format: int32 */
+            order_disagreement_count: number;
+            /** Format: int32 */
+            order_pair_count: number;
+            order_status: string;
+            revision_sha: string;
+            /** Format: int32 */
+            score: number;
+            /** Format: int32 */
+            source_coverage_percentage: number;
+            /** Format: int32 */
+            source_only_issue_count: number;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        CblSourceComparisonRequest: {
+            comicvine_issue_ids: string[];
+        };
+        CblSourceComparisonResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            comicvine_issue_ids: string[];
+            /** Format: int32 */
+            input_total: number;
+        };
+        /** @description One ordered source occurrence inside a CBL list. */
+        CblSourceEntryDetail: {
+            comicvine_issue_id?: string | null;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            series_name: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblSourceFingerprintResponse: {
+            content_hash: string;
+            revision_sha: string;
+            /** Format: int32 */
+            source_list_id: number;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description One active CBL source list with one bounded page of ordered occurrences. */
+        CblSourceListDetail: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            entries: components["schemas"]["CblSourceEntryDetail"][];
+            /** Format: int32 */
+            entries_limit: number;
+            /** Format: int32 */
+            entries_offset: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        /** @description Reader-safe summary of one active persisted CBL source list. */
+        CblSourceListDiscoveryItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            /**
+             * @description Raw stored path: Python's discovery response deliberately returns the
+             *     unprojected `source_path` (see `list_cbl_source_previews`).
+             */
+            source_path: string;
+            source_repository: string;
+        };
         /**
          * CheckPotentialDuplicatesRequest
          * @description Request to check for possible existing volumes before create or rename.
@@ -6311,6 +6466,11 @@ export interface components {
             /** Total Available */
             total_available?: number | null;
         };
+        CommitEntryOverride: {
+            /** Format: int32 */
+            cbl_position: number;
+            decision: string;
+        };
         CommitRequest: {
             approved_row_ids?: string[];
             idempotency_key: string;
@@ -6323,6 +6483,10 @@ export interface components {
             idempotency_key: string;
             needs_review_issue_ids: number[];
             series_mapping: components["schemas"]["CommitSeriesMapping"];
+        };
+        CommitSeriesDecision: {
+            decision: string;
+            series_name: string;
         };
         CommitSeriesMapping: {
             evidence_source: string;
@@ -6447,6 +6611,18 @@ export interface components {
             lanes?: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
             nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ContinuityPlanResponseWire: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
             ordering_mode: string;
             updated_at: string;
             /** Format: int32 */
@@ -8889,7 +9065,7 @@ export interface components {
         IdentityInboxActionResponse: {
             message: string;
             success: boolean;
-            updated_item?: null | components["schemas"]["IdentityInboxItem"];
+            updated_item?: components["schemas"]["IdentityInboxItem"] | null;
         };
         IdentityInboxCandidate: {
             comicvine_id?: string | null;
@@ -9838,14 +10014,14 @@ export interface components {
             thread_ids: number[];
         };
         NativeReadingBoundaryBlocker: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
             kind: components["schemas"]["BlockerKind"];
             origin: components["schemas"]["BlockerOrigin"];
             reason: string;
             waiting_on: components["schemas"]["NativeBoundaryIssue"][];
         };
         NativeReadingBoundaryNext: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
         NativeReadingListEntryIntent: {
@@ -9864,7 +10040,7 @@ export interface components {
         NativeReadingListReaderEntry: {
             availability: string;
             checkpoint_target_issue_ids: number[];
-            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
+            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
             gate: string;
             /** Format: int32 */
             id: number;
@@ -10762,7 +10938,7 @@ export interface components {
         };
         ReadingBoundaryExplanationV2: {
             blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            next?: components["schemas"]["NativeReadingBoundaryNext"] | null;
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
@@ -11567,7 +11743,7 @@ export interface components {
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
             exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+            release?: components["schemas"]["MinimalReleaseResponse"] | null;
         };
         ReleaseSourceUpdate: {
             enabled: boolean;
@@ -11640,7 +11816,7 @@ export interface components {
             die: number;
             /** @description The approved dice ladder, smallest to largest. */
             ladder: number[];
-            last_roll?: null | components["schemas"]["RollLastRoll"];
+            last_roll?: components["schemas"]["RollLastRoll"] | null;
         };
         /** @description The ordered eligible issue identifiers for the current die. */
         RollEligibleIssueIdsResponse: {
@@ -12123,8 +12299,8 @@ export interface components {
         };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             correction?: unknown;
             /** Format: int32 */
             current_die: number;
@@ -12132,7 +12308,7 @@ export interface components {
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -12283,7 +12459,7 @@ export interface components {
         };
         /** @description List-item session response (history list endpoint). */
         SessionListItemResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
@@ -12942,7 +13118,7 @@ export interface components {
         /** @description One reader threads collection item. */
         ThreadListItem: {
             blocking_reasons: string[];
-            comicvine_mapping?: null | components["schemas"]["NativeComicVineMappingHealth"];
+            comicvine_mapping?: components["schemas"]["NativeComicVineMappingHealth"] | null;
             created_at: string;
             format: string;
             /** Format: int32 */
@@ -12956,7 +13132,7 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
-            series_metadata?: null | components["schemas"]["NativeQueueSeriesMetadata"];
+            series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
             status: string;
             tags: components["schemas"]["ThreadTag"][];
             title: string;
@@ -13115,15 +13291,15 @@ export interface components {
         };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -13460,7 +13636,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -13757,74 +13933,101 @@ export interface operations {
             };
         };
     };
-    api_cbl_adoption_commit_api_v1_cbl__list_id__adoption_commit_post: {
+    cbl_adoption_commit_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionCommitRequest"];
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan created with adopted CBL issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionCommitResponse"];
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Stale source fingerprint */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    api_targeted_cbl_adoption_commit_api_v1_cbl__list_id__reading_plans__plan_id__adoption_commit_post: {
+    cbl_targeted_adoption_commit_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
+                /** @description Owned continuity plan identifier */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionCommitRequest"];
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan updated with adopted CBL issues */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionCommitResponse"];
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Stale source fingerprint */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed validation or plan not found */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -16141,10 +16344,12 @@ export interface operations {
             };
         };
     };
-    discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get: {
+    discover_cbl_source_lists_documentation: {
         parameters: {
             query?: {
-                q?: string | null;
+                /** @description Case-insensitive list-name filter, max 200 characters */
+                q?: string;
+                /** @description Maximum results, 1-100 (default 25) */
                 limit?: number;
             };
             header?: never;
@@ -16153,22 +16358,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Active CBL source lists */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceListDiscoveryItem"][];
+                    "application/json": components["schemas"]["CblSourceListDiscoveryItem"][];
                 };
             };
-            /** @description Validation Error */
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16229,43 +16434,54 @@ export interface operations {
             };
         };
     };
-    find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get: {
+    find_cbl_sources_by_comicvine_issue_documentation: {
         parameters: {
             query?: {
+                /** @description Occurrence offset, 0-based (default 0) */
                 offset?: number;
+                /** @description Occurrence limit, 1-200 (default 50) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description Comic Vine issue identifier, max 100 characters */
                 comicvine_issue_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Shared-catalog occurrences for the Comic Vine issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLComicvineOccurrencePage"];
+                    "application/json": components["schemas"]["CblComicvineOccurrencePage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Identifier or query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post: {
+    compare_cbl_sources_documentation: {
         parameters: {
             query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
                 limit?: number;
             };
             header?: never;
@@ -16274,26 +16490,26 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLSourceComparisonRequest"];
+                "application/json": components["schemas"]["CblSourceComparisonRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Ranked coverage comparison */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceComparisonResponse"];
+                    "application/json": components["schemas"]["CblSourceComparisonResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request or query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16351,71 +16567,89 @@ export interface operations {
             };
         };
     };
-    get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get: {
+    get_cbl_source_list_documentation: {
         parameters: {
             query?: {
+                /** @description Entry offset, 0-based (default 0) */
                 offset?: number;
+                /** @description Entry limit, 1-2000 (default 1000) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description CBL source list with a bounded page of entries */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceListDetail"];
+                    "application/json": components["schemas"]["CblSourceListDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description CBL source list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    api_cbl_adoption_plan_api_v1_issue_identity_cbl__list_id__adoption_plan_post: {
+    cbl_adoption_plan_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionPlanRequest"];
+                "application/json": components["schemas"]["CblAdoptionPlanRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Adoption preview for the active CBL list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Inactive list or invalid request */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16486,35 +16720,44 @@ export interface operations {
             };
         };
     };
-    find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get: {
+    find_cbl_candidates_for_reading_list_documentation: {
         parameters: {
             query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description Owned custom CBL list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Reading-list gaps and ranked CBL candidates */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLReadingListCandidatesResponse"];
+                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Custom CBL not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16581,7 +16824,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20063,7 +20306,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -20606,7 +20849,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
