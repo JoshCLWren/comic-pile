@@ -600,8 +600,11 @@ impl CreatorLibrary {
 fn manual_creator_id(name: &str) -> i64 {
     use sha2::{Digest, Sha256};
     let digest = Sha256::digest(name.as_bytes());
+    // GenericArray does not implement LowerHex; render each byte explicitly so
+    // the 64 hex chars match Python's int(hexdigest, 16) modulo arithmetic.
+    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     let mut acc: i64 = 0;
-    for ch in format!("{digest:x}").chars() {
+    for ch in hex.chars() {
         if let Some(digit) = ch.to_digit(16) {
             acc = (acc * 16 + digit as i64) % MANUAL_CREATOR_ID_BASE;
         }
@@ -4055,6 +4058,7 @@ pub async fn get_series_drilldown(
 // ---------------------------------------------------------------------------
 
 #[utoipa::path(get, path = "/api/v2/creators", tag = "creators",
+    operation_id = "creators_list",
     params(CreatorListQuery),
     responses((status = 200, description = "Creator list", body = CreatorListResponse),
         (status = 422, description = "Invalid filters"),
