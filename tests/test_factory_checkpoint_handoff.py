@@ -442,7 +442,7 @@ def test_checkpoint_malformed_graphql_result_never_publishes(
         handoff.checkpoint_refs(REPO)
 
 
-def test_merged_checkpoint_requires_actual_incorporated_bytes(
+def test_merged_checkpoint_distinguishes_ancestry_from_unmodified_bytes(
     harness: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     harness["pr"]["state"] = "closed"
@@ -452,13 +452,14 @@ def test_merged_checkpoint_requires_actual_incorporated_bytes(
     monkeypatch.setattr(handoff, "incorporated", lambda *_: False)
     result = handoff.publish(REPO, RUN, cleanup=True)
     assert result["saved"] and result["work_pr"] == 5152
-    assert result["published"] is False and "merged" not in result
+    assert result["published"] is True and result["merged"] is True
+    assert result["exact_bytes_included"] is False
     monkeypatch.setattr(handoff, "incorporated", lambda *_: True)
     # Keep retention safe while checking independently verified merge credit.
     monkeypatch.setattr(handoff, "retire", lambda *_args, **_kwargs: {"retired": True})
     result = handoff.publish(REPO, RUN, cleanup=True)
     assert result["merged"] is True and result["merge_sha"] == "d" * 40
-    assert result["published"] is True
+    assert result["published"] is True and result["exact_bytes_included"] is True
 
 
 
@@ -483,10 +484,10 @@ def test_checkpoint_second_page_missing_connection_fails_closed(monkeypatch: pyt
     assert seen == [None, "next"]
 
 
-def test_closed_recovery_requires_main_and_source_run_bytes(
+def test_closed_recovery_requires_main_and_source_run_ancestry(
     harness: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A resumed branch's new bytes cannot award its earlier source run a merge."""
+    """A resumed source is credited for a merged PR, not for unchanged bytes."""
     saved = harness["saved"]
     saved["resumed"] = True
     saved["origin_head"] = "d" * 40
@@ -504,7 +505,8 @@ def test_closed_recovery_requires_main_and_source_run_bytes(
 
     monkeypatch.setattr(handoff, "incorporated", incorporated)
     result = handoff.publish(REPO, RUN, cleanup=True)
-    assert not result["published"] and not result.get("merged")
+    assert result["published"] and result.get("merged")
+    assert result["exact_bytes_included"] is False
     assert observed and observed[-1]["head"] == saved["origin_head"]
     assert observed[-1]["tree"] == saved["origin_tree"]
     harness["pr"]["base"] = {"ref": "release"}
