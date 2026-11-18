@@ -99,6 +99,11 @@ pub struct ThreadListItem {
     pub tags: Vec<ThreadTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_metadata: Option<QueueSeriesMetadata>,
+    /// Derived series cover: the exact provider CDN URL of the thread's next
+    /// unread confirmed issue, falling back to the first confirmed issue with a
+    /// cover. Null when the series has no confirmed issue cover.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_cover_image_url: Option<String>,
 }
 
 /// Paginated reader threads collection.
@@ -735,6 +740,7 @@ struct PageRow {
     tags: Vec<ThreadTag>,
     series_documents: Vec<Value>,
     health: Option<MappingHealthRow>,
+    series_cover_image_url: Option<String>,
 }
 
 impl PageRow {
@@ -802,6 +808,7 @@ impl PageRow {
             },
             tags: self.tags,
             series_metadata: series_metadata(&self.series_documents, &self.title),
+            series_cover_image_url: self.series_cover_image_url,
         })
     }
 }
@@ -1107,7 +1114,7 @@ ranked AS (
     WHERE t.status = 'active'
 ),
 page AS (
-    SELECT t.id, t.title, t.format, t.queue_position, t.status,
+    SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
            t.last_activity_at, t.is_blocked, t.total_issues, t.notes, t.created_at,
            t.manual_creator_credits,
            r.display_position,
@@ -1164,6 +1171,37 @@ health AS (
         GROUP BY thread_state.thread_id
     ) state ON state.thread_id = p.id
     WHERE p.total_issues IS NOT NULL
+),
+-- One representative cover per page thread, computed set-based in a single
+-- statement: the exact provider CDN URL of the thread's next unread confirmed
+-- issue, falling back to the first confirmed issue (by position) with a cover.
+-- Only ComicVine confirmed mappings expose covers, matching issue_service.rs.
+series_cover AS (
+    SELECT DISTINCT ON (p.id) p.id AS thread_id, cov.cover_url
+    FROM page p
+    JOIN issues i ON i.thread_id = p.id
+    JOIN issue_external_identity_mappings m
+        ON m.issue_id = i.id AND m.status = 'confirmed'
+    JOIN external_identities ei
+        ON ei.id = m.external_identity_id
+       AND ei.entity_type = 'issue'
+       AND lower(ei.provider) IN ('comicvine', 'comic_vine')
+    CROSS JOIN LATERAL (
+        SELECT COALESCE(
+            NULLIF(BTRIM(ei.metadata_json->>'image_url'), ''),
+            NULLIF(BTRIM(ei.metadata_json->>'primary_image'), ''),
+            NULLIF(BTRIM(ei.metadata_json#>>'{image,original_url}'), ''),
+            NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
+            NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
+            NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
+            NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
+        ) AS cover_url
+    ) cov
+    WHERE cov.cover_url IS NOT NULL
+    ORDER BY p.id,
+             COALESCE(i.id = p.next_unread_issue_id, false) DESC,
+             i.position,
+             i.id
 )
 SELECT json_build_object(
     'auth', (SELECT json_build_object(
@@ -1191,6 +1229,7 @@ SELECT json_build_object(
             'is_blocked', p.is_blocked,
             'total_issues', p.total_issues,
             'next_issue_number', p.next_issue_number,
+            'series_cover_image_url', cov.cover_url,
             'notes', p.notes,
             'created_at', {created_timestamp},
             'manual_creator_credits', p.manual_creator_credits,
@@ -1226,6 +1265,7 @@ SELECT json_build_object(
             ) FROM health h WHERE h.thread_id = p.id)
         ) ORDER BY p.page_ord)
         FROM page p
+        LEFT JOIN series_cover cov ON cov.thread_id = p.id
     ), '[]'::json)
 )::text
 "#;

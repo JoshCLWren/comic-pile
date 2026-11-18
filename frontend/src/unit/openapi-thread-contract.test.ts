@@ -12,8 +12,10 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
     expectTypeOf<Thread>().toEqualTypeOf<ThreadDetail>()
   })
 
-  it('exports the queue thread list item from OpenAPI', () => {
-    expectTypeOf<ThreadListItem>().toEqualTypeOf<QueueThreadListItem>()
+  it('exports the queue thread list item from OpenAPI plus the native series cover (#5433)', () => {
+    // The Python-generated schema predates the native-only derived series cover,
+    // so the list item is the generated shape plus that single optional field.
+    expectTypeOf<ThreadListItem>().toEqualTypeOf<QueueThreadListItem & { series_cover_image_url?: string | null }>()
   })
 
   it('exports the paginated queue thread list response from OpenAPI', () => {

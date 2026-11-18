@@ -79,3 +79,11 @@
 **Expected:** Confirmed title and active/completed state refresh promptly across affected views, including Queue position. Targeted cache invalidation prevents stale data from reappearing; failed operations never falsely show committed changes or lose persisted state. No unrelated Thread is affected.
 
 **Tracking:** Approved Queue/dialog work [#3558](https://github.com/JoshCLWren/comic-pile/issues/3558); related QA regression [#3771](https://github.com/JoshCLWren/comic-pile/issues/3771). Keep separately tracked functional Queue bugs independent of this usability contract.
+
+## MQA-QUEUE-011: Queue rows show the series cover when a confirmed cover exists
+
+**Test:** Open Queue with one series whose next unread issue has a confirmed ComicVine mapping carrying a cover, one series whose only confirmed covers sit on later issues, and one series with no confirmed cover. Expand the page at phone and desktop widths.
+
+**Expected:** The series with a confirmed cover shows the provider cover image at the start of its row, using the provider URL unchanged and reserving its frame before load (no layout shift). The later-issue series shows the first confirmed cover by issue position. The series without a confirmed cover shows the shared "No cover" placeholder, not a broken image or an empty gap. Covers never come from unconfirmed candidates.
+
+**Tracking:** Part of the V2 covers work [#5433](https://github.com/JoshCLWren/comic-pile/issues/5433). Other views (Thread detail, History, Sessions, plans, CBL browser, Identity inbox, Creators, Crossovers) are not covered by this scenario yet.
