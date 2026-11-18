@@ -670,8 +670,14 @@ while :; do
       provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
         if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
           attempted_pairs+=("$(jq -nc --arg source "$SOURCE" --arg model "$MODEL" '[$source,$model]')")
-          # A paid-model credit refusal backs off only the attempted model.
+          # A directly observed credential/account refusal cannot recover by
+          # trying another model with the same credential in this assignment.
+          # Keep durable health model-scoped: only this lease skips the source.
           failure_scope=model
+          if [[ "$failure_class" == provider_quota ]] && account_wide_failure; then
+            failure_scope=account
+            blocked_providers+=("$SOURCE")
+          fi
           if ! record_model_failover_failure "$SOURCE" "$MODEL" "$failure_class" "$failure_scope"; then
             record_terminal_outcome control_plane_failure "failed to persist exact attempt before failover"
             break
