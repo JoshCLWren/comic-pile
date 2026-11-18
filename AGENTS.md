@@ -547,6 +547,32 @@ alembic revision --autogenerate -m "description"  # Create migration
 make migrate  # Run migrations (or: alembic upgrade head)
 ```
 
+## Greptile Review Rules
+
+The following rules in `.greptile/config.json` are enforced by Greptile during PR review. These rules cite concrete failure classes from recurring defects:
+
+### High Severity Rules
+
+1. **rust-write-lock-order**: Rust write paths take the per-reader queue advisory lock BEFORE any thread/issue row lock (SELECT ... FOR UPDATE); every new/changed writer needs a concurrent DB test against sibling writers (#5398/#5419 deadlocks).
+
+2. **bounded-input-before-allocation**: Request-supplied counts/ranges must be bounded and use checked arithmetic before allocating, looping or inserting; prefer set-based SQL (generate_series/unnest) (#5398 12GB alloc, #5420 overflow bypass).
+
+3. **python-parity-wire-contract**: Rust replacements of frozen Python routes must match production wire behavior — validation 422 body `{"detail":"Validation failed"}`, always-emitted `[]` / `null` instead of omitted fields, Python round()/int parsing semantics; require golden tests measured from Python (#5428, #5451, #5439, #5411).
+
+4. **postgres-integer-width**: int4 columns read as i32 or cast ::bigint in SQL; never row.get::<i64> on int4 (#5351 panic).
+
+5. **no-test-weakening**: Flag removed/loosened assertions, added timeouts/retries/sleeps, or new skip guards; flaky tests are deleted and redesigned deterministically (owner rule).
+
+6. **bot-owned-route-outputs**: PRs must not change vercel.json, docs/api/v2-route-inventory.json, docs/api/route-fragments/vercel-rewrites.json or the AGENTS.md route-burndown marker block.
+
+### Medium Severity Rules
+
+7. **tests-no-network**: Tests must not call real external services (GitHub, ComicVine); use injectable fakes (#5339).
+
+### No-SQL-in-loops Reference
+
+8. **no-sql-in-loops**: No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, = ANY($1) / unnest batched statements, bounded batch requests, indexed filters, and predictable pagination. See AGENTS.md Database query efficiency rule.
+
 ## Git Workflow
 
 - Branch from `main`: `git checkout -b phase/X-description`
