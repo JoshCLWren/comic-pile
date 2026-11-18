@@ -9,7 +9,7 @@ The canonical rehearsal sequence against a disposable database is:
 
 1. ``upgrade_head`` - run ``alembic upgrade head`` (fresh disposable database -> head);
 2. ``apply_fixture`` - load the prod-shaped synthetic migration fixture;
-3. ``downgrade_base`` - run ``alembic downgrade <base_revision>`` to roll back applied work;
+3. ``downgrade_base`` - run ``alembic downgrade <base_revision>`` to roll back the migrations under rehearsal;
 4. ``upgrade_head`` - run ``alembic upgrade head`` again to re-apply.
 
 Every step is timed and fail-closed: the first failing step raises
@@ -24,6 +24,7 @@ migration set under rehearsal by deploy/CI callers.
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -44,7 +45,10 @@ REHEARSAL_STEPS: tuple[str, ...] = (
 )
 
 ALEMBIC_CONFIG_PATH = Path("alembic.ini")
-BASE_REVISION = "base"
+# Default rollback target: one revision down. A full ``base`` downgrade is not
+# possible because history-preserving migrations are deliberately irreversible;
+# CI and deploy pass the PR's base Alembic head explicitly.
+BASE_REVISION = "-1"
 
 
 class MigrationRehearsalError(RuntimeError):
@@ -137,6 +141,7 @@ def run_migration_rehearsal(
     alembic_config_path: Path = ALEMBIC_CONFIG_PATH,
     fixture_applier: Callable[[Engine], None] | None = None,
     base_revision: str = BASE_REVISION,
+    budget_seconds: float | None = None,
 ) -> MigrationRehearsalResult:
     """Run the disposable-Postgres migration rehearsal cycle.
 
@@ -147,7 +152,9 @@ def run_migration_rehearsal(
             engine and loads the prod-shaped fixture before the rollback step.
             When omitted, only the migration cycle runs.
         base_revision: Migration revision the rollback step targets (the base
-            revision of the migration set under rehearsal, or alembic ``base``).
+            revision of the migration set under rehearsal, or ``-1``).
+        budget_seconds: Optional migration safety budget. When the summed step
+            duration exceeds it the rehearsal fails closed.
 
     Returns:
         The per-step results and the final revision reached by the cycle.
@@ -157,7 +164,8 @@ def run_migration_rehearsal(
     """
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
-    engine = create_engine(_sync_database_url(database_url)) if fixture_applier is not None else None
+    sync_url = _sync_database_url(database_url)
+    engine = create_engine(sync_url) if fixture_applier is not None else None
 
     def _upgrade_head() -> None:
         nonlocal final_revision
@@ -168,14 +176,30 @@ def run_migration_rehearsal(
     def _downgrade_base() -> None:
         command.downgrade(_alembic_config(database_url, alembic_config_path), base_revision)
 
-    steps.append(_run_step("upgrade_head", _upgrade_head))
-    if fixture_applier is not None and engine is not None:
-        steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
-    steps.append(_run_step("downgrade_base", _downgrade_base))
-    steps.append(_run_step("upgrade_head", _upgrade_head))
+    # alembic/env.py prefers DATABASE_URL over the config URL. Pin it to the
+    # disposable database so an ambient (production) DATABASE_URL can never
+    # redirect the rehearsal.
+    previous_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = sync_url
+    try:
+        steps.append(_run_step("upgrade_head", _upgrade_head))
+        if fixture_applier is not None and engine is not None:
+            steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
+        steps.append(_run_step("downgrade_base", _downgrade_base))
+        steps.append(_run_step("upgrade_head", _upgrade_head))
+    finally:
+        if previous_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous_database_url
+        if engine is not None:
+            engine.dispose()
 
-    if engine is not None:
-        engine.dispose()
+    total_seconds = sum(step.duration_ms for step in steps) / 1000
+    if budget_seconds is not None and total_seconds > budget_seconds:
+        raise MigrationRehearsalError(
+            f"migration rehearsal took {total_seconds:.1f}s, over the {budget_seconds:.1f}s safety budget"
+        )
     return MigrationRehearsalResult(final_revision=final_revision, steps=tuple(steps))
 
 
@@ -201,7 +225,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--base-revision",
         default=BASE_REVISION,
-        help="Migration revision the rollback step targets (default: base)",
+        help="Migration revision the rollback step targets (default: -1)",
+    )
+    parser.add_argument(
+        "--budget-seconds",
+        type=float,
+        default=None,
+        help="Fail when the rehearsal's total step time exceeds this migration safety budget",
     )
     parser.add_argument(
         "--apply-fixture",
@@ -209,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Load the prod-shaped migration fixture before upgrading",
     )
     args = parser.parse_args(argv)
+
+    # Importing app models loads settings that require DATABASE_URL; make sure
+    # any ambient (possibly production) value is replaced by the disposable one.
+    os.environ["DATABASE_URL"] = _sync_database_url(args.database_url)
 
     fixture_applier = None
     if args.apply_fixture:
@@ -227,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
             alembic_config_path=args.alembic_config,
             fixture_applier=fixture_applier,
             base_revision=args.base_revision,
+            budget_seconds=args.budget_seconds,
         )
     except MigrationRehearsalError as error:
         print(f"MIGRATION REHEARSAL FAILED: {error}")
