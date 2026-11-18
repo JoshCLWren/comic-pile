@@ -164,3 +164,22 @@ def test_recording_is_idempotent_at_trusted_ledger_boundary(
         item["event_id"] for item in second
     ]
     assert not any(item["event_type"] == "worker_completed" for item in first)
+
+
+def test_incident_backfill_extracts_pr_candidates_but_not_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only referenced PR IDs are discovered; another verifier grants receipts."""
+    body = (
+        "Source runs recorded unsuccessful terminal outcomes even though PRs later merged:\n"
+        "| Actions source run | Merged PR | Terminal |\n"
+        "| --- | --- | --- |\n"
+        "| [44000000001](https://github.com/owner/repo/actions/runs/44000000001)"
+        " | #5123 | work_failure |\n"
+        "| [44000000002](https://github.com/owner/repo/actions/runs/44000000002)"
+        " | #5124 | agent_timeout |\n"
+    )
+    monkeypatch.setattr(delivery, "obj", lambda *_args: {"body": body})
+    assert delivery.incident_prs(REPO, 23) == [5123, 5124]
+    assert delivery.incident_prs(REPO, 23, max_prs=1) == [5123]
+    assert delivery.incident_prs(REPO, 23) != [23]
