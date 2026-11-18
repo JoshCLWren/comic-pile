@@ -1532,6 +1532,50 @@ pub async fn import_series(
 // Provider-backed read handlers.
 // ---------------------------------------------------------------------------
 
+async fn series_import_provider_payload(
+    volume_id: i32,
+) -> Result<(String, Vec<Value>), ApiError> {
+    #[cfg(test)]
+    if let Some((series, roster)) =
+        crate::test_support::lookup_test_volume_roster(&volume_id.to_string())
+    {
+        let series_name = series
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|name| !name.trim().is_empty())
+            .ok_or_else(|| series_provider_failure("ComicVine series has no name"))?;
+        return Ok((series_name.to_owned(), roster));
+    }
+
+    let Some(key) = provider_key() else {
+        return Err(series_import_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "provider_unavailable",
+            "ComicVine is not configured on this server",
+        ));
+    };
+    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &key)
+        .await
+        .map_err(|error| {
+            series_provider_failure(format!("Failed to fetch ComicVine series: {error:?}"))
+        })?;
+    let Some(result) = volume.get("results").and_then(Value::as_object) else {
+        return Err(series_provider_failure(
+            "ComicVine series response did not contain valid data",
+        ));
+    };
+    let series_name = result
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .ok_or_else(|| series_provider_failure("ComicVine series has no name"))?
+        .to_owned();
+    let rows = provider_roster(volume_id, &key).await.map_err(|error| {
+        series_provider_failure(format!("Failed to fetch series issues: {error:?}"))
+    })?;
+    Ok((series_name, rows))
+}
+
 fn provider_key() -> Option<String> {
     std::env::var("COMICVINE_API_KEY")
         .ok()
