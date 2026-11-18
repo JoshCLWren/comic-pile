@@ -782,6 +782,59 @@ pub async fn list_groups(
     Ok(Json(responses))
 }
 
+/// `POST /api/v1/reading-order-groups/`
+pub async fn create_group(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<DependencyGroupCreateRequest>,
+) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    let name = normalize_group_name(&request.name)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    let result = create_group_tx(&tx, user.id(), &name).await;
+    match result {
+        Ok(group) => {
+            tx.commit().await.map_err(db::query_error)?;
+            let memberships = memberships(&connection, group.id).await?;
+            let response = group_response(&connection, &group, &memberships).await?;
+            Ok((StatusCode::CREATED, Json(response)))
+        }
+        Err(error) => {
+            let _ = tx.rollback().await;
+            Err(error)
+        }
+    }
+}
+
+async fn create_group_tx(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    name: &str,
+) -> Result<GroupRecord, ApiError> {
+    let row = tx
+        .query_one(
+            "INSERT INTO dependency_groups (user_id, name) VALUES ($1, $2) RETURNING id, name, created_at",
+            &[&user_id, &name],
+        )
+        .await
+        .map_err(|error| {
+            if error.is_unique_violation() {
+                return conflict("A group with this name already exists");
+            }
+            db::query_error(error)
+        })?;
+    Ok(GroupRecord {
+        id: row.get(0),
+        name: row.get(1),
+        created_at: row.get(2),
+    })
+}
+
 /// `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
 pub async fn list_thread_groups(
     State(state): State<Arc<AppState>>,
@@ -1297,8 +1350,13 @@ pub async fn set_group_order(
         .map_err(db::query_error)?;
     let result = set_group_order_tx(&tx, group_id, user.id(), &request).await;
     match result {
-        Ok(response) => {
+        Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
+            let group = owned_group(&connection, group_id, user.id())
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
+            let memberships = memberships(&connection, group_id).await?;
+            let response = group_response(&connection, &group, &memberships).await?;
             Ok((StatusCode::OK, Json(response)))
         }
         Err(error) => {
@@ -1313,7 +1371,7 @@ async fn set_group_order_tx(
     group_id: i32,
     user_id: i32,
     request: &DependencyGroupOrderUpdateRequest,
-) -> Result<DependencyGroupResponse, ApiError> {
+) -> Result<(), ApiError> {
     if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
         return Err(unprocessable(format!(
             "The crossover order must contain between 1 and {MAX_ORDER_ITEMS} items"
@@ -1321,6 +1379,7 @@ async fn set_group_order_tx(
     }
     let mut seen_issues: BTreeSet<i32> = BTreeSet::new();
     let mut seen_positions: BTreeSet<i32> = BTreeSet::new();
+    let mut ordered_positions: BTreeMap<i32, i32> = BTreeMap::new();
     let mut ordered_issue_ids: BTreeSet<i32> = BTreeSet::new();
     for item in &request.items {
         if !seen_issues.insert(item.issue_id) {
@@ -1333,6 +1392,7 @@ async fn set_group_order_tx(
                 "Each sequence_order position may appear at most once in the order",
             ));
         }
+        ordered_positions.insert(item.issue_id, item.sequence_order);
         ordered_issue_ids.insert(item.issue_id);
     }
     if owned_group(tx, group_id, user_id).await?.is_none() {
@@ -1347,7 +1407,13 @@ async fn set_group_order_tx(
         member_by_issue.insert(row.get(1), row.get(2));
     }
     let owned_rows = tx
-        .query(OWNED_ISSUES_SQL, &[&ordered_issue_ids.iter().copied().collect::<Vec<i32>>(), &user_id])
+        .query(
+            OWNED_ISSUES_SQL,
+            &[
+                &ordered_issue_ids.iter().copied().collect::<Vec<i32>>(),
+                &user_id,
+            ],
+        )
         .await
         .map_err(db::query_error)?;
     let mut owned_issues: BTreeSet<i32> = BTreeSet::new();
@@ -1364,18 +1430,20 @@ async fn set_group_order_tx(
             )));
         }
     }
-    let mut ordered_members: Vec<(i32, i32)> = Vec::with_capacity(request.items.len());
-    for item in &request.items {
-        let membership_id = member_by_issue
-            .iter()
-            .find(|(issue, _)| **issue == item.issue_id)
-            .map(|(issue, sequence)| (*sequence, **issue))
-            .map(|_| membership_id_for(&member_by_issue, item.issue_id))
-            .expect("ordered issue must have a membership");
-        let _ = (membership_id, *sequence_placeholder());
-        ordered_members.push((*sequence_placeholder(), item.issue_id));
+    // Persist the authoritative sequence_order verbatim for each issue-level
+    // membership. Issues not listed are cleared to unordered (NULL); thread
+    // memberships are never sequence entries and are left untouched because
+    // they are absent from member_by_issue.
+    for (issue_id, membership_id) in &member_by_issue {
+        tx.execute(
+            "UPDATE dependency_group_memberships SET sequence_order = $1 WHERE id = $2",
+            &[ordered_positions.get(issue_id), membership_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     }
-    Ok(group_response_placeholder(&mut connection, group_id, user_id).await?)
+    issue_service::refresh_blocked_threads(tx, user_id).await?;
+    Ok(())
 }
 
 /// `GET /api/v1/reading-order-groups/{group_id}/plans`
