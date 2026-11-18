@@ -444,8 +444,13 @@ def handoff_comment(repo: str, pr: dict, saved: dict, run: dict, run_id: str) ->
 
 def merged_checkpoint_receipt(repo: str, saved: dict, pr: dict) -> dict:
     """Credit merge only after the real GitHub merge contains checkpoint bytes."""
-    merge_sha = str(pr.get("merge_commit_sha") or "")
-    if (pr.get("merged") is True and SHA.fullmatch(merge_sha)
+    if pr.get("state") != "closed":
+        return {}
+    # List-pull-request responses lack the authoritative merged boolean.
+    # Fetch the canonical PR before attributing any merged delivery.
+    canonical = obj(f"repos/{repo}/pulls/{pr['number']}")
+    merge_sha = str(canonical.get("merge_commit_sha") or "")
+    if (canonical.get("merged") is True and SHA.fullmatch(merge_sha)
             and incorporated(repo, saved, merge_sha)):
         return {"merged": True, "merge_sha": merge_sha}
     return {}
