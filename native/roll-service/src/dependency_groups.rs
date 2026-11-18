@@ -1312,8 +1312,8 @@ pub async fn remove_member(
     let result = remove_member_tx(&tx, group_id, member_id, user.id()).await;
     match result {
         Ok(()) => {
-            tx.commit().await.map_err(db::query_error)?;
             issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+            tx.commit().await.map_err(db::query_error)?;
             Ok(StatusCode::NO_CONTENT)
         }
         Err(error) => {
