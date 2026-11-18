@@ -177,8 +177,6 @@ describe('canonical query keys', () => {
       'blocking',
       7,
     ])
-    expect(queryKeys.analytics.all).toEqual(['analytics'])
-    expect(queryKeys.analytics.overview()).toEqual(['analytics', 'overview'])
   })
 
   it('normalizes session list params and keeps the cursor out of the key', () => {

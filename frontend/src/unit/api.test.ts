@@ -20,7 +20,6 @@ const {
   queueApi,
   rollApi,
   sessionApi,
-  tasksApi,
   threadsApi,
   undoApi,
 } = createApiServiceSet(client)
@@ -168,8 +167,6 @@ it('calls every remaining API resource endpoint', async () => {
   await dependenciesApi.getIssueDependencies(2)
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
-  await tasksApi.getMetrics()
-  expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   await preferencesApi.get()
