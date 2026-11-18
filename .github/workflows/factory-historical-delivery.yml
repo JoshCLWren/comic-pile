@@ -9,6 +9,9 @@ on:
     paths:
       - '.github/scripts/factory_historical_delivery.py'
       - '.github/workflows/factory-historical-delivery.yml'
+  workflow_run:
+    workflows: [Deploy Production]
+    types: [completed]
   schedule:
     - cron: '43 */6 * * *'
   workflow_dispatch:
@@ -30,6 +33,7 @@ concurrency:
 
 jobs:
   reconcile:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -53,7 +57,7 @@ jobs:
           if [[ -n "$SELECTED_PR" ]]; then
             [[ "$SELECTED_PR" =~ ^[1-9][0-9]*$ ]] || exit 1
             args+=(--pr "$SELECTED_PR")
-          elif [[ "$GITHUB_EVENT_NAME" == push ]]; then
+          elif [[ "$GITHUB_EVENT_NAME" == push || "$GITHUB_EVENT_NAME" == workflow_run ]]; then
             # One-time activation recovers the exact history reported by the
             # P0 incident, without hard-coding source run/PR identities.
             # The incident table is discovery only; every PR is reverified.
