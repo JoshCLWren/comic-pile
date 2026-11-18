@@ -24,8 +24,8 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::HashMap, sync::Arc};
+use serde_json::{json, Value};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use tokio_postgres::Transaction;
 
 // ---------------------------------------------------------------------------
@@ -433,6 +433,29 @@ fn map_provider_failure(error: ProviderFailure) -> ApiError {
             ApiError::ServiceUnavailable("provider_invalid_payload".to_owned())
         }
     }
+}
+
+/// Match the structured `SeriesImportError` envelope returned by FastAPI.
+fn series_import_error(
+    status: StatusCode,
+    code: &'static str,
+    message: impl Into<String>,
+) -> ApiError {
+    ApiError::structured(status, json!({"code": code, "message": message.into()}))
+}
+
+fn provider_failure(error: ProviderFailure, resource: &str) -> ApiError {
+    let error_type = match error {
+        ProviderFailure::Timeout => "TimeoutError",
+        ProviderFailure::RateLimited(_)
+        | ProviderFailure::Unavailable
+        | ProviderFailure::InvalidPayload => "ComicVineError",
+    };
+    series_import_error(
+        StatusCode::BAD_GATEWAY,
+        "provider_failure",
+        format!("Failed to fetch {resource}: {error_type}"),
+    )
 }
 
 // ---------------------------------------------------------------------------
