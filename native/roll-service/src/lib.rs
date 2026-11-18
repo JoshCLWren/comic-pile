@@ -27,6 +27,7 @@ pub mod dice_state;
 pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
+pub mod issue_identity;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
@@ -68,6 +69,7 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_ordering;
 pub mod threads;
 pub mod undo_apply;
 pub mod undo_snapshots;
@@ -710,6 +712,33 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/issues",
             get(issue_read::list_thread_issues),
         )
+        // axum/matchit rejects a parameter followed by literal text, so the
+        // `{thread_id}:action` operation family is routed through the single
+        // `{thread_id}` segment and dispatched on the action suffix.
+        .route(
+            "/api/v1/threads/{thread_id}",
+            post(thread_ordering::post_thread_action),
+        )
+        .route(
+            "/api/v1/threads:getBlockingInfo",
+            post(thread_ordering::get_threads_blocking_info),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(thread_ordering::get_thread_connected_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/dependency-order-check",
+            get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:validateOrder",
+            get(thread_ordering::validate_issue_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/reading-orders",
+            get(thread_ordering::get_thread_reading_orders),
+        )
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
@@ -836,6 +865,39 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
+        )
+        // Issue Identity / CBL Adoption family (#4843).
+        .route(
+            "/api/v1/issue-identity/cbl-sources",
+            get(issue_identity::discover_cbl_source_lists),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(issue_identity::get_cbl_source_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(issue_identity::find_cbl_sources_by_comicvine_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(issue_identity::compare_cbl_sources),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(issue_identity::cbl_adoption_plan),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(issue_identity::cbl_adoption_commit),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",

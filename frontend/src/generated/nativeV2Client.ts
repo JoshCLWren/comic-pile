@@ -119,7 +119,7 @@ export interface ContinuityPlansProjectToReadingOrderRequest {
   body: components['schemas']['NativeReadingOrderProjectionRequest']
 }
 
-export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['NativeReadingOrderProjectionResult']
+export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['ReadingOrderProjectionResult']
 
 export interface ContinuityPlansUnlinkDependencyRequest {
   path: {
@@ -353,7 +353,7 @@ export interface IssueIntelligenceDocsRequest {
   }
 }
 
-export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
+export type IssueIntelligenceDocsResponse = components['schemas']['IssueIntelligence'] | null
 
 export interface IssueOrderRequest {
   path: {
@@ -479,7 +479,7 @@ export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundar
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
 export interface RefreshRequest {
-  body?: null | components['schemas']['RefreshTokenRequest']
+  body?: components['schemas']['RefreshTokenRequest'] | null
 }
 
 export type RefreshResponse = components['schemas']['TokenResponse']

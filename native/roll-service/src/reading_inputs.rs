@@ -191,7 +191,12 @@ mod tests {
             let connection = state.pool.get().await.unwrap();
             connection.batch_execute("CREATE TEMP TABLE users (id int, username text, password_changed_at timestamptz); CREATE TEMP TABLE revoked_tokens (jti text); INSERT INTO users VALUES (1, 'snapshot-reader', NULL)").await.unwrap();
             drop(connection);
-            let token = jsonwebtoken::encode(&jsonwebtoken::Header::default(), &serde_json::json!({"sub":"snapshot-reader", "type":"access", "jti":"synthetic-jti"}), &jsonwebtoken::EncodingKey::from_secret(b"synthetic-core-key")).unwrap();
+            let token = jsonwebtoken::encode(
+                &jsonwebtoken::Header::default(),
+                &serde_json::json!({"sub":"snapshot-reader", "type":"access", "jti":"synthetic-jti"}),
+                &jsonwebtoken::EncodingKey::from_secret(b"synthetic-core-key").unwrap(),
+            )
+            .unwrap();
             let user = crate::auth::authenticate(&state, &token)
                 .await
                 .ok()

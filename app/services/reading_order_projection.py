@@ -1,8 +1,9 @@
-"""Deterministic continuity plan → reading order projection service.
+"""Deterministic continuity plan → reading order projection preview service.
 
 Projections are explicit two-step operations: callers preview the entries
 that would be added or updated, then confirm the projection in a separate
-request. The plan is never modified by a projection, and reading order
+request. The preview is the only step served by Python; confirmation runs in
+native Rust v2. The plan is never modified by a projection, and reading order
 changes never feed back into the plan.
 """
 
@@ -20,10 +21,7 @@ from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode
 
 if TYPE_CHECKING:
-    from app.schemas.reading_order import (
-        ReadingOrderProjectionPreview,
-        ReadingOrderProjectionResult,
-    )
+    from app.schemas.reading_order import ReadingOrderProjectionPreview
 
 
 @dataclass(frozen=True)
@@ -61,18 +59,6 @@ class ProjectionPlan:
     conflicts: tuple[ProjectionConflict, ...]
     total_positions: int
     dropped_node_ids: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ProjectionOutcome:
-    """Internal representation of an applied projection."""
-
-    plan_id: int
-    reading_order_id: int
-    added_count: int
-    updated_count: int
-    kept_count: int
-    total_positions: int
 
 
 async def _load_owned_plan(db: AsyncSession, *, user_id: int, plan_id: int) -> ContinuityPlan:
@@ -309,85 +295,6 @@ async def build_projection_plan(
     )
 
 
-async def apply_projection(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    plan_id: int,
-    reading_order_id: int,
-) -> ProjectionOutcome:
-    """Persist the projection atomically; rollback on any failure.
-
-    The plan is reloaded and re-flattened so the confirmed result always
-    matches the preview the caller reviewed. Any conflict or unrecoverable
-    error rolls the transaction back so neither the plan nor the reading
-    order change.
-    """
-    projection = await build_projection_plan(
-        db,
-        user_id=user_id,
-        plan_id=plan_id,
-        reading_order_id=reading_order_id,
-    )
-    if projection.conflicts:
-        raise _conflict(
-            {
-                "code": "projection_conflicts",
-                "conflicts": [
-                    {
-                        "code": conflict.code,
-                        "node_id": conflict.node_id,
-                        "thread_id": conflict.thread_id,
-                        "message": conflict.message,
-                        "existing_positions": conflict.existing_positions,
-                    }
-                    for conflict in projection.conflicts
-                ],
-            }
-        )
-
-    try:
-        existing_rows = await db.execute(
-            select(ReadingOrderItem).where(ReadingOrderItem.reading_order_id == reading_order_id)
-        )
-        existing = list(existing_rows.scalars())
-        for item in existing:
-            await db.delete(item)
-        await db.flush()
-
-        added = 0
-        updated = 0
-        kept = 0
-        for entry in projection.entries:
-            db.add(
-                ReadingOrderItem(
-                    reading_order_id=reading_order_id,
-                    thread_id=entry.thread_id,
-                    position=entry.position,
-                    issue_number=None,
-                )
-            )
-            if entry.source == "added":
-                added += 1
-            elif entry.source == "updated":
-                updated += 1
-            else:
-                kept += 1
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
-
-    return ProjectionOutcome(
-        plan_id=plan_id,
-        reading_order_id=reading_order_id,
-        added_count=added,
-        updated_count=updated,
-        kept_count=kept,
-        total_positions=len(projection.entries),
-    )
-
-
 async def preview_to_response(projection: ProjectionPlan) -> ReadingOrderProjectionPreview:
     """Convert an internal projection into the API preview contract."""
     from app.schemas.reading_order import (
@@ -427,15 +334,3 @@ async def preview_to_response(projection: ProjectionPlan) -> ReadingOrderProject
     )
 
 
-async def outcome_to_response(outcome: ProjectionOutcome) -> ReadingOrderProjectionResult:
-    """Convert an internal outcome into the API confirm contract."""
-    from app.schemas.reading_order import ReadingOrderProjectionResult
-
-    return ReadingOrderProjectionResult(
-        plan_id=outcome.plan_id,
-        reading_order_id=outcome.reading_order_id,
-        added_count=outcome.added_count,
-        updated_count=outcome.updated_count,
-        kept_count=outcome.kept_count,
-        total_positions=outcome.total_positions,
-    )

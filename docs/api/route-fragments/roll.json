@@ -22,7 +22,8 @@
       "method": "POST",
       "path": "/api/v1/roll/override",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/roll/override$"
+      "src": "^/api/v1/roll/override$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "unversioned_operations",
@@ -32,14 +33,16 @@
       "src": "^/api/roll/override$",
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$"
+      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "unversioned_operations",
@@ -47,14 +50,16 @@
       "path": "/api/roll/events/{event_id}/recommendation-explanation",
       "dest": "/api/native_roll.rs",
       "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
-      "consumers": []
+      "consumers": [],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/roll/switch-prerequisite",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/roll/switch\\-prerequisite$"
+      "src": "^/api/v1/roll/switch\\-prerequisite$",
+      "exclude_from_inventory": true
     }
   ]
 }
