@@ -2057,8 +2057,16 @@ mod tests {
         Arc::new(AppState::new(config).expect("dependency-groups test state"))
     }
 
+    fn validation_detail(error: ApiError) -> serde_json::Value {
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        error
+            .structured_detail()
+            .expect("FastAPI-compatible structured validation detail")
+            .clone()
+    }
+
     #[test]
-    fn normalize_group_name_trims_and_rejects_blank_and_overlong() {
+    fn normalize_group_name_trims_and_preserves_schema_and_service_errors() {
         assert_eq!(
             normalize_group_name("  crossover  ").expect("valid name"),
             "crossover"
@@ -2067,52 +2075,136 @@ mod tests {
             normalize_group_name("   \t  "),
             Err(ApiError::Unprocessable(detail)) if detail == "Group name must not be blank"
         ));
-        let overlong = "x".repeat(MAX_GROUP_NAME_CHARS + 1);
-        assert!(matches!(
-            normalize_group_name(&overlong),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
-        let padded_overlong = format!(" {} ", "x".repeat(MAX_GROUP_NAME_CHARS));
-        assert!(matches!(
-            normalize_group_name(&padded_overlong),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
-        assert!(matches!(
-            normalize_group_name(""),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
+        assert_eq!(
+            validation_detail(normalize_group_name("").expect_err("empty raw name")),
+            serde_json::json!([{
+                "type": "string_too_short",
+                "loc": ["body", "name"],
+                "msg": "String should have at least 1 character",
+                "input": "",
+                "ctx": {"min_length": 1},
+                "url": "https://errors.pydantic.dev/2.12/v/string_too_short"
+            }])
+        );
+        for overlong in [
+            "x".repeat(MAX_GROUP_NAME_CHARS + 1),
+            format!(" {} ", "x".repeat(MAX_GROUP_NAME_CHARS)),
+        ] {
+            let detail = validation_detail(
+                normalize_group_name(&overlong).expect_err("overlong raw name"),
+            );
+            assert_eq!(detail[0]["type"], "string_too_long");
+            assert_eq!(detail[0]["loc"], serde_json::json!(["body", "name"]));
+            assert_eq!(detail[0]["input"], overlong);
+        }
     }
 
     #[test]
-    fn request_validation_matches_python_schema_bounds() {
-        let member = DependencyGroupMemberCreateRequest {
-            thread_id: Some(0),
-            issue_id: None,
-            sequence_order: None,
+    fn request_validation_matches_fastapi_error_envelopes() {
+        let member: DependencyGroupMemberCreateRequest = serde_json::from_value(
+            serde_json::json!({"thread_id": 0, "issue_id": 0, "sequence_order": 0}),
+        )
+        .expect("numeric member payload");
+        assert_eq!(
+            validation_detail(validate_member_request(&member).expect_err("invalid member")),
+            serde_json::json!([
+                {
+                    "type": "greater_than",
+                    "loc": ["body", "thread_id"],
+                    "msg": "Input should be greater than 0",
+                    "input": 0,
+                    "ctx": {"gt": 0},
+                    "url": "https://errors.pydantic.dev/2.12/v/greater_than"
+                },
+                {
+                    "type": "greater_than",
+                    "loc": ["body", "issue_id"],
+                    "msg": "Input should be greater than 0",
+                    "input": 0,
+                    "ctx": {"gt": 0},
+                    "url": "https://errors.pydantic.dev/2.12/v/greater_than"
+                },
+                {
+                    "type": "greater_than_equal",
+                    "loc": ["body", "sequence_order"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": 0,
+                    "ctx": {"ge": 1},
+                    "url": "https://errors.pydantic.dev/2.12/v/greater_than_equal"
+                }
+            ])
+        );
+
+        let missing_target: DependencyGroupMemberCreateRequest =
+            serde_json::from_value(serde_json::json!({})).expect("empty object payload");
+        assert_eq!(
+            validation_detail(
+                validate_member_request(&missing_target).expect_err("missing member target")
+            ),
+            serde_json::json!([{
+                "type": "value_error",
+                "loc": ["body"],
+                "msg": "Value error, Exactly one of thread_id or issue_id is required",
+                "input": {},
+                "ctx": {"error": {}},
+                "url": "https://errors.pydantic.dev/2.12/v/value_error"
+            }])
+        );
+
+        let reversed_range: DependencyGroupIssueRangeCreateRequest = serde_json::from_value(
+            serde_json::json!({"thread_id": 1, "start_position": 2, "end_position": 1}),
+        )
+        .expect("numeric range payload");
+        assert_eq!(
+            validation_detail(
+                validate_issue_range_request(&reversed_range).expect_err("reversed range")
+            )[0]["loc"],
+            serde_json::json!(["body"])
+        );
+
+        let empty_order = DependencyGroupOrderUpdateRequest { items: Vec::new() };
+        let empty_detail = validation_detail(
+            validate_group_order_request(&empty_order).expect_err("empty order"),
+        );
+        assert_eq!(empty_detail[0]["type"], "too_short");
+        assert_eq!(empty_detail[0]["loc"], serde_json::json!(["body", "items"]));
+
+        let oversized_order = DependencyGroupOrderUpdateRequest {
+            items: vec![
+                DependencyGroupOrderItem {
+                    issue_id: 1,
+                    sequence_order: 1,
+                };
+                MAX_ORDER_ITEMS + 1
+            ],
         };
-        assert!(matches!(
-            validate_member_request(&member),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
-        let range = DependencyGroupIssueRangeCreateRequest {
-            thread_id: 1,
-            start_position: 0,
-            end_position: 1,
-        };
-        assert!(matches!(
-            validate_issue_range_request(&range),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
-        let order = DependencyGroupOrderUpdateRequest {
+        let oversized_detail = validation_detail(
+            validate_group_order_request(&oversized_order).expect_err("oversized order"),
+        );
+        assert_eq!(oversized_detail[0]["type"], "too_long");
+        assert_eq!(oversized_detail[0]["ctx"]["actual_length"], 1001);
+        assert_eq!(
+            oversized_detail[0]["input"]
+                .as_array()
+                .expect("raw item list")
+                .len(),
+            1001
+        );
+
+        let invalid_order = DependencyGroupOrderUpdateRequest {
             items: vec![DependencyGroupOrderItem {
-                issue_id: 1,
+                issue_id: 0,
                 sequence_order: 0,
             }],
         };
-        assert!(matches!(
-            validate_group_order_request(&order),
-            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
-        ));
+        let invalid_detail = validation_detail(
+            validate_group_order_request(&invalid_order).expect_err("invalid order positions"),
+        );
+        assert_eq!(invalid_detail.as_array().map(Vec::len), Some(2));
+        assert_eq!(
+            invalid_detail[1]["loc"],
+            serde_json::json!(["body", "items", 0, "sequence_order"])
+        );
     }
 
     #[test]
