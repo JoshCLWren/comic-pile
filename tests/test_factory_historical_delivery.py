@@ -1,0 +1,167 @@
+"""Historical checkpoint PR receipts require trusted immutable provenance."""
+
+from __future__ import annotations
+
+import importlib
+import json
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".github/scripts"))
+delivery = importlib.import_module("factory_historical_delivery")
+
+REPO = "owner/repo"
+RUN = "12345"
+WORKER = "46"
+HEAD = "a" * 40
+SOURCE = "b" * 40
+BASE = "c" * 40
+MERGE = "d" * 40
+
+
+def pr_data(*, target: str = "main", merged: bool = True,
+            body: str | None = None) -> dict:
+    """Create a source-run-linked canonical work PR."""
+    return {
+        "number": 67, "body": body or f"<!-- factory-checkpoint-handoff:v1 run={RUN} -->",
+        "base": {"ref": target}, "merged": merged,
+        "merge_commit_sha": MERGE,
+        "head": {"sha": HEAD, "ref": f"factory/work-checkpoints/issue-42/free/{RUN}",
+                 "repo": {"full_name": REPO}},
+    }
+
+
+def test_historical_merged_source_run_proves_immutable_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed execution with bot-saved code earns separate PR/merge receipts."""
+    pr = pr_data()
+    comments = [
+        {"user": {"login": "github-actions[bot]"},
+         "body": f"<!-- factory-persisted-handoff:v1 run={RUN} head={SOURCE} -->"},
+    ]
+    monkeypatch.setattr(delivery, "obj", lambda endpoint: (
+        pr if "/pulls/" in endpoint else {"status": "ahead"}))
+    monkeypatch.setattr(delivery, "verified_run", lambda _repo, _run: {
+        "status": "completed"})
+    monkeypatch.setattr(delivery, "source_worker", lambda _run: WORKER)
+    monkeypatch.setattr(delivery, "pages", lambda _endpoint: comments)
+    monkeypatch.setattr(delivery, "snapshot_for_run", lambda *_args: {
+        "base": BASE, "tree": "e" * 40, "head": SOURCE})
+    monkeypatch.setattr(delivery, "incorporated", lambda *_args: True)
+    result = delivery.receipt_for_pr(REPO, 67)
+    assert result == {"run_id": RUN, "worker": WORKER, "saved": True,
+                      "checkpoint_sha": SOURCE, "published": True,
+                      "work_pr": 67, "validated": False,
+                      "merged": True, "merge_sha": MERGE}
+
+
+def test_unverified_source_never_credits_code_or_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR existence, foreign comments and wrong bases cannot create receipts."""
+    pr = pr_data()
+    monkeypatch.setattr(delivery, "obj", lambda endpoint: pr)
+    monkeypatch.setattr(delivery, "verified_run", lambda *_args: {
+        "status": "completed"})
+    monkeypatch.setattr(delivery, "source_worker", lambda *_args: WORKER)
+    monkeypatch.setattr(delivery, "pages", lambda *_args: [
+        {"user": {"login": "untrusted"},
+         "body": f"<!-- factory-persisted-handoff:v1 run={RUN} head={SOURCE} -->"},
+    ])
+    assert delivery.receipt_for_pr(REPO, 67) is None
+    pr["base"]["ref"] = "release"
+    assert delivery.receipt_for_pr(REPO, 67) is None
+    pr["base"]["ref"] = "main"
+    pr["body"] = "No verified source-run marker"
+    assert delivery.receipt_for_pr(REPO, 67) is None
+
+
+def test_backfill_retains_saved_credit_when_merge_bytes_are_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later revert must not be falsely credited as a fully merged snapshot."""
+    pr = pr_data()
+    monkeypatch.setattr(delivery, "obj", lambda endpoint: (
+        pr if "/pulls/" in endpoint else {"status": "ahead"}))
+    monkeypatch.setattr(delivery, "verified_run", lambda *_args: {
+        "status": "completed"})
+    monkeypatch.setattr(delivery, "source_worker", lambda *_args: WORKER)
+    monkeypatch.setattr(delivery, "pages", lambda *_args: [{
+        "user": {"login": "github-actions[bot]"},
+        "body": f"<!-- factory-persisted-handoff:v1 run={RUN} head={SOURCE} -->",
+    }])
+    monkeypatch.setattr(delivery, "snapshot_for_run", lambda *_args: {
+        "head": SOURCE, "base": BASE, "tree": "e" * 40})
+    monkeypatch.setattr(delivery, "incorporated", lambda _repo, _source, destination:
+                        destination == SOURCE)
+    result = delivery.receipt_for_pr(REPO, 67)
+    assert result and result["saved"] and result["published"]
+    assert not result.get("merged")
+    writes: list[dict] = []
+    summary = delivery.backfill(
+        REPO, [67], receipt_writer=lambda _repo, rows: writes.extend(rows))
+    assert summary["saved"] == [67] and summary["merged"] == []
+    assert len(writes) == 1 and "merged" not in writes[0]
+
+
+def test_source_commit_metadata_matches_exact_worker_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bot comment alone cannot spoof another worker's checkpoint."""
+    message = (
+        f"checkpoint(factory): worker {WORKER} run {RUN} issue #42 "
+        f"(persisted work; validation pending)\n\nBase-commit: {BASE}\n"
+    )
+    commit = {"sha": SOURCE, "message": message,
+              "tree": {"sha": "e" * 40}, "parents": []}
+    monkeypatch.setattr(delivery, "obj", lambda _: commit)
+    assert delivery.snapshot_for_run(REPO, SOURCE, RUN, WORKER) == {
+        "head": SOURCE, "tree": "e" * 40, "base": BASE,
+    }
+    with pytest.raises(ValueError, match="does not prove"):
+        delivery.snapshot_for_run(REPO, SOURCE, RUN, "99")
+
+
+def test_recent_pr_scan_is_bounded_and_deduplicated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large PR history cannot make an unbounded GitHub API sweep."""
+    current = datetime(2026, 11, 18, 13, tzinfo=UTC)
+    rows = [pr_data() for _ in range(100)]
+    for i, item in enumerate(rows):
+        item["number"] = i + 1
+        item["merged_at"] = "2026-11-18T12:00:00Z"
+    second = [{**pr_data(), "number": 101,
+               "merged_at": "2026-11-18T12:00:00Z"}]
+    calls: list[str] = []
+
+    def fake_api(path: str) -> list[dict]:
+        calls.append(path)
+        return rows if "page=1" in path else second
+
+    monkeypatch.setattr(delivery, "api", fake_api)
+    results = delivery.recent_candidate_prs(
+        REPO, now=current, days=3, max_pages=3, max_prs=110)
+    assert len(results) == 101 and results[-1] == 101
+    assert len(calls) == 2
+
+
+def test_recording_is_idempotent_at_trusted_ledger_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated reconciliation never reclassifies a failed worker as success."""
+    from factory_state_ledger import checkpoint_evidence_events
+
+    rows = [{"worker": WORKER, "run_id": RUN, "saved": True,
+             "checkpoint_sha": SOURCE, "published": True, "work_pr": 67,
+             "merged": True, "merge_sha": MERGE}]
+    first = checkpoint_evidence_events(REPO, rows[0])
+    second = checkpoint_evidence_events(REPO, rows[0])
+    assert len(first) == 3 and [item["event_id"] for item in first] == [
+        item["event_id"] for item in second
+    ]
+    assert not any(item["event_type"] == "worker_completed" for item in first)
