@@ -1745,6 +1745,287 @@ pub async fn list_crossover_plans(
     Ok(Json(plans))
 }
 
+/// Documentation-only operation for the owned group collection.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list",
+    responses(
+        (status = 200, description = "Owned groups with member metadata and progress", body = [DependencyGroupResponse]),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_groups_documentation() {}
+
+/// Documentation-only operation for group creation.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_create",
+    request_body = DependencyGroupCreateRequest,
+    responses(
+        (status = 201, description = "Group created", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_group_documentation() {}
+
+/// Documentation-only operation for the groups containing a thread or its issues.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list_for_thread",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    responses(
+        (status = 200, description = "Groups containing the thread or one of its issues", body = [DependencyGroupSummary]),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_thread_groups_documentation() {}
+
+/// Documentation-only operation for one owned group.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_get",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Owned group with member metadata and progress", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_group_documentation() {}
+
+/// Documentation-only operation for one enriched crossover detail.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}/detail",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_detail",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Crossover members, cross-references and linked plans", body = DependencyGroupDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_group_detail_documentation() {}
+
+/// Documentation-only operation for renaming one owned group.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_update",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupUpdateRequest,
+    responses(
+        (status = 200, description = "Renamed group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request payload failed validation"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn update_group_documentation() {}
+
+/// Documentation-only operation for deleting one owned group.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_delete",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 204, description = "Group deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_group_documentation() {}
+
+/// Documentation-only operation for adding a complete issue-position range.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_add_issue_range",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupIssueRangeCreateRequest,
+    responses(
+        (status = 200, description = "Issue-range membership result", body = DependencyGroupIssueRangeResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group or thread not found"),
+        (status = 422, description = "Invalid, oversized or incomplete issue range"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn add_issue_range_documentation() {}
+
+/// Documentation-only operation for adding one thread or issue member.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/{group_id}/members",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_add_member",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupMemberCreateRequest,
+    responses(
+        (status = 201, description = "Membership created", body = DependencyGroupMemberResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group, thread or issue not found"),
+        (status = 409, description = "This member is already in the group"),
+        (status = 422, description = "Request payload or sequence position is invalid"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn add_member_documentation() {}
+
+/// Documentation-only operation for replacing authoritative issue order.
+#[utoipa::path(
+    put,
+    path = "/api/v1/reading-order-groups/{group_id}/order",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_set_order",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupOrderUpdateRequest,
+    responses(
+        (status = 200, description = "Updated group with authoritative issue order", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group, issue or issue membership not found"),
+        (status = 422, description = "Request payload or order is invalid"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn set_group_order_documentation() {}
+
+/// Documentation-only operation for plans containing one crossover.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}/plans",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list_plans",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Owned continuity plans containing the crossover", body = [DependencyGroupSummary]),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_crossover_plans_documentation() {}
+
+/// Documentation-only operation for deleting one group membership.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_remove_member",
+    params(
+        ("group_id" = i32, Path, description = "Owned group identifier"),
+        ("member_id" = i32, Path, description = "Membership identifier")
+    ),
+    responses(
+        (status = 204, description = "Membership deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group or membership not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn remove_member_documentation() {}
+
+/// OpenAPI document for all twelve native same-path dependency-group operations.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(
+        list_groups_documentation,
+        create_group_documentation,
+        list_thread_groups_documentation,
+        get_group_documentation,
+        get_group_detail_documentation,
+        update_group_documentation,
+        delete_group_documentation,
+        add_issue_range_documentation,
+        add_member_documentation,
+        set_group_order_documentation,
+        list_crossover_plans_documentation,
+        remove_member_documentation
+    ),
+    components(schemas(
+        DependencyGroupCreateRequest,
+        DependencyGroupUpdateRequest,
+        DependencyGroupMemberCreateRequest,
+        DependencyGroupIssueRangeCreateRequest,
+        DependencyGroupOrderUpdateRequest,
+        DependencyGroupOrderItem,
+        DependencyGroupIssueRangeResponse,
+        DependencyGroupMemberResponse,
+        DependencyGroupResponse,
+        DependencyGroupSummary,
+        DependencyGroupDetailMemberResponse,
+        DependencyGroupDetailResponse,
+        ThreadDetailResponse,
+        IssueDetailResponse
+    )),
+    modifiers(&DependencyGroupsSecurityAddon)
+)]
+pub struct DependencyGroupsApi;
+
+struct DependencyGroupsSecurityAddon;
+impl utoipa::Modify for DependencyGroupsSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
