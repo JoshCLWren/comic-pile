@@ -1665,7 +1665,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the CBL adoption preview. */
+        /** Documentation-only operation for the CBL adoption plan. */
         post: operations["cbl_adoption_plan_documentation"];
         delete?: never;
         options?: never;
@@ -1680,11 +1680,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Cbl Adoption Preview
-         * @description Preview all CBL positions and their default read-only adoption choices.
-         */
-        get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
+        /** Documentation-only operation for the CBL adoption preview. */
+        get: operations["cbl_adoption_preview_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16762,34 +16759,49 @@ export interface operations {
             };
         };
     };
-    api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get: {
+    cbl_adoption_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Adoption preview for the active CBL list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Path failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

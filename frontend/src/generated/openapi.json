@@ -28891,7 +28891,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "summary": "Documentation-only operation for the CBL adoption plan.",
         "tags": [
           "issue-identity"
         ]
@@ -28899,15 +28899,15 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "description": "Preview all CBL positions and their default read-only adoption choices.",
-        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
+        "operationId": "cbl_adoption_preview_documentation",
         "parameters": [
           {
+            "description": "CBL source list identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -28917,21 +28917,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLAdoptionPreviewResponse"
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Adoption preview for the active CBL list"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Path failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28939,9 +28945,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Cbl Adoption Preview",
+        "summary": "Documentation-only operation for the CBL adoption preview.",
         "tags": [
-          "issue-identity",
           "issue-identity"
         ]
       }

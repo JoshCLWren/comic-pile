@@ -1004,6 +1004,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_identity::find_cbl_candidates_for_reading_list),
         )
         .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity::cbl_adoption_preview),
+        )
+        .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
             post(issue_identity::cbl_adoption_plan),
         )
