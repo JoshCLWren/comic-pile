@@ -320,8 +320,54 @@ fn unprocessable(detail: impl Into<String>) -> ApiError {
     ApiError::Unprocessable(detail.into())
 }
 
-fn validation_failed() -> ApiError {
-    unprocessable("Validation failed")
+fn validation_failed(errors: Vec<serde_json::Value>) -> ApiError {
+    ApiError::structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        serde_json::Value::Array(errors),
+    )
+}
+
+fn pydantic_error(
+    error_type: &str,
+    location: &[serde_json::Value],
+    message: impl Into<String>,
+    input: serde_json::Value,
+    context: serde_json::Value,
+) -> serde_json::Value {
+    let mut loc = Vec::with_capacity(location.len() + 1);
+    loc.push(serde_json::json!("body"));
+    loc.extend_from_slice(location);
+    serde_json::json!({
+        "type": error_type,
+        "loc": loc,
+        "msg": message.into(),
+        "input": input,
+        "ctx": context,
+        "url": format!("https://errors.pydantic.dev/2.12/v/{error_type}"),
+    })
+}
+
+fn greater_than_error(location: &[serde_json::Value], input: i32) -> serde_json::Value {
+    pydantic_error(
+        "greater_than",
+        location,
+        "Input should be greater than 0",
+        serde_json::json!(input),
+        serde_json::json!({"gt": 0}),
+    )
+}
+
+fn model_validation_error(
+    message: &str,
+    input: serde_json::Value,
+) -> serde_json::Value {
+    pydantic_error(
+        "value_error",
+        &[],
+        format!("Value error, {message}"),
+        input,
+        serde_json::json!({"error": {}}),
+    )
 }
 
 fn conflict(detail: impl Into<String>) -> ApiError {
@@ -330,8 +376,23 @@ fn conflict(detail: impl Into<String>) -> ApiError {
 
 fn validate_group_name_schema(name: &str) -> Result<(), ApiError> {
     let raw_length = name.chars().count();
-    if raw_length == 0 || raw_length > MAX_GROUP_NAME_CHARS {
-        return Err(validation_failed());
+    if raw_length == 0 {
+        return Err(validation_failed(vec![pydantic_error(
+            "string_too_short",
+            &[serde_json::json!("name")],
+            "String should have at least 1 character",
+            serde_json::json!(name),
+            serde_json::json!({"min_length": 1}),
+        )]));
+    }
+    if raw_length > MAX_GROUP_NAME_CHARS {
+        return Err(validation_failed(vec![pydantic_error(
+            "string_too_long",
+            &[serde_json::json!("name")],
+            format!("String should have at most {MAX_GROUP_NAME_CHARS} characters"),
+            serde_json::json!(name),
+            serde_json::json!({"max_length": MAX_GROUP_NAME_CHARS}),
+        )]));
     }
     Ok(())
 }
@@ -347,16 +408,36 @@ fn normalize_group_name(name: &str) -> Result<String, ApiError> {
 }
 
 fn validate_member_request(request: &DependencyGroupMemberCreateRequest) -> Result<(), ApiError> {
-    if request.thread_id.is_some_and(|id| id <= 0)
-        || request.issue_id.is_some_and(|id| id <= 0)
-        || request.sequence_order.is_some_and(|position| position < 1)
-    {
-        return Err(validation_failed());
+    let mut errors = Vec::new();
+    if let Some(thread_id) = request.thread_id.filter(|id| *id <= 0) {
+        errors.push(greater_than_error(
+            &[serde_json::json!("thread_id")],
+            thread_id,
+        ));
+    }
+    if let Some(issue_id) = request.issue_id.filter(|id| *id <= 0) {
+        errors.push(greater_than_error(
+            &[serde_json::json!("issue_id")],
+            issue_id,
+        ));
+    }
+    if let Some(sequence_order) = request.sequence_order.filter(|position| *position < 1) {
+        errors.push(pydantic_error(
+            "greater_than_equal",
+            &[serde_json::json!("sequence_order")],
+            "Input should be greater than or equal to 1",
+            serde_json::json!(sequence_order),
+            serde_json::json!({"ge": 1}),
+        ));
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
     }
     if request.thread_id.is_none() == request.issue_id.is_none() {
-        return Err(unprocessable(
+        return Err(validation_failed(vec![model_validation_error(
             "Exactly one of thread_id or issue_id is required",
-        ));
+            request.validation_input.clone(),
+        )]));
     }
     Ok(())
 }
@@ -364,13 +445,27 @@ fn validate_member_request(request: &DependencyGroupMemberCreateRequest) -> Resu
 fn validate_issue_range_request(
     request: &DependencyGroupIssueRangeCreateRequest,
 ) -> Result<(), ApiError> {
-    if request.thread_id <= 0 || request.start_position <= 0 || request.end_position <= 0 {
-        return Err(validation_failed());
+    let mut errors = Vec::new();
+    for (field, value) in [
+        ("thread_id", request.thread_id),
+        ("start_position", request.start_position),
+        ("end_position", request.end_position),
+    ] {
+        if value <= 0 {
+            errors.push(greater_than_error(
+                &[serde_json::json!(field)],
+                value,
+            ));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
     }
     if request.end_position < request.start_position {
-        return Err(unprocessable(
+        return Err(validation_failed(vec![model_validation_error(
             "end_position must be greater than or equal to start_position",
-        ));
+            request.validation_input.clone(),
+        )]));
     }
     Ok(())
 }
@@ -378,15 +473,55 @@ fn validate_issue_range_request(
 fn validate_group_order_request(
     request: &DependencyGroupOrderUpdateRequest,
 ) -> Result<(), ApiError> {
-    if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
-        return Err(validation_failed());
+    let mut errors = Vec::new();
+    if request.items.is_empty() {
+        errors.push(pydantic_error(
+            "too_short",
+            &[serde_json::json!("items")],
+            "List should have at least 1 item after validation, not 0",
+            serde_json::json!([]),
+            serde_json::json!({
+                "field_type": "List",
+                "min_length": 1,
+                "actual_length": 0,
+            }),
+        ));
+    } else if request.items.len() > MAX_ORDER_ITEMS {
+        let actual_length = request.items.len();
+        errors.push(pydantic_error(
+            "too_long",
+            &[serde_json::json!("items")],
+            format!(
+                "List should have at most {MAX_ORDER_ITEMS} items after validation, not {actual_length}"
+            ),
+            serde_json::to_value(&request.items)
+                .expect("order request serialization cannot fail"),
+            serde_json::json!({
+                "field_type": "List",
+                "max_length": MAX_ORDER_ITEMS,
+                "actual_length": actual_length,
+            }),
+        ));
     }
-    if request
-        .items
-        .iter()
-        .any(|item| item.issue_id <= 0 || item.sequence_order <= 0)
-    {
-        return Err(validation_failed());
+    for (index, item) in request.items.iter().enumerate() {
+        for (field, value) in [
+            ("issue_id", item.issue_id),
+            ("sequence_order", item.sequence_order),
+        ] {
+            if value <= 0 {
+                errors.push(greater_than_error(
+                    &[
+                        serde_json::json!("items"),
+                        serde_json::json!(index),
+                        serde_json::json!(field),
+                    ],
+                    value,
+                ));
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
     }
     Ok(())
 }
@@ -1908,7 +2043,7 @@ mod tests {
     use super::*;
     use crate::{config::Config, test_support::DB_LOCK};
     use axum::extract::{Path, State};
-    use chrono::TimeZone;
+    use chrono::{TimeZone, Timelike};
 
     async fn test_state() -> Arc<AppState> {
         let url = crate::test_support::database_url().await;
