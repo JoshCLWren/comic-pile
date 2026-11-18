@@ -211,7 +211,7 @@ fn require_compilable(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
     Ok(())
 }
 
-async fn lock_graph(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+pub(crate) async fn lock_graph(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
     tx.execute(
         "SELECT pg_advisory_xact_lock($1, $2)",
         &[&CONTINUITY_LOCK_NAMESPACE, &user_id],
@@ -323,7 +323,7 @@ async fn owned_references(
     Ok(())
 }
 
-async fn would_create_cycle(
+pub(crate) async fn would_create_cycle(
     tx: &Transaction<'_>,
     user_id: i32,
     source_type: &str,
@@ -407,7 +407,7 @@ async fn load_rule(
     Ok(Some(response_from_row(&row, members)))
 }
 
-async fn compile_edges(
+pub(crate) async fn compile_edges(
     tx: &Transaction<'_>,
     pairs: &[(i32, i32)],
     rule_id: i32,
@@ -427,7 +427,7 @@ async fn compile_edges(
     Ok(())
 }
 
-async fn retire_edges(
+pub(crate) async fn retire_edges(
     tx: &Transaction<'_>,
     user_id: i32,
     pairs: &[(i32, i32)],

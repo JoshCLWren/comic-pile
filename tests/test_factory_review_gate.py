@@ -3669,6 +3669,6 @@ def test_review_uses_existing_model_preflight_and_provider_rotation() -> None:
     selector = selector.split("- name:", 1)[0]
     assert "fleet_fallback()" in selector
     assert 'echo "runtime_model=$runtime_model"' in selector
-    assert "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model" in workflow
+    assert "FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model" in workflow
     worker = (WORKFLOWS.parent / "scripts" / "free-model-factory-worker.sh").read_text()
     assert "select_next_eligible_model" in worker

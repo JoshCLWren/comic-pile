@@ -787,7 +787,7 @@ fn recovery_chains(
 
 /// Keep the existing pending roll intact. Explain only real blocked frontiers,
 /// with actionable leaf issues derived from the *same* authoritative graph.
-fn pending_roll_recovery(
+pub(crate) fn pending_roll_recovery(
     validated: &crate::reading_constraints::ValidatedReadingInputs,
     pending_thread_id: Option<i32>,
     excluded: &HashSet<i32>,

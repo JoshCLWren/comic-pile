@@ -47,7 +47,7 @@ def test_dispatched_model_is_looked_up_at_execution() -> None:
     assert "factory_published_model_catalog.py" in workflow
     assert "factory_live_opencode.py" in workflow
     assert "factory_kilo_catalog.py" in workflow
-    assert "steps.model_preflight.outputs.model" in workflow
+    assert "steps.executor.outputs.model || steps.lane.outputs.model" in workflow
 
 
 def test_historical_worker_streak_spans_model_rotations() -> None:

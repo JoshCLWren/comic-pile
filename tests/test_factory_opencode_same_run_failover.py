@@ -41,8 +41,8 @@ def test_actual_work_is_first_inference_for_all_factory_sources() -> None:
 
 def test_selected_catalog_model_flows_to_real_work_session() -> None:
     workflow = WORKFLOW.read_text()
-    assert 'FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in workflow
-    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
+    assert 'FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}' in workflow
+    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
 
 
 def test_selector_supports_per_run_exclusions_without_paid_fallback() -> None:
