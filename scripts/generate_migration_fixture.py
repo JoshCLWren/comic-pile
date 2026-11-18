@@ -17,7 +17,10 @@ migration rehearsal runs ``alembic upgrade head``.
 
 Every inserted row satisfies the live PostgreSQL CHECK / NOT NULL constraints
 so the rehearsal fixture itself cannot fail for fixture-shape reasons before
-exercising the migrations under test.
+exercising the migrations under test. Deploy rehearsals load the fixture at
+the production base revision, so inserts are restricted to columns that exist
+at that revision; pending migrations remain responsible for new columns and
+backfills.
 """
 
 from __future__ import annotations
@@ -25,8 +28,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import insert
-from sqlalchemy.engine import Engine
+from sqlalchemy import Column, MetaData, Table, insert, inspect
+from sqlalchemy.engine import Connection, Engine
 
 from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.cbl_reference import CBLSource, CBLSourceList
@@ -47,6 +50,11 @@ from app.models.thread import Thread
 from app.models.user import User
 
 SYNTHETIC_EMAIL_DOMAIN = "example.invalid"
+# A bounded, deterministic volume tier keeps data backfills from being tested
+# only against a handful of rows. These are synthetic shapes, not production
+# counts or identities; production distribution checks remain aggregate-only.
+FIXTURE_FILLER_THREADS = 128
+FIXTURE_ISSUES_PER_FILLER_THREAD = 4
 
 _TABLES: dict[str, Any] = {
     "users": User.__table__,
@@ -102,7 +110,7 @@ def _user_rows() -> list[dict[str, Any]]:
 def _thread_rows() -> list[dict[str, Any]]:
     """Threads covering active, blocked, snoozed and legacy NULL-heavy shapes."""
     now = _utc_now()
-    return [
+    rows = [
         {
             "id": 910001,
             "title": "Rehearsal Alpha Series",
