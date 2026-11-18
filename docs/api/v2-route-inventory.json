@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 53,
-    "native_rust": 53,
+    "total_live_operations": 42,
+    "native_rust": 42,
     "python_fastapi": 0,
-    "native_rust_status": 53,
+    "native_rust_status": 42,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -306,204 +306,6 @@
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
         "measurement_status": "pending-fixture"
       }
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/compare",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/discoveries",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/summaries",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/team-chemistry",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}/metrics/{metric_type}",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4836,
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/creators/{creator_key}/series/{series_key}/issues",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
     },
     {
       "owning_issue": 4855,
@@ -1201,16 +1003,16 @@
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 126,
-      "v1_shadowed_by_rust": 14,
-      "v1_live_python": 99,
+      "v1_shadowed_by_rust": 5,
+      "v1_live_python": 108,
       "v1_orphaned": 7,
       "unversioned_total": 3,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 1,
       "unversioned_orphaned": 1,
       "total_python_surface": 129,
-      "total_shadowed_by_rust": 14,
-      "total_live_python": 100,
+      "total_shadowed_by_rust": 5,
+      "total_live_python": 109,
       "total_orphaned": 8
     },
     "catch_all": {
@@ -1697,7 +1499,7 @@
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1708,14 +1510,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/compare",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1726,14 +1528,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/discoveries",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1744,14 +1546,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/team-chemistry",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1762,14 +1564,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1780,14 +1582,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1798,14 +1600,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1816,14 +1618,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1834,14 +1636,14 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4836,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-creators.ts",
           "frontend/src/services/creatorComparisonApi.ts",
@@ -1852,8 +1654,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
