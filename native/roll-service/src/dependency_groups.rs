@@ -213,6 +213,7 @@ pub struct DependencyGroupDetailResponse {
 }
 
 /// Persisted group membership as the service resolves it.
+#[derive(Debug, Clone)]
 struct GroupMemberInput {
     id: i32,
     group_id: i32,
@@ -822,7 +823,7 @@ async fn create_group_tx(
         .query_one(INSERT_GROUP_SQL, &[&user_id, &name])
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1001,7 +1002,7 @@ async fn update_group_tx(
         )
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1255,7 +1256,7 @@ async fn add_member_tx(
         .query_one(INSERT_MEMBERSHIP_SQL, &[&group_id, &thread_id, &issue_id, &sequence_order])
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
                 return conflict("This member is already in the group");
             }
             db::query_error(error)
