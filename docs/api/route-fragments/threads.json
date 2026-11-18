@@ -168,7 +168,8 @@
       "src": "^/api/v1/threads/[^/]+/connected$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -178,7 +179,8 @@
       "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -202,15 +204,21 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/issues",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/issues$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/issues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/issues:reorder",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/issues:reorder$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/issues:reorder$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -267,28 +275,38 @@
       "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssues$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -301,7 +319,8 @@
       ],
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     }
   ]
 }

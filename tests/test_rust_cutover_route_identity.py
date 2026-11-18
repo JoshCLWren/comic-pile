@@ -132,12 +132,17 @@ def test_threads_collection_client_uses_the_native_v2_resource() -> None:
     assert "client.get<ThreadListResponse>('/v1/threads/'" not in source
 
 
-def test_analytics_client_uses_the_bounded_native_v2_resource() -> None:
-    """The real client uses native v2; the Python v1 handlers are pruned (#4861)."""
-    source = _service("api-tasks.ts")
-    assert "createNativeV2Client" in source
-    assert "nativeV2.metrics()" in source
-    assert "/v1/analytics/metrics" not in source
+def test_no_frontend_service_calls_the_pruned_v1_analytics_route() -> None:
+    """The v1 analytics handlers are pruned (#4861) and the Analytics page is gone (#5437).
+
+    No frontend service may reach for the retired v1 analytics metrics path.
+    """
+    offenders = [
+        path.name
+        for path in sorted(FRONTEND_SERVICES.glob("*.ts"))
+        if "/v1/analytics/metrics" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
 
 
 def test_current_runtime_routing_is_explicit_and_independent_of_version() -> None:

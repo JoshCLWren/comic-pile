@@ -350,12 +350,6 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export type AnalyticsSession = components['schemas']['RecentSession']
-
-export type TopRatedThread = components['schemas']['TopRatedThread']
-
-export type AnalyticsMetrics = components['schemas']['AnalyticsMetricsResponse']
-
 export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
 
 export interface SessionListResponse {

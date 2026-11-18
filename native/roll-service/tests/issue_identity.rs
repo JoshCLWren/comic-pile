@@ -12,7 +12,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -116,20 +116,17 @@ async fn setup() -> (
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = isolated_test_database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => {
-                    Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
-                }
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => {
+                Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
+            }
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
     let (token, csrf) = create_test_user(&state, "issue-identity").await;
@@ -550,6 +547,26 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
     assert_eq!(first["list_id"], 1);
     assert_eq!(first["matched_input_count"], 1);
     assert_eq!(first["missing_input_ids"], json!([]));
+}
+
+#[tokio::test]
+async fn adoption_preview_returns_preview_shape_for_active_list() {
+    let (state, token, _csrf, _guard) = setup().await;
+    let (status, body) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["source"]["source_list_id"], 1);
+    assert_eq!(
+        body["source"]["source_path"], MIRROR_SOURCE_PATH,
+        "adoption preview must return raw stored source_path like Python"
+    );
+    assert!(body["total_positions"].as_i64().unwrap() >= 1, "{body}");
+    assert!(body["entries"].is_array(), "{body}");
+    assert!(body["summary"]["final_adopted_count"].is_number(), "{body}");
 }
 
 #[tokio::test]
@@ -1132,21 +1149,18 @@ async fn adoption_commit_inactive_list_returns_422() {
 #[tokio::test]
 async fn adoption_commit_returns_503_on_database_outage() {
     let secret = comicpile_roll_service::test_support::TEST_JWT_SECRET;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => {
-                    Some("postgresql://127.0.0.1:1/unreachable?connect_timeout=1".into())
-                }
-                "RUST_ROLL_JWT_SECRET" => Some(secret.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("1".into()),
-                "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("1000".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => {
+                Some("postgresql://127.0.0.1:1/unreachable?connect_timeout=1".into())
+            }
+            "RUST_ROLL_JWT_SECRET" => Some(secret.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("1000".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1187,6 +1201,128 @@ async fn adoption_commit_returns_503_on_database_outage() {
     .await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
     assert_eq!(body["error"]["code"], "database_unavailable", "{body}");
+}
+
+#[tokio::test]
+async fn adoption_preview_and_explicit_include_cannot_restore_excluded_volumes() {
+    let (state, token, csrf, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO collection_exclusions (user_id, provider, external_volume_id, created_at) VALUES ($1, 'comicvine', $2, NOW())",
+        &[&user_id, &VOLUME_ID],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let entries = body["entries"].as_array().unwrap();
+    assert!(!entries.is_empty(), "{body}");
+    for entry in entries {
+        assert_eq!(entry["adoption_decision"], "excluded", "{body}");
+        assert_eq!(
+            entry["collection_exclusion_reason"], "collection_volume_excluded",
+            "{body}"
+        );
+    }
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {"1": "include", "2": "include"},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([]), "{body}");
+    assert_eq!(
+        body["excluded_positions"].as_array().unwrap().len(),
+        2,
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_rechecks_exclusions_added_after_preview() {
+    let (state, token, csrf, _guard) = setup().await;
+
+    let (status, preview) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert!(
+        preview["summary"]["missing_would_create_count"]
+            .as_i64()
+            .unwrap_or(0)
+            >= 1
+            || preview["summary"]["final_adopted_count"]
+                .as_i64()
+                .unwrap_or(0)
+                >= 1,
+        "preview should be adoptable before exclusion: {preview}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO collection_exclusions (user_id, provider, external_volume_id, created_at) VALUES ($1, 'comicvine', $2, NOW())",
+        &[&user_id, &VOLUME_ID],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([]), "{body}");
+    assert!(
+        !body["excluded_positions"].as_array().unwrap().is_empty(),
+        "{body}"
+    );
 }
 
 // ---------------------------------------------------------------------------

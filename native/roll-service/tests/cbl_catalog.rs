@@ -10,7 +10,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -22,20 +22,17 @@ static NEXT_CLIENT: AtomicUsize = AtomicUsize::new(1);
 
 async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => {
-                    Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
-                }
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => {
+                Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
+            }
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
     let suffix = std::time::SystemTime::now()
@@ -245,16 +242,105 @@ async fn browse_invalid_pagination_returns_fastapi_422_envelope() {
 }
 
 #[tokio::test]
-async fn browse_extreme_page_echoes_requested_page_without_overflow() {
+async fn browse_extreme_page_clamps_without_overflow() {
     let (state, token, _guard) = setup().await;
     let extreme = "9223372036854775808"; // 2^63
     let uri =
         format!("/api/v1/issue-identity/cbl-sources/browse?q=JLI&page={extreme}&page_size=100");
     let (status, body) = get(&state, &token, &uri).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["items"], json!([]));
     assert_eq!(body["total"], 1);
+    assert_eq!(body["total_pages"], 1);
+    assert_eq!(body["page"], 1);
+    assert_eq!(body["has_next"], false);
+    assert_eq!(body["has_previous"], false);
+    let names: Vec<_> = body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["JLI"], "{body}");
+}
+
+#[tokio::test]
+async fn browse_out_of_range_page_clamps_to_last_page_with_results() {
+    let (state, token, _guard) = setup().await;
+    // 2 matches, all on one page: requesting page 2 must clamp to page 1 and
+    // return the matching sources (issue #5381).
+    let uri = "/api/v1/issue-identity/cbl-sources/browse?q=Secret%20Wars&page=2&page_size=50";
+    let (status, body) = get(&state, &token, uri).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["scope"], "search");
+    assert_eq!(body["total"], 2);
+    assert_eq!(body["total_pages"], 1);
+    assert_eq!(body["page"], 1);
+    assert_eq!(body["has_next"], false);
+    assert_eq!(body["has_previous"], false);
+    let names: Vec<_> = body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["Secret Wars", "Secret Wars Crossovers"],
+        "{body}"
+    );
+}
+
+fn folder_item_names(body: &Value) -> Vec<String> {
+    body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn browse_folder_out_of_range_page_clamps_to_true_last_page() {
+    let (state, token, _guard) = setup().await;
+    // Folder mode (no `q`): "Special" has 2 direct lists; page_size=1 gives 2
+    // pages. Page 9 must select page 2 (the last), not reset to page 1.
+    let uri = "/api/v1/issue-identity/cbl-sources/browse?folder=Special&page=9&page_size=1";
+    let (status, body) = get(&state, &token, uri).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["scope"], "folder");
+    assert_eq!(body["total"], 2);
+    assert_eq!(body["total_pages"], 2);
+    assert_eq!(body["page"], 2);
     assert_eq!(body["has_next"], false);
     assert_eq!(body["has_previous"], true);
-    assert_eq!(body["page"].as_u64(), Some(9223372036854775808u64));
+    assert_eq!(folder_item_names(&body), vec!["Under_score"], "{body}");
+}
+
+#[tokio::test]
+async fn browse_folder_in_range_page_is_not_clamped() {
+    let (state, token, _guard) = setup().await;
+    let uri = "/api/v1/issue-identity/cbl-sources/browse?folder=Special&page=1&page_size=1";
+    let (status, body) = get(&state, &token, uri).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["page"], 1);
+    assert_eq!(body["has_next"], true);
+    assert_eq!(body["has_previous"], false);
+    assert_eq!(folder_item_names(&body), vec!["Percent%List"], "{body}");
+}
+
+#[tokio::test]
+async fn browse_root_out_of_range_page_clamps_to_single_page() {
+    let (state, token, _guard) = setup().await;
+    let uri = "/api/v1/issue-identity/cbl-sources/browse?page=7&page_size=50";
+    let (status, body) = get(&state, &token, uri).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["total"], 1);
+    assert_eq!(body["page"], 1);
+    assert_eq!(body["has_next"], false);
+    assert_eq!(body["has_previous"], false);
+    assert_eq!(
+        folder_item_names(&body),
+        vec!["Root Reading List"],
+        "{body}"
+    );
 }

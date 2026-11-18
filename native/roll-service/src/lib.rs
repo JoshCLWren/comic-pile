@@ -2,7 +2,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod activity;
-pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
@@ -40,6 +39,7 @@ pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 mod preview_validation;
@@ -77,6 +77,7 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_issues;
 pub mod thread_lifecycle;
 pub mod thread_ordering;
 pub mod thread_validation;
@@ -123,6 +124,11 @@ pub struct AppState {
     /// Production always enables this. The regression suite disables it to prove
     /// the first-statement failure it prevents; no environment variable can.
     pub connection_recovery: bool,
+    /// Outbound HTTPS seam (GitHub issue creation, ComicVine). Production
+    /// installs the real client; test builds/environments install a recording
+    /// fake that never opens a socket, so no test can reach the network
+    /// (#5339). See [`outbound`].
+    pub outbound: Arc<dyn outbound::OutboundHttp>,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -141,6 +147,33 @@ impl AppState {
     pub fn with_recycling(
         config: Config,
         recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound::default_transport())
+    }
+
+    /// Construct with an explicit outbound transport. Production callers use
+    /// [`Self::new`]; tests install a recording fake (#5339).
+    pub fn with_outbound(
+        config: Config,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, RecyclingMethod::Fast, outbound)
+    }
+
+    /// Construct with an explicit pool recycling method and outbound
+    /// transport; test-only combination.
+    pub fn with_recycling_and_outbound(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound)
+    }
+
+    fn build(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
     ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
@@ -178,7 +211,14 @@ impl AppState {
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
             connection_recovery: true,
+            outbound,
         })
+    }
+
+    /// The recording fake outbound client when one is installed (test
+    /// contexts), so tests can assert on recorded calls.
+    pub fn recording_fake(&self) -> Option<&outbound::RecordingFakeOutbound> {
+        self.outbound.as_any().downcast_ref()
     }
 }
 
@@ -776,6 +816,18 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(thread_ordering::check_thread_dependency_order),
         )
         .route(
+            "/api/v1/threads/{thread_id}/issues",
+            post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(thread_issues::reorder_thread_issues),
+        )
+        .route(
             "/api/v1/threads/{thread_id}/issues:validateOrder",
             get(thread_ordering::validate_issue_order),
         )
@@ -924,7 +976,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/dependencies/{dependency_id}",
             delete(legacy_dependencies::delete),
         )
-        .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(

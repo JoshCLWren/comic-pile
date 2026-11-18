@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 53 (53 native-rust + 0 python-fastapi).
+- Live v2 operations: 52 (52 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 99 operations (v1 98 + unversioned 1); v1 active 52 live Python / 4 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 75 operations (v1 74 + unversioned 1); v1 active 30 live Python / 4 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -69,7 +69,6 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
 - #4335 (9): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
 - #4342 (1): `GET /api/v2/threads -> native-rust`
-- #4348 (1): `GET /api/v2/analytics/metrics -> native-rust`
 - #4443 (2): `POST /api/v2/issues/cards -> native-rust`; `PATCH /api/v2/issues/{issue_id} -> native-rust`
 - #4459 (8): `GET /api/v2/auth/csrf -> native-rust`; `POST /api/v2/auth/forgot-password -> native-rust`; `POST /api/v2/auth/login -> native-rust`; `POST /api/v2/auth/logout -> native-rust`; `GET /api/v2/auth/me -> native-rust`; `POST /api/v2/auth/refresh -> native-rust`; `POST /api/v2/auth/register -> native-rust`; `POST /api/v2/auth/reset-password -> native-rust`
 - #4595 (2): `GET /api/v2/roll/die-state -> native-rust`; `GET /api/v2/roll/eligible-issue-ids -> native-rust`
@@ -82,7 +81,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
 ### Route generation ownership (bot-owned)
 
-Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `python3 scripts/generate_route_burndown.py` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
+Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `node scripts/generate_route_burndown.mjs` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
 
 ## MANDATORY: Frontend Visual Policy
 
@@ -547,6 +546,32 @@ in `frontend/src/query/` (see `queryKeys.ts`, `queryClient.ts`, `cacheEffects.ts
 alembic revision --autogenerate -m "description"  # Create migration
 make migrate  # Run migrations (or: alembic upgrade head)
 ```
+
+## Greptile Review Rules
+
+The following rules in `.greptile/config.json` are enforced by Greptile during PR review. These rules cite concrete failure classes from recurring defects:
+
+### High Severity Rules
+
+1. **rust-write-lock-order**: Rust write paths take the per-reader queue advisory lock BEFORE any thread/issue row lock (SELECT ... FOR UPDATE); every new/changed writer needs a concurrent DB test against sibling writers (#5398/#5419 deadlocks).
+
+2. **bounded-input-before-allocation**: Request-supplied counts/ranges must be bounded and use checked arithmetic before allocating, looping or inserting; prefer set-based SQL (generate_series/unnest) (#5398 12GB alloc, #5420 overflow bypass).
+
+3. **python-parity-wire-contract**: Rust replacements of frozen Python routes must match production wire behavior — validation 422 body `{"detail":"Validation failed"}`, always-emitted `[]` / `null` instead of omitted fields, Python round()/int parsing semantics; require golden tests measured from Python (#5428, #5451, #5439, #5411).
+
+4. **postgres-integer-width**: int4 columns read as i32 or cast ::bigint in SQL; never row.get::<i64> on int4 (#5351 panic).
+
+5. **no-test-weakening**: Flag removed/loosened assertions, added timeouts/retries/sleeps, or new skip guards; flaky tests are deleted and redesigned deterministically (owner rule).
+
+6. **bot-owned-route-outputs**: PRs must not change vercel.json, docs/api/v2-route-inventory.json, docs/api/route-fragments/vercel-rewrites.json or the AGENTS.md route-burndown marker block.
+
+### Medium Severity Rules
+
+7. **tests-no-network**: Tests must not call real external services (GitHub, ComicVine); use injectable fakes (#5339).
+
+### No-SQL-in-loops Reference
+
+8. **no-sql-in-loops**: No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, = ANY($1) / unnest batched statements, bounded batch requests, indexed filters, and predictable pagination. See AGENTS.md Database query efficiency rule.
 
 ## Git Workflow
 
