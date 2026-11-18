@@ -1180,6 +1180,81 @@ pub async fn import_issue(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
+#[derive(Debug)]
+struct SeriesLocalIssue {
+    id: Option<i32>,
+    issue_number: String,
+    position: i32,
+    confirmed_external_id: Option<String>,
+}
+
+#[derive(Debug)]
+struct SeriesExternalMapping {
+    issue_id: Option<i32>,
+    issue_number: String,
+    thread_id: i32,
+}
+
+#[derive(Debug)]
+struct PlannedSeriesIssue {
+    comicvine_issue_id: i32,
+    issue_number: String,
+    local_issue_number: Option<String>,
+    existing_issue_id: Option<i32>,
+    outcome: &'static str,
+    conflict_detail: Option<String>,
+}
+
+/// Apply the shared one-issue natural-order insertion rule entirely in memory.
+/// The caller persists the resulting position changes and new rows in two
+/// set-based statements, avoiding the former per-roster-row database round trips.
+fn create_series_issue_in_natural_order(
+    local_issues: &mut Vec<SeriesLocalIssue>,
+    issue_number: String,
+) -> usize {
+    let mut ordered: Vec<&SeriesLocalIssue> = local_issues.iter().collect();
+    ordered.sort_by_key(|issue| (issue.position, issue.id.unwrap_or(i32::MAX)));
+    let existing_numbers: Vec<String> = ordered
+        .into_iter()
+        .map(|issue| issue.issue_number.clone())
+        .collect();
+    let incoming = [issue_number.clone()];
+    let natural =
+        crate::reading_plan_sync::natural_issue_order(&existing_numbers, &incoming);
+    let fallback_position = local_issues
+        .iter()
+        .map(|issue| issue.position)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let position = if let Some(order) = natural {
+        let targets: HashMap<String, i32> = order
+            .into_iter()
+            .enumerate()
+            .map(|(index, number)| (number, index as i32 + 1))
+            .collect();
+        for issue in local_issues.iter_mut() {
+            if let Some(target) = targets.get(&issue.issue_number) {
+                issue.position = *target;
+            }
+        }
+        targets
+            .get(&issue_number)
+            .copied()
+            .unwrap_or(fallback_position)
+    } else {
+        fallback_position
+    };
+    let index = local_issues.len();
+    local_issues.push(SeriesLocalIssue {
+        id: None,
+        issue_number,
+        position,
+        confirmed_external_id: None,
+    });
+    index
+}
+
 /// `POST /api/v2/comicvine/series:import`.
 pub async fn import_series(
     State(state): State<Arc<AppState>>,
