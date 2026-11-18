@@ -611,6 +611,22 @@ async fn link_confirmed(
 ) -> Result<i32, ApiError> {
     owned_issue(tx, user, issue_id).await?;
     let identity_id = upsert_issue_identity(tx, comicvine_issue_id).await?;
+    let conflicting = tx
+        .query_opt(
+            "SELECT m.id FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND m.external_identity_id <> $2 AND e.provider = 'comicvine' \
+             LIMIT 1",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if conflicting.is_some() {
+        return Err(bad_request(
+            "issue already has a confirmed comicvine identity",
+        ));
+    }
     tx.execute(
         "INSERT INTO issue_external_identity_mappings \
             (issue_id, external_identity_id, status, evidence_source, evidence_json, \
@@ -1007,10 +1023,19 @@ pub async fn import_issue(
         .map_err(db::query_error)?
         .map(|row| row.get(0));
     if let Some(existing_issue_id) = duplicate {
-        return Err(ApiError::Conflict(format!(
+        let message = format!(
             "ComicVine issue {} already exists as issue {}",
             request.comicvine_issue_id, existing_issue_id
-        )));
+        );
+        return Err(ApiError::structured(
+            StatusCode::CONFLICT,
+            json!({
+                "code": "duplicate_physical_issue",
+                "comicvine_issue_id": request.comicvine_issue_id,
+                "existing_issue_id": existing_issue_id,
+                "message": message,
+            }),
+        ));
     }
 
     let next_position: i32 = tx
