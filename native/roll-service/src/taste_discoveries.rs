@@ -395,6 +395,7 @@ pub async fn dismiss_taste_discovery(
     get,
     path = "/api/v1/taste/discoveries",
     tag = "taste",
+    operation_id = "taste_discoveries_list",
     description = "Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.",
     params(("limit" = Option<i64>, Query, description = "Maximum discoveries to return (1-3, default 3).")),
     responses(

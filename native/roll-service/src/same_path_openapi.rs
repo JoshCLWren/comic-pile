@@ -184,7 +184,7 @@ mod tests {
         let paths = document["paths"].as_object().expect("paths");
 
         let listing = &paths["/api/v1/taste/discoveries"]["get"];
-        assert_eq!(listing["operationId"], "list_documentation");
+        assert_eq!(listing["operationId"], "taste_discoveries_list");
         assert!(listing["responses"]["200"].is_object());
         assert_eq!(
             listing["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
