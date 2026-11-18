@@ -134,14 +134,12 @@ async def test_exclusion_added_after_preview_is_rechecked_at_commit(
     preview = await auth_client.get(f"/api/v1/issue-identity/cbl/{source.id}/adoption-preview")
     assert preview.status_code == 200
     assert preview.json()["summary"]["missing_would_create_count"] == 3
-    response = await auth_client.post(
-        "/api/v1/collection-exclusions",
-        json={
-            "provider": "comicvine",
-            "external_volume_id": "10001",
-        },
+    async_db.add(
+        CollectionExclusion(
+            user_id=user.id, provider="comicvine", external_volume_id="10001"
+        )
     )
-    assert response.status_code == 200, response.text
+    await async_db.commit()
     result = await auth_client.post(
         f"/api/v1/cbl/{source.id}/adoption-commit",
         json={
