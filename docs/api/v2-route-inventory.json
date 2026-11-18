@@ -1026,17 +1026,23 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/catalog/series-mappings/preview",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-series-mapping.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/catalog/series-mappings/preview",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1046,7 +1052,10 @@
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1056,7 +1065,10 @@
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1064,7 +1076,10 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1072,7 +1087,10 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
         "method": "DELETE",
@@ -1080,137 +1098,179 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/comicvine/issues:import",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "DELETE",
         "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
         "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
         "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
         "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
         "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
         "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/comicvine/issues:import",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-comicvine.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/comicvine/resolve",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/comicvine/search/series",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/comicvine/series:import",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-comicvine.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-comicvine.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/comicvine/series:import",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1221,7 +1281,10 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1232,117 +1295,10 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/continuity-plans/{plan_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/continuity-plans/{plan_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/continuity-plans/{plan_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/continuity-plans/{plan_id}/membership",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1353,7 +1309,10 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1364,7 +1323,10 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "DELETE",
@@ -1375,7 +1337,10 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "PATCH",
@@ -1386,252 +1351,455 @@
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/compare",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/discoveries",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/creators/team-chemistry",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/custom-cbls",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/custom-cbls",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/custom-cbls/{list_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/export",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "DELETE",
-        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+        "path": "/api/v1/continuity-plans/{plan_id}",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
-        "path": "/api/v1/custom-cbls/{list_id}/reader",
+        "path": "/api/v1/continuity-plans/{plan_id}",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/continuity-plans/{plan_id}",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "method": "DELETE",
+        "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "method": "POST",
+        "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/continuity-plans/{plan_id}/membership",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
-        "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
-          "frontend/src/services/api-custom-cbl.ts"
-        ]
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
-        "path": "/api/v1/custom-cbls/issue-search",
+        "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/compare",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/discoveries",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/team-chemistry",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-creators.ts",
+          "frontend/src/services/creatorComparisonApi.ts",
+          "frontend/src/services/creatorDiscoveryApi.ts",
+          "frontend/src/services/creatorMetricDrilldownApi.ts",
+          "frontend/src/services/creatorTeamChemistryApi.ts",
+          "frontend/src/services/creatorsApi.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-custom-cbl.ts"
-        ]
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/custom-cbls",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls/issue-search",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls/{list_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/custom-cbls/{list_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls/{list_id}/export",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "DELETE",
+        "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/custom-cbls/{list_id}/reader",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1642,29 +1810,24 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/browse",
-        "runtime": "python-fastapi",
+        "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4843,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/browse",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1675,7 +1838,10 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1686,18 +1852,38 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/folders",
-        "runtime": "python-fastapi",
+        "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4843,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/folders",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-cbl-sources.ts",
+          "frontend/src/services/api-reading-graph.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1708,7 +1894,10 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1719,7 +1908,10 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1730,7 +1922,10 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1741,31 +1936,12 @@
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/issues:bulkMarkRead",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-issues.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issues:bulkMarkUnread",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-issues.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issues/{issue_id}:markRead",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
@@ -1773,35 +1949,14 @@
           "frontend/src/services/api-dependencies.ts",
           "frontend/src/services/api-issues.ts",
           "frontend/src/services/api-reader-context.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issues/{issue_id}:markUnread",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-reader-context.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issues/{issue_id}:move",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-reader-context.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/issues/{issue_id}/reader-context",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
@@ -1809,15 +1964,88 @@
           "frontend/src/services/api-dependencies.ts",
           "frontend/src/services/api-issues.ts",
           "frontend/src/services/api-reader-context.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/issues/{issue_id}:markRead",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-reader-context.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/issues/{issue_id}:markUnread",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-reader-context.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/issues/{issue_id}:move",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-issues.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/issues:bulkMarkRead",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-issues.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/issues:bulkMarkUnread",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "owning_issue": 4854,
+        "runtime": "native-rust",
+        "status": "target",
+        "consumers": [],
         "method": "GET",
         "path": "/api/v1/metrics",
-        "runtime": "python-fastapi",
-        "status": "target",
-        "owning_issue": 4854,
-        "consumers": []
+        "db_free": true,
+        "sql_budget": {
+          "application_statements": 0,
+          "transaction_control_statements": 0,
+          "total_statements": 0,
+          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
+          "max_statements": 0,
+          "grows_with_data": false
+        },
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1825,7 +2053,10 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1833,147 +2064,192 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
         "method": "GET",
         "path": "/api/v1/reading-order-groups/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
+        ],
+        "verified_against": "vercel.json",
         "method": "POST",
         "path": "/api/v1/reading-order-groups/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}/detail",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/reading-order-groups/{group_id}/members",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/reading-order-groups/{group_id}/order",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}/plans",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": 4841,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ]
-      },
-      {
+        ],
+        "verified_against": "vercel.json",
         "method": "GET",
         "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
-        ]
+        ],
+        "verified_against": "vercel.json",
+        "method": "DELETE",
+        "path": "/api/v1/reading-order-groups/{group_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "GET",
+        "path": "/api/v1/reading-order-groups/{group_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "PATCH",
+        "path": "/api/v1/reading-order-groups/{group_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "GET",
+        "path": "/api/v1/reading-order-groups/{group_id}/detail",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "POST",
+        "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "POST",
+        "path": "/api/v1/reading-order-groups/{group_id}/members",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "DELETE",
+        "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "PUT",
+        "path": "/api/v1/reading-order-groups/{group_id}/order",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
+        "verified_against": "vercel.json",
+        "method": "GET",
+        "path": "/api/v1/reading-order-groups/{group_id}/plans",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4851,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/reading-plan-sync/status",
-        "runtime": "python-fastapi",
-        "status": "native Rust",
-        "owning_issue": 4851,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts"
-        ]
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/reading-plan-sync/sync",
-        "runtime": "python-fastapi",
+        "runtime": "native-rust",
         "status": "native Rust",
         "owning_issue": 4851,
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/reading-plan-sync/sync",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -1984,7 +2260,10 @@
         "consumers": [
           "frontend/src/services/api-roll.ts",
           "frontend/src/services/rollBootstrapApi.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -1995,7 +2274,10 @@
         "consumers": [
           "frontend/src/services/api-roll.ts",
           "frontend/src/services/rollBootstrapApi.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -2006,437 +2288,533 @@
         "consumers": [
           "frontend/src/services/api-roll.ts",
           "frontend/src/services/rollBootstrapApi.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-sessions.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/sessions/",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-sessions.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/sessions/{session_id}/details",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-sessions.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/sessions/{session_id}/restore-session-start",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-sessions.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/sessions/correction-examples",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-sessions.ts"
-        ]
-      },
-      {
+        ],
         "method": "GET",
         "path": "/api/v1/sessions/current/",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-sessions.ts"
-        ]
+        ],
+        "method": "GET",
+        "path": "/api/v1/sessions/{session_id}/details",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/taste/discoveries",
         "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-sessions.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/sessions/{session_id}/restore-session-start",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
         "status": "transitional",
         "owning_issue": 4853,
         "consumers": [
           "frontend/src/services/api-taste.ts"
-        ]
+        ],
+        "method": "GET",
+        "path": "/api/v1/taste/discoveries",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
         "method": "POST",
-        "path": "/api/v1/threads:getBlockingInfo",
+        "path": "/api/v1/threads/",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/check-duplicates",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/excluded/threads",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/groups:batch",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/reactivate",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/stale",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "DELETE",
+        "path": "/api/v1/threads/{thread_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/threads/{thread_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/connected",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/dependency-order-check",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/exclude",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issues",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/issues",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issues/creators",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/issues:reorder",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/threads/{thread_id}/reading-orders",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/restore",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}/set-pending",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/threads/{thread_id}/test-backdate",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}:migrateToIssues",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-dependencies.ts",
+          "frontend/src/services/api-dependency-groups.ts",
+          "frontend/src/services/api-issues.ts",
+          "frontend/src/services/api-migration.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-threads.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
-        ]
-      },
-      {
+        ],
         "method": "POST",
-        "path": "/api/v1/threads/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/threads/{thread_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/threads/{thread_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/connected",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/dependency-order-check",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/exclude",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/issues",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/issues",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/issues:reorder",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/issues/creators",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/{thread_id}/reading-orders",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/restore",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/set-pending",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/threads/{thread_id}/test-backdate",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/check-duplicates",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/excluded/threads",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/groups:batch",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/threads/reactivate",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/threads/stale",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ]
+        "path": "/api/v1/threads:getBlockingInfo",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -2444,37 +2822,58 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-undo.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/undo/{session_id}/snapshots",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-undo.ts"
-        ]
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-undo.ts"
-        ]
+        ],
+        "method": "POST",
+        "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       }
     ],
     "unversioned_operations": [
       {
+        "owning_issue": 4854,
+        "runtime": "native-rust",
+        "status": "target",
+        "consumers": [],
         "method": "GET",
         "path": "/api/metrics",
-        "runtime": "python-fastapi",
-        "status": "target",
-        "owning_issue": 4854,
-        "consumers": []
+        "db_free": true,
+        "sql_budget": {
+          "application_statements": 0,
+          "transaction_control_statements": 0,
+          "total_statements": 0,
+          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
+          "max_statements": 0,
+          "grows_with_data": false
+        },
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
       },
       {
         "method": "GET",
@@ -2482,7 +2881,10 @@
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": null,
-        "consumers": []
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
+        "verified_against": "vercel.json"
       },
       {
         "method": "POST",
@@ -2492,7 +2894,10 @@
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-roll.ts"
-        ]
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
       }
     ]
   },
