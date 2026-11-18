@@ -82,3 +82,23 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$handoff_status"
+      - name: Reconcile older missing terminal outcomes in a bounded scheduled pass
+        if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${FACTORY_STATE_DSN_FILE:-}" && -f "$FACTORY_STATE_DSN_FILE" ]] || {
+            echo "::error::Neon ledger unavailable for terminal recovery"
+            exit 1
+          }
+          python3 .github/scripts/factory_outcome_reconcile.py \
+            --repo "$GITHUB_REPOSITORY" --hours 24 --limit 20 --max-pages 4 \
+            | tee "$RUNNER_TEMP/factory-terminal-reconciliation.json"
+          {
+            echo '### Missing terminal outcome recovery'
+            echo '```json'
+            cat "$RUNNER_TEMP/factory-terminal-reconciliation.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
