@@ -32,7 +32,6 @@ ENTRY_PATH = REPOSITORY_ROOT / "api" / "index.py"
 DEFERRED_ROUTER_MODULES = (
     "app.api.thread",
     "app.api.session",
-    "app.api.continuity_rule",
 )
 
 #: Dependency sub-router route reachable only once the sub-routers are composed.

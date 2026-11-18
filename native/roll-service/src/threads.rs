@@ -604,6 +604,82 @@ pub async fn list_completed_threads(
     }))
 }
 
+/// Read one validated page of the authenticated reader's excluded threads.
+///
+/// Mirrors `thread_service.list_excluded_threads`: `position` has no meaning
+/// off the active queue and is read as `created`, excluded rows hold no live
+/// Queue ordinal (their `queue_position` is zero), and `active_count` is the
+/// schema default of zero. Parameter validation (`search`, `sort`, `page_size`)
+/// is the caller's responsibility (`thread_lifecycle::list_excluded_threads`).
+pub(crate) async fn list_excluded_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    raw_search: Option<&str>,
+    requested_sort: &str,
+    page_size: i64,
+    page_token: Option<&str>,
+) -> Result<Json<ThreadListResponse>, ApiError> {
+    let sort = if requested_sort == "position" {
+        "created"
+    } else {
+        requested_sort
+    };
+    let search = normalize_search(raw_search);
+    let cursor = page_token
+        .filter(|token| !token.is_empty())
+        .map(|token| decode_cursor(token, sort, &search, "legacy"))
+        .transpose()?;
+    let (auth, _active_count, _list_names, rows) = query_page(
+        state,
+        claims,
+        None,
+        false,
+        None,
+        &search,
+        sort,
+        page_size,
+        cursor.as_ref(),
+        "excluded",
+    )
+    .await?;
+    validate_auth(claims, &auth)?;
+    let mut rows = rows;
+    let next_page_token = if rows.len() > page_size as usize {
+        rows.truncate(page_size as usize);
+        rows.last().map(|last| {
+            encode_cursor(&QueueCursor {
+                sort: sort.to_string(),
+                search,
+                values: match sort {
+                    "title" => vec![last.title.clone(), last.id.to_string()],
+                    _ => vec![
+                        last.created_at
+                            .strip_suffix('Z')
+                            .map(|value| format!("{value}+00:00"))
+                            .unwrap_or_else(|| last.created_at.clone()),
+                        last.id.to_string(),
+                    ],
+                },
+                execution: "legacy".to_string(),
+            })
+        })
+    } else {
+        None
+    };
+    let threads = rows
+        .into_iter()
+        .map(|mut row| {
+            row.queue_position = 0;
+            row.into_item(None, None)
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    Ok(Json(ThreadListResponse {
+        threads,
+        next_page_token,
+        active_count: 0,
+    }))
+}
+
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
     let auth = auth
         .as_ref()
