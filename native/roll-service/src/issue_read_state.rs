@@ -1,0 +1,1121 @@
+//! Same-path Rust cutover for the browser-called issue read-state routes
+//! (#4832, part C).
+//!
+//! Replaces the frozen Python handlers in `app/api/issue.py` and
+//! `app/services/issue.py` at the identical HTTP methods and paths:
+//!
+//! * `POST /api/v1/issues/{issue_id}:markRead`
+//! * `POST /api/v1/issues/{issue_id}:markUnread`
+//! * `POST /api/v1/issues/{issue_id}:move`
+//! * `POST /api/v1/issues:bulkMarkRead`
+//! * `POST /api/v1/issues:bulkMarkUnread`
+//! * `GET  /api/v1/issues/{issue_id}/reader-context` (see [`crate::reader_context`])
+//!
+//! Every mutation runs in one transaction that takes the per-reader queue
+//! advisory lock first (the global lock order every queue writer uses), then
+//! row locks, and mirrors the Python side effects exactly: issue
+//! `status`/`read_at`, the thread's `next_unread_issue_id`,
+//! `issues_remaining`, `reading_progress`, derived lifecycle status (an
+//! excluded series is never overwritten and completing a series ends its
+//! manual queue claim), queue renumbering, the `issue_read`/`issue_unread`
+//! history events and the denormalized `threads.is_blocked` refresh.
+//!
+//! Wire parity:
+//!
+//! * Success is `204 No Content`. Missing and foreign issues are the same
+//!   `404 {"detail": "Issue {id} not found"}`. Re-marking an issue is
+//!   `400 "Issue {id} is already marked as read|unread"`. A bulk request
+//!   fails on the first invalid id in request order, with nothing changed.
+//! * Validation failures use FastAPI's list-shaped 422 body
+//!   (`type`/`loc`/`msg`/`input`/`ctx`) for the integer path parameter and
+//!   the `after_issue_id` / `issue_ids` request fields. Authentication runs
+//!   before validation, as in FastAPI.
+//! * A bulk list that repeats an id records one history event per list entry,
+//!   exactly like the Python loop.
+//! * axum cannot express a parameter followed by `:action`, so the whole
+//!   `{issue_id}:action` segment is captured and dispatched on its suffix
+//!   (the same technique the thread-action dispatcher uses). Any other
+//!   `POST /api/v1/issues/{segment}` is a 405, as in Starlette where the
+//!   path matches the `GET` route only.
+
+#![forbid(unsafe_code)]
+
+use crate::{
+    auth::AuthenticatedUser, db, issue_mutation, issue_service, reader_context, ApiError, AppState,
+};
+use axum::{
+    body::Bytes,
+    extract::{rejection::PathRejection, Path, State},
+    http::StatusCode,
+};
+use serde_json::{json, Value};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use tokio_postgres::Transaction;
+
+const MAX_BULK_ISSUES: usize = 100;
+
+fn validation(items: Vec<Value>) -> ApiError {
+    ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, Value::Array(items))
+}
+
+fn issue_not_found(issue_id: impl std::fmt::Display) -> ApiError {
+    ApiError::NotFound(format!("Issue {issue_id} not found"))
+}
+
+/// Pydantic lax integer text: optional sign then ASCII digits (surrounding
+/// whitespace is ignored).
+fn parse_int_text(raw: &str) -> Option<i64> {
+    let trimmed = raw.trim();
+    let digits = trimmed.strip_prefix(['+', '-']).unwrap_or(trimmed);
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    trimmed.parse().ok()
+}
+
+fn path_int_error(raw: &str) -> ApiError {
+    validation(vec![json!({
+        "type": "int_parsing",
+        "loc": ["path", "issue_id"],
+        "msg": "Input should be a valid integer, unable to parse string as an integer",
+        "input": raw,
+    })])
+}
+
+/// Resolve an `issue_id` path value. Integers outside PostgreSQL's `integer`
+/// range can never name a row, so they are an ordinary missing issue.
+fn resolve_issue_id(raw: &str) -> Result<i32, ApiError> {
+    let value = parse_int_text(raw).ok_or_else(|| path_int_error(raw))?;
+    i32::try_from(value).map_err(|_| issue_not_found(value))
+}
+
+/// Parse the `{issue_id}` path segment of a single-segment route.
+pub(crate) fn parse_path_issue_id(
+    raw: Result<Path<String>, PathRejection>,
+) -> Result<i32, ApiError> {
+    let Path(raw) = raw.map_err(|_| path_int_error(""))?;
+    resolve_issue_id(&raw)
+}
+
+/// One pydantic lax integer element. `Err` carries the pydantic error
+/// `(type, msg)` pair for the offending value.
+fn lax_int(value: &Value) -> Result<i64, (&'static str, &'static str)> {
+    match value {
+        Value::Number(number) => {
+            if let Some(int) = number.as_i64() {
+                return Ok(int);
+            }
+            match number.as_f64() {
+                Some(float) if float.fract() == 0.0 && float.abs() < 9.0e15 => Ok(float as i64),
+                Some(float) if float.is_finite() && float.fract() != 0.0 => Err((
+                    "int_from_float",
+                    "Input should be a valid integer, got a number with a fractional part",
+                )),
+                _ => Err((
+                    "int_parsing",
+                    "Input should be a valid integer, unable to parse string as an integer",
+                )),
+            }
+        }
+        Value::String(text) => parse_int_text(text).ok_or((
+            "int_parsing",
+            "Input should be a valid integer, unable to parse string as an integer",
+        )),
+        Value::Bool(flag) => Ok(i64::from(*flag)),
+        _ => Err(("int_type", "Input should be a valid integer")),
+    }
+}
+
+/// Parse the JSON request body into a top-level object, FastAPI style.
+fn body_object(body: &[u8]) -> Result<serde_json::Map<String, Value>, ApiError> {
+    if body.iter().all(u8::is_ascii_whitespace) {
+        return Err(validation(vec![json!({
+            "type": "missing",
+            "loc": ["body"],
+            "msg": "Field required",
+            "input": Value::Null,
+        })]));
+    }
+    let value: Value = serde_json::from_slice(body).map_err(|error| {
+        validation(vec![json!({
+            "type": "json_invalid",
+            "loc": ["body", error.column().saturating_sub(1)],
+            "msg": "JSON decode error",
+            "input": {},
+            "ctx": {"error": "Expecting value"},
+        })])
+    })?;
+    match value {
+        Value::Object(map) => Ok(map),
+        other => Err(validation(vec![json!({
+            "type": "model_attributes_type",
+            "loc": ["body"],
+            "msg": "Input should be a valid dictionary or object to extract fields from",
+            "input": other,
+        })])),
+    }
+}
+
+/// `IssueMoveRequest`: required nullable `after_issue_id >= 1`.
+fn parse_move_body(body: &[u8]) -> Result<Option<i64>, ApiError> {
+    let object = body_object(body)?;
+    let Some(value) = object.get("after_issue_id") else {
+        return Err(validation(vec![json!({
+            "type": "missing",
+            "loc": ["body", "after_issue_id"],
+            "msg": "Field required",
+            "input": Value::Object(object),
+        })]));
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    match lax_int(value) {
+        Ok(int) if int >= 1 => Ok(Some(int)),
+        Ok(_) => Err(validation(vec![json!({
+            "type": "greater_than_equal",
+            "loc": ["body", "after_issue_id"],
+            "msg": "Input should be greater than or equal to 1",
+            "input": value,
+            "ctx": {"ge": 1},
+        })])),
+        Err((kind, msg)) => Err(validation(vec![json!({
+            "type": kind,
+            "loc": ["body", "after_issue_id"],
+            "msg": msg,
+            "input": value,
+        })])),
+    }
+}
+
+/// `IssueBulkMarkReadRequest` / `IssueBulkMarkUnreadRequest`: 1..=100 integers.
+fn parse_bulk_body(body: &[u8]) -> Result<Vec<i64>, ApiError> {
+    let object = body_object(body)?;
+    let Some(value) = object.get("issue_ids") else {
+        return Err(validation(vec![json!({
+            "type": "missing",
+            "loc": ["body", "issue_ids"],
+            "msg": "Field required",
+            "input": Value::Object(object),
+        })]));
+    };
+    let Value::Array(items) = value else {
+        return Err(validation(vec![json!({
+            "type": "list_type",
+            "loc": ["body", "issue_ids"],
+            "msg": "Input should be a valid list",
+            "input": value,
+        })]));
+    };
+    let mut ids = Vec::with_capacity(items.len());
+    let mut errors = vec![];
+    for (index, item) in items.iter().enumerate() {
+        match lax_int(item) {
+            Ok(int) => ids.push(int),
+            Err((kind, msg)) => errors.push(json!({
+                "type": kind,
+                "loc": ["body", "issue_ids", index],
+                "msg": msg,
+                "input": item,
+            })),
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation(errors));
+    }
+    if ids.is_empty() {
+        return Err(validation(vec![json!({
+            "type": "too_short",
+            "loc": ["body", "issue_ids"],
+            "msg": "List should have at least 1 item after validation, not 0",
+            "input": value,
+            "ctx": {"field_type": "List", "min_length": 1, "actual_length": 0},
+        })]));
+    }
+    if ids.len() > MAX_BULK_ISSUES {
+        return Err(validation(vec![json!({
+            "type": "too_long",
+            "loc": ["body", "issue_ids"],
+            "msg": format!(
+                "List should have at most {MAX_BULK_ISSUES} items after validation, not {}",
+                ids.len()
+            ),
+            "input": value,
+            "ctx": {"field_type": "List", "max_length": MAX_BULK_ISSUES, "actual_length": ids.len()},
+        })]));
+    }
+    Ok(ids)
+}
+
+struct OwnedIssue {
+    id: i32,
+    thread_id: i32,
+    issue_number: String,
+    status: String,
+    position: i32,
+}
+
+async fn owned_issue(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    issue_id: i32,
+) -> Result<OwnedIssue, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position
+             FROM issues i JOIN threads t ON t.id = i.thread_id
+             WHERE i.id = $1 AND t.user_id = $2",
+            &[&issue_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| issue_not_found(issue_id))?;
+    Ok(OwnedIssue {
+        id: row.get(0),
+        thread_id: row.get(1),
+        issue_number: row.get(2),
+        status: row.get(3),
+        position: row.get(4),
+    })
+}
+
+struct ThreadState {
+    status: String,
+    total_issues: Option<i32>,
+    issues_remaining: i32,
+    next_unread_issue_id: Option<i32>,
+    queue_position: i32,
+}
+
+async fn lock_owned_thread(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+) -> Result<ThreadState, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT status, total_issues, issues_remaining, next_unread_issue_id, queue_position
+             FROM threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::NotFound(format!("Thread {thread_id} not found")))?;
+    Ok(ThreadState {
+        status: row.get(0),
+        total_issues: row.get(1),
+        issues_remaining: row.get(2),
+        next_unread_issue_id: row.get(3),
+        queue_position: row.get(4),
+    })
+}
+
+async fn begin(
+    conn: &mut deadpool_postgres::Object,
+) -> Result<deadpool_postgres::Transaction<'_>, ApiError> {
+    conn.build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)
+}
+
+/// `Thread.apply_derived_status`: an excluded series keeps its status. Returns
+/// whether the status was written. Completing ends any manual queue claim.
+async fn apply_derived_status(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+    status: &str,
+) -> Result<bool, ApiError> {
+    let written = tx
+        .execute(
+            "UPDATE threads SET status = $2::text,
+                    queue_position_is_manual = CASE WHEN $2::text = 'completed'
+                        THEN FALSE ELSE queue_position_is_manual END
+             WHERE id = $1 AND status <> 'excluded'",
+            &[&thread_id, &status],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(written > 0)
+}
+
+/// Seat a reactivated series at the end of the active queue when it has none.
+async fn seat_at_queue_end(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "UPDATE threads SET queue_position = (
+             SELECT COALESCE(MAX(other.queue_position), 0) + 1
+             FROM threads other
+             WHERE other.user_id = $1 AND other.status = 'active'
+               AND other.queue_position >= 1 AND other.id <> $2
+         )
+         WHERE id = $2 AND queue_position < 1",
+        &[&user_id, &thread_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// `thread_repository.renormalize_queue_positions`: dense `1..N` active queue.
+async fn renormalize_queue_positions(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    tx.execute(
+        "UPDATE threads t SET queue_position = ranked.seq
+         FROM (
+             SELECT id, row_number() OVER (ORDER BY queue_position, id)::int AS seq
+             FROM threads
+             WHERE user_id = $1 AND status = 'active' AND queue_position >= 1
+         ) ranked
+         WHERE t.id = ranked.id AND t.queue_position IS DISTINCT FROM ranked.seq",
+        &[&user_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// `apply_thread_issue_tracking_state`: re-derive the thread counters from its
+/// issue rows. Returns the new `next_unread_issue_id`. Lifecycle `status` is
+/// left to the caller; a thread with nothing unread cannot be blocked.
+async fn apply_tracking_state(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+) -> Result<Option<i32>, ApiError> {
+    let row = tx
+        .query_one(
+            "UPDATE threads t SET
+                 total_issues = s.total,
+                 issues_remaining = s.unread,
+                 next_unread_issue_id = s.next_id,
+                 reading_progress = CASE WHEN s.unread = 0 THEN 'completed'
+                                         WHEN s.unread = s.total THEN 'not_started'
+                                         ELSE 'in_progress' END,
+                 is_blocked = CASE WHEN s.unread = 0 THEN FALSE ELSE t.is_blocked END
+             FROM (
+                 SELECT count(*)::int AS total,
+                        (count(*) FILTER (WHERE status = 'unread'))::int AS unread,
+                        (SELECT id FROM issues WHERE thread_id = $1 AND status = 'unread'
+                         ORDER BY position, id LIMIT 1) AS next_id
+                 FROM issues WHERE thread_id = $1
+             ) s
+             WHERE t.id = $1
+             RETURNING t.next_unread_issue_id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.get(0))
+}
+
+async fn insert_history_event(
+    tx: &Transaction<'_>,
+    event_type: &str,
+    user_id: i32,
+    thread_id: i32,
+    issue_id: i32,
+    issue_number: &str,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, issue_number)
+         VALUES ($1, NOW(), $2, $3, $4, $5)",
+        &[&event_type, &user_id, &thread_id, &issue_id, &issue_number],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+async fn count_unread(tx: &Transaction<'_>, thread_id: i32) -> Result<i32, ApiError> {
+    Ok(tx
+        .query_one(
+            "SELECT count(*)::int FROM issues WHERE thread_id = $1 AND status = 'unread'",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0))
+}
+
+async fn mark_issue_read(
+    state: &AppState,
+    user: AuthenticatedUser,
+    issue_id: i32,
+) -> Result<StatusCode, ApiError> {
+    let mut conn = db::checkout(state).await?;
+    let tx = begin(&mut conn).await?;
+    issue_mutation::lock_reader(&tx, user.id()).await?;
+    let issue = owned_issue(&tx, user.id(), issue_id).await?;
+    let thread = lock_owned_thread(&tx, user.id(), issue.thread_id).await?;
+    if issue.status == "read" {
+        return Err(ApiError::BadRequest(format!(
+            "Issue {issue_id} is already marked as read"
+        )));
+    }
+    tx.execute(
+        "UPDATE issues SET status = 'read', read_at = NOW() WHERE id = $1",
+        &[&issue_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let next_unread: Option<i32> = tx
+        .query_opt(
+            "SELECT id FROM issues WHERE thread_id = $1 AND status = 'unread'
+             ORDER BY position, id LIMIT 1",
+            &[&issue.thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
+    if let Some(next_id) = next_unread {
+        // `Thread.get_issues_remaining`: counted only once issue tracking is on.
+        let remaining = if thread.total_issues.is_some() {
+            count_unread(&tx, issue.thread_id).await?
+        } else {
+            thread.issues_remaining
+        };
+        tx.execute(
+            "UPDATE threads SET next_unread_issue_id = $2, reading_progress = 'in_progress',
+                    issues_remaining = $3
+             WHERE id = $1",
+            &[&issue.thread_id, &next_id, &remaining],
+        )
+        .await
+        .map_err(db::query_error)?;
+    } else {
+        tx.execute(
+            "UPDATE threads SET next_unread_issue_id = NULL, reading_progress = 'completed',
+                    issues_remaining = 0
+             WHERE id = $1",
+            &[&issue.thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+        if apply_derived_status(&tx, issue.thread_id, "completed").await? {
+            renormalize_queue_positions(&tx, user.id()).await?;
+        }
+    }
+    insert_history_event(
+        &tx,
+        "issue_read",
+        user.id(),
+        issue.thread_id,
+        issue_id,
+        &issue.issue_number,
+    )
+    .await?;
+    issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn mark_issue_unread(
+    state: &AppState,
+    user: AuthenticatedUser,
+    issue_id: i32,
+) -> Result<StatusCode, ApiError> {
+    let mut conn = db::checkout(state).await?;
+    let tx = begin(&mut conn).await?;
+    // The queue lock precedes every row lock so reactivation's renumbering
+    // cannot deadlock against a concurrent move or shuffle.
+    issue_mutation::lock_reader(&tx, user.id()).await?;
+    let issue = owned_issue(&tx, user.id(), issue_id).await?;
+    let thread = lock_owned_thread(&tx, user.id(), issue.thread_id).await?;
+    if issue.status == "unread" {
+        return Err(ApiError::BadRequest(format!(
+            "Issue {issue_id} is already marked as unread"
+        )));
+    }
+    let thread_was_completed = thread.status == "completed";
+    tx.execute(
+        "UPDATE issues SET status = 'unread', read_at = NULL WHERE id = $1",
+        &[&issue_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let current_next_position: Option<i32> = match thread.next_unread_issue_id {
+        Some(next_id) => tx
+            .query_opt("SELECT position FROM issues WHERE id = $1", &[&next_id])
+            .await
+            .map_err(db::query_error)?
+            .map(|row| row.get(0)),
+        None => None,
+    };
+    let next_unread_issue_id = match current_next_position {
+        Some(position) if issue.position >= position => thread.next_unread_issue_id,
+        _ => Some(issue_id),
+    };
+    let remaining = if thread.total_issues.is_some() {
+        count_unread(&tx, issue.thread_id).await?
+    } else {
+        thread.issues_remaining
+    };
+    tx.execute(
+        "UPDATE threads SET next_unread_issue_id = $2, reading_progress = 'in_progress',
+                issues_remaining = $3
+         WHERE id = $1",
+        &[&issue.thread_id, &next_unread_issue_id, &remaining],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    if thread_was_completed && apply_derived_status(&tx, issue.thread_id, "active").await? {
+        if thread.queue_position < 1 {
+            seat_at_queue_end(&tx, user.id(), issue.thread_id).await?;
+        }
+        renormalize_queue_positions(&tx, user.id()).await?;
+    }
+    insert_history_event(
+        &tx,
+        "issue_unread",
+        user.id(),
+        issue.thread_id,
+        issue_id,
+        &issue.issue_number,
+    )
+    .await?;
+    issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn bulk_mark(
+    state: &AppState,
+    user: AuthenticatedUser,
+    requested: &[i64],
+    mark_read: bool,
+) -> Result<StatusCode, ApiError> {
+    let (target_status, refused_status, event_type) = if mark_read {
+        ("read", "read", "issue_read")
+    } else {
+        ("unread", "unread", "issue_unread")
+    };
+    let mut conn = db::checkout(state).await?;
+    let tx = begin(&mut conn).await?;
+    issue_mutation::lock_reader(&tx, user.id()).await?;
+
+    // Verify every requested id, in request order, before changing anything.
+    let mut issues: Vec<OwnedIssue> = Vec::with_capacity(requested.len());
+    for raw_id in requested {
+        let issue_id = i32::try_from(*raw_id).map_err(|_| issue_not_found(raw_id))?;
+        let issue = owned_issue(&tx, user.id(), issue_id).await?;
+        if issue.status == refused_status {
+            return Err(ApiError::BadRequest(format!(
+                "Issue {issue_id} is already marked as {refused_status}"
+            )));
+        }
+        issues.push(issue);
+    }
+
+    let distinct_ids: Vec<i32> = issues
+        .iter()
+        .map(|issue| issue.id)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    tx.execute(
+        "UPDATE issues SET status = $2::text,
+                read_at = CASE WHEN $2::text = 'read' THEN NOW() ELSE NULL END
+         WHERE id = ANY($1)",
+        &[&distinct_ids, &target_status],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let thread_ids: BTreeSet<i32> = issues.iter().map(|issue| issue.thread_id).collect();
+    let mut queue_changed = false;
+    for thread_id in thread_ids {
+        lock_owned_thread(&tx, user.id(), thread_id).await?;
+        match apply_tracking_state(&tx, thread_id).await? {
+            None => {
+                if apply_derived_status(&tx, thread_id, "completed").await? {
+                    queue_changed = true;
+                }
+            }
+            Some(_) => {
+                let completed: bool = tx
+                    .query_one(
+                        "SELECT status = 'completed' FROM threads WHERE id = $1",
+                        &[&thread_id],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .get(0);
+                if completed && apply_derived_status(&tx, thread_id, "active").await? {
+                    seat_at_queue_end(&tx, user.id(), thread_id).await?;
+                    queue_changed = true;
+                }
+            }
+        }
+    }
+    if queue_changed {
+        renormalize_queue_positions(&tx, user.id()).await?;
+    }
+    for issue in &issues {
+        insert_history_event(
+            &tx,
+            event_type,
+            user.id(),
+            issue.thread_id,
+            issue.id,
+            &issue.issue_number,
+        )
+        .await?;
+    }
+    issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn move_issue(
+    state: &AppState,
+    user: AuthenticatedUser,
+    issue_id: i32,
+    after_issue_id: Option<i64>,
+) -> Result<StatusCode, ApiError> {
+    let mut conn = db::checkout(state).await?;
+    let tx = begin(&mut conn).await?;
+    issue_mutation::lock_reader(&tx, user.id()).await?;
+    let thread_id: i32 = tx
+        .query_opt(
+            "SELECT i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id
+             WHERE i.id = $1 AND t.user_id = $2",
+            &[&issue_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| issue_not_found(issue_id))?
+        .get(0);
+    lock_owned_thread(&tx, user.id(), thread_id).await?;
+    let ids: Vec<i32> = tx
+        .query(
+            "SELECT id FROM issues WHERE thread_id = $1 ORDER BY position, id FOR UPDATE",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    if !ids.contains(&issue_id) {
+        return Err(issue_not_found(issue_id));
+    }
+
+    if after_issue_id == Some(i64::from(issue_id)) {
+        // Anchoring on itself keeps the order and only refreshes tracking state.
+        apply_tracking_state(&tx, thread_id).await?;
+        issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+        tx.commit().await.map_err(db::query_error)?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let mut reordered: Vec<i32> = ids.iter().copied().filter(|id| *id != issue_id).collect();
+    let insert_index = match after_issue_id {
+        None => 0,
+        Some(after) => reordered
+            .iter()
+            .position(|id| i64::from(*id) == after)
+            .map(|index| index + 1)
+            .ok_or_else(|| issue_not_found(after))?,
+    };
+    reordered.insert(insert_index, issue_id);
+
+    tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+        .await
+        .map_err(db::query_error)?;
+    let positions: Vec<(i32, i32)> = (1..)
+        .zip(reordered.iter())
+        .map(|(p, id)| (*id, p))
+        .collect();
+    issue_mutation::reseat_positions(&tx, thread_id, &positions).await?;
+    apply_tracking_state(&tx, thread_id).await?;
+    issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Dispatch `POST /api/v1/issues/{issue_id}:{action}` operations.
+///
+/// The segment is split on its action suffix like Starlette's
+/// `(?P<issue_id>[^/]+):action` pattern, so an id containing a colon is an
+/// invalid integer rather than a different route. Any other segment matches
+/// only the `GET` route in Python and is a 405.
+pub async fn post_issue_action(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    segment: Result<Path<String>, PathRejection>,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let Path(segment) = segment.map_err(|_| path_int_error(""))?;
+    if let Some(raw_id) = segment.strip_suffix(":markRead") {
+        let issue_id = resolve_issue_id(raw_id)?;
+        return mark_issue_read(&state, user, issue_id).await;
+    }
+    if let Some(raw_id) = segment.strip_suffix(":markUnread") {
+        let issue_id = resolve_issue_id(raw_id)?;
+        return mark_issue_unread(&state, user, issue_id).await;
+    }
+    if let Some(raw_id) = segment.strip_suffix(":move") {
+        // FastAPI reports path errors before body errors.
+        let path_id = parse_int_text(raw_id).ok_or_else(|| path_int_error(raw_id));
+        let after = parse_move_body(&body);
+        let (path_id, after) = match (path_id, after) {
+            (Err(path_error), Err(body_error)) => {
+                return Err(merge_validation(path_error, body_error))
+            }
+            (Err(path_error), Ok(_)) => return Err(path_error),
+            (Ok(_), Err(body_error)) => return Err(body_error),
+            (Ok(path_id), Ok(after)) => (path_id, after),
+        };
+        let issue_id = i32::try_from(path_id).map_err(|_| issue_not_found(path_id))?;
+        return move_issue(&state, user, issue_id, after).await;
+    }
+    Err(ApiError::MethodNotAllowed("Method Not Allowed".to_string()))
+}
+
+/// Combine two FastAPI validation errors into one ordered list (path first).
+fn merge_validation(first: ApiError, second: ApiError) -> ApiError {
+    let items = |error: ApiError| match error {
+        ApiError::StructuredDetail {
+            detail: Value::Array(items),
+            ..
+        } => items,
+        _ => vec![],
+    };
+    let mut merged = items(first);
+    merged.extend(items(second));
+    validation(merged)
+}
+
+/// `POST /api/v1/issues:bulkMarkRead`
+pub async fn bulk_mark_issues_read(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let ids = parse_bulk_body(&body)?;
+    bulk_mark(&state, user, &ids, true).await
+}
+
+/// `POST /api/v1/issues:bulkMarkUnread`
+pub async fn bulk_mark_issues_unread(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> Result<StatusCode, ApiError> {
+    let ids = parse_bulk_body(&body)?;
+    bulk_mark(&state, user, &ids, false).await
+}
+
+/// Request body for `POST /api/v1/issues/{issue_id}:move`.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+pub struct IssueMoveRequest {
+    /// Move after this issue. `null` moves the issue to position 1.
+    #[schema(minimum = 1, nullable = true)]
+    pub after_issue_id: Option<i32>,
+}
+
+/// Request body for the bulk read-state operations.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+pub struct IssueBulkRequest {
+    #[schema(min_items = 1, max_items = 100)]
+    pub issue_ids: Vec<i32>,
+}
+
+/// Documentation-only operation for `:markRead`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issues/{issue_id}:markRead",
+    tag = "issues",
+    operation_id = "issue_read_state_mark_read",
+    params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
+    responses(
+        (status = 204, description = "Issue marked read and the thread counters refreshed"),
+        (status = 400, description = "Issue is already marked as read"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn mark_read_documentation() {}
+
+/// Documentation-only operation for `:markUnread`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issues/{issue_id}:markUnread",
+    tag = "issues",
+    operation_id = "issue_read_state_mark_unread",
+    params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
+    responses(
+        (status = 204, description = "Issue marked unread; a completed thread is reactivated"),
+        (status = 400, description = "Issue is already marked as unread"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn mark_unread_documentation() {}
+
+/// Documentation-only operation for `:move`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issues/{issue_id}:move",
+    tag = "issues",
+    operation_id = "issue_read_state_move",
+    params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
+    request_body = IssueMoveRequest,
+    responses(
+        (status = 204, description = "Issue moved within its thread"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue or anchor issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn move_documentation() {}
+
+/// Documentation-only operation for `:bulkMarkRead`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issues:bulkMarkRead",
+    tag = "issues",
+    operation_id = "issue_read_state_bulk_mark_read",
+    request_body = IssueBulkRequest,
+    responses(
+        (status = 204, description = "Every issue marked read atomically"),
+        (status = 400, description = "An issue is already marked as read"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_mark_read_documentation() {}
+
+/// Documentation-only operation for `:bulkMarkUnread`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issues:bulkMarkUnread",
+    tag = "issues",
+    operation_id = "issue_read_state_bulk_mark_unread",
+    request_body = IssueBulkRequest,
+    responses(
+        (status = 204, description = "Every issue marked unread atomically"),
+        (status = 400, description = "An issue is already marked as unread"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bulk_mark_unread_documentation() {}
+
+/// Documentation-only operation for reader context.
+#[utoipa::path(
+    get,
+    path = "/api/v1/issues/{issue_id}/reader-context",
+    tag = "issues",
+    operation_id = "issue_read_state_reader_context",
+    params(("issue_id" = i32, Path, description = "Owned Issue identifier")),
+    responses(
+        (status = 200, description = "Bounded reader context", body = reader_context::ReaderContextResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Issue not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn reader_context_documentation() {}
+
+/// OpenAPI document for the native same-path issue read-state surface.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native same-path issue read-state API",
+        version = "1.0.0",
+        description = "Generated contract for the native issue read-state, move and reader-context handlers that retain their original method and path."
+    ),
+    paths(
+        mark_read_documentation,
+        mark_unread_documentation,
+        move_documentation,
+        bulk_mark_read_documentation,
+        bulk_mark_unread_documentation,
+        reader_context_documentation
+    ),
+    components(schemas(
+        IssueMoveRequest,
+        IssueBulkRequest,
+        reader_context::ReaderContextPreviousIssue,
+        reader_context::ReaderContextRecentRating,
+        reader_context::ReaderContextSeries,
+        reader_context::ReaderContextCrossoverNextMember,
+        reader_context::ReaderContextCrossover,
+        reader_context::ReaderContextCrossoverMembership,
+        reader_context::ReaderContextLocalIssue,
+        reader_context::ReaderContextEdge,
+        reader_context::ReaderContextLocalChain,
+        reader_context::ReaderContextResponse
+    )),
+    modifiers(&IssueReadStateSecurityAddon)
+)]
+pub struct IssueReadStateApi;
+
+struct IssueReadStateSecurityAddon;
+impl utoipa::Modify for IssueReadStateSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
+/// Emit the same-path native issue read-state contract.
+pub fn issue_read_state_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    IssueReadStateApi::openapi()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detail(error: ApiError) -> Value {
+        match error {
+            ApiError::StructuredDetail { detail, .. } => detail,
+            other => panic!("expected structured validation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn path_ids_follow_integer_path_semantics() {
+        assert_eq!(parse_int_text("12"), Some(12));
+        assert_eq!(parse_int_text(" +4 "), Some(4));
+        assert_eq!(parse_int_text("-3"), Some(-3));
+        assert_eq!(parse_int_text("1.5"), None);
+        assert_eq!(parse_int_text("abc"), None);
+        assert_eq!(parse_int_text(""), None);
+        assert!(matches!(
+            resolve_issue_id("99999999999"),
+            Err(ApiError::NotFound(_))
+        ));
+        let error = detail(resolve_issue_id("abc").unwrap_err());
+        assert_eq!(error[0]["type"], "int_parsing");
+        assert_eq!(error[0]["loc"], json!(["path", "issue_id"]));
+        assert_eq!(error[0]["input"], "abc");
+    }
+
+    #[test]
+    fn move_body_matches_pydantic_validation() {
+        assert_eq!(
+            parse_move_body(br#"{"after_issue_id": null}"#).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_move_body(br#"{"after_issue_id": 7}"#).unwrap(),
+            Some(7)
+        );
+        assert_eq!(
+            parse_move_body(br#"{"after_issue_id": "7"}"#).unwrap(),
+            Some(7)
+        );
+        assert_eq!(
+            parse_move_body(br#"{"after_issue_id": 7.0}"#).unwrap(),
+            Some(7)
+        );
+        let missing = detail(parse_move_body(b"{}").unwrap_err());
+        assert_eq!(missing[0]["type"], "missing");
+        assert_eq!(missing[0]["loc"], json!(["body", "after_issue_id"]));
+        let low = detail(parse_move_body(br#"{"after_issue_id": 0}"#).unwrap_err());
+        assert_eq!(low[0]["type"], "greater_than_equal");
+        assert_eq!(low[0]["ctx"], json!({"ge": 1}));
+        let fractional = detail(parse_move_body(br#"{"after_issue_id": 1.5}"#).unwrap_err());
+        assert_eq!(fractional[0]["type"], "int_from_float");
+        let text = detail(parse_move_body(br#"{"after_issue_id": "x"}"#).unwrap_err());
+        assert_eq!(text[0]["type"], "int_parsing");
+        let list = detail(parse_move_body(br#"[1]"#).unwrap_err());
+        assert_eq!(list[0]["type"], "model_attributes_type");
+        let empty = detail(parse_move_body(b"").unwrap_err());
+        assert_eq!(empty[0]["type"], "missing");
+        assert_eq!(empty[0]["loc"], json!(["body"]));
+        let broken = detail(parse_move_body(b"{not json").unwrap_err());
+        assert_eq!(broken[0]["type"], "json_invalid");
+    }
+
+    #[test]
+    fn bulk_body_matches_pydantic_validation() {
+        assert_eq!(
+            parse_bulk_body(br#"{"issue_ids": [3, "4", 3]}"#).unwrap(),
+            vec![3, 4, 3]
+        );
+        let missing = detail(parse_bulk_body(b"{}").unwrap_err());
+        assert_eq!(missing[0]["type"], "missing");
+        let short = detail(parse_bulk_body(br#"{"issue_ids": []}"#).unwrap_err());
+        assert_eq!(short[0]["type"], "too_short");
+        assert_eq!(
+            short[0]["msg"],
+            "List should have at least 1 item after validation, not 0"
+        );
+        let too_many = format!(
+            "{{\"issue_ids\":[{}]}}",
+            (1..=101)
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let long = detail(parse_bulk_body(too_many.as_bytes()).unwrap_err());
+        assert_eq!(long[0]["type"], "too_long");
+        assert_eq!(long[0]["ctx"]["actual_length"], 101);
+        let bad = detail(parse_bulk_body(br#"{"issue_ids": [1, "x", null]}"#).unwrap_err());
+        assert_eq!(bad.as_array().unwrap().len(), 2);
+        assert_eq!(bad[0]["loc"], json!(["body", "issue_ids", 1]));
+        assert_eq!(bad[1]["type"], "int_type");
+        let not_list = detail(parse_bulk_body(br#"{"issue_ids": 5}"#).unwrap_err());
+        assert_eq!(not_list[0]["type"], "list_type");
+    }
+
+    #[test]
+    fn contract_documents_every_operation_and_stays_current() {
+        let document = serde_json::to_value(issue_read_state_openapi()).unwrap();
+        for path in [
+            "/api/v1/issues/{issue_id}:markRead",
+            "/api/v1/issues/{issue_id}:markUnread",
+            "/api/v1/issues/{issue_id}:move",
+            "/api/v1/issues:bulkMarkRead",
+            "/api/v1/issues:bulkMarkUnread",
+            "/api/v1/issues/{issue_id}/reader-context",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        let expected = include_str!("../../contracts/issue-read-state-v1.openapi.json");
+        let generated = issue_read_state_openapi().to_pretty_json().unwrap();
+        assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+}

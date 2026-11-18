@@ -28,6 +28,7 @@ pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_mutation;
 pub mod issue_read;
+pub mod issue_read_state;
 pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
@@ -36,6 +37,7 @@ pub mod option_inputs;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
+pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
@@ -716,6 +718,23 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
+        )
+        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
+        .route(
+            "/api/v1/issues/{issue_id}",
+            post(issue_read_state::post_issue_action),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkRead",
+            post(issue_read_state::bulk_mark_issues_read),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkUnread",
+            post(issue_read_state::bulk_mark_issues_unread),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(reader_context::get_issue_reader_context),
         )
         .route(
             "/api/v1/threads:getBlockingInfo",
