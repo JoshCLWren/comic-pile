@@ -697,9 +697,7 @@ fn normalized_volume_key(key: &str) -> Option<String> {
     }
 
     let mut chars = rest.chars();
-    let Some(first) = chars.next() else {
-        return None;
-    };
+    let first = chars.next()?;
     if !first.is_ascii_alphanumeric() {
         return None;
     }
@@ -844,7 +842,7 @@ async fn load_thread_volume_candidates(
         .query(
             "SELECT t.id, ei.external_id
              FROM threads t
-             JOIN thread_external_series_mapping tem ON tem.thread_id = t.id
+             JOIN thread_external_series_mappings tem ON tem.thread_id = t.id
              JOIN external_identities ei ON ei.id = tem.external_identity_id
              WHERE t.id = ANY($1) AND t.user_id = $2
                AND tem.status = 'confirmed'
@@ -2600,7 +2598,6 @@ pub async fn save_overlap_decision(
 
     // Upsert the decision
     let now = chrono::Utc::now();
-    let now_str = now.to_rfc3339();
 
     // Delete opposite direction
     tx.execute(
@@ -2656,15 +2653,14 @@ pub async fn save_overlap_decision(
     }
 
     // Advance version token
-    let new_token = now_str.clone();
     let updated_row = tx
         .query_opt(
             "UPDATE custom_cbl_lists
-             SET overlap_decisions_updated_at = $3::timestamptz,
+             SET overlap_decisions_updated_at = $3,
                  updated_at = updated_at
              WHERE id = $1 AND user_id = $2
              RETURNING overlap_decisions_updated_at::text",
-            &[&list_id, &user.id(), &new_token],
+            &[&list_id, &user.id(), &now],
         )
         .await
         .map_err(db::query_error)?

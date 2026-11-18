@@ -244,19 +244,6 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
-    /// Explicit status with a structured JSON `detail` object.
-    ///
-    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
-    /// conflicts and validation errors. The scalar variants above cannot
-    /// represent that shape (their detail is a JSON string), so cutover
-    /// handlers that must preserve a structured wire contract use this
-    /// variant. The payload is serialized JSON text and parsed on response.
-    StructuredDetail {
-        /// HTTP status to emit.
-        status: StatusCode,
-        /// Serialized JSON object used as the `detail` value.
-        detail: String,
-    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -326,7 +313,6 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             ApiError::Detail { status, .. } | ApiError::StructuredDetail { status, .. } => *status,
         }
@@ -348,7 +334,6 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
-            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
             ApiError::StructuredDetail { message, .. } => message.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),

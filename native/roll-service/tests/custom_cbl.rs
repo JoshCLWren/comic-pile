@@ -102,11 +102,15 @@ async fn setup() -> Fixture {
     let own_issue_id: i32 = 910201;
     let other_issue_id: i32 = 910202;
     conn.batch_execute(&format!(
-        "INSERT INTO users (id, username) VALUES ({OTHER_USER_ID}, 'issue-search-other');
+        "INSERT INTO users (id, username, is_admin, created_at)
+         VALUES ({OTHER_USER_ID}, 'issue-search-other', false, NOW());
          INSERT INTO threads
-           (id, user_id, title, format, issues_remaining, queue_position, status)
-         VALUES ({own_thread_id}, {user_id}, 'Saga', 'Comic', 1, 1, 'active'),
-                ({other_thread_id}, {OTHER_USER_ID}, 'Saga', 'Comic', 1, 1, 'active');
+           (id, user_id, title, format, issues_remaining, queue_position, status,
+            manual_creator_credits, is_test, is_blocked, queue_position_is_manual, created_at)
+         VALUES ({own_thread_id}, {user_id}, 'Saga', 'Comic', 1, 1, 'active',
+                 '[]'::json, false, false, false, NOW()),
+                ({other_thread_id}, {OTHER_USER_ID}, 'Saga', 'Comic', 1, 1, 'active',
+                 '[]'::json, false, false, false, NOW());
          INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
          VALUES ({own_issue_id}, {own_thread_id}, '7', 'unread', NOW(), 1),
                 ({other_issue_id}, {other_thread_id}, '7', 'unread', NOW(), 1);"
@@ -843,9 +847,12 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
     let conn = fixture.state.pool.get().await.unwrap();
     conn.batch_execute(&format!(
         "INSERT INTO threads
-           (id, user_id, title, format, issues_remaining, queue_position, status)
-         VALUES (930101, {}, 'Alpha Series', 'Comic', 0, 930101, 'active'),
-                (930102, {}, 'Beta Series', 'Comic', 0, 930102, 'active');
+           (id, user_id, title, format, issues_remaining, queue_position, status,
+            manual_creator_credits, is_test, is_blocked, queue_position_is_manual, created_at)
+         VALUES (930101, {}, 'Alpha Series', 'Comic', 0, 930101, 'active',
+                 '[]'::json, false, false, false, NOW()),
+                (930102, {}, 'Beta Series', 'Comic', 0, 930102, 'active',
+                 '[]'::json, false, false, false, NOW());
          INSERT INTO external_identities
            (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
          VALUES (930201, 'comicvine', 'series', 'alpha-vol', '{{}}'::json, NOW(), NOW()),

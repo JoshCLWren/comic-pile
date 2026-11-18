@@ -319,10 +319,7 @@ fn not_found(detail: impl Into<String>) -> ApiError {
 /// wire and break the frontend's `detail.code` branching. This helper keeps
 /// the exact object shape (review #4838 finding #6).
 fn structured(status: StatusCode, detail: serde_json::Value) -> ApiError {
-    ApiError::StructuredDetail {
-        status,
-        detail: detail.to_string(),
-    }
+    ApiError::structured(status, detail)
 }
 
 /// Build a 422 envelope matching the Python Pydantic `model_validator` shape.
