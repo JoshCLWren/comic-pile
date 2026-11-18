@@ -1313,7 +1313,7 @@ pub async fn remove_member(
     match result {
         Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
-            issue_service::refresh_blocked_threads(tx, user.id()).await?;
+            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             Ok(StatusCode::NO_CONTENT)
         }
         Err(error) => {
@@ -1340,7 +1340,7 @@ async fn remove_member_tx(
         .await
         .map_err(db::query_error)?;
     let member = member.ok_or_else(|| ApiError::NotFound(format!("Member {member_id} not found")))?;
-    if member.get(1) != group_id {
+    if member.get::<_, i32>(1) != group_id {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
     }
     let deleted = tx
