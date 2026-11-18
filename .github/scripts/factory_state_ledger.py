@@ -680,7 +680,8 @@ def checkpoint_evidence_events(repo: str, result: dict[str, Any]) -> list[dict[s
         return records
     records.append({
         **common, "event_type": "checkpoint_pr_linked",
-        "event_id": f"checkpoint:{run_id}:pr:{pr}", "work_pr": pr,
+        "event_id": f"checkpoint:{run_id}:pr:{pr}:head:{head}:validated:{int(result.get('validated') is True)}",
+        "work_pr": pr,
         "validated": result.get("validated") is True,
     })
     if result.get("merged") is True:
@@ -688,7 +689,7 @@ def checkpoint_evidence_events(repo: str, result: dict[str, Any]) -> list[dict[s
         if re.fullmatch(r"[a-f0-9]{40}", merge_sha):
             records.append({
                 **common, "event_type": "checkpoint_pr_merged",
-                "event_id": f"checkpoint:{run_id}:merged:{pr}",
+                "event_id": f"checkpoint:{run_id}:merged:{pr}:head:{head}",
                 "work_pr": pr, "merge_sha": merge_sha,
             })
     return records
