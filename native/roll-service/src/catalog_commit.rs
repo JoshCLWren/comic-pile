@@ -198,6 +198,46 @@ fn verify_preview_token(
     Ok(payload)
 }
 
+/// Generate an HMAC-signed preview token matching the Python wire contract.
+///
+/// The token is `{"payload": payload, "signature": signature}` where `signature`
+/// is HMAC-SHA2256 over `canonical_json(&payload)` (Python `json.dumps(payload,
+/// sort_keys=True)` default separators).
+pub(crate) fn generate_preview_token(
+    secret: &str,
+    user_id: i32,
+    provider: &str,
+    provider_series_external_id: &str,
+    origin_issue_id: i32,
+    scope_key: &str,
+    issue_numbers: &[String],
+    classification_digest: &str,
+    scope_mode: &str,
+    issued_at: f64,
+    expires_at: f64,
+) -> String {
+    let payload = serde_json::json!({
+        "user_id": user_id,
+        "provider": provider,
+        "provider_series_external_id": provider_series_external_id,
+        "origin_issue_id": origin_issue_id,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "classification_digest": classification_digest,
+        "scope_mode": scope_mode,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+    });
+    let payload_json = canonical_json(&payload);
+    let signature = hmac_sha256_hex(secret, &payload_json)
+        .unwrap_or_else(|_| "".to_string());
+    serde_json::json!({
+        "payload": payload,
+        "signature": signature,
+    })
+    .to_string()
+}
+
 fn canonical_row_ids(approved_row_ids: &[String]) -> Vec<String> {
     let set: std::collections::BTreeSet<String> = approved_row_ids
         .iter()
@@ -690,7 +730,7 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // Python's build_series_mapping_plan can call ComicVine for rosters - for
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
-async fn build_plan_db(
+pub(crate) async fn build_plan_db(
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
