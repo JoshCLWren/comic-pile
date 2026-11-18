@@ -444,8 +444,10 @@ def test_checkpoint_malformed_graphql_result_never_publishes(
 def test_merged_checkpoint_requires_actual_incorporated_bytes(
     harness: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    harness["drafts"] = [{**harness["pr"], "state": "closed",
-                          "merged": True, "merge_commit_sha": "d" * 40}]
+    harness["pr"]["state"] = "closed"
+    harness["pr"]["merged"] = True
+    harness["pr"]["merge_commit_sha"] = "d" * 40
+    harness["drafts"] = [harness["pr"]]
     monkeypatch.setattr(handoff, "incorporated", lambda *_: False)
     result = handoff.publish(REPO, RUN, cleanup=True)
     assert result["saved"] and result["work_pr"] == 5152
