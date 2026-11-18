@@ -1011,6 +1011,17 @@ export async function invalidateRollBootstrapOnNavigation(
 }
 
 /**
+ * Refresh the roll bootstrap so active Roll views refetch authoritative state
+ * (used after direct issue corrections that bypass cache-effect helpers).
+ */
+export async function invalidateRollBootstrap(client: QueryClient): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.roll.bootstrap(),
+    exact: true,
+  })
+}
+
+/**
  * Refresh every surface a tag mutation rewrites (issue #3032).
  *
  * Tag creates/updates/deletes and (bulk) assignment changes rewrite the tag

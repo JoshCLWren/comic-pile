@@ -11,6 +11,8 @@ import { ComicIdentity } from './ComicIdentity'
 import { TagSection } from '../../../components/Tags/TagSection'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { useComicIssueMapping } from '../../../hooks/useComicIssueMapping'
+import { queryClient } from '../../../query/queryClient'
+import { invalidateRollBootstrap } from '../../../query/cacheEffects'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -254,7 +256,10 @@ export function ComicPillar({
           onClose={() => setIsCorrectionDialogOpen(false)}
           onSuccess={() => {
             setIsCorrectionDialogOpen(false)
-            onRefreshThread()
+            void (async () => {
+              await invalidateRollBootstrap(queryClient)
+              await onRefreshThread()
+            })()
           }}
         />
       ) : null}
