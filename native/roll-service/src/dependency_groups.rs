@@ -482,14 +482,23 @@ fn validate_group_order_request(
         ));
     } else if request.items.len() > MAX_ORDER_ITEMS {
         let actual_length = request.items.len();
+        let input = request
+            .items
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "issue_id": item.issue_id,
+                    "sequence_order": item.sequence_order,
+                })
+            })
+            .collect();
         errors.push(pydantic_error(
             "too_long",
             &[serde_json::json!("items")],
             format!(
                 "List should have at most {MAX_ORDER_ITEMS} items after validation, not {actual_length}"
             ),
-            serde_json::to_value(&request.items)
-                .expect("order request serialization cannot fail"),
+            serde_json::Value::Array(input),
             serde_json::json!({
                 "field_type": "List",
                 "max_length": MAX_ORDER_ITEMS,
