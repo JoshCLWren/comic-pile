@@ -1161,6 +1161,130 @@ mod tests {
     use crate::auth::AuthenticatedUser;
     use crate::test_support;
 
+    /// ComICVine search must go through the outbound seam: the fake records
+    /// the host and query and supplies the payload, never a socket (#5339).
+    #[tokio::test]
+    async fn fetch_comicvine_records_host_and_query_and_parses_the_payload() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":40001,"name":"Batman"}]}"#,
+            ),
+        );
+        let url = build_search_url("KEY123", "bat man", 10);
+        let payload = fetch_comicvine(&fake, url)
+            .await
+            .expect("canned provider payload must parse");
+        assert_eq!(payload["number_of_total_results"], 1);
+        assert_eq!(payload["results"][0]["id"], 40001);
+
+        let calls = recorder.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+        assert_eq!(calls[0].method, "GET");
+        assert!(
+            calls[0].path.starts_with("/api/search/?api_key=KEY123"),
+            "unexpected search path {}",
+            calls[0].path
+        );
+        assert!(calls[0].path.contains("query=bat%20man"));
+        assert!(calls[0].path.contains("resources=issue"));
+    }
+
+    #[tokio::test]
+    async fn fetch_comicvine_returns_none_on_error_status_failure_and_oversize() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        // Non-success status.
+        recorder.push_ok(
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            http::HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1}"#),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Transport failure (the default fake behavior).
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Oversized body is dropped instead of allocated unbounded.
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from(vec![b'x'; MAX_SEARCH_BODY + 1]),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        assert_eq!(recorder.calls().len(), 3);
+    }
+
+    /// End-to-end through the handler: a test-configured app answers search
+    /// from the recording fake, so the route never touches the network.
+    #[tokio::test]
+    async fn search_issues_serves_results_from_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"Detective Comics","issue_number":"1","volume":{"id":40509},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "detective".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("search must succeed against the fake");
+        assert_eq!(response.total_available, Some(1));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "exactly one outbound call, no socket");
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+    }
+
+    /// Save/restore `COMICVINE_API_KEY` around one test (same pattern as the
+    /// bug-reports GitHub env guard).
+    struct ComicvineKeyEnv {
+        previous: Option<String>,
+    }
+
+    impl ComicvineKeyEnv {
+        fn install() -> Self {
+            let previous = std::env::var("COMICVINE_API_KEY").ok();
+            std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+            Self { previous }
+        }
+    }
+
+    impl Drop for ComicvineKeyEnv {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+                None => std::env::remove_var("COMICVINE_API_KEY"),
+            }
+        }
+    }
+
     #[test]
     fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
         let empty = serde_json::json!({});
