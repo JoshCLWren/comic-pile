@@ -223,9 +223,8 @@ def run_migration_rehearsal(
     os.environ["DATABASE_URL"] = sync_url
     try:
         if mode == "upgrade-only":
+            steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
             steps.append(_run_step("upgrade_head", _upgrade_base))
-            if fixture_applier is not None and engine is not None:
-                steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
             steps.append(_run_step("upgrade_head", _upgrade_head))
         else:
             steps.append(_run_step("upgrade_head", _upgrade_head))
