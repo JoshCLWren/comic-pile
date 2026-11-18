@@ -985,7 +985,7 @@ pub async fn update_group(
     match result {
         Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
-            let memberships = memberships(&connection, group_id).await?;
+            let memberships = memberships(&*connection, group_id).await?;
             let response = group_response(&connection, &group, &memberships).await?;
             Ok((StatusCode::OK, Json(response)))
         }
@@ -1373,7 +1373,7 @@ pub async fn set_group_order(
             let group = owned_group(&connection, group_id, user.id())
                 .await?
                 .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
-            let memberships = memberships(&connection, group_id).await?;
+            let memberships = memberships(&*connection, group_id).await?;
             let response = group_response(&connection, &group, &memberships).await?;
             Ok((StatusCode::OK, Json(response)))
         }
