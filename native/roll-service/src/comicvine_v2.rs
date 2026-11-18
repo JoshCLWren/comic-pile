@@ -1383,12 +1383,74 @@ pub async fn import_series(
     .await
     .map_err(db::query_error)?;
 
-    let mut issue_results = Vec::with_capacity(rows.len());
-    let mut adopted = 0i32;
-    let mut skipped = 0i32;
-    let conflicts = 0i32;
+    let requested_external_ids: Vec<String> = rows
+        .iter()
+        .filter_map(|row| coerce_provider_int(row.get("id")))
+        .map(|id| id.to_string())
+        .collect();
+    let existing_mapping_rows = if requested_external_ids.is_empty() {
+        Vec::new()
+    } else {
+        tx.query(
+            "SELECT e.external_id, i.id, i.thread_id, i.issue_number \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND e.external_id = ANY($1::text[]) AND m.status = 'confirmed' \
+               AND t.user_id = $2 ORDER BY i.id, m.id",
+            &[&requested_external_ids, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+    };
+    let mut confirmed_by_external: HashMap<String, SeriesExternalMapping> = HashMap::new();
+    for row in existing_mapping_rows {
+        let external_id: String = row.get(0);
+        confirmed_by_external
+            .entry(external_id)
+            .or_insert_with(|| SeriesExternalMapping {
+                issue_id: Some(row.get(1)),
+                thread_id: row.get(2),
+                issue_number: row.get(3),
+            });
+    }
+
+    let local_rows = tx
+        .query(
+            "SELECT i.id, i.issue_number, i.position, \
+                (SELECT e.external_id FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE m.issue_id = i.id AND m.status = 'confirmed' \
+                   AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+                 ORDER BY m.id LIMIT 1) \
+             FROM issues i WHERE i.thread_id = $1 \
+             ORDER BY i.position, i.id FOR UPDATE OF i",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut local_issues: Vec<SeriesLocalIssue> = local_rows
+        .iter()
+        .map(|row| SeriesLocalIssue {
+            id: Some(row.get(0)),
+            issue_number: row.get(1),
+            position: row.get(2),
+            confirmed_external_id: row.get(3),
+        })
+        .collect();
+    let original_positions: HashMap<i32, i32> = local_issues
+        .iter()
+        .filter_map(|issue| issue.id.map(|id| (id, issue.position)))
+        .collect();
+
+    let mut planned_results: Vec<PlannedSeriesIssue> = Vec::with_capacity(rows.len());
+    let mut identity_specs: Vec<(String, Option<String>, Value)> = Vec::new();
+    let mut links: Vec<(String, String)> = Vec::new();
+    let mut created_issue_count = 0i32;
     for (index, row) in rows.iter().enumerate() {
-        let Some(cv_id) = coerce_provider_int(row.get("id")) else {
+        let Some(comicvine_issue_id) = coerce_provider_int(row.get("id")) else {
             continue;
         };
         let issue_number = row
@@ -1400,89 +1462,294 @@ pub async fn import_series(
             })
             .filter(|text| !text.is_empty())
             .unwrap_or_else(|| (index + 1).to_string());
-
-        let existing: Option<i32> = tx
-            .query_opt(
-                "SELECT i.id FROM external_identities e \
-                 JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
-                 JOIN issues i ON i.id = m.issue_id \
-                 JOIN threads t ON t.id = i.thread_id \
-                 WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
-                   AND e.external_id = $1 AND m.status = 'confirmed' AND t.user_id = $2 \
-                 LIMIT 1",
-                &[&cv_id.to_string(), &user.id()],
-            )
-            .await
-            .map_err(db::query_error)?
-            .map(|r| r.get(0));
-        if let Some(issue_id) = existing {
-            skipped += 1;
-            issue_results.push(ImportSeriesIssueResult {
-                comicvine_issue_id: cv_id,
-                issue_number: Some(issue_number),
-                issue_id: Some(issue_id),
-                outcome: "reused".to_owned(),
-                hydration: "pending".to_owned(),
-                conflict_detail: None,
+        if issue_number.chars().count() > 50 {
+            planned_results.push(PlannedSeriesIssue {
+                comicvine_issue_id,
+                issue_number,
+                local_issue_number: None,
+                existing_issue_id: None,
+                outcome: "error",
+                conflict_detail: Some("issue_number exceeds 50 characters".to_owned()),
             });
             continue;
         }
-        let position = index as i32 + 1;
-        let new_issue = tx
-            .query_one(
-                "INSERT INTO issues \
-                    (thread_id, issue_number, position, status, created_at) \
-                 VALUES ($1, $2, $3, 'unread', now()) \
-                 ON CONFLICT ON CONSTRAINT uq_issue_thread_number \
-                 DO UPDATE SET position = EXCLUDED.position RETURNING id",
-                &[&thread_id, &issue_number, &position],
+        let external_id = comicvine_issue_id.to_string();
+        if let Some(existing) = confirmed_by_external.get(&external_id).cloned() {
+            let cross_thread = existing.thread_id != thread_id;
+            let detail = cross_thread.then(|| {
+                format!(
+                    "ComicVine issue {comicvine_issue_id} is already confirmed on issue {} of thread {}",
+                    existing.issue_id.unwrap_or_default(),
+                    existing.thread_id
+                )
+            });
+            planned_results.push(PlannedSeriesIssue {
+                comicvine_issue_id,
+                issue_number,
+                local_issue_number: Some(existing.issue_number.clone()),
+                existing_issue_id: existing.issue_id,
+                outcome: if cross_thread { "conflict" } else { "reused" },
+                conflict_detail: detail,
+            });
+            continue;
+        }
+
+        identity_specs.push((
+            external_id.clone(),
+            provider_string(row.get("site_detail_url")),
+            normalize_roster_issue_metadata(row),
+        ));
+        let existing_local = local_issues
+            .iter()
+            .position(|issue| issue.issue_number == issue_number);
+        let (local_index, outcome) = if let Some(local_index) = existing_local {
+            (local_index, "reused")
+        } else {
+            created_issue_count += 1;
+            (
+                create_series_issue_in_natural_order(&mut local_issues, issue_number.clone()),
+                "created",
             )
-            .await
-            .map_err(db::query_error)?;
-        let issue_id: i32 = new_issue.get(0);
-        link_confirmed(&tx, user.id(), issue_id, cv_id).await?;
-        adopted += 1;
-        issue_results.push(ImportSeriesIssueResult {
-            comicvine_issue_id: cv_id,
-            issue_number: Some(issue_number),
-            issue_id: Some(issue_id),
-            outcome: "created".to_owned(),
-            hydration: "pending".to_owned(),
+        };
+        let local = &mut local_issues[local_index];
+        if local
+            .confirmed_external_id
+            .as_ref()
+            .is_some_and(|current| current != &external_id)
+        {
+            planned_results.push(PlannedSeriesIssue {
+                comicvine_issue_id,
+                issue_number,
+                local_issue_number: Some(local.issue_number.clone()),
+                existing_issue_id: local.id,
+                outcome: "conflict",
+                conflict_detail: Some(
+                    "issue already has a confirmed comicvine identity".to_owned(),
+                ),
+            });
+            continue;
+        }
+        if local.confirmed_external_id.is_none() {
+            local.confirmed_external_id = Some(external_id.clone());
+            links.push((local.issue_number.clone(), external_id.clone()));
+        }
+        confirmed_by_external.insert(
+            external_id,
+            SeriesExternalMapping {
+                issue_id: local.id,
+                issue_number: local.issue_number.clone(),
+                thread_id,
+            },
+        );
+        planned_results.push(PlannedSeriesIssue {
+            comicvine_issue_id,
+            issue_number,
+            local_issue_number: Some(local.issue_number.clone()),
+            existing_issue_id: local.id,
+            outcome,
             conflict_detail: None,
         });
     }
 
-    // Mark the leading locally-adopted issues read, then derive the thread's
-    // canonical counters from the rows that actually exist.
-    let thread_issues = tx
-        .query(
-            "SELECT id FROM issues WHERE thread_id = $1 ORDER BY position, id",
-            &[&thread_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let read_count = (request.already_read_count as usize).min(thread_issues.len());
-    for row in thread_issues.iter().take(read_count) {
+    if !identity_specs.is_empty() {
+        let external_ids: Vec<String> = identity_specs
+            .iter()
+            .map(|(external_id, _, _)| external_id.clone())
+            .collect();
+        let external_urls: Vec<Option<String>> = identity_specs
+            .iter()
+            .map(|(_, external_url, _)| external_url.clone())
+            .collect();
+        let metadata: Vec<Value> = identity_specs
+            .iter()
+            .map(|(_, _, metadata)| metadata.clone())
+            .collect();
         tx.execute(
-            "UPDATE issues SET status = 'read', read_at = now() WHERE id = $1",
-            &[&row.get::<_, i32>(0)],
+            "INSERT INTO external_identities \
+                (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             SELECT 'comicvine', 'issue', source.external_id, source.external_url, \
+                    source.metadata, now(), now() \
+             FROM unnest($1::text[], $2::text[], $3::json[]) \
+                  AS source(external_id, external_url, metadata) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET external_url = COALESCE(EXCLUDED.external_url, external_identities.external_url), \
+                           updated_at = now()",
+            &[&external_ids, &external_urls, &metadata],
         )
         .await
         .map_err(db::query_error)?;
     }
-    let total_issues = thread_issues.len() as i32;
-    let issues_remaining = (total_issues - read_count as i32).max(0);
-    let next_unread = thread_issues
-        .get(read_count)
-        .map(|row| row.get::<_, i32>(0));
-    let status = if issues_remaining == 0 {
+
+    let position_updates: Vec<(i32, i32)> = local_issues
+        .iter()
+        .filter_map(|issue| {
+            let id = issue.id?;
+            (original_positions.get(&id) != Some(&issue.position)).then_some((id, issue.position))
+        })
+        .collect();
+    let new_issue_count = local_issues.iter().filter(|issue| issue.id.is_none()).count();
+    if !position_updates.is_empty() || new_issue_count > 0 {
+        tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+            .await
+            .map_err(db::query_error)?;
+    }
+    if !position_updates.is_empty() {
+        let ids: Vec<i32> = position_updates.iter().map(|(id, _)| *id).collect();
+        let positions: Vec<i32> = position_updates
+            .iter()
+            .map(|(_, position)| *position)
+            .collect();
+        tx.execute(
+            "UPDATE issues AS issue SET position = source.position \
+             FROM (SELECT unnest($1::int[]) AS id, unnest($2::int[]) AS position) AS source \
+             WHERE issue.id = source.id AND issue.thread_id = $3",
+            &[&ids, &positions, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    if new_issue_count > 0 {
+        let issue_numbers: Vec<String> = local_issues
+            .iter()
+            .filter(|issue| issue.id.is_none())
+            .map(|issue| issue.issue_number.clone())
+            .collect();
+        let positions: Vec<i32> = local_issues
+            .iter()
+            .filter(|issue| issue.id.is_none())
+            .map(|issue| issue.position)
+            .collect();
+        let inserted = tx
+            .query(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+                 SELECT $1, source.issue_number, source.position, 'unread', now() \
+                 FROM unnest($2::text[], $3::int[]) AS source(issue_number, position) \
+                 RETURNING id, issue_number",
+                &[&thread_id, &issue_numbers, &positions],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if inserted.len() != new_issue_count {
+            return Err(ApiError::Internal(
+                "series import did not persist every planned issue".to_owned(),
+            ));
+        }
+        for row in inserted {
+            let issue_number: String = row.get(1);
+            if let Some(issue) = local_issues
+                .iter_mut()
+                .find(|issue| issue.id.is_none() && issue.issue_number == issue_number)
+            {
+                issue.id = Some(row.get(0));
+            }
+        }
+    }
+
+    if !links.is_empty() {
+        let mut issue_ids: Vec<i32> = Vec::with_capacity(links.len());
+        let mut external_ids: Vec<String> = Vec::with_capacity(links.len());
+        for (issue_number, external_id) in &links {
+            let Some(issue_id) = local_issues
+                .iter()
+                .find(|issue| &issue.issue_number == issue_number)
+                .and_then(|issue| issue.id)
+            else {
+                return Err(ApiError::Internal(
+                    "series import could not resolve a planned identity mapping".to_owned(),
+                ));
+            };
+            issue_ids.push(issue_id);
+            external_ids.push(external_id.clone());
+        }
+        let inserted = tx
+            .execute(
+                "INSERT INTO issue_external_identity_mappings \
+                    (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+                     confidence, created_at, updated_at) \
+                 SELECT source.issue_id, e.id, 'confirmed', 'comicvine_issue_adoption', \
+                        '{}'::json, 1.0, now(), now() \
+                 FROM unnest($1::int[], $2::text[]) AS source(issue_id, external_id) \
+                 JOIN external_identities e ON e.provider = 'comicvine' \
+                    AND e.entity_type = 'issue' AND e.external_id = source.external_id \
+                 ON CONFLICT ON CONSTRAINT uq_issue_external_identity_mapping \
+                 DO UPDATE SET status = 'confirmed', evidence_source = 'comicvine_issue_adoption', \
+                               confidence = 1.0, rejection_reason = NULL, updated_at = now()",
+                &[&issue_ids, &external_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if inserted != links.len() as u64 {
+            return Err(ApiError::Internal(
+                "series import did not persist every planned identity mapping".to_owned(),
+            ));
+        }
+    }
+
+    let tracking_rows = tx
+        .query(
+            "SELECT id, status FROM issues WHERE thread_id = $1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut effective_issues: Vec<(i32, String)> = tracking_rows
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    let read_count = (request.already_read_count as usize).min(effective_issues.len());
+    if read_count > 0 {
+        tx.execute(
+            "UPDATE issues SET status = 'read', read_at = now() \
+             WHERE id IN (SELECT id FROM issues WHERE thread_id = $1 \
+                          ORDER BY position, id LIMIT $2)",
+            &[&thread_id, &(read_count as i32)],
+        )
+        .await
+        .map_err(db::query_error)?;
+        for (_, status) in effective_issues.iter_mut().take(read_count) {
+            *status = "read".to_owned();
+        }
+    }
+    let total_issues = effective_issues.len() as i32;
+    let issues_remaining = effective_issues
+        .iter()
+        .filter(|(_, status)| status == "unread")
+        .count() as i32;
+    let next_unread = effective_issues
+        .iter()
+        .find(|(_, status)| status == "unread")
+        .map(|(id, _)| *id);
+    let reading_progress = if issues_remaining == 0 {
+        "completed"
+    } else if issues_remaining == total_issues {
+        "not_started"
+    } else {
+        "in_progress"
+    };
+    let status = if prior_status == "excluded" {
+        "excluded"
+    } else if issues_remaining == 0 {
         "completed"
     } else {
         "active"
     };
+    let reseat_to_front = created_issue_count > 0
+        && prior_total_issues.is_some()
+        && prior_next_unread.is_none()
+        && prior_status == "completed";
+    if reseat_to_front {
+        tx.execute(
+            "UPDATE threads SET queue_position = queue_position + 1 \
+             WHERE user_id = $1 AND status = 'active' AND id <> $2",
+            &[&user.id(), &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
     tx.execute(
         "UPDATE threads SET total_issues = $2, issues_remaining = $3, \
             next_unread_issue_id = $4, reading_progress = $5, status = $6, \
+            queue_position = CASE WHEN $7 THEN 1 ELSE queue_position END, \
             is_blocked = CASE WHEN $3 = 0 THEN false ELSE is_blocked END \
             WHERE id = $1",
         &[
@@ -1490,12 +1757,54 @@ pub async fn import_series(
             &total_issues,
             &issues_remaining,
             &next_unread,
-            &Some(format!("{read_count}/{total_issues}")),
+            &reading_progress,
             &status,
+            &reseat_to_front,
         ],
     )
     .await
     .map_err(db::query_error)?;
+    if created_issue_count > 0 {
+        tx.execute(
+            "INSERT INTO events (type, timestamp, thread_id) \
+             SELECT 'issues_created', now(), $1 FROM generate_series(1, $2)",
+            &[&thread_id, &created_issue_count],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    if created_issue_count > 0 || read_count > 0 {
+        crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+    }
+
+    let mut issue_results = Vec::with_capacity(planned_results.len());
+    let mut adopted = 0i32;
+    let mut skipped = 0i32;
+    let mut conflicts = 0i32;
+    for planned in planned_results {
+        let issue_id = planned.existing_issue_id.or_else(|| {
+            planned.local_issue_number.as_ref().and_then(|number| {
+                local_issues
+                    .iter()
+                    .find(|issue| &issue.issue_number == number)
+                    .and_then(|issue| issue.id)
+            })
+        });
+        match planned.outcome {
+            "created" => adopted += 1,
+            "reused" => skipped += 1,
+            "conflict" => conflicts += 1,
+            _ => {}
+        }
+        issue_results.push(ImportSeriesIssueResult {
+            comicvine_issue_id: planned.comicvine_issue_id,
+            issue_number: Some(planned.issue_number),
+            issue_id,
+            outcome: planned.outcome.to_owned(),
+            hydration: "not_attempted".to_owned(),
+            conflict_detail: planned.conflict_detail,
+        });
+    }
 
     let mut response = ImportSeriesResponse {
         thread_id,
