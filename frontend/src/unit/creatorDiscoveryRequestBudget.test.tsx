@@ -536,6 +536,9 @@ describe('comparison and CBL discovery request budgets', () => {
   it('records the actual axios crossover rows before and after expansion', async () => {
     installDomainLedger(
       {
+        // The shared CSRF bootstrap every write-capable client performs before
+        // its first POST, then the one bounded issue-card batch projection.
+        'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'ledger-csrf-token' } }),
         'GET /api/v1/reading-order-groups/': () => ({
           data: [
             {
@@ -548,6 +551,7 @@ describe('comparison and CBL discovery request budgets', () => {
             },
           ],
         }),
+        'POST /api/v2/issues/cards': () => ({ data: { items: [] } }),
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
@@ -563,13 +567,20 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
-    await waitFor(() => expect(ledger.requests).toHaveLength(1))
-    expect(ledger.requests[0]?.url).toBe('GET /api/v1/reading-order-groups/')
+    // Cold open is the crossover list, its CSRF bootstrap, and the single
+    // bounded issue-card batch for the visible membership issue — never one
+    // provider read per row.
+    await waitFor(() => expect(ledger.requests).toHaveLength(3))
+    expect(ledger.requests.map((request) => request.url)).toEqual([
+      'GET /api/v1/reading-order-groups/',
+      'GET /api/v2/auth/csrf',
+      'POST /api/v2/issues/cards',
+    ])
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
-    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
+    await waitFor(() => expect(ledger.requests).toHaveLength(4))
+    expect(ledger.requests[3]?.url).toBe('GET /api/v2/threads?page_size=100')
   })
 })
