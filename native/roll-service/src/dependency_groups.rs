@@ -1508,11 +1508,6 @@ async fn add_member_tx(
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
-    if request.thread_id.is_none() == request.issue_id.is_none() {
-        return Err(unprocessable(
-            "Exactly one of thread_id or issue_id is required",
-        ));
-    }
     let (thread_id, issue_id) = if let Some(thread_id) = request.thread_id {
         if owned_thread_id(tx, thread_id, user_id).await?.is_none() {
             return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
