@@ -33,12 +33,8 @@
 //!   and refresh the denormalized blocked-state flags in the same transaction.
 
 use crate::{
-    auth::AuthenticatedUser,
-    db,
-    issue_read::IssueDetailResponse,
-    issue_service,
-    threads::ThreadDetailResponse,
-    ApiError, AppState,
+    auth::AuthenticatedUser, db, issue_read::IssueDetailResponse, issue_service,
+    threads::ThreadDetailResponse, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},
@@ -88,7 +84,8 @@ const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.pos
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
      to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
      FROM issues i WHERE i.id = ANY($1::int[])";
-const OTHER_COUPLERS_SQL: &str = "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
+const OTHER_COUPLERS_SQL: &str =
+    "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
      AS thread_id FROM dependency_group_memberships m \
      JOIN dependency_groups g ON g.id = m.group_id AND g.user_id = $1 AND g.id <> $2 \
      LEFT JOIN issues i ON i.id = m.issue_id \
@@ -99,7 +96,8 @@ const LINKED_PLANS_SQL: &str = "SELECT id, name FROM continuity_plans \
 const DELETE_GROUP_SQL: &str = "DELETE FROM dependency_groups WHERE id = $1 AND user_id = $2";
 const SEQUENCE_OCCUPIED_SQL: &str = "SELECT id FROM dependency_group_memberships \
      WHERE group_id = $1 AND sequence_order = $2 LIMIT 1";
-const ISSUE_MEMBERSHIPS_SQL: &str = "SELECT id, issue_id, sequence_order FROM dependency_group_memberships \
+const ISSUE_MEMBERSHIPS_SQL: &str =
+    "SELECT id, issue_id, sequence_order FROM dependency_group_memberships \
      WHERE group_id = $1 AND issue_id IS NOT NULL";
 const OWNED_ISSUES_SQL: &str = "SELECT i.id, i.thread_id FROM issues i \
      JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1::int[]) AND t.user_id = $2";
@@ -356,12 +354,7 @@ fn group_order_update_parameters(
 ) -> (Vec<i32>, Vec<Option<i32>>) {
     member_by_issue
         .iter()
-        .map(|(issue_id, membership_id)| {
-            (
-                *membership_id,
-                ordered_positions.get(issue_id).copied(),
-            )
-        })
+        .map(|(issue_id, membership_id)| (*membership_id, ordered_positions.get(issue_id).copied()))
         .unzip()
 }
 
@@ -761,7 +754,10 @@ async fn issue_parent_threads(
     }
     let ids: Vec<i32> = issue_ids.iter().copied().collect();
     let rows = connection
-        .query("SELECT id, thread_id FROM issues WHERE id = ANY($1)", &[&ids])
+        .query(
+            "SELECT id, thread_id FROM issues WHERE id = ANY($1)",
+            &[&ids],
+        )
         .await
         .map_err(db::query_error)?;
     for row in rows {
@@ -790,12 +786,8 @@ async fn group_response(
     let threads = load_thread_totals(connection, &thread_ids).await?;
     let unread_counts = load_unread_counts(connection, &thread_ids).await?;
     let issues = load_issue_progress(connection, &issue_ids).await?;
-    let (read_issues, total_issues, progress) = crossover_progress(
-        memberships,
-        &threads,
-        &issues,
-        &unread_counts,
-    );
+    let (read_issues, total_issues, progress) =
+        crossover_progress(memberships, &threads, &issues, &unread_counts);
     Ok(DependencyGroupResponse {
         id: group.id,
         name: group.name.clone(),
@@ -927,7 +919,10 @@ async fn create_group_tx(
         .query_one(INSERT_GROUP_SQL, &[&user_id, &name])
         .await
         .map_err(|error| {
-            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
+            if error
+                .as_db_error()
+                .is_some_and(|e| e.code().code() == "23505")
+            {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1019,7 +1014,10 @@ pub async fn get_group_detail(
         let (series_title, issue_number) = if let Some(thread_id) = member.thread_id {
             thread = threads.get(&thread_id).and_then(|opt| opt.clone());
             let title = thread.as_ref().map(|t| t.title.clone());
-            other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
+            other = other_crossovers
+                .get(&thread_id)
+                .cloned()
+                .unwrap_or_default();
             (title, None)
         } else if let Some(issue_id) = member.issue_id {
             issue = issues.get(&issue_id).and_then(|opt| opt.clone());
@@ -1027,7 +1025,10 @@ pub async fn get_group_detail(
             thread = threads.get(&thread_id).and_then(|opt| opt.clone());
             let title = thread.as_ref().map(|t| t.title.clone());
             let number = issue.as_ref().map(|i| i.issue_number.clone());
-            other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
+            other = other_crossovers
+                .get(&thread_id)
+                .cloned()
+                .unwrap_or_default();
             (title, number)
         } else {
             (None, None)
@@ -1102,7 +1103,10 @@ async fn update_group_tx(
         )
         .await
         .map_err(|error| {
-            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
+            if error
+                .as_db_error()
+                .is_some_and(|e| e.code().code() == "23505")
+            {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1216,8 +1220,7 @@ async fn add_issue_range_tx(
             request.thread_id
         )));
     }
-    let range_size =
-        i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
+    let range_size = i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
     if range_size > i64::from(MAX_RANGE_SIZE) {
         return Err(unprocessable(format!(
             "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
@@ -1241,8 +1244,7 @@ async fn add_issue_range_tx(
         actual_positions.push(row.get(1));
         issue_ids.push(row.get(0));
     }
-    let expected_positions: Vec<i32> =
-        (request.start_position..=request.end_position).collect();
+    let expected_positions: Vec<i32> = (request.start_position..=request.end_position).collect();
     if actual_positions != expected_positions {
         let actual_set: BTreeSet<i32> = actual_positions.iter().copied().collect();
         let missing: Vec<i32> = expected_positions
@@ -1340,7 +1342,10 @@ async fn add_member_tx(
         (Some(thread_id), None)
     } else {
         let issue_id = request.issue_id.unwrap_or_default();
-        if owned_issue_thread_id(tx, issue_id, user_id).await?.is_none() {
+        if owned_issue_thread_id(tx, issue_id, user_id)
+            .await?
+            .is_none()
+        {
             return Err(ApiError::NotFound(format!("Issue {issue_id} not found")));
         }
         (None, Some(issue_id))
@@ -1368,7 +1373,10 @@ async fn add_member_tx(
         )
         .await
         .map_err(|error| {
-            if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
+            if error
+                .as_db_error()
+                .is_some_and(|e| e.code().code() == "23505")
+            {
                 return conflict("This member is already in the group");
             }
             db::query_error(error)
@@ -1430,7 +1438,8 @@ async fn remove_member_tx(
         )
         .await
         .map_err(db::query_error)?;
-    let member = member.ok_or_else(|| ApiError::NotFound(format!("Member {member_id} not found")))?;
+    let member =
+        member.ok_or_else(|| ApiError::NotFound(format!("Member {member_id} not found")))?;
     let member_group_id: i32 = member.get(1);
     if member_group_id != group_id {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
@@ -1537,12 +1546,9 @@ async fn set_group_order_tx(
         .collect();
     let (membership_ids, sequence_orders) =
         group_order_update_parameters(&member_by_issue, &ordered_positions);
-    tx.execute(
-        UPDATE_GROUP_ORDER_SQL,
-        &[&membership_ids, &sequence_orders],
-    )
-    .await
-    .map_err(db::query_error)?;
+    tx.execute(UPDATE_GROUP_ORDER_SQL, &[&membership_ids, &sequence_orders])
+        .await
+        .map_err(db::query_error)?;
     issue_service::refresh_blocked_threads(tx, user_id).await?;
     let row = tx
         .query_one(
@@ -1943,8 +1949,7 @@ mod tests {
     fn group_order_update_is_set_based_and_clears_omitted_issues() {
         let members = BTreeMap::from([(11, 101), (12, 102), (13, 103)]);
         let positions = BTreeMap::from([(12, 1), (13, 2)]);
-        let (membership_ids, sequence_orders) =
-            group_order_update_parameters(&members, &positions);
+        let (membership_ids, sequence_orders) = group_order_update_parameters(&members, &positions);
         assert_eq!(membership_ids, vec![101, 102, 103]);
         assert_eq!(sequence_orders, vec![None, Some(1), Some(2)]);
         assert!(UPDATE_GROUP_ORDER_SQL.contains("FROM unnest"));
@@ -1956,10 +1961,7 @@ mod tests {
             ApiError::status(&unprocessable("bad")),
             StatusCode::UNPROCESSABLE_ENTITY
         );
-        assert_eq!(
-            ApiError::status(&conflict("dup")),
-            StatusCode::CONFLICT
-        );
+        assert_eq!(ApiError::status(&conflict("dup")), StatusCode::CONFLICT);
     }
 
     #[test]
@@ -2042,7 +2044,9 @@ mod tests {
                 .await
                 .expect("seed thread");
         }
-        for (member_id, group_id, thread_id) in [(201_i32, 101_i32, 11), (202, 102, 12), (203, 103, 13)] {
+        for (member_id, group_id, thread_id) in
+            [(201_i32, 101_i32, 11), (202, 102, 12), (203, 103, 13)]
+        {
             connection
                 .execute(
                     "INSERT INTO dependency_group_memberships (id, group_id, thread_id) \
@@ -2065,9 +2069,14 @@ mod tests {
         .expect("remove member");
         assert_eq!(status, StatusCode::NO_CONTENT);
 
-        let connection = crate::db::checkout(&state).await.expect("verify connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
         let remaining: Vec<i32> = connection
-            .query("SELECT id FROM dependency_group_memberships ORDER BY id", &[])
+            .query(
+                "SELECT id FROM dependency_group_memberships ORDER BY id",
+                &[],
+            )
             .await
             .expect("remaining memberships")
             .iter()
