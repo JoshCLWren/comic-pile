@@ -272,6 +272,7 @@ pub struct DependencyGroupDetailMemberResponse {
     pub membership: DependencyGroupMemberResponse,
     pub thread: Option<ThreadDetailResponse>,
     pub issue: Option<IssueDetailResponse>,
+    #[schema(required = false, default = json!([]))]
     pub other_crossovers: Vec<String>,
 }
 
@@ -280,8 +281,10 @@ pub struct DependencyGroupDetailMemberResponse {
 pub struct DependencyGroupDetailResponse {
     pub id: i32,
     pub name: String,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub memberships: Vec<DependencyGroupDetailMemberResponse>,
+    #[schema(required = false, default = json!([]))]
     pub linked_plans: Vec<DependencyGroupSummary>,
 }
 
