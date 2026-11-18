@@ -218,7 +218,6 @@ export function generateVercel(config, operations, fragments = null) {
     routes: slimNativeRollRoutes(
       fullRoutes,
       new Set(fragmentNatives),
-      fragments.flatMap(fragment => fragment.operations.map(operation => operation.path)),
     ),
   };
 }

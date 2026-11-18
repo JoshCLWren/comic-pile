@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {_generateVercelDocument, _loadRouteFragments} from './generate_route_burndown.mjs';
-import {slimNativeRollRoutes, sampleFromRegex} from './vercel_slim_routes.mjs';
+import {slimNativeRollRoutes, parseSegments, routesMayOverlap} from './vercel_slim_routes.mjs';
 
 const ROLL = '/api/native_roll.rs';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -81,13 +81,26 @@ test('synthetic: a roll route is dropped unless a later python or issue route ov
   const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
   const spa = {src: '/(.*)', dest: '/index.html'};
   const routes = [free, shadowed, otherMethod, python, pythonOther, catchAll, spa];
-  const out = slimNativeRollRoutes(routes, new Set([free, shadowed, otherMethod]), [
-    '/api/v2/free', '/api/v1/things/{id}', '/api/v1/other',
-  ]);
+  const out = slimNativeRollRoutes(routes, new Set([free, shadowed, otherMethod]));
   assert.deepEqual(out, [shadowed, python, pythonOther, catchAll, spa]);
 });
 
-test('sampleFromRegex inverts the regexes the generators emit', () => {
-  assert.equal(sampleFromRegex('^/api/v1/identity\\-inbox/[^/]+/confirm$', '1'), '/api/v1/identity-inbox/1/confirm');
-  assert.equal(sampleFromRegex('^/api/v2/queue-entries/[0-9]+$', 'x'), '/api/v2/queue-entries/1');
+test('crossed-parameter routes overlap even though no template produces a shared sample', () => {
+  const roll = {src: '^/api/a/[^/]+/b$', methods: ['GET'], dest: ROLL};
+  const python = {src: '^/api/a/c/[^/]+$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
+  assert.equal(routesMayOverlap(roll, python), true);
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  assert.deepEqual(slimNativeRollRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
+});
+
+test('segment unifier proves disjointness and treats unknown shapes as overlapping', () => {
+  const route = (src, methods = ['GET']) => ({src, methods, dest: '/api/index.py'});
+  assert.equal(routesMayOverlap(route('^/api/a/[0-9]+$'), route('^/api/a/x$')), false);
+  assert.equal(routesMayOverlap(route('^/api/a/[0-9]+$'), route('^/api/a/12$')), true);
+  assert.equal(routesMayOverlap(route('^/api/a$'), route('^/api/a/[^/]+$')), false);
+  assert.equal(routesMayOverlap(route('^/api/a/[^/]+$'), route('^/api/a/.+$')), true);
+  assert.equal(routesMayOverlap(route('^/api/a$'), route('^/api/a/.+$')), false);
+  assert.equal(routesMayOverlap(route('^/api/a/(?!b$)[^/]+$'), route('^/api/a/b$')), true);
+  assert.equal(parseSegments('^/api/v1/identity\\-inbox/[^/]+$').length, 5);
+  assert.equal(routesMayOverlap(route('^/api/a$', ['GET']), route('^/api/a$', ['POST'])), false);
 });

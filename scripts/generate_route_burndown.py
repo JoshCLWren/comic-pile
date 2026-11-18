@@ -519,100 +519,114 @@ def _fragment_vercel_groups(
 
 
 ROLL_DESTINATION = "/api/native_roll.rs"
-_SAMPLE_TOKEN = re.compile(
-    r"\(\?![^)]*\)|\(\?:/\.\*\)\?|\[\^/\]\+|\[0-9\]\+|\.\+|\.\*|\\(.)",
-    re.DOTALL,
-)
+_REGEX_META = frozenset("[](){}|*+?.^$")
+Segment = tuple[str, str]
 
 
-def _sample_from_regex(src: str, fill: str) -> str:
-    """Derive one concrete path from a route regex (mirrors vercel_slim_routes.mjs)."""
+def _parse_segments(src: str) -> list[Segment] | None:
+    """Parse a simple path regex into (kind, value) segments, else None."""
     body = src.removeprefix("^").removesuffix("$")
+    # `[^/]+` contains a slash; swap it for a sentinel before splitting.
+    parts = body.replace("[^/]+", "\u0001").split("/")
+    segments: list[Segment] = []
+    for index, part in enumerate(parts):
+        if part == "\u0001":
+            segments.append(("param", ""))
+        elif part == "[0-9]+":
+            segments.append(("num", ""))
+        elif part == ".+":
+            if index != len(parts) - 1:
+                return None
+            segments.append(("rest", ""))
+        else:
+            literal = ""
+            i = 0
+            while i < len(part):
+                ch = part[i]
+                if ch == "\\":
+                    if i + 1 >= len(part):
+                        return None
+                    i += 1
+                    literal += part[i]
+                elif ch in _REGEX_META:
+                    return None
+                else:
+                    literal += ch
+                i += 1
+            segments.append(("lit", literal))
+    return segments
 
-    def replace(match: re.Match[str]) -> str:
-        escaped = match.group(1)
-        if escaped is not None:
-            return escaped
-        token = match.group(0)
-        if token == "[0-9]+":
-            return "1"
-        if token in ("[^/]+", ".+"):
-            return fill
-        return ""
 
-    return _SAMPLE_TOKEN.sub(replace, body)
+def _segments_compatible(left: Segment, right: Segment) -> bool:
+    if left[0] == "lit" and right[0] == "lit":
+        return left[1] == right[1]
+    if left[0] == "lit" or right[0] == "lit":
+        lit, other = (left, right) if left[0] == "lit" else (right, left)
+        if lit[1] == "":
+            return False
+        return other[0] != "num" or re.fullmatch(r"[0-9]+", lit[1]) is not None
+    return True
+
+
+def _segments_overlap(left: list[Segment], right: list[Segment]) -> bool:
+    for i in range(max(len(left), len(right))):
+        a = left[i] if i < len(left) else None
+        b = right[i] if i < len(right) else None
+        if (a is not None and a[0] == "rest") or (b is not None and b[0] == "rest"):
+            return a is not None and b is not None
+        if a is None or b is None:
+            return False
+        if not _segments_compatible(a, b):
+            return False
+    return True
+
+
+def _methods_of(route: dict[str, object]) -> list[str]:
+    raw = route.get("methods")
+    return [m for m in raw if isinstance(m, str)] if isinstance(raw, list) else []
+
+
+def _routes_may_overlap(first: dict[str, object], second: dict[str, object]) -> bool:
+    mine = _methods_of(first)
+    theirs = _methods_of(second)
+    if mine and theirs and not any(m in theirs for m in mine):
+        return False
+    src_a = first.get("src")
+    src_b = second.get("src")
+    left = _parse_segments(src_a) if isinstance(src_a, str) else None
+    right = _parse_segments(src_b) if isinstance(src_b, str) else None
+    if left is None or right is None:
+        return True
+    return _segments_overlap(left, right)
 
 
 def _slim_native_roll_routes(
     routes: list[dict[str, object]],
     removable: list[dict[str, object]],
-    template_paths: list[str],
 ) -> list[dict[str, object]]:
     """Drop fragment native_roll routes that the catch-all already provides.
 
     A route is kept only when a later non-roll route (before the catch-all)
-    overlaps it on method and on a sample path. Mirrors
+    may overlap it on method and path; overlap is proven absent segment by
+    segment, and unknown regex shapes count as overlapping. Mirrors
     scripts/vercel_slim_routes.mjs; keep the two in sync.
     """
     catch_index = next(
         (i for i, route in enumerate(routes) if route.get("src") == CATCH_ALL_SRC), -1
     )
     limit = len(routes) if catch_index == -1 else catch_index
-    matchers: list[re.Pattern[str] | None] = []
-    for route in routes:
-        src = route.get("src")
-        try:
-            matchers.append(re.compile(src) if isinstance(src, str) else None)
-        except re.error:
-            matchers.append(None)
-    pool: set[str] = set()
-    for template in template_paths:
-        for fill in ("1", "x"):
-            pool.add(re.sub(r"\{[^}]+\}", fill, template))
-    for index, route in enumerate(routes):
-        matcher = matchers[index]
-        if index >= limit or matcher is None:
-            continue
-        for fill in ("1", "x"):
-            sample = _sample_from_regex(str(route["src"]), fill)
-            if matcher.fullmatch(sample):
-                pool.add(sample)
-    samples = sorted(pool)
-    matched: list[set[int]] = []
-    for index, matcher in enumerate(matchers):
-        if matcher is None or index >= limit:
-            matched.append(set())
-            continue
-        matched.append(
-            {i for i, sample in enumerate(samples) if matcher.fullmatch(sample)}
-        )
-
-    def methods_of(route: dict[str, object]) -> list[str]:
-        raw = route.get("methods")
-        return [m for m in raw if isinstance(m, str)] if isinstance(raw, list) else []
-
-    def required(index: int) -> bool:
-        mine = methods_of(routes[index])
-        for later in range(index + 1, limit):
-            other = routes[later]
-            if other.get("dest") == ROLL_DESTINATION:
-                continue
-            theirs = methods_of(other)
-            if mine and theirs and not any(m in theirs for m in mine):
-                continue
-            if matched[index] & matched[later]:
-                return True
-        return False
-
     removable_ids = {id(route) for route in removable}
-    return [
-        route
-        for index, route in enumerate(routes)
-        if id(route) not in removable_ids
-        or route.get("dest") != ROLL_DESTINATION
-        or matchers[index] is None
-        or required(index)
-    ]
+    kept: list[dict[str, object]] = []
+    for index, route in enumerate(routes):
+        if id(route) not in removable_ids or route.get("dest") != ROLL_DESTINATION:
+            kept.append(route)
+            continue
+        if any(
+            other.get("dest") != ROLL_DESTINATION and _routes_may_overlap(route, other)
+            for other in routes[index + 1 : limit]
+        ):
+            kept.append(route)
+    return kept
 
 
 def _generate_vercel_document(
@@ -700,17 +714,7 @@ def _generate_vercel_document(
         *non_api,
     ]
     new_routes = (
-        _slim_native_roll_routes(
-            full_routes,
-            generated,
-            [
-                _string(operation.get("path"), "fragment.path")
-                for fragment in fragments
-                for operation in fragment.operations
-            ],
-        )
-        if slim
-        else full_routes
+        _slim_native_roll_routes(full_routes, generated) if slim else full_routes
     )
     # Validate native-before-Python precedence and catch-all placement.
     native_indices = [

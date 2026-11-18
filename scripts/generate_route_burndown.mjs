@@ -486,7 +486,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     ? slimNativeRollRoutes(
       fullRoutes,
       new Set(generated),
-      fragments.flatMap(fragment => fragment.operations.map(operation => operation.path)),
     )
     : fullRoutes;
   const nativeIndices = [];
