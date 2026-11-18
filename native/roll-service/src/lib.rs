@@ -7,6 +7,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
@@ -620,6 +621,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_preview::preview_series_mapping),
         )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))

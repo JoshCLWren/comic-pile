@@ -36,6 +36,7 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        crate::catalog_preview::preview_series_mapping_documentation,
         crate::activity::list_activity_documentation,
         crate::bootstrap::bootstrap_documentation,
         crate::bootstrap::initialize_session_documentation,
