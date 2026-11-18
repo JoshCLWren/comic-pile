@@ -198,6 +198,7 @@ export function RollRecoveryCard({
                       issueNumber="?"
                       card={cardsByIssue.get(prerequisite.node_id) ?? null}
                       hideTitle
+                      actionLabel="Read directly"
                     />
                   </div>
                 )}
