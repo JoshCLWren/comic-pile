@@ -11666,6 +11666,7 @@ export interface components {
             comicvine_issue_id: string;
             comicvine_url?: string | null;
             cover_date?: string | null;
+            image_url?: string | null;
             issue_number?: string | null;
             name?: string | null;
             series_name?: string | null;

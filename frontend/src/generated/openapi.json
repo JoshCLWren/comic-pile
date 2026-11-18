@@ -16824,6 +16824,12 @@
               "null"
             ]
           },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issue_number": {
             "type": [
               "string",
