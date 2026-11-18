@@ -2363,7 +2363,8 @@ mod tests {
             .execute(
                 "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
                  queue_position, is_blocked, created_at, last_activity_at) \
-                 VALUES (11, 7, 'Legacy Series', 'Comics', 0, 'active', 1, false, $1, $2)",
+                 VALUES (11, 7, 'Legacy Series', 'Comics', 0, 'active', 1, false, $1, $2), \
+                 (12, 7, 'Unread Series', 'Comic', 1, 'active', 2, false, $2, NULL)",
                 &[&micros, &whole],
             )
             .await
@@ -2371,7 +2372,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at) \
-                 VALUES (21, 11, '1', 1, 'read', $1, $2)",
+                 VALUES (21, 11, '1', 1, 'read', $1, $2), \
+                 (22, 12, '1', 1, 'unread', NULL, $1)",
                 &[&micros, &whole],
             )
             .await
@@ -2387,7 +2389,7 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO dependency_group_memberships (id, group_id, issue_id) \
-                 VALUES (201, 101, 21)",
+                 VALUES (201, 101, 21), (202, 101, 22)",
                 &[],
             )
             .await
@@ -2424,7 +2426,8 @@ mod tests {
         assert_eq!(detail.linked_plans.len(), 1);
         assert_eq!(detail.linked_plans[0].id, 301);
         assert_eq!(detail.linked_plans[0].name, "Matching");
-        let member = detail.memberships.first().expect("one enriched member");
+        assert_eq!(detail.memberships.len(), 2);
+        let member = detail.memberships.first().expect("read enriched member");
         let thread = member.thread.as_ref().expect("thread projection");
         assert_eq!(thread.format, "Comics");
         assert_eq!(thread.created_at, "2026-11-17T12:34:56.123456Z");
@@ -2438,6 +2441,13 @@ mod tests {
             issue.read_at.as_deref(),
             Some("2026-11-17T12:34:56.123456Z")
         );
+        let unread_member = detail.memberships.get(1).expect("unread enriched member");
+        let unread_thread = unread_member.thread.as_ref().expect("unread thread");
+        let unread_issue = unread_member.issue.as_ref().expect("unread issue");
+        assert_eq!(unread_thread.last_activity_at, None);
+        assert_eq!(unread_thread.created_at, "2026-11-17T12:34:56Z");
+        assert_eq!(unread_issue.read_at, None);
+        assert_eq!(unread_issue.created_at, "2026-11-17T12:34:56.123456Z");
 
         let Json(plans) =
             list_crossover_plans(State(state), AuthenticatedUser::for_test(7), Path(101))
