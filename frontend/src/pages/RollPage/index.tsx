@@ -44,6 +44,7 @@ import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
+import ManualIssuePickerModal from './components/ManualIssuePickerModal'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
 import { RollCta } from './components/RollCta'
@@ -429,6 +430,7 @@ export default function RollPage() {
         setDiePending={setDieMutation.isPending}
         onSetDie={actions.handleSetDie}
         onOpenOverride={modals.openOverrideModal}
+        onOpenDirectIssue={modals.openDirectIssueModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onBackToQueue={handleBackToQueue}
         dieState={scopedDieState ?? null}
@@ -548,6 +550,13 @@ export default function RollPage() {
         <div id="explosion-layer" className="explosion-wrap"></div>
 
         {state.isRatingView && <RollFooter />}
+
+        {state.isDirectIssueOpen && (
+          <ManualIssuePickerModal
+            snoozedThreads={snoozedThreads}
+            onClose={modals.closeDirectIssueModal}
+          />
+        )}
 
         <RollModals
           showMigrationDialog={state.showMigrationDialog}
