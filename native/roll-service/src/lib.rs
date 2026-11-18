@@ -67,6 +67,7 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_issues;
 pub mod thread_ordering;
 pub mod threads;
 pub mod undo_apply;
@@ -728,6 +729,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(thread_issues::reorder_thread_issues),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:validateOrder",
