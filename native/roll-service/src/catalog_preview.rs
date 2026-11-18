@@ -36,7 +36,7 @@ use tracing::instrument;
 // ---------------------------------------------------------------------------
 
 /// Python `SeriesMappingPreviewRequest`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewRequest {
     pub origin_issue_id: i32,
     pub provider: String,
@@ -50,7 +50,7 @@ fn default_scope_mode() -> String {
 }
 
 /// Python `SeriesMappingPreviewScope`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewScope {
     pub status: String,
     pub scope_key: Option<String>,
@@ -104,7 +104,7 @@ pub struct SeriesMappingPreviewProviderSeries {
 }
 
 /// Python `SeriesMappingPreviewResponse`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewResponse {
     pub preview_token: Option<String>,
     pub scope: SeriesMappingPreviewScope,
