@@ -28,7 +28,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
@@ -382,11 +381,15 @@ class TestCriterion5DiscoveryNonBlocking:
 
     async def test_roll_still_works_when_discovery_is_present(
         self,
-        auth_client: AsyncClient,
         async_db: AsyncSession,
         sample_data: dict,
     ) -> None:
-        """A prompt-eligible discovery does not interrupt rolling or rating."""
+        """A prompt-eligible discovery does not interrupt rolling or rating.
+
+        The discovery listing itself runs in native Rust same-path
+        (``GET /api/v1/taste/discoveries``, issue #4853) and is covered by the
+        native service tests; here the durable signal must not block rolling.
+        """
         strong = TasteSignal(
             user_id=sample_data["user"].id,
             signal_type=SIGNAL_CREATOR,
@@ -399,10 +402,6 @@ class TestCriterion5DiscoveryNonBlocking:
         )
         async_db.add(strong)
         await async_db.flush()
-
-        discoveries = await auth_client.get("/api/v1/taste/discoveries")
-        assert discoveries.status_code == 200
-        assert len(discoveries.json()["discoveries"]) == 1
 
         await roll_pending_thread(async_db)
 
