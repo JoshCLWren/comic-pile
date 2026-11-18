@@ -3676,6 +3676,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["creators_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["compare_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discoveries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["summaries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["team_chemistry_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rating_distribution_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/role-stats/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["role_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/{metric_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["metric_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/series/{series_key}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_issues_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/demo-roll": {
         parameters: {
             query?: never;
@@ -7328,6 +7504,16 @@ export interface components {
              */
             thread_title: string;
         };
+        CreatorMetricPagination: {
+            /** Format: int64 */
+            next_page_token?: number | null;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
         /**
          * CreatorRatingBucket
          * @description One half-star bucket in a creator's rating distribution.
@@ -9507,6 +9693,366 @@ export interface components {
             source_story_arc_ids: string[] | null;
             source_target_story_arc_id: string | null;
         };
+        NativeCreatorComparisonCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        NativeCreatorComparisonIssueRef: {
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorComparisonItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            insufficient_data: boolean;
+            /** Format: int64 */
+            max_issue_refs_per_group: number;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: int64 */
+            min_rated_issues_per_series: number;
+            normalized_roles: string[];
+            rating_distribution: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            read_unrated_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            role_stats: components["schemas"]["NativeCreatorComparisonRoleStat"][];
+            strongest_series: components["schemas"]["NativeCreatorComparisonSeriesAggregate"][];
+            /** Format: double */
+            top_rating_rate?: number | null;
+            unread_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            /** Format: int64 */
+            unread_upcoming_count: number;
+        };
+        NativeCreatorComparisonResponse: {
+            comparisons: {
+                [key: string]: components["schemas"]["NativeCreatorComparisonItem"];
+            };
+            coverage: components["schemas"]["NativeCreatorComparisonCoverage"];
+            insufficient_data_keys: string[];
+        };
+        NativeCreatorComparisonRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorComparisonSeriesAggregate: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorDetailResponse: {
+            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            headline_roles: string[];
+            insights?: components["schemas"]["NativeCreatorInsights"] | null;
+            next_cursor?: string | null;
+            rated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            rated_population_scope: string;
+            rating_distribution?: components["schemas"]["NativeCreatorRatingDistribution"] | null;
+            read_unrated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            role_stats: components["schemas"]["NativeCreatorRoleStat"][];
+            series_groups: components["schemas"]["NativeCreatorSeriesGroup"][];
+            series_groups_complete: boolean;
+            /** Format: int64 */
+            series_groups_total: number;
+            summary: components["schemas"]["NativeCreatorSummaryItem"];
+            upcoming_issues: components["schemas"]["NativeCreatorIssueRow"][];
+        };
+        NativeCreatorDiscoveryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorDiscoveryEntry: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            /** Format: double */
+            earlier_average_rating?: number | null;
+            /** Format: double */
+            max_rating?: number | null;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: double */
+            min_rating?: number | null;
+            normalized_roles: string[];
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: double */
+            rating_spread?: number | null;
+            /** Format: double */
+            rating_stddev?: number | null;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            reasons: components["schemas"]["NativeCreatorDiscoveryReason"][];
+            /** Format: double */
+            recent_average_rating?: number | null;
+            /** Format: int64 */
+            top_rating_count: number;
+            /** Format: double */
+            top_rating_rate?: number | null;
+            /** Format: double */
+            trend_delta?: number | null;
+            trend_direction?: string | null;
+            /** Format: int64 */
+            trend_sample_count: number;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorDiscoveryReason: {
+            comparison: string;
+            label: string;
+            metric: string;
+            /** Format: double */
+            threshold: number;
+            /** Format: double */
+            value: number;
+        };
+        NativeCreatorDiscoveryResponse: {
+            coverage: components["schemas"]["NativeCreatorDiscoveryCoverage"];
+            /** Format: int64 */
+            max_entries_per_view: number;
+            /** Format: int64 */
+            minimum_reliable_sample: number;
+            views: components["schemas"]["NativeCreatorDiscoveryView"][];
+        };
+        NativeCreatorDiscoveryView: {
+            description: string;
+            entries: components["schemas"]["NativeCreatorDiscoveryEntry"][];
+            /** Format: int64 */
+            max_entries: number;
+            /** Format: int64 */
+            min_sample: number;
+            mode: string;
+            title: string;
+            /** Format: int64 */
+            total: number;
+            truncated: boolean;
+        };
+        NativeCreatorInsights: {
+            /** Format: int64 */
+            excluded_incomplete_series_count: number;
+            highest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            individual_issue_limit: number;
+            individual_issues_combined: boolean;
+            lowest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            min_series_sample: number;
+            most_rated_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            series_message?: string | null;
+            series_sample_met: boolean;
+            strongest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            weakest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+        };
+        NativeCreatorIssueInsight: {
+            /** Format: double */
+            effective_rating: number;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            roles: string[];
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorIssueRow: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            rating_timestamp?: string | null;
+            roles: string[];
+            sort_key: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorMetricCalculation: {
+            denominator?: string | null;
+            formula: string;
+            numerator: string;
+            percentage?: string | null;
+        };
+        NativeCreatorMetricDrilldown: {
+            /** Format: int64 */
+            bucket_count?: number | null;
+            /** Format: double */
+            bucket_percentage?: number | null;
+            calculation: components["schemas"]["NativeCreatorMetricCalculation"];
+            creator_key: string;
+            excluded_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            included_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            metric_type: string;
+            pagination: components["schemas"]["CreatorMetricPagination"];
+            rating_value?: string | null;
+            role?: string | null;
+            /** Format: double */
+            role_average_rating?: number | null;
+            /** Format: int64 */
+            role_issue_count?: number | null;
+            /** Format: int64 */
+            role_rated_issue_count?: number | null;
+            /** Format: double */
+            series_average_rating?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            /** Format: int64 */
+            series_issue_count?: number | null;
+            /** Format: int64 */
+            series_rated_issue_count?: number | null;
+            series_title?: string | null;
+            /** Format: int64 */
+            total_count: number;
+        };
+        NativeCreatorMetricIssue: {
+            creator_roles: string[];
+            /** Format: double */
+            effective_rating?: number | null;
+            effective_rating_source?: string | null;
+            effective_rating_timestamp?: string | null;
+            exclusion_reason?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            missing_rating_cause?: string | null;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorRatingBucket: {
+            /** Format: int64 */
+            count: number;
+            /** Format: double */
+            rating: number;
+        };
+        NativeCreatorRatingDistribution: {
+            buckets: components["schemas"]["NativeCreatorRatingBucket"][];
+            /** Format: double */
+            max_rating: number;
+            /** Format: double */
+            mean_rating: number;
+            /** Format: double */
+            median_rating: number;
+            /** Format: double */
+            min_rating: number;
+            /** Format: int64 */
+            sample_count: number;
+        };
+        NativeCreatorRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorSeriesGroup: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorSeriesInsight: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: double */
+            highest_rating: number;
+            /** Format: double */
+            lowest_rating: number;
+            metadata_complete: boolean;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorSeriesIssueListResponse: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            issues: components["schemas"]["NativeCreatorIssueRow"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            next_cursor?: string | null;
+            /** Format: int64 */
+            offset: number;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            total: number;
+        };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
             rated_issues_total: number;
@@ -9536,6 +10082,69 @@ export interface components {
             read_unrated_count: number;
             /** Format: int64 */
             upcoming_count: number;
+        };
+        NativeCreatorTeamChemistryResponse: {
+            coverage: components["schemas"]["NativeCreatorTeamCoverage"];
+            /** Format: int64 */
+            max_ranked_pairs: number;
+            /** Format: int64 */
+            min_shared_team_sample: number;
+            pairs: components["schemas"]["NativeCreatorTeamPair"][];
+            /** Format: int64 */
+            pairs_total: number;
+        };
+        NativeCreatorTeamCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorTeamIssueRef: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorTeamMember: {
+            /** Format: double */
+            baseline_average_rating?: number | null;
+            /** Format: int64 */
+            baseline_rated_count: number;
+            canonical_creator_key: string;
+            /** Format: double */
+            difference_from_baseline?: number | null;
+            display_name: string;
+            roles: string[];
+        };
+        NativeCreatorTeamPair: {
+            creators: components["schemas"]["NativeCreatorTeamMember"][];
+            /** Format: int64 */
+            max_shared_issue_refs: number;
+            pair_key: string;
+            /** Format: double */
+            shared_average_rating?: number | null;
+            shared_issue_refs: components["schemas"]["NativeCreatorTeamIssueRef"][];
+            /** Format: double */
+            shared_median_rating?: number | null;
+            /** Format: int64 */
+            shared_rated_issue_count: number;
+            shared_rating_distribution: {
+                [key: string]: number;
+            };
+            shared_series: components["schemas"]["NativeCreatorTeamSeriesRef"][];
+        };
+        NativeCreatorTeamSeriesRef: {
+            /** Format: int64 */
+            shared_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
         };
         NativeCustomCBLApplyRequest: {
             expected_updated_at?: string | null;
@@ -19860,6 +20469,467 @@ export interface operations {
             };
             /** @description Stale preview or different authoritative list */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    creators_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                sort?: string;
+                limit?: number;
+                offset?: number;
+                min_ratings?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorComparisonResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discoveries_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDiscoveryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summaries_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    team_chemistry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator team chemistry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorTeamChemistryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDetailResponse"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Creator not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rating_distribution_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Rating value */
+                rating_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating distribution drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    role_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Creator role */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid role */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid series */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    metric_documentation: {
+        parameters: {
+            query?: {
+                role?: string;
+                rating_value?: string;
+                series_key?: string;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Metric type */
+                metric_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator metric drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid metric */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Metric not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_issues_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator series issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorSeriesIssueListResponse"];
+                };
+            };
+            /** @description Invalid keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
