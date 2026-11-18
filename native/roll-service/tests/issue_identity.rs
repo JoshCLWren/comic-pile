@@ -869,3 +869,286 @@ async fn targeted_adoption_commit_other_users_plan_returns_422() {
         "{body}"
     );
 }
+
+async fn register_user(
+    state: &Arc<AppState>,
+    username: &str,
+    ip_suffix: usize,
+) -> (String, String) {
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header("x-forwarded-for", format!("2001:db8::{ip_suffix:x}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .find_map(|cookie| {
+            let cookie = cookie.to_str().ok()?;
+            cookie
+                .strip_prefix("csrf_token=")?
+                .split(';')
+                .next()
+                .map(str::to_owned)
+        })
+        .expect("register sets a CSRF cookie");
+    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
+    let token = body["access_token"].as_str().unwrap().to_owned();
+    (token, csrf)
+}
+
+#[tokio::test]
+async fn reading_list_candidates_other_user_returns_404() {
+    let (state, token, _csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO custom_cbl_lists (id, user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at)
+        VALUES (920, {user_id}, 'Mine', NULL, 'loose', NOW(), NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING;
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let (token2, _csrf2) = register_user(
+        &state,
+        &format!("issue-identity-cand-{suffix}"),
+        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed),
+    )
+    .await;
+
+    let (status, body) = get(
+        &state,
+        &token2,
+        "/api/v1/issue-identity/reading-lists/920/cbl-candidates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["detail"], "Custom CBL 920 not found", "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_other_users_thread_not_reused() {
+    let (state, token, csrf, _guard) = setup().await;
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let (token2, _csrf2) = register_user(
+        &state,
+        &format!("issue-identity-thread-{suffix}"),
+        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed),
+    )
+    .await;
+    let (status, me2) = get(&state, &token2, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me2}");
+    let user2 = me2["id"].as_i64().unwrap() as i32;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+        VALUES (930, {user2}, 'CBL: Mister Miracle (1989)', 'comic', 0, 1, 'active', 0, 'not_started', NOW())
+        ON CONFLICT (id) DO NOTHING;
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+
+    let row = conn
+        .query_one("SELECT COUNT(*)::bigint FROM threads WHERE id = 930", &[])
+        .await
+        .unwrap();
+    let count: i64 = row.get(0);
+    assert_eq!(count, 1, "other user's thread must remain untouched");
+    let row = conn
+        .query_one("SELECT user_id FROM threads WHERE id = 930", &[])
+        .await
+        .unwrap();
+    let owner: i32 = row.get(0);
+    assert_eq!(
+        owner, user2,
+        "other user's thread ownership must not change"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_recommit_is_idempotent() {
+    let (state, token, csrf, _guard) = setup().await;
+    let payload = json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": "h-mm",
+        "revision_sha": "rev-1"
+    });
+
+    let (status1, body1) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        payload.clone(),
+    )
+    .await;
+    assert!(
+        status1 == StatusCode::CREATED || status1 == StatusCode::OK,
+        "{status1} {body1}"
+    );
+    let plan_id = body1["id"].as_i64().expect("plan id");
+    let nodes1 = body1["nodes"].as_array().cloned().unwrap_or_default();
+
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        payload,
+    )
+    .await;
+    assert!(
+        status2 == StatusCode::CREATED || status2 == StatusCode::OK,
+        "{status2} {body2}"
+    );
+    assert_eq!(body2["id"], plan_id, "re-commit must target same plan");
+    let nodes2 = body2["nodes"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        nodes2.len(),
+        nodes1.len(),
+        "re-commit must not duplicate nodes: first={body1} second={body2}"
+    );
+    assert!(
+        body2["created_positions"]
+            .as_array()
+            .map(|a| a.is_empty())
+            .unwrap_or(true),
+        "re-commit must not create duplicate positions: {body2}"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_inactive_list_returns_422() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/3/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-dead",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(
+        body["detail"]["message"], "CBL source list is not active",
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_returns_503_on_database_outage() {
+    let secret = comicpile_roll_service::test_support::TEST_JWT_SECRET;
+    let state = Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => {
+                    Some("postgresql://127.0.0.1:1/unreachable?connect_timeout=1".into())
+                }
+                "RUST_ROLL_JWT_SECRET" => Some(secret.into()),
+                "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+                "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("1000".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let key = jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()).unwrap();
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &json!({
+            "sub": "reader",
+            "jti": "test-jti",
+            "type": "access",
+            "exp": now + 3600
+        }),
+        &key,
+    )
+    .unwrap();
+    let (status, body) = send(
+        &state,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/cbl/1/adoption-commit")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("x-csrf-token", "csrf")
+            .header(header::COOKIE, "csrf_token=csrf")
+            .body(Body::from(
+                json!({
+                    "entry_decisions": {},
+                    "series_decisions": [],
+                    "series_overrides": [],
+                    "content_hash": "h-mm",
+                    "revision_sha": "rev-1"
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["error"]["code"], "database_unavailable", "{body}");
+}

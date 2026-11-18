@@ -2666,7 +2666,7 @@ async fn do_cbl_adoption_commit(
     request: CblAdoptionCommitRequest,
 ) -> Result<(StatusCode, CblAdoptionCommitResponseWire), CommitErr> {
     let mut client = checkout(state).await.map_err(CommitErr::Db)?;
-    let tx = client.build_transaction().start().await.map_err(|e| {
+    let mut tx = client.build_transaction().start().await.map_err(|e| {
         if crate::db::is_transport_failure(&e) {
             CommitErr::Db(ApiError::database_unavailable())
         } else {
@@ -2828,7 +2828,7 @@ async fn do_cbl_adoption_commit(
         }
     };
 
-    // Merge nodes (simplified but preserves key semantics: reuse existing issue nodes, append new, record provenance and positions)
+    // Merge nodes (preserves key semantics and propagates DB outages as 503).
     let merge_ctx = MergeAdoptionCtx {
         user_id,
         planned: &planned,
@@ -2836,15 +2836,7 @@ async fn do_cbl_adoption_commit(
         series_overrides: &override_bool,
         preserve_existing_order: target_plan_id.is_some(),
     };
-    let merge = merge_adoption_nodes_tx(&tx, &mut nodes_json, &merge_ctx)
-        .await
-        .map_err(|e| {
-            if e.is_database_unavailable() {
-                CommitErr::Db(e)
-            } else {
-                CommitErr::Unexpected(e.to_string())
-            }
-        })?;
+    let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
     tx.run_execute(
         "UPDATE continuity_plans SET nodes_json=$1::jsonb, updated_at=NOW() WHERE id=$2",
         &[&tokio_postgres::types::Json(&nodes_json), &plan_id],
@@ -3416,10 +3408,10 @@ struct MergeAdoptionCtx<'a> {
 }
 
 async fn merge_adoption_nodes_tx(
-    tx: &tokio_postgres::Transaction<'_>,
+    tx: &mut tokio_postgres::Transaction<'_>,
     nodes_json: &mut JsonValue,
     ctx: &MergeAdoptionCtx<'_>,
-) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), ApiError> {
+) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), CommitErr> {
     let user_id = ctx.user_id;
     let planned = ctx.planned;
     let source_path = ctx.source_path;
@@ -3427,7 +3419,7 @@ async fn merge_adoption_nodes_tx(
     let preserve_existing_order = ctx.preserve_existing_order;
     let nodes_arr = nodes_json
         .as_array_mut()
-        .ok_or_else(|| ApiError::Internal("invalid nodes_json".to_string()))?;
+        .ok_or_else(|| CommitErr::Unexpected("invalid nodes_json".to_string()))?;
     let mut reused_positions = Vec::new();
     let mut created_positions = Vec::new();
     let mut excluded_positions = Vec::new();
@@ -3494,24 +3486,32 @@ async fn merge_adoption_nodes_tx(
                 v.as_i64().map(|x| x as i32)
             }
         });
-        let issue_id = if let Some(id) = resolved {
-            id
+        let (issue_id, created_now) = if let Some(id) = resolved {
+            (id, false)
         } else {
-            // try materialize missing importable issue (simplified)
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok((id, created)) => {
-                    if created {
-                        created_positions.push(pos);
+                Ok(MaterializeOutcome::Issue { id, created }) => (id, created),
+                Ok(MaterializeOutcome::Excluded { reason }) => {
+                    if reason == "collection_identity_requires_review" {
+                        unresolved_positions.push(pos);
+                    } else {
+                        excluded_positions.push(pos);
                     }
-                    id
+                    continue;
                 }
-                Err(_) => {
+                Ok(MaterializeOutcome::Unresolved) => {
                     unresolved_positions.push(pos);
                     continue;
                 }
+                Err(MaterializeErr::DbUnavailable) => {
+                    return Err(CommitErr::Db(ApiError::database_unavailable()));
+                }
+                Err(MaterializeErr::Unexpected(msg)) => return Err(CommitErr::Unexpected(msg)),
             }
         };
-        if !created_positions.contains(&pos) { /* reused if not newly created now */ }
+        if created_now {
+            created_positions.push(pos);
+        }
         let label = format!(
             "{} #{}",
             entry
@@ -3533,7 +3533,7 @@ async fn merge_adoption_nodes_tx(
                     .unwrap_or("")
                     .to_string(),
             );
-            if !created_positions.contains(&pos) {
+            if !created_now {
                 reused_positions.push(pos);
             }
         } else {
@@ -3558,7 +3558,7 @@ async fn merge_adoption_nodes_tx(
             nodes_arr.push(node);
             issue_node_index.insert(issue_id, nodes_arr.len() - 1);
             adopted_order.push(format!("cbl-{cse_id}"));
-            if !created_positions.contains(&pos) {
+            if !created_now {
                 reused_positions.push(pos);
             }
         }
@@ -3661,11 +3661,409 @@ fn ensure_node_provenance(
     }
 }
 
-async fn materialize_missing_issue_tx(
+enum MaterializeOutcome {
+    Issue { id: i32, created: bool },
+    Excluded { reason: String },
+    Unresolved,
+}
+
+enum MaterializeErr {
+    DbUnavailable,
+    Unexpected(String),
+}
+
+fn tx_to_commit_err(error: tokio_postgres::Error, context: &str) -> MaterializeErr {
+    if crate::db::is_transport_failure(&error) {
+        MaterializeErr::DbUnavailable
+    } else if context.is_empty() {
+        MaterializeErr::Unexpected(error.to_string())
+    } else {
+        MaterializeErr::Unexpected(format!("{context}: {error}"))
+    }
+}
+
+fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
+    if issue_number.is_empty() || issue_number.starts_with('0') {
+        return None;
+    }
+    if !issue_number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
+}
+
+fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
+    let mut incoming: Vec<(i64, String)> = Vec::new();
+    for issue_number in new_numbers {
+        let value = parse_ordinary_issue_number(issue_number)?;
+        incoming.push((value, issue_number.clone()));
+    }
+    let existing_numbered: Vec<(i64, String)> = existing
+        .iter()
+        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
+        .collect();
+    if existing_numbered.len() == existing.len() {
+        let mut merged = existing_numbered;
+        merged.extend(incoming);
+        merged.sort_by_key(|(n, _)| *n);
+        return Some(merged.into_iter().map(|(_, s)| s).collect());
+    }
+    if existing_numbered.is_empty() {
+        return None;
+    }
+    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
+    if numbers.windows(2).any(|w| w[0] > w[1]) {
+        return None;
+    }
+    let mut result: Vec<String> = existing.to_vec();
+    incoming.sort_by_key(|(n, _)| *n);
+    for (number, label) in incoming {
+        let mut inserted = false;
+        for idx in 0..result.len() {
+            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
+                if existing_number > number {
+                    result.insert(idx, label.clone());
+                    inserted = true;
+                    break;
+                }
+            }
+        }
+        if !inserted {
+            result.push(label);
+        }
+    }
+    Some(result)
+}
+
+async fn insert_issue_natural_order_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    thread_id: i32,
+    issue_number: &str,
+) -> Result<i32, MaterializeErr> {
+    let rows = tx
+        .query(
+            "SELECT id, issue_number, position FROM issues WHERE thread_id = $1 ORDER BY position, id FOR UPDATE",
+            &[&thread_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "lock issue rows"))?;
+    let existing: Vec<(i32, String, i32)> = rows
+        .iter()
+        .map(|r| (r.get(0), r.get::<_, String>(1), r.get(2)))
+        .collect();
+    let existing_numbers: Vec<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
+    let new_numbers = vec![issue_number.to_string()];
+
+    if let Some(order) = natural_issue_order(&existing_numbers, &new_numbers) {
+        let target_positions: std::collections::HashMap<String, i32> = order
+            .iter()
+            .enumerate()
+            .map(|(idx, n)| (n.clone(), (idx + 1) as i32))
+            .collect();
+        let mut updates: Vec<(i32, i32)> = Vec::new();
+        for (id, number, position) in &existing {
+            if let Some(&target) = target_positions.get(number) {
+                if target != *position {
+                    updates.push((*id, target));
+                }
+            }
+        }
+        if !updates.is_empty() {
+            tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+                .await
+                .map_err(|e| tx_to_commit_err(e, "defer position constraint"))?;
+            for (id, pos) in &updates {
+                tx.execute("UPDATE issues SET position = $1 WHERE id = $2", &[pos, id])
+                    .await
+                    .map_err(|e| tx_to_commit_err(e, "reposition issue"))?;
+            }
+        }
+        let pos = *target_positions.get(issue_number).ok_or_else(|| {
+            MaterializeErr::Unexpected("natural order missing inserted issue".into())
+        })?;
+        let row = tx
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at) VALUES ($1, $2, $3, 'unread', NOW()) RETURNING id",
+                &[&thread_id, &issue_number, &pos],
+            )
+            .await
+            .map_err(|e| tx_to_commit_err(e, "insert issue"))?;
+        return Ok(row.get(0));
+    }
+
+    let max_pos = existing.iter().map(|(_, _, p)| *p).max().unwrap_or(0);
+    let pos = max_pos + 1;
+    let row = tx
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at) VALUES ($1, $2, $3, 'unread', NOW()) RETURNING id",
+            &[&thread_id, &issue_number, &pos],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "insert issue"))?;
+    Ok(row.get(0))
+}
+
+async fn apply_thread_issue_tracking_state_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    thread_id: i32,
+) -> Result<(), MaterializeErr> {
+    let rows = tx
+        .query(
+            "SELECT id, status::text FROM issues WHERE thread_id = $1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "load issues for tracking"))?;
+    let total = i32::try_from(rows.len()).unwrap_or(i32::MAX);
+    let mut unread = 0i32;
+    let mut next_unread: Option<i32> = None;
+    for row in &rows {
+        let status: Option<String> = row.get(1);
+        if status.as_deref() != Some("read") {
+            unread += 1;
+            if next_unread.is_none() {
+                next_unread = Some(row.get(0));
+            }
+        }
+    }
+    let reading_progress = if unread == 0 {
+        "completed"
+    } else if unread == total {
+        "not_started"
+    } else {
+        "in_progress"
+    };
+    // Keep status active for a thread receiving materialized unread work; if no unread issues remain,
+    // derived status becomes completed. Preserve/derive conservatively like Python's apply_derived_status.
+    let status = if unread == 0 { "completed" } else { "active" };
+    tx.execute(
+        "UPDATE threads SET total_issues = $1, issues_remaining = $2, next_unread_issue_id = $3, reading_progress = $4, status = $5 WHERE id = $6",
+        &[&total, &unread, &next_unread, &reading_progress, &status, &thread_id],
+    )
+    .await
+    .map_err(|e| tx_to_commit_err(e, "update thread tracking"))?;
+    Ok(())
+}
+
+async fn confirmed_comicvine_issue_ids_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    issue_id: i32,
+) -> Result<std::collections::HashSet<String>, MaterializeErr> {
+    let rows = tx
+        .query(
+            r#"
+            SELECT ei.external_id
+            FROM issue_external_identity_mappings m
+            JOIN external_identities ei ON ei.id = m.external_identity_id
+            WHERE m.issue_id = $1 AND m.status = 'confirmed'
+              AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+            "#,
+            &[&issue_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "load confirmed issue identities"))?;
+    Ok(rows.into_iter().map(|r| r.get::<_, String>(0)).collect())
+}
+
+async fn ensure_comicvine_issue_identity_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    comicvine_id: &str,
+) -> Result<i32, MaterializeErr> {
+    if let Some(row) = tx
+        .query_opt(
+            "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
+            &[&comicvine_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "lookup comicvine identity"))?
+    {
+        return Ok(row.get(0));
+    }
+    let row = tx
+        .query_one(
+            "INSERT INTO external_identities (provider,entity_type,external_id,metadata_json,created_at,updated_at) VALUES ('comicvine','issue',$1,'{}'::jsonb,NOW(),NOW()) RETURNING id",
+            &[&comicvine_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "insert comicvine identity"))?;
+    Ok(row.get(0))
+}
+
+async fn confirm_comicvine_issue_mapping_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    issue_id: i32,
+    comicvine_id: &str,
+) -> Result<(), MaterializeErr> {
+    let ei_id = ensure_comicvine_issue_identity_tx(tx, comicvine_id).await?;
+    tx.execute(
+        "INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING",
+        &[&issue_id, &ei_id],
+    )
+    .await
+    .map_err(|e| tx_to_commit_err(e, "confirm comicvine mapping"))?;
+    Ok(())
+}
+
+async fn max_queue_position_tx(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
+) -> Result<i32, MaterializeErr> {
+    let row = tx
+        .query_one(
+            "SELECT COALESCE(MAX(queue_position),0) FROM threads WHERE user_id=$1",
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "max queue position"))?;
+    Ok(row.get::<_, i32>(0))
+}
+
+async fn owned_title_exists_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    title: &str,
+) -> Result<bool, MaterializeErr> {
+    let row = tx
+        .query_opt(
+            "SELECT 1 FROM threads WHERE user_id=$1 AND title=$2",
+            &[&user_id, &title],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "check thread title"))?;
+    Ok(row.is_some())
+}
+
+async fn new_series_thread_title_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    series_name: &str,
+    volume_year: Option<i64>,
+) -> Result<String, MaterializeErr> {
+    let base = format!("CBL: {series_name}");
+    let year = volume_year.map(|y| format!(" ({y})")).unwrap_or_default();
+    let mut run = 1i32;
+    loop {
+        let suffix = if run == 1 {
+            year.clone()
+        } else {
+            format!("{year} (run {run})")
+        };
+        let max_base = 200usize.saturating_sub(suffix.len());
+        let trimmed_base: String = base.chars().take(max_base).collect();
+        let title = format!("{}{}", trimmed_base.trim_end(), suffix);
+        if !owned_title_exists_tx(tx, user_id, &title).await? {
+            return Ok(title);
+        }
+        run += 1;
+    }
+}
+
+async fn find_or_create_series_thread_sp(
+    sp: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    series_name: &str,
+    external_series_identity_id: Option<i32>,
+    volume_year: Option<i64>,
+) -> Result<i32, MaterializeErr> {
+    if let Some(ext_series_id) = external_series_identity_id {
+        if let Some(row) = sp
+            .query_opt(
+                r#"
+                SELECT t.id
+                FROM threads t
+                JOIN thread_external_series_mappings tesm ON tesm.thread_id = t.id
+                WHERE t.user_id = $1 AND tesm.external_identity_id = $2
+                LIMIT 1
+                "#,
+                &[&user_id, &ext_series_id],
+            )
+            .await
+            .map_err(|e| tx_to_commit_err(e, "find mapped series thread"))?
+        {
+            return Ok(row.get(0));
+        }
+        if sp
+            .query_opt(
+                "SELECT id FROM external_identities WHERE id = $1",
+                &[&ext_series_id],
+            )
+            .await
+            .map_err(|e| tx_to_commit_err(e, "lookup series identity"))?
+            .is_some()
+        {
+            let title = new_series_thread_title_tx(sp, user_id, series_name, volume_year).await?;
+            let qp = max_queue_position_tx(sp, user_id).await? + 1;
+            let row = sp
+                .query_one(
+                    "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',0,$3,'active',0,'not_started',NOW()) RETURNING id",
+                    &[&user_id, &title, &qp],
+                )
+                .await
+                .map_err(|e| tx_to_commit_err(e, "insert series thread"))?;
+            let thread_id: i32 = row.get(0);
+            sp.execute(
+                "INSERT INTO thread_external_series_mappings (thread_id,external_identity_id,status,evidence_source,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit',NOW(),NOW())",
+                &[&thread_id, &ext_series_id],
+            )
+            .await
+            .map_err(|e| tx_to_commit_err(e, "insert series thread mapping"))?;
+            return Ok(thread_id);
+        }
+    }
+
+    let mut title = format!("CBL: {series_name}");
+    if let Some(y) = volume_year {
+        title = format!("{title} ({y})");
+    }
+    if let Some(row) = sp
+        .query_opt(
+            "SELECT id FROM threads WHERE user_id=$1 AND title=$2",
+            &[&user_id, &title],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "find fallback thread"))?
+    {
+        return Ok(row.get(0));
+    }
+    let qp = max_queue_position_tx(sp, user_id).await? + 1;
+    let row = sp
+        .query_one(
+            "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',0,$3,'active',0,'not_started',NOW()) RETURNING id",
+            &[&user_id, &title, &qp],
+        )
+        .await
+        .map_err(|e| tx_to_commit_err(e, "insert fallback thread"))?;
+    Ok(row.get(0))
+}
+
+fn guard_fact_for_thread(
     entry: &serde_json::Map<String, JsonValue>,
-) -> Result<(i32, bool), ApiError> {
+    thread_id: i32,
+) -> serde_json::Map<String, JsonValue> {
+    let mut fact = entry.clone();
+    fact.insert("thread_id".into(), JsonValue::Number(thread_id.into()));
+    fact
+}
+
+fn guard_fact_for_existing_issue(
+    entry: &serde_json::Map<String, JsonValue>,
+    issue_id: i32,
+    thread_id: i32,
+) -> serde_json::Map<String, JsonValue> {
+    let mut fact = entry.clone();
+    fact.insert(
+        "resolved_issue_id".into(),
+        JsonValue::Number(issue_id.into()),
+    );
+    fact.insert("thread_id".into(), JsonValue::Number(thread_id.into()));
+    fact
+}
+
+async fn materialize_missing_issue_tx(
+    tx: &mut tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    entry: &serde_json::Map<String, JsonValue>,
+) -> Result<MaterializeOutcome, MaterializeErr> {
     let series_name = entry
         .get("series_name")
         .and_then(|v| v.as_str())
@@ -3676,96 +4074,176 @@ async fn materialize_missing_issue_tx(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    let comicvine_id = entry.get("comicvine_issue_id").and_then(|v| {
-        if v.is_null() {
-            None
-        } else {
-            v.as_str().map(|s| s.to_string())
-        }
-    });
-    // Reuse by confirmed identity if present
-    if let Some(ref cvid) = comicvine_id {
-        let row = tx.run_query_opt(
-            r#"
-            SELECT i.id FROM issues i
-            JOIN issue_external_identity_mappings m ON m.issue_id = i.id
-            JOIN external_identities ei ON ei.id = m.external_identity_id
-            JOIN threads t ON t.id = i.thread_id
-            WHERE t.user_id=$1 AND m.status='confirmed' AND ei.provider='comicvine' AND ei.entity_type='issue' AND ei.external_id=$2
-            LIMIT 1
-            "#,
-            &[&user_id, cvid]
-        ).await.map_err(|e| tx_db_error(e, ""))?;
-        if let Some(r) = row {
-            return Ok((r.get(0), false));
-        }
-    }
-    // Find or create thread (simplified: by title "CBL: {series}" with volume year)
+    let comicvine_id = entry
+        .get("comicvine_issue_id")
+        .and_then(|v| v.as_str().map(|s| s.to_string()));
+    let external_series_identity_id = entry
+        .get("external_series_identity_id")
+        .and_then(|v| v.as_i64().map(|n| n as i32));
     let volume_year = entry.get("volume_year").and_then(|v| v.as_i64());
-    let mut title = format!("CBL: {series_name}");
-    if let Some(y) = volume_year {
-        title = format!("{title} ({y})");
+
+    // Collection guard on the incoming fact.
+    {
+        let facts = vec![entry.clone()];
+        let guard = load_collection_guard_state(tx, user_id, &facts)
+            .await
+            .map_err(|e| {
+                if e.is_database_unavailable() {
+                    MaterializeErr::DbUnavailable
+                } else {
+                    MaterializeErr::Unexpected(e.to_string())
+                }
+            })?;
+        if let Some((reason, _ids)) = guard_check(&guard, entry) {
+            return Ok(MaterializeOutcome::Excluded { reason });
+        }
     }
-    let thread_row = tx
-        .run_query_opt(
-            "SELECT id FROM threads WHERE user_id=$1 AND title=$2",
-            &[&user_id, &title],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
-    let thread_id: i32 = if let Some(r) = thread_row {
-        r.get(0)
-    } else {
-        let max_q: Option<i32> = tx
-            .run_query_one(
-                "SELECT COALESCE(MAX(queue_position),0) FROM threads WHERE user_id=$1",
-                &[&user_id],
+
+    // Reuse by confirmed comicvine identity if present (with collection guard).
+    if let Some(ref cvid) = comicvine_id {
+        let row = tx
+            .query_opt(
+                r#"
+                SELECT i.id, i.thread_id
+                FROM issues i
+                JOIN issue_external_identity_mappings m ON m.issue_id = i.id
+                JOIN external_identities ei ON ei.id = m.external_identity_id
+                JOIN threads t ON t.id = i.thread_id
+                WHERE t.user_id=$1 AND m.status='confirmed'
+                  AND ei.provider='comicvine' AND ei.entity_type='issue' AND ei.external_id=$2
+                LIMIT 1
+                "#,
+                &[&user_id, cvid],
             )
             .await
-            .map_err(|e| tx_db_error(e, ""))?
-            .get(0);
-        let qp = max_q.unwrap_or(0) + 1;
-        tx.run_query_one(
-            "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',1,$3,'active',1,'not_started',NOW()) RETURNING id",
-            &[&user_id,&title,&qp]
-        ).await.map_err(|e| tx_db_error(e, ""))?.get(0)
-    };
-    // Reuse existing issue in thread by number
-    let existing_issue = tx
-        .run_query_opt(
-            "SELECT id FROM issues WHERE thread_id=$1 AND issue_number=$2",
-            &[&thread_id, &issue_number],
+            .map_err(|e| tx_to_commit_err(e, "lookup existing by comicvine identity"))?;
+        if let Some(r) = row {
+            let issue_id: i32 = r.get(0);
+            let thread_id: i32 = r.get(1);
+            let fact = guard_fact_for_existing_issue(entry, issue_id, thread_id);
+            let facts = vec![fact.clone()];
+            let guard = load_collection_guard_state(tx, user_id, &facts)
+                .await
+                .map_err(|e| {
+                    if e.is_database_unavailable() {
+                        MaterializeErr::DbUnavailable
+                    } else {
+                        MaterializeErr::Unexpected(e.to_string())
+                    }
+                })?;
+            if let Some((reason, _ids)) = guard_check(&guard, &fact) {
+                return Ok(MaterializeOutcome::Excluded { reason });
+            }
+            return Ok(MaterializeOutcome::Issue {
+                id: issue_id,
+                created: false,
+            });
+        }
+    }
+
+    // Target materialization runs in a savepoint so refusal/conflict leaves no partial state.
+    let sp = tx
+        .savepoint("materialize_issue")
+        .await
+        .map_err(|e| tx_to_commit_err(e, "create savepoint"))?;
+
+    let materialized = async {
+        let thread_id = find_or_create_series_thread_sp(
+            &sp,
+            user_id,
+            &series_name,
+            external_series_identity_id,
+            volume_year,
+        )
+        .await?;
+
+        // Collection guard on resolved thread target.
+        let thread_fact = guard_fact_for_thread(entry, thread_id);
+        let facts = vec![thread_fact.clone()];
+        let guard = load_collection_guard_state(&sp, user_id, &facts)
+            .await
+            .map_err(|e| {
+                if e.is_database_unavailable() {
+                    MaterializeErr::DbUnavailable
+                } else {
+                    MaterializeErr::Unexpected(e.to_string())
+                }
+            })?;
+        if let Some((reason, _ids)) = guard_check(&guard, &thread_fact) {
+            return Ok(MaterializeOutcome::Excluded { reason });
+        }
+
+        // Ensure queue position valid for existing/new thread.
+        sp.execute(
+            "UPDATE threads SET queue_position = (SELECT COALESCE(MAX(queue_position),0)+1 FROM threads t2 WHERE t2.user_id=$1) WHERE id=$2 AND queue_position < 1",
+            &[&user_id, &thread_id],
         )
         .await
-        .map_err(|e| tx_db_error(e, ""))?;
-    if let Some(r) = existing_issue {
-        return Ok((r.get(0), false));
+        .map_err(|e| tx_to_commit_err(e, "fix thread queue position"))?;
+
+        // Reuse existing issue in thread by number with ComicVine conflict checks.
+        if let Some(row) = sp
+            .query_opt(
+                "SELECT id FROM issues WHERE thread_id=$1 AND issue_number=$2",
+                &[&thread_id, &issue_number],
+            )
+            .await
+            .map_err(|e| tx_to_commit_err(e, "lookup existing issue by number"))?
+        {
+            let existing_issue_id: i32 = row.get(0);
+            let confirmed_ids = confirmed_comicvine_issue_ids_tx(&sp, existing_issue_id).await?;
+            match comicvine_id.as_deref() {
+                None => {
+                    if !confirmed_ids.is_empty() {
+                        return Ok(MaterializeOutcome::Unresolved);
+                    }
+                }
+                Some(cvid) => {
+                    if !confirmed_ids.contains(cvid) {
+                        if !confirmed_ids.is_empty() {
+                            return Ok(MaterializeOutcome::Unresolved);
+                        }
+                        confirm_comicvine_issue_mapping_tx(&sp, existing_issue_id, cvid).await?;
+                    }
+                }
+            }
+            return Ok(MaterializeOutcome::Issue {
+                id: existing_issue_id,
+                created: false,
+            });
+        }
+
+        let issue_id = insert_issue_natural_order_tx(&sp, thread_id, &issue_number).await?;
+        apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
+
+        if let Some(cvid) = comicvine_id.as_deref() {
+            confirm_comicvine_issue_mapping_tx(&sp, issue_id, cvid).await?;
+        }
+
+        Ok(MaterializeOutcome::Issue {
+            id: issue_id,
+            created: true,
+        })
     }
-    // Insert issue at end (simplified natural order)
-    let max_pos: Option<i32> = tx
-        .run_query_one(
-            "SELECT COALESCE(MAX(position),-1) FROM issues WHERE thread_id=$1",
-            &[&thread_id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?
-        .get(0);
-    let pos = max_pos.unwrap_or(-1) + 1;
-    let issue_id: i32 = tx.run_query_one(
-        "INSERT INTO issues (thread_id,issue_number,position,status,created_at) VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
-        &[&thread_id,&issue_number,&pos]
-    ).await.map_err(|e| tx_db_error(e, ""))?.get(0);
-    // Update thread tracking counts best-effort
-    let _ = tx.run_execute("UPDATE threads SET total_issues = (SELECT COUNT(*) FROM issues WHERE thread_id=$1), issues_remaining = (SELECT COUNT(*) FROM issues WHERE thread_id=$1 AND status='unread') WHERE id=$1", &[&thread_id]).await;
-    // Confirm comicvine mapping if provided
-    if let Some(cvid) = comicvine_id {
-        let ei = tx.run_query_opt("SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1", &[&cvid]).await.map_err(|e| tx_db_error(e, ""))?;
-        let ei_id: i32 = if let Some(r) = ei {
-            r.get(0)
-        } else {
-            tx.run_query_one("INSERT INTO external_identities (provider,entity_type,external_id,metadata_json,created_at,updated_at) VALUES ('comicvine','issue',$1,'{}'::jsonb,NOW(),NOW()) RETURNING id", &[&cvid]).await.map_err(|e| tx_db_error(e, ""))?.get(0)
-        };
-        tx.run_execute("INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING", &[&issue_id,&ei_id]).await.map_err(|e| tx_db_error(e, ""))?;
+    .await;
+
+    match materialized {
+        Ok(outcome @ MaterializeOutcome::Excluded { .. })
+        | Ok(outcome @ MaterializeOutcome::Unresolved) => {
+            sp.rollback()
+                .await
+                .map_err(|e| tx_to_commit_err(e, "rollback materialization savepoint"))?;
+            Ok(outcome)
+        }
+        Ok(outcome) => {
+            sp.commit()
+                .await
+                .map_err(|e| tx_to_commit_err(e, "release materialization savepoint"))?;
+            Ok(outcome)
+        }
+        Err(err) => {
+            let _ = sp.rollback().await;
+            Err(err)
+        }
     }
-    Ok((issue_id, true))
 }
