@@ -200,10 +200,14 @@ pub struct DependencyGroupMemberResponse {
 pub struct DependencyGroupResponse {
     pub id: i32,
     pub name: String,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub memberships: Vec<DependencyGroupMemberResponse>,
+    #[schema(required = false, default = 0)]
     pub read_issues: i32,
+    #[schema(required = false, default = 0)]
     pub total_issues: i64,
+    #[schema(required = false, default = "0%")]
     pub reading_progress: String,
 }
 
@@ -220,6 +224,7 @@ pub struct DependencyGroupDetailMemberResponse {
     pub membership: DependencyGroupMemberResponse,
     pub thread: Option<ThreadDetailResponse>,
     pub issue: Option<IssueDetailResponse>,
+    #[schema(required = false, default = json!([]))]
     pub other_crossovers: Vec<String>,
 }
 
@@ -228,8 +233,10 @@ pub struct DependencyGroupDetailMemberResponse {
 pub struct DependencyGroupDetailResponse {
     pub id: i32,
     pub name: String,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub memberships: Vec<DependencyGroupDetailMemberResponse>,
+    #[schema(required = false, default = json!([]))]
     pub linked_plans: Vec<DependencyGroupSummary>,
 }
 
