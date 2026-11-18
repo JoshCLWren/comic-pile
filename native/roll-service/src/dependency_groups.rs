@@ -952,8 +952,8 @@ pub async fn get_group_detail(
                 issue_number,
                 sequence_order: member.sequence_order,
             },
-            thread.cloned(),
-            issue.cloned(),
+            thread: thread.cloned(),
+            issue: issue.cloned(),
             other_crossovers: other,
         });
     }
