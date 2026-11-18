@@ -16,6 +16,7 @@ import CblBrowserPage from '../pages/CblBrowserPage'
 import api from '../services/api'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
 import { useCreatorsList, CREATOR_LIST_PAGE_SIZE } from '../hooks/useCreatorsList'
+import { issueCardsApi } from '../services/issueCardsApi'
 import type { CreatorListParams, CreatorListResponse } from '../services/api-creators'
 
 /**
