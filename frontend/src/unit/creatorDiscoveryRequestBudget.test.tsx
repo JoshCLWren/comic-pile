@@ -543,6 +543,8 @@ describe('comparison and CBL discovery request budgets', () => {
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
+        // The first state-changing request fetches the CSRF token exactly once.
+        'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'test-csrf' } }),
         // #4444/#4445: membership rows with an exact owned issue id share one
         // bounded card batch on cold open, never one request per row.
         'POST /api/v2/issues/cards': () => ({
