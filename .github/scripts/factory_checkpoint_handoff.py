@@ -446,28 +446,37 @@ def handoff_comment(repo: str, pr: dict, saved: dict, run: dict, run_id: str) ->
 
 
 def merged_checkpoint_receipt(repo: str, saved: dict, pr: dict) -> dict:
-    """Credit the original source snapshot only when merged into main.
+    """Prove a source snapshot belonged to a PR GitHub merged into main.
 
-    A resumed tracking ref may point at another worker's changes. Verify the
-    immutable source-run origin tree, not the current mutable branch tip.
-    The latter is still required independently by retire() before cleanup.
+    The original snapshot may be revised by a later factory/human repair. A
+    verified GitHub merge + exact source-commit ancestry credits the *linked
+    PR merge*, while the stricter byte comparison records separately whether
+    the original snapshot survived verbatim. Neither fact rewrites execution.
     """
     if pr.get("state") != "closed":
         return {}
     canonical = obj(f"repos/{repo}/pulls/{pr['number']}")
     merge_sha = str(canonical.get("merge_commit_sha") or "")
     if (canonical.get("base", {}).get("ref") != "main"
+            or canonical.get("head", {}).get("repo", {}).get("full_name") != repo
             or canonical.get("merged") is not True or not SHA.fullmatch(merge_sha)):
         return {}
-    origin_head = saved.get("origin_head", saved["head"])
-    origin_tree = saved.get("origin_tree")
-    if not origin_tree and saved.get("resumed"):
+    source_head = saved.get("origin_head", saved["head"])
+    source_tree = saved.get("origin_tree")
+    if not SHA.fullmatch(source_head) or (saved.get("resumed") and not source_tree):
         raise ValueError("Resumed checkpoint lacks immutable source snapshot")
-    source = {**saved, "head": origin_head,
-              "tree": origin_tree or saved["tree"]}
-    if incorporated(repo, source, merge_sha):
-        return {"merged": True, "merge_sha": merge_sha}
-    return {}
+    current_head = str(canonical.get("head", {}).get("sha") or "")
+    if not SHA.fullmatch(current_head):
+        return {}
+    ancestry = obj(f"repos/{repo}/compare/{source_head}...{current_head}")
+    if ancestry.get("status") not in {"ahead", "identical"}:
+        return {}
+    source = {**saved, "head": source_head, "tree": source_tree or saved["tree"]}
+    return {
+        "merged": True, "merge_sha": merge_sha, "merge_basis": "pr_ancestry",
+        "exact_bytes_included": incorporated(repo, source, merge_sha),
+    }
+
 
 
 def saved_receipt(saved: dict, result: dict) -> dict:
