@@ -11,13 +11,6 @@ function stableIso(offsetMinutes: number): string {
   return new Date(Date.parse(AUDIT_FIXED_NOW) + offsetMinutes * 60_000).toISOString()
 }
 
-function normalizeActivityRecord(record: JsonRecord, index: number) {
-  return {
-    ...record,
-    timestamp: stableIso(index),
-  } satisfies JsonRecord
-}
-
 function normalizeSessionRecord(record: JsonRecord, index: number) {
   const normalized = {
     ...record,
@@ -35,6 +28,13 @@ function normalizeSessionRecord(record: JsonRecord, index: number) {
   }
 
   return normalized
+}
+
+function normalizeActivityRecord(record: JsonRecord, index: number) {
+  return {
+    ...record,
+    timestamp: stableIso(index),
+  } satisfies JsonRecord
 }
 
 /**
