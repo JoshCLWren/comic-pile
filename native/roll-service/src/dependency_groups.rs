@@ -1495,7 +1495,7 @@ mod tests {
         let (read, total, progress) = crossover_progress(&memberships, &threads, &issues, &unread_counts);
         assert_eq!(total, 10 + 4 + 1);
         assert_eq!(read, 8 + 3 + 1);
-        assert_eq!(progress, "92%"); // 12 / 13
+        assert_eq!(progress, "80%"); // 12 / 15
     }
 
     #[test]
