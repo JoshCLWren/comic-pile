@@ -1151,9 +1151,11 @@ async fn add_issue_range_tx(
         .map_err(db::query_error)?;
     let mut expected = Vec::new();
     let mut actual: Vec<i32> = Vec::new();
+    let mut issue_ids: Vec<i32> = Vec::new();
     for row in rows {
         expected.push(request.start_position + actual.len() as i32);
         actual.push(row.get(1));
+        issue_ids.push(row.get(0));
     }
     if actual != expected {
         let mut missing: Vec<i32> = Vec::new();
@@ -1169,7 +1171,6 @@ async fn add_issue_range_tx(
             missing.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
-    let issue_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
     let added = tx
         .query(INSERT_ISSUE_MEMBERSHIPS_SQL, &[&group_id, &issue_ids])
         .await
@@ -1209,7 +1210,7 @@ pub async fn add_member(
         .map_err(db::query_error)?;
     let result = add_member_tx(&tx, group_id, user.id(), &request).await;
     match result {
-        Ok((member, thread_id, issue_id, sequence_order)) => {
+        Ok((member, thread_id, issue_id, _sequence_order)) => {
             issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             let thread_ids: BTreeSet<i32> = thread_id.into_iter().collect();
@@ -1339,7 +1340,8 @@ async fn remove_member_tx(
         .await
         .map_err(db::query_error)?;
     let member = member.ok_or_else(|| ApiError::NotFound(format!("Member {member_id} not found")))?;
-    if member.get(1) != group_id {
+    let member_group_id: i32 = member.get(1);
+    if member_group_id != group_id {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
     }
     let deleted = tx
