@@ -5,8 +5,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import sqlalchemy as sa
 
 from scripts import migration_rehearsal as rehearsal_module
+from scripts.generate_migration_fixture import (
+    REVIEWED_DANGLING_OWNER_USER_ID,
+    REVIEWED_DANGLING_RULE_IDS,
+    VOLUME_ISSUES_PER_THREAD,
+    VOLUME_THREAD_COUNT,
+    apply_fixture,
+    build_fixture,
+)
 from scripts.migration_rehearsal import (
     BASE_REVISION,
     REHEARSAL_STEPS,
@@ -47,6 +56,10 @@ class _FakeScriptDirectory:
         """Return the fake current head revision."""
         return self.head
 
+    def get_revision(self, revision: str) -> SimpleNamespace:
+        """Return one linear parent for the default ``-1`` shorthand."""
+        return SimpleNamespace(down_revision="c85900000000")
+
 
 class _FakeEngine:
     """Minimal engine double that records fixture use without opening a pool."""
@@ -62,8 +75,14 @@ class _FakeEngine:
 
 
 def test_rehearsal_cycle_steps_are_canonical() -> None:
-    """The canonical rehearsal cycle is upgrade -> fixture -> downgrade -> upgrade."""
-    assert REHEARSAL_STEPS == ("upgrade_head", "apply_fixture", "downgrade_base", "upgrade_head")
+    """Historical rows load at base before upgrade, rollback and re-upgrade."""
+    assert REHEARSAL_STEPS == (
+        "upgrade_base",
+        "apply_fixture",
+        "upgrade_head",
+        "downgrade_base",
+        "upgrade_head",
+    )
     assert BASE_REVISION == "-1"
 
 
@@ -132,11 +151,12 @@ def test_run_migration_rehearsal_full_cycle_with_stubbed_alembic(
 
     assert result.final_revision == "c85900000001"
     assert tuple(step.step for step in result.steps) == (
+        "upgrade_base",
         "upgrade_head",
         "downgrade_base",
         "upgrade_head",
     )
-    assert [call[1] for call in calls] == ["head", "c44050000002", "head"]
+    assert [call[1] for call in calls] == ["c44050000002", "head", "c44050000002", "head"]
 
 
 def test_run_migration_rehearsal_applies_fixture_between_upgrade_and_downgrade(
@@ -186,21 +206,21 @@ def test_run_migration_rehearsal_fails_closed_and_stops_after_first_failure(
     """The first failing step raises MigrationRehearsalError and later steps never run."""
     attempted: list[str] = []
 
-    def _upgrade_head_then_fail(config: object, revision: str) -> None:
-        attempted.append("upgrade_head")
+    def _upgrade_base_then_fail(config: object, revision: str) -> None:
+        attempted.append("upgrade_base")
         raise RuntimeError("irreversible refusal")
 
-    monkeypatch.setattr(rehearsal_module.command, "upgrade", _upgrade_head_then_fail)
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", _upgrade_base_then_fail)
     monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
     monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
 
-    with pytest.raises(MigrationRehearsalError, match="migration rehearsal step 'upgrade_head' failed"):
+    with pytest.raises(MigrationRehearsalError, match="migration rehearsal step 'upgrade_base' failed"):
         run_migration_rehearsal(
             "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
             alembic_config_path=Path("alembic.ini"),
         )
 
-    assert attempted == ["upgrade_head"]
+    assert attempted == ["upgrade_base"]
 
 
 def test_main_returns_zero_when_rehearsal_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,7 +276,7 @@ def test_run_migration_rehearsal_pins_database_url_and_restores_environment(
     disposable = "postgresql://postgres:postgres@127.0.0.1:55432/comic_pile_test"
     run_migration_rehearsal(disposable)
 
-    assert seen == ["postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test"] * 3
+    assert seen == ["postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test"] * 4
     assert os.environ["DATABASE_URL"] == "postgresql://prod-user:secret@prod.example.invalid/neondb"
 
 
@@ -312,7 +332,7 @@ def test_run_migration_rehearsal_upgrade_only_mode_skips_downgrade(
     )
 
     assert tuple(step.step for step in result.steps) == (
-        "upgrade_head",
+        "upgrade_base",
         "apply_fixture",
         "upgrade_head",
     )
@@ -369,3 +389,63 @@ def test_main_mode_upgrade_only(monkeypatch: pytest.MonkeyPatch) -> None:
         ["--database-url", "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test", "--upgrade-only"]
     )
     assert exit_code2 == 0
+
+
+def _historical_users_engine(*extra_columns: sa.Column) -> sa.Engine:
+    """Create a minimal pre-password-reset users schema in memory."""
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    sa.Table(
+        "users",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("username", sa.String(50), nullable=False),
+        sa.Column("email", sa.String(255)),
+        sa.Column("password_hash", sa.String(255)),
+        sa.Column("is_admin", sa.Boolean, nullable=False),
+        sa.Column("created_at", sa.DateTime, nullable=False),
+        *extra_columns,
+    )
+    metadata.create_all(engine)
+    return engine
+
+
+def test_fixture_applier_reflects_an_older_base_schema() -> None:
+    """Head-only ORM columns are omitted when the base table does not have them."""
+    engine = _historical_users_engine()
+    apply_fixture(engine)
+    with engine.connect() as connection:
+        count = connection.execute(sa.text("SELECT COUNT(*) FROM users")).scalar_one()
+        usernames = connection.execute(
+            sa.text("SELECT username FROM users ORDER BY id")
+        ).scalars()
+        assert count == 3
+        assert "rehearsal-reviewed-owner" in set(usernames)
+
+
+def test_fixture_applier_rejects_unmapped_required_history() -> None:
+    """An unknown required base column fails explicitly instead of half-loading."""
+    engine = _historical_users_engine(sa.Column("legacy_required", sa.String, nullable=False))
+    with pytest.raises(RuntimeError, match="legacy_required"):
+        apply_fixture(engine)
+
+
+def test_fixture_contains_reviewed_3359_failures_and_representative_volume() -> None:
+    """The checked-in generator carries actual dangling shapes and non-trivial volume."""
+    fixture = build_fixture()
+    reviewed_rules = [
+        row
+        for row in fixture["continuity_rules"]
+        if row["user_id"] == REVIEWED_DANGLING_OWNER_USER_ID
+    ]
+    issue_ids = {row["id"] for row in fixture["issues"]}
+    assert {row["id"] for row in reviewed_rules} == set(REVIEWED_DANGLING_RULE_IDS)
+    assert all(
+        row["source_id"] not in issue_ids or row["target_id"] not in issue_ids
+        for row in reviewed_rules
+    )
+    assert len(fixture["issues"]) == 6 + VOLUME_THREAD_COUNT * VOLUME_ISSUES_PER_THREAD
+    assert len(fixture["dependencies"]) == 2 + VOLUME_THREAD_COUNT * (
+        VOLUME_ISSUES_PER_THREAD - 1
+    )
+    assert len({row["user_id"] for row in fixture["threads"]}) == 3

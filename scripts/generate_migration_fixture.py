@@ -454,6 +454,155 @@ def _session_rows() -> list[dict[str, Any]]:
     ]
 
 
+def _reviewed_dangling_user_rows() -> list[dict[str, Any]]:
+    """Return the synthetic owner identity required by the #3359 allowlist."""
+    return [
+        {
+            **_user_rows()[0],
+            "id": REVIEWED_DANGLING_OWNER_USER_ID,
+            "username": "rehearsal-reviewed-owner",
+            "email": f"rehearsal-reviewed-owner@{SYNTHETIC_EMAIL_DOMAIN}",
+            "password_hash": None,
+        }
+    ]
+
+
+def _reviewed_dangling_thread_rows() -> list[dict[str, Any]]:
+    """Return surviving synthetic threads around the #3359 dangling rules."""
+    return [
+        {
+            **_thread_rows()[1],
+            "id": 910004,
+            "title": "Rehearsal Reviewed Dangling Series",
+            "issues_remaining": 1,
+            "total_issues": 2,
+            "queue_position": 4,
+            "user_id": REVIEWED_DANGLING_OWNER_USER_ID,
+        }
+    ]
+
+
+def _reviewed_dangling_issue_rows() -> list[dict[str, Any]]:
+    """Return two surviving endpoints; the other #3359 endpoints stay absent."""
+    return [
+        {
+            **_issue_rows()[0],
+            "id": 920005,
+            "thread_id": 910004,
+            "issue_number": "1",
+            "position": 1,
+        },
+        {
+            **_issue_rows()[1],
+            "id": 920006,
+            "thread_id": 910004,
+            "issue_number": "2",
+            "position": 2,
+        },
+    ]
+
+
+def _reviewed_dangling_plan_rows() -> list[dict[str, Any]]:
+    """Return the synthetic plan named by the reviewed dangling rules."""
+    return [
+        {
+            **_continuity_plan_rows()[0],
+            "id": 940002,
+            "user_id": REVIEWED_DANGLING_OWNER_USER_ID,
+            "name": "Rehearsal Reviewed Dangling Plan",
+            "nodes_json": [{"issue_id": 920006, "lane_id": "reviewed"}],
+            "lanes_json": [],
+        }
+    ]
+
+
+def _reviewed_dangling_rule_rows() -> list[dict[str, Any]]:
+    """Reproduce the six reviewed missing-endpoint shapes that aborted #3359."""
+    specs = (
+        (1117318, 920006),
+        (920005, 1117522),
+        (1117685, 920006),
+        (920005, 1117685),
+        (1117318, 1117522),
+        (1117522, 1117685),
+    )
+    template = _continuity_rule_rows()[0]
+    return [
+        {
+            **template,
+            "id": rule_id,
+            "user_id": REVIEWED_DANGLING_OWNER_USER_ID,
+            "source_id": source_id,
+            "target_id": target_id,
+            "note": "continuity-plan:940002",
+        }
+        for rule_id, (source_id, target_id) in zip(
+            REVIEWED_DANGLING_RULE_IDS, specs, strict=True
+        )
+    ]
+
+
+def _volume_thread_rows() -> list[dict[str, Any]]:
+    """Return a bounded multi-user synthetic library for backfill timing."""
+    template = _thread_rows()[1]
+    return [
+        {
+            **template,
+            "id": 800001 + thread_index,
+            "title": f"Rehearsal Volume Series {thread_index + 1:02d}",
+            "issues_remaining": VOLUME_ISSUES_PER_THREAD,
+            "total_issues": VOLUME_ISSUES_PER_THREAD,
+            "queue_position": 100 + thread_index,
+            "last_activity_at": None,
+            "last_rating": None,
+            "notes": None if thread_index % 2 else "  synthetic legacy whitespace  ",
+            "is_blocked": thread_index % 7 == 0,
+            "user_id": 900001 + thread_index % 2,
+        }
+        for thread_index in range(VOLUME_THREAD_COUNT)
+    ]
+
+
+def _volume_issue_rows() -> list[dict[str, Any]]:
+    """Return representative issue cardinality and duplicate cross-thread keys."""
+    template = _issue_rows()[1]
+    rows: list[dict[str, Any]] = []
+    for thread_index in range(VOLUME_THREAD_COUNT):
+        for position in range(1, VOLUME_ISSUES_PER_THREAD + 1):
+            is_read = position % 17 == 0
+            rows.append(
+                {
+                    **template,
+                    "id": 1000000 + thread_index * VOLUME_ISSUES_PER_THREAD + position,
+                    "thread_id": 800001 + thread_index,
+                    "issue_number": "0001" if position == 1 else str(position),
+                    "position": position,
+                    "status": "read" if is_read else "unread",
+                    "read_at": _utc_now() if is_read else None,
+                }
+            )
+    return rows
+
+
+def _volume_dependency_rows() -> list[dict[str, Any]]:
+    """Return acyclic issue chains for data-dependent backfill/cycle checks."""
+    template = _dependency_rows()[0]
+    rows: list[dict[str, Any]] = []
+    for thread_index in range(VOLUME_THREAD_COUNT):
+        for position in range(1, VOLUME_ISSUES_PER_THREAD):
+            source_id = 1000000 + thread_index * VOLUME_ISSUES_PER_THREAD + position
+            rows.append(
+                {
+                    **template,
+                    "id": 1100000 + thread_index * VOLUME_ISSUES_PER_THREAD + position,
+                    "source_issue_id": source_id,
+                    "target_issue_id": source_id + 1,
+                    "note": "synthetic-volume-prerequisite",
+                }
+            )
+    return rows
+
+
 def build_fixture() -> dict[str, list[dict[str, Any]]]:
     """Build the deterministic prod-shaped synthetic fixture rows.
 
@@ -461,11 +610,11 @@ def build_fixture() -> dict[str, list[dict[str, Any]]]:
         Mapping of table name to inserted row dictionaries, in fixture order.
     """
     return {
-        "users": _user_rows(),
-        "threads": _thread_rows(),
-        "issues": _issue_rows(),
-        "dependencies": _dependency_rows(),
-        "continuity_plans": _continuity_plan_rows(),
+        "users": [*_user_rows(), *_reviewed_dangling_user_rows()],
+        "threads": [*_thread_rows(), *_reviewed_dangling_thread_rows(), *_volume_thread_rows()],
+        "issues": [*_issue_rows(), *_reviewed_dangling_issue_rows(), *_volume_issue_rows()],
+        "dependencies": [*_dependency_rows(), *_volume_dependency_rows()],
+        "continuity_plans": [*_continuity_plan_rows(), *_reviewed_dangling_plan_rows()],
         "reading_plan_issues": _reading_plan_issue_rows(),
         "reading_plan_dependencies": _reading_plan_dependency_rows(),
         "custom_cbl_lists": _custom_cbl_list_rows(),
@@ -474,26 +623,76 @@ def build_fixture() -> dict[str, list[dict[str, Any]]]:
         "cbl_source_lists": _cbl_source_list_rows(),
         "custom_cbl_source_links": _custom_cbl_source_link_rows(),
         "reading_plan_sources": _reading_plan_source_rows(),
-        "continuity_rules": _continuity_rule_rows(),
+        "continuity_rules": [
+            *_continuity_rule_rows(),
+            *_reviewed_dangling_rule_rows(),
+        ],
         "cbl_adoption_receipts": _cbl_adoption_receipt_rows(),
         "collection_exclusions": _collection_exclusion_rows(),
         "sessions": _session_rows(),
     }
 
 
+def _compatible_rows(
+    connection: Connection,
+    table: Table,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Project rows onto the actual base schema and reject unmappable history.
+
+    Args:
+        connection: Disposable database connection used for reflection.
+        table: Freshly reflected base-revision table.
+        rows: Synthetic row values in their newest known shape.
+
+    Returns:
+        Rows containing only columns present at the base revision.
+
+    Raises:
+        RuntimeError: If a required historical column has no fixture value.
+    """
+    supplied = set().union(*(row.keys() for row in rows))
+    missing_required = [
+        column.name
+        for column in table.columns
+        if column.name not in supplied
+        and not column.nullable
+        and column.default is None
+        and column.server_default is None
+        and not column.autoincrement
+    ]
+    if missing_required:
+        raise RuntimeError(
+            f"fixture table {table.name!r} needs values for historical required columns: "
+            + ", ".join(sorted(missing_required))
+        )
+    return [
+        {key: value for key, value in row.items() if key in table.columns}
+        for row in rows
+    ]
+
+
 def apply_fixture(engine: Engine) -> None:
-    """Apply the prod-shaped synthetic fixture through bulk inserts.
+    """Apply synthetic history through bulk inserts at the actual base schema.
 
     Args:
         engine: Sync SQLAlchemy engine bound to the disposable rehearsal DB.
 
     Raises:
-        RuntimeError: When a fixture row violates a constraint.
+        RuntimeError: When a historical table needs an explicit new fixture
+            mapping, or when a row violates a base-schema constraint.
     """
     fixture = build_fixture()
+    metadata = MetaData()
     with engine.begin() as connection:
+        existing_tables = set(inspect(connection).get_table_names())
+        inserted_total = 0
         for table_name, rows in fixture.items():
-            if not rows:
+            if not rows or table_name not in existing_tables:
                 continue
-            table = _TABLES[table_name]
-            connection.execute(insert(table).values(rows))
+            table = Table(table_name, metadata, autoload_with=connection)
+            compatible_rows = _compatible_rows(connection, table, rows)
+            connection.execute(insert(table).values(compatible_rows))
+            inserted_total += len(compatible_rows)
+            print(f"migration-fixture table {table_name}: {len(compatible_rows)} rows")
+        print(f"migration-fixture total: {inserted_total} synthetic rows")
