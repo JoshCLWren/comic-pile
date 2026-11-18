@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import test from 'node:test';
+import {_generateVercelDocument, _loadRouteFragments} from './generate_route_burndown.mjs';
+import {slimNativeRollRoutes, sampleFromRegex} from './vercel_slim_routes.mjs';
+
+const ROLL = '/api/native_roll.rs';
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const json = file => JSON.parse(readFileSync(file, 'utf8'));
+
+function resolve(routes, method, path) {
+  for (const route of routes) {
+    if (typeof route.src !== 'string') continue;
+    if (!new RegExp(`^(?:${route.src})$`).test(path)) continue;
+    if (route.methods && route.methods.length && !route.methods.includes(method)) continue;
+    return route.dest;
+  }
+  return null;
+}
+
+function concretePaths(template) {
+  return ['1', 'abc', '42'].map(fill => template.replace(/\{[^}]+\}/g, fill));
+}
+
+function allTemplates(inventory, fragments) {
+  const templates = new Set();
+  for (const op of inventory.operations) templates.add(op.path);
+  for (const bucket of ['v1_operations', 'unversioned_operations']) {
+    for (const op of inventory.full_surface[bucket]) templates.add(op.path);
+  }
+  for (const fragment of fragments) for (const op of fragment.operations) templates.add(op.path);
+  return [...templates];
+}
+
+test('slim vercel routes resolve identically to the full route list', () => {
+  const fragments = _loadRouteFragments('docs/api/route-fragments');
+  const previous = json('vercel.json');
+  const full = _generateVercelDocument(previous, fragments, {slim: false}).routes;
+  const slim = _generateVercelDocument(previous, fragments, {slim: true}).routes;
+  assert.ok(slim.length < full.length, 'slim list must drop redundant native_roll routes');
+  const inventory = json('docs/api/v2-route-inventory.json');
+  const templates = allTemplates(inventory, fragments);
+  let checked = 0;
+  for (const template of templates) {
+    for (const concrete of concretePaths(template)) {
+      for (const method of METHODS) {
+        assert.equal(
+          resolve(slim, method, concrete),
+          resolve(full, method, concrete),
+          `${method} ${concrete} resolves differently`,
+        );
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 1000);
+  // Unknown paths still reach the catch-all.
+  assert.equal(resolve(slim, 'GET', '/api/v2/never-registered'), ROLL);
+});
+
+test('slim list keeps python, issue, catch-all and non-api routes and every needed roll route', () => {
+  const fragments = _loadRouteFragments('docs/api/route-fragments');
+  const previous = json('vercel.json');
+  const full = _generateVercelDocument(previous, fragments, {slim: false}).routes;
+  const slim = _generateVercelDocument(previous, fragments, {slim: true}).routes;
+  const keep = route => route.dest !== ROLL || route.src === '/api(?:/.*)?';
+  assert.deepEqual(slim.filter(keep), full.filter(keep));
+  const slimSet = new Set(slim.map(route => JSON.stringify(route)));
+  for (const route of slim) assert.ok(slimSet.has(JSON.stringify(route)));
+  // A roll route shadowed by a later python route must survive.
+  const kept = slim.filter(route => route.dest === ROLL && route.src !== '/api(?:/.*)?');
+  assert.ok(kept.length > 0);
+});
+
+test('synthetic: a roll route is dropped unless a later python or issue route overlaps', () => {
+  const free = {src: '^/api/v2/free$', methods: ['GET'], dest: ROLL};
+  const shadowed = {src: '^/api/v1/things/summaries$', methods: ['GET'], dest: ROLL};
+  const otherMethod = {src: '^/api/v1/other$', methods: ['POST'], dest: ROLL};
+  const python = {src: '^/api/v1/things/[^/]+$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
+  const pythonOther = {src: '^/api/v1/other$', methods: ['GET'], dest: '/api/index.py'};
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  const spa = {src: '/(.*)', dest: '/index.html'};
+  const routes = [free, shadowed, otherMethod, python, pythonOther, catchAll, spa];
+  const out = slimNativeRollRoutes(routes, new Set([free, shadowed, otherMethod]), [
+    '/api/v2/free', '/api/v1/things/{id}', '/api/v1/other',
+  ]);
+  assert.deepEqual(out, [shadowed, python, pythonOther, catchAll, spa]);
+});
+
+test('sampleFromRegex inverts the regexes the generators emit', () => {
+  assert.equal(sampleFromRegex('^/api/v1/identity\\-inbox/[^/]+/confirm$', '1'), '/api/v1/identity-inbox/1/confirm');
+  assert.equal(sampleFromRegex('^/api/v2/queue-entries/[0-9]+$', 'x'), '/api/v2/queue-entries/1');
+});

@@ -435,6 +435,7 @@ def _fragment_vercel_groups(
 
     Args:
         fragments: Family-owned route metadata.
+        slim: Drop native_roll routes the catch-all already provides.
         previous_routes: Previous Vercel routes for dest/src inference.
 
     Returns:
@@ -517,15 +518,115 @@ def _fragment_vercel_groups(
     return ordered
 
 
+ROLL_DESTINATION = "/api/native_roll.rs"
+_SAMPLE_TOKEN = re.compile(
+    r"\(\?![^)]*\)|\(\?:/\.\*\)\?|\[\^/\]\+|\[0-9\]\+|\.\+|\.\*|\\(.)",
+    re.DOTALL,
+)
+
+
+def _sample_from_regex(src: str, fill: str) -> str:
+    """Derive one concrete path from a route regex (mirrors vercel_slim_routes.mjs)."""
+    body = src.removeprefix("^").removesuffix("$")
+
+    def replace(match: re.Match[str]) -> str:
+        escaped = match.group(1)
+        if escaped is not None:
+            return escaped
+        token = match.group(0)
+        if token == "[0-9]+":
+            return "1"
+        if token in ("[^/]+", ".+"):
+            return fill
+        return ""
+
+    return _SAMPLE_TOKEN.sub(replace, body)
+
+
+def _slim_native_roll_routes(
+    routes: list[dict[str, object]],
+    removable: list[dict[str, object]],
+    template_paths: list[str],
+) -> list[dict[str, object]]:
+    """Drop fragment native_roll routes that the catch-all already provides.
+
+    A route is kept only when a later non-roll route (before the catch-all)
+    overlaps it on method and on a sample path. Mirrors
+    scripts/vercel_slim_routes.mjs; keep the two in sync.
+    """
+    catch_index = next(
+        (i for i, route in enumerate(routes) if route.get("src") == CATCH_ALL_SRC), -1
+    )
+    limit = len(routes) if catch_index == -1 else catch_index
+    matchers: list[re.Pattern[str] | None] = []
+    for route in routes:
+        src = route.get("src")
+        try:
+            matchers.append(re.compile(src) if isinstance(src, str) else None)
+        except re.error:
+            matchers.append(None)
+    pool: set[str] = set()
+    for template in template_paths:
+        for fill in ("1", "x"):
+            pool.add(re.sub(r"\{[^}]+\}", fill, template))
+    for index, route in enumerate(routes):
+        matcher = matchers[index]
+        if index >= limit or matcher is None:
+            continue
+        for fill in ("1", "x"):
+            sample = _sample_from_regex(str(route["src"]), fill)
+            if matcher.fullmatch(sample):
+                pool.add(sample)
+    samples = sorted(pool)
+    matched: list[set[int]] = []
+    for index, matcher in enumerate(matchers):
+        if matcher is None or index >= limit:
+            matched.append(set())
+            continue
+        matched.append(
+            {i for i, sample in enumerate(samples) if matcher.fullmatch(sample)}
+        )
+
+    def methods_of(route: dict[str, object]) -> list[str]:
+        raw = route.get("methods")
+        return [m for m in raw if isinstance(m, str)] if isinstance(raw, list) else []
+
+    def required(index: int) -> bool:
+        mine = methods_of(routes[index])
+        for later in range(index + 1, limit):
+            other = routes[later]
+            if other.get("dest") == ROLL_DESTINATION:
+                continue
+            theirs = methods_of(other)
+            if mine and theirs and not any(m in theirs for m in mine):
+                continue
+            if matched[index] & matched[later]:
+                return True
+        return False
+
+    removable_ids = {id(route) for route in removable}
+    return [
+        route
+        for index, route in enumerate(routes)
+        if id(route) not in removable_ids
+        or route.get("dest") != ROLL_DESTINATION
+        or matchers[index] is None
+        or required(index)
+    ]
+
+
 def _generate_vercel_document(
     previous: dict[str, object],
     fragments: list[RouteFragment],
+    *,
+    slim: bool = True,
 ) -> dict[str, object]:
     """Regenerate ``vercel.json`` API routes from fragments plus baseline.
 
     Args:
         previous: Previous ``vercel.json`` document.
         fragments: Family-owned route metadata.
+        slim: Drop native_roll routes the catch-all already provides.
 
     Returns:
         The new document with API routes in native-before-Python order.
@@ -591,13 +692,26 @@ def _generate_vercel_document(
         {"src": r["src"], "methods": r["methods"], "dest": r["dest"]}
         for r in [*native_fragment, *python_fragment]
     ]
-    new_routes: list[dict[str, object]] = [
+    full_routes: list[dict[str, object]] = [
         *baseline_natives,
         *generated,
         *baseline_pythons,
         catch_all,
         *non_api,
     ]
+    new_routes = (
+        _slim_native_roll_routes(
+            full_routes,
+            generated,
+            [
+                _string(operation.get("path"), "fragment.path")
+                for fragment in fragments
+                for operation in fragment.operations
+            ],
+        )
+        if slim
+        else full_routes
+    )
     # Validate native-before-Python precedence and catch-all placement.
     native_indices = [
         index

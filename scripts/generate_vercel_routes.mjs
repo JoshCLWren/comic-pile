@@ -6,6 +6,7 @@
 import {execFileSync} from 'node:child_process';
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
+import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const PYTHON = '/api/index.py';
 const RUST = '/api/native_roll.rs';
@@ -201,16 +202,24 @@ export function generateVercel(config, operations, fragments = null) {
   // Deterministic native-before-Python order: baseline natives (preserved
   // order) + fragment natives (sorted) + fragment pythons (sorted) +
   // baseline exceptions (sorted by path) + catch-all + non-API tail.
+  // Fragment-derived native_roll routes are emitted only when a later Python
+  // or native_issue route could otherwise shadow them (the catch-all already
+  // sends everything else to native_roll).
+  const fullRoutes = [
+    ...baselineNatives,
+    ...fragmentNatives,
+    ...fragmentPythons,
+    ...baselineExceptions,
+    {src: FALLBACK, dest: RUST},
+    ...rest,
+  ];
   return {
     ...config,
-    routes: [
-      ...baselineNatives,
-      ...fragmentNatives,
-      ...fragmentPythons,
-      ...baselineExceptions,
-      {src: FALLBACK, dest: RUST},
-      ...rest,
-    ],
+    routes: slimNativeRollRoutes(
+      fullRoutes,
+      new Set(fragmentNatives),
+      fragments.flatMap(fragment => fragment.operations.map(operation => operation.path)),
+    ),
   };
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
