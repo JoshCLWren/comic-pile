@@ -403,6 +403,17 @@ fn app() -> Router {
         .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v1/roll/override", post(native_dispatch))
+        .route("/api/roll/override", post(native_dispatch))
+        .route(
+            "/api/v1/roll/events/{event_id}/recommendation-explanation",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/roll/events/{event_id}/recommendation-explanation",
+            get(native_dispatch),
+        )
+        .route("/api/v1/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
         .route("/api/v1/users/me/preferences", patch(native_dispatch))
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))
