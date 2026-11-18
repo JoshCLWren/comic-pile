@@ -4,13 +4,62 @@ Covers CBL identity collisions, Fourth World volume mapping, no false cycles,
 bulk dependency materialization blocked, and idempotent repair.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.issue import Issue
+from app.models.thread import Thread
 from app.services.cbl_plan_adoption import (
     CBL_SOURCE_ORDER_DEPENDENCY_MATERIALIZATION_BLOCKED,
     _refuse_bulk_cbl_dependency_materialization,
 )
+
+
+async def _thread_with_numbers(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    title: str,
+    numbers: list[str],
+    queue_position: int,
+    read_through: int = 0,
+) -> tuple[Thread, list[Issue]]:
+    """Create one owned Thread with stable issue ids."""
+    unread = max(len(numbers) - read_through, 0)
+    thread = Thread(
+        title=title,
+        format="Comic",
+        issues_remaining=unread,
+        queue_position=queue_position,
+        status="active",
+        user_id=user_id,
+        total_issues=len(numbers),
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread)
+    await db.flush()
+    issues: list[Issue] = []
+    next_unread: int | None = None
+    for position, number in enumerate(numbers, start=1):
+        status = "read" if position <= read_through else "unread"
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=number,
+            position=position,
+            status=status,
+            read_at=datetime.now(UTC) if status == "read" else None,
+        )
+        db.add(issue)
+        await db.flush()
+        issues.append(issue)
+        if status == "unread" and next_unread is None:
+            next_unread = issue.id
+    thread.next_unread_issue_id = next_unread
+    await db.flush()
+    return thread, issues
+
 
 
 def test_3470_bulk_cbl_dependency_materialization_blocked() -> None:
@@ -54,15 +103,12 @@ async def test_3470_cross_volume_forever_people_not_collapsed(
     Two threads share one ComicVine issue identity, but only the thread
     whose series mapping matches the CBL entry is retained as a candidate.
     """
-    from datetime import UTC, datetime
-
     from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
     from app.models.external_identity import (
         ExternalIdentity,
         ThreadExternalSeriesMapping,
     )
     from tests.conftest import get_or_create_user_async
-    from tests.test_series_thread_reattach import _thread_with_numbers
 
     user = await get_or_create_user_async(async_db)
 
@@ -176,14 +222,11 @@ async def test_3470_missing_volume_thread_identity_unresolved_not_guessed(
     async_db: AsyncSession,
 ) -> None:
     """No matching thread series mapping leaves the entry unresolved."""
-    from datetime import UTC, datetime
-
     from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
     from app.models.external_identity import (
         ExternalIdentity,
     )
     from tests.conftest import get_or_create_user_async
-    from tests.test_series_thread_reattach import _thread_with_numbers
 
     user = await get_or_create_user_async(async_db)
     thread_a, issues_a = await _thread_with_numbers(
@@ -274,15 +317,12 @@ async def test_3470_multiple_candidates_without_exact_volume_unmatched(
     "unknown"), never the CBL issue's volume_id repeated for every candidate,
     and a missing CBL volume identity never renders as the literal "None".
     """
-    from datetime import UTC, datetime
-
     from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
     from app.models.external_identity import (
         ExternalIdentity,
         ThreadExternalSeriesMapping,
     )
     from tests.conftest import get_or_create_user_async
-    from tests.test_series_thread_reattach import _thread_with_numbers
 
     user = await get_or_create_user_async(async_db)
     thread_a, issues_a = await _thread_with_numbers(
