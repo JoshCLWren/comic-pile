@@ -637,12 +637,6 @@ pub async fn unsnooze(
     let metadata = offer_metadata(&*pending.connection(), user, snoozed_thread).await?;
     pending.release();
 
-    // Get the issue for the restored thread.
-    let issue_number = active
-        .session
-        .pending_issue_id
-        .and_then(|_| None); // We don't have the issue_id here, but the metadata has it via next_unread_issue_id
-
     Ok(Json(UnsnoozeResponse {
         thread_id: metadata.thread_id,
         title: metadata.title,
@@ -654,7 +648,7 @@ pub async fn unsnooze(
         offset: 0,
         snoozed_count: snoozed_ids.len() as i32,
         issue_id: metadata.next_unread_issue_id,
-        issue_number: metadata.next_unread_issue_number,
+        issue_number: metadata.next_unread_issue_number.clone(),
         next_issue_id: metadata.next_unread_issue_id,
         next_issue_number: metadata.next_unread_issue_number,
         total_issues: metadata.total_issues,
