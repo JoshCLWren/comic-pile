@@ -406,7 +406,7 @@ fn encode_query(value: &str) -> String {
 
 /// 1-based insertion position between neighbor anchors. Mirrors the Python
 /// `resolve_anchored_position` rules exactly.
-fn resolve_anchored_position(
+pub(crate) fn resolve_anchored_position(
     positions: &HashMap<i32, i32>,
     before: Option<i32>,
     after: Option<i32>,
