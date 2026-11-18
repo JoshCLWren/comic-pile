@@ -557,7 +557,7 @@ pub async fn unsnooze(
         .await
         .map_err(db::query_error)?;
 
-    let current_pending: Option<i32> = row.try_get(0).map_err(db::query_error)?;
+    let _current_pending: Option<i32> = row.try_get(0).map_err(db::query_error)?;
     let snoozed_raw: Option<String> = row.try_get(1).map_err(db::query_error)?;
     let mut snoozed_ids: Vec<i32> = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
 
