@@ -132,6 +132,22 @@ export function ReadingGraphProblemCard() {
                       {edge.target.series_title} #{edge.target.issue_number}
                     </span>{' '}
                     <span className="text-[var(--theme-text-dim)]">({edge.origin})</span>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <CompactIssueCardTrigger
+                        issueId={edge.source.issue_id}
+                        threadTitle={edge.source.series_title}
+                        issueNumber={edge.source.issue_number}
+                        card={cardsByIssue.get(edge.source.issue_id) ?? null}
+                        hideTitle
+                      />
+                      <CompactIssueCardTrigger
+                        issueId={edge.target.issue_id}
+                        threadTitle={edge.target.series_title}
+                        issueNumber={edge.target.issue_number}
+                        card={cardsByIssue.get(edge.target.issue_id) ?? null}
+                        hideTitle
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>

@@ -1,3 +1,4 @@
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 import {
   act,
   screen,
@@ -8,6 +9,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest'
 import type {
   CBLAdoptionPreview,
@@ -29,6 +31,7 @@ import {
   preview,
   searchFor,
 } from './CblBrowserPage.fixture'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 describe('CblBrowserPage catalog', () => {
   it('browses the catalog root immediately without a search submission', async () => {
