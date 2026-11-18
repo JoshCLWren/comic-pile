@@ -71,6 +71,24 @@ def recent_candidate_prs(repo: str, *, now: datetime, days: int,
     return chosen
 
 
+def incident_prs(repo: str, issue_number: int, *, max_prs: int = 25) -> list[int]:
+    """Find user-documented historical examples, then independently verify all.
+
+    This input is a discovery hint, NEVER an attestation. A referenced PR
+    earns no credit without bot checkpoint + run + byte-level merge proof.
+    """
+    if issue_number <= 0:
+        raise ValueError("Invalid incident tracking issue")
+    issue = obj(f"repos/{repo}/issues/{issue_number}")
+    body = str(issue.get("body") or "")
+    pair = re.compile(
+        r"(?m)^\|\s*\[([1-9][0-9]*)\]\([^\n|]+\)\s*\|"
+        r"\s*#([1-9][0-9]*)\s*\|"
+    )
+    found = list(dict.fromkeys(int(pr) for _run, pr in pair.findall(body)))
+    return found[:max_prs]
+
+
 def snapshot_for_run(repo: str, sha: str, run_id: str, worker: str) -> dict[str, str]:
     """Resolve immutable source-run checkpoint metadata, never mutable ref tip."""
     if not SHA.fullmatch(sha):
@@ -191,6 +209,7 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=3)
     parser.add_argument("--max-pages", type=int, default=3)
     parser.add_argument("--max-prs", type=int, default=12)
+    parser.add_argument("--incident-issue", type=int)
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):
         parser.error("Invalid repository")
@@ -198,10 +217,15 @@ def main() -> int:
     if not enabled():
         raise RuntimeError("Neon required for trusted delivery backfill")
     limit = max(1, min(args.max_prs, 25))
-    prs = list(dict.fromkeys(args.pr))[:limit] if args.pr else recent_candidate_prs(
-        args.repo, now=datetime.now(UTC), days=max(1, min(args.days, 14)),
-        max_pages=max(1, min(args.max_pages, 10)), max_prs=limit,
-    )
+    if args.pr:
+        prs = list(dict.fromkeys(args.pr))[:limit]
+    elif args.incident_issue:
+        prs = incident_prs(args.repo, args.incident_issue, max_prs=limit)
+    else:
+        prs = recent_candidate_prs(
+            args.repo, now=datetime.now(UTC), days=max(1, min(args.days, 14)),
+            max_pages=max(1, min(args.max_pages, 10)), max_prs=limit,
+        )
     if any(number <= 0 for number in prs):
         raise ValueError("Invalid work PR")
     summary = backfill(args.repo, prs, receipt_writer=record_checkpoint_evidence)
