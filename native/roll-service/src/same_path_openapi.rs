@@ -140,6 +140,20 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
                 .insert(alias.to_string(), alias_item(item, alias));
         }
     }
+    // utoipa's `schema_with` supplies the full `limit` schema but suppresses the
+    // parameter-level description. Restore the Python `Query(description=...)`
+    // text so the generated client contract matches the retired FastAPI route.
+    if let Some(item) = document.paths.paths.get_mut("/api/v1/taste/discoveries") {
+        if let Some(operation) = item.get.as_mut() {
+            for parameter in operation.parameters.iter_mut().flatten() {
+                if let utoipa::openapi::RefOr::T(parameter) = parameter {
+                    if parameter.name == "limit" {
+                        parameter.description = Some("Maximum discoveries to return.".to_string());
+                    }
+                }
+            }
+        }
+    }
     document
         .paths
         .paths
@@ -233,11 +247,19 @@ mod tests {
             "#/components/schemas/TasteDiscoveryListResponse"
         );
         let params = listing["parameters"].as_array().expect("limit param");
-        assert!(
-            params
-                .iter()
-                .any(|param| param["name"] == "limit" && param["in"] == "query"),
-            "GET listing must document its bounded limit query parameter"
+        let limit = params
+            .iter()
+            .find(|param| param["name"] == "limit" && param["in"] == "query")
+            .expect("GET listing must document its bounded limit query parameter");
+        assert_eq!(limit["description"], "Maximum discoveries to return.");
+        assert_eq!(limit["schema"]["type"], "integer");
+        assert_eq!(limit["schema"]["title"], "Limit");
+        assert_eq!(limit["schema"]["minimum"], 1);
+        assert_eq!(limit["schema"]["maximum"], 3);
+        assert_eq!(limit["schema"]["default"], 3);
+        assert_eq!(
+            listing["responses"]["422"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TasteDiscoveryValidationError"
         );
 
         let dismiss = &paths["/api/v1/taste/discoveries/{signal_id}/dismiss"]["post"];

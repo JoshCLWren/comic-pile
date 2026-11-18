@@ -21161,6 +21161,21 @@
         "title": "TasteDiscoveryListResponse",
         "type": "object"
       },
+      "TasteDiscoveryValidationError": {
+        "description": "FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`.",
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
       "TasteDismissResponse": {
         "description": "Wire parity with Python `{\"dismissed\": True}`.",
         "properties": {
@@ -29950,12 +29965,16 @@
         "operationId": "taste_discoveries_list",
         "parameters": [
           {
-            "description": "Maximum discoveries to return (1-3, default 3).",
+            "description": "Maximum discoveries to return.",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "format": "int64",
+              "default": 3,
+              "description": "Maximum discoveries to return.",
+              "maximum": 3,
+              "minimum": 1,
+              "title": "Limit",
               "type": "integer"
             }
           }
@@ -29975,7 +29994,14 @@
             "description": "Not authenticated"
           },
           "422": {
-            "description": "limit is outside the allowed range"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteDiscoveryValidationError"
+                }
+              }
+            },
+            "description": "Validation error"
           },
           "503": {
             "description": "Database temporarily unavailable"

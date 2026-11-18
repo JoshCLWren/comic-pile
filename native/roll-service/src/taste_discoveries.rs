@@ -33,10 +33,11 @@
 
 use crate::{
     auth::{self, AuthenticatedUser, VerifiedAccessClaims},
+    cbl_catalog::ValidationErrorItem,
     db, ApiError, AppState,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, RawQuery, State},
     http::StatusCode,
     Json,
 };
@@ -44,10 +45,15 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, collections::HashSet, sync::Arc};
 use tokio_postgres::IsolationLevel;
+use utoipa::IntoParams;
 
 /// Upper bound on discoveries returned at once; Roll shows one at a time.
 /// Wire parity with `MAX_ACTIVE_DISCOVERIES` in `app/services/taste_bank.py`.
 const MAX_ACTIVE_DISCOVERIES: i64 = 3;
+
+/// Lower bound on the `limit` query parameter. Wire parity with `Query(ge=1)`
+/// in `app/api/taste.py`.
+const MIN_LIMIT: i64 = 1;
 
 /// Canonical prompt-eligibility thresholds from `PromptEligibilityConfig`.
 const MIN_EVIDENCE_COUNT: i32 = 3;
@@ -82,10 +88,158 @@ pub struct TasteDiscoveryListResponse {
     pub generated_at: String,
 }
 
-/// Bounded `limit` query parameter, matching the Python `Query(ge=1, le=3)`.
-#[derive(Debug, Deserialize)]
+/// Raw string query params parsed at the handler boundary so malformed or
+/// out-of-range values can emit the exact FastAPI/Pydantic 422 envelope.
+/// Mirrors the Python `Query(ge=1, le=MAX_ACTIVE_DISCOVERIES, description=...)`.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TasteDiscoveryQuery {
-    pub limit: Option<i64>,
+    /// Maximum discoveries to return.
+    #[param(schema_with = limit_query_schema)]
+    pub limit: Option<String>,
+}
+
+/// OpenAPI schema for `limit`, matching the Python `Query` metadata exactly:
+/// `type: integer`, `minimum: 1`, `maximum: 3`, `default: 3`,
+/// `description`, `title: Limit`. The wire value is a string until validated.
+fn limit_query_schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+    use utoipa::openapi::schema::{ObjectBuilder, Type};
+    ObjectBuilder::new()
+        .schema_type(Type::Integer)
+        .title(Some("Limit"))
+        .description(Some("Maximum discoveries to return."))
+        .default(Some(serde_json::json!(MAX_ACTIVE_DISCOVERIES)))
+        .minimum(Some(MIN_LIMIT))
+        .maximum(Some(MAX_ACTIVE_DISCOVERIES))
+        .into()
+}
+
+/// FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct TasteDiscoveryValidationError {
+    pub detail: Vec<ValidationErrorItem>,
+}
+
+fn limit_int_parsing(input: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "int_parsing".to_string(),
+        loc: vec!["query".to_string(), "limit".to_string()],
+        msg: "Input should be a valid integer, unable to parse string as an integer".to_string(),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: None,
+    }
+}
+
+fn limit_greater_than_equal(input: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "greater_than_equal".to_string(),
+        loc: vec!["query".to_string(), "limit".to_string()],
+        msg: format!("Input should be greater than or equal to {MIN_LIMIT}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"ge": MIN_LIMIT})),
+    }
+}
+
+fn limit_less_than_equal(input: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "less_than_equal".to_string(),
+        loc: vec!["query".to_string(), "limit".to_string()],
+        msg: format!("Input should be less than or equal to {MAX_ACTIVE_DISCOVERIES}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"le": MAX_ACTIVE_DISCOVERIES})),
+    }
+}
+
+/// Structured 422 carrying the Python validation envelope under `detail`.
+fn validation_error(items: Vec<ValidationErrorItem>) -> ApiError {
+    let detail = serde_json::json!(items);
+    ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, detail)
+}
+
+fn extract_last_limit(raw_query: Option<&str>) -> Option<String> {
+    let raw_query = raw_query?;
+    let mut last = None;
+    for (key, value) in form_urlencoded::parse(raw_query.as_bytes()) {
+        if key == "limit" {
+            last = Some(value.into_owned());
+        }
+    }
+    last
+}
+
+/// Parse the raw `limit` into the Python `Query(ge=1, le=3)` bound.
+/// Pydantic coerces query strings before bound checks, so whitespace, `+`,
+/// underscore separators, and whole-number float/scientific forms are accepted.
+/// Integer literals beyond `i64` still fail with bound errors when they are a
+/// well-formed integer magnitude. Errors carry the original raw string as
+/// `input`.
+fn parse_limit(raw: Option<String>) -> Result<i64, ApiError> {
+    let Some(value) = raw else {
+        return Ok(MAX_ACTIVE_DISCOVERIES);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(validation_error(vec![limit_int_parsing(&value)]));
+    }
+
+    let normalized: String = trimmed.chars().filter(|&c| c != '_').collect();
+    if normalized.is_empty() || normalized == "+" || normalized == "-" {
+        return Err(validation_error(vec![limit_int_parsing(&value)]));
+    }
+
+    let sign_count = normalized
+        .as_bytes()
+        .iter()
+        .take_while(|&&b| b == b'+' || b == b'-')
+        .count();
+    if sign_count > 1 {
+        return Err(validation_error(vec![limit_int_parsing(&value)]));
+    }
+
+    if let Ok(parsed) = normalized.parse::<i64>() {
+        if parsed < MIN_LIMIT {
+            return Err(validation_error(vec![limit_greater_than_equal(&value)]));
+        }
+        if parsed > MAX_ACTIVE_DISCOVERIES {
+            return Err(validation_error(vec![limit_less_than_equal(&value)]));
+        }
+        return Ok(parsed);
+    }
+
+    if let Ok(f) = normalized.parse::<f64>() {
+        if f.is_finite() && f.fract() == 0.0 {
+            if f.abs() <= 9_007_199_254_740_992.0 {
+                let as_i = f as i64;
+                if as_i < MIN_LIMIT {
+                    return Err(validation_error(vec![limit_greater_than_equal(&value)]));
+                }
+                if as_i > MAX_ACTIVE_DISCOVERIES {
+                    return Err(validation_error(vec![limit_less_than_equal(&value)]));
+                }
+                return Ok(as_i);
+            }
+        } else {
+            return Err(validation_error(vec![limit_int_parsing(&value)]));
+        }
+    }
+
+    let (negative, digits_part) = if let Some(rest) = normalized.strip_prefix('-') {
+        (true, rest)
+    } else if let Some(rest) = normalized.strip_prefix('+') {
+        (false, rest)
+    } else {
+        (false, normalized.as_str())
+    };
+    if !digits_part.is_empty() && digits_part.bytes().all(|b| b.is_ascii_digit()) {
+        let error = if negative {
+            limit_greater_than_equal(&value)
+        } else {
+            limit_less_than_equal(&value)
+        };
+        return Err(validation_error(vec![error]));
+    }
+
+    Err(validation_error(vec![limit_int_parsing(&value)]))
 }
 
 /// One persisted signal row used for eligibility evaluation.
@@ -298,15 +452,10 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 /// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
-    query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
+    raw_query: RawQuery,
     claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let Query(query) =
-        query.map_err(|_| ApiError::Unprocessable("Validation failed".to_string()))?;
-    let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
-    if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
-        return Err(ApiError::Unprocessable("Validation failed".to_string()));
-    }
+    let limit = parse_limit(extract_last_limit(raw_query.0.as_deref()))?;
     let user = auth::authenticate_claims(&state, &claims).await?;
 
     let now = Utc::now();
@@ -397,11 +546,11 @@ pub async fn dismiss_taste_discovery(
     tag = "taste",
     operation_id = "taste_discoveries_list",
     description = "Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.",
-    params(("limit" = Option<i64>, Query, description = "Maximum discoveries to return (1-3, default 3).")),
+    params(TasteDiscoveryQuery),
     responses(
         (status = 200, description = "Ranked discoveries", body = TasteDiscoveryListResponse),
         (status = 401, description = "Not authenticated"),
-        (status = 422, description = "limit is outside the allowed range"),
+        (status = 422, description = "Validation error", body = TasteDiscoveryValidationError),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
@@ -673,7 +822,7 @@ mod tests {
         let (state, _user, _guard) = database_fixture().await;
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
-            Ok(Query(TasteDiscoveryQuery { limit: None })),
+            RawQuery(None),
             VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
@@ -700,7 +849,7 @@ mod tests {
 
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
-            Ok(Query(TasteDiscoveryQuery { limit: None })),
+            RawQuery(None),
             VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
@@ -713,7 +862,7 @@ mod tests {
         let (state, _user, _guard) = database_fixture().await;
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
-            Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
+            RawQuery(Some("limit=1".to_string())),
             VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
@@ -722,7 +871,7 @@ mod tests {
 
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
-            Ok(Query(TasteDiscoveryQuery { limit: None })),
+            RawQuery(None),
             VerifiedAccessClaims::for_test("taste-dismiss-other", "jti-7002", 0),
         )
         .await
@@ -735,17 +884,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_rejects_out_of_range_limit_without_database_state() {
+    async fn list_rejects_out_of_range_limit_with_python_envelope() {
         let (state, _user, _guard) = database_fixture().await;
-        for limit in [0, 4] {
+        let cases = [
+            (
+                "0",
+                serde_json::json!([{
+                    "type": "greater_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": "0",
+                    "ctx": {"ge": 1}
+                }]),
+            ),
+            (
+                "4",
+                serde_json::json!([{
+                    "type": "less_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be less than or equal to 3",
+                    "input": "4",
+                    "ctx": {"le": 3}
+                }]),
+            ),
+        ];
+        for (raw, expected) in cases {
             let error = list_taste_discoveries(
                 State(state.clone()),
-                Ok(Query(TasteDiscoveryQuery { limit: Some(limit) })),
+                RawQuery(Some(format!("limit={raw}"))),
                 VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
             )
             .await
             .expect_err("out-of-range limit must 422");
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(
+                error.structured_detail().expect("structured detail"),
+                &expected,
+                "limit={raw}"
+            );
         }
     }
 
@@ -826,6 +1002,90 @@ mod tests {
         assert_eq!(error.detail(), "Taste discovery 42 not found");
     }
 
+    #[test]
+    fn extract_last_limit_uses_last_repeated_value() {
+        assert_eq!(extract_last_limit(None), None);
+        assert_eq!(
+            extract_last_limit(Some("limit=1&limit=2")),
+            Some("2".to_string())
+        );
+        assert_eq!(
+            extract_last_limit(Some("foo=bar&limit=1&baz=qux&limit=3")),
+            Some("3".to_string())
+        );
+        assert_eq!(extract_last_limit(Some("limit=")), Some(String::new()));
+    }
+
+    #[test]
+    fn parse_limit_matches_python_query_semantics() {
+        assert_eq!(parse_limit(None).unwrap(), MAX_ACTIVE_DISCOVERIES);
+        assert_eq!(parse_limit(Some("2".to_string())).unwrap(), 2);
+        assert_eq!(parse_limit(Some(" 2 ".to_string())).unwrap(), 2);
+        assert_eq!(parse_limit(Some("+2".to_string())).unwrap(), 2);
+        assert_eq!(parse_limit(Some("2.0".to_string())).unwrap(), 2);
+
+        let ge_cases = [
+            ("0", "0"),
+            ("0.0", "0.0"),
+            ("-1", "-1"),
+            ("-99999999999999999999", "-99999999999999999999"),
+        ];
+        for (raw, input) in ge_cases {
+            let err = parse_limit(Some(raw.to_string())).unwrap_err();
+            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(
+                err.structured_detail().unwrap(),
+                &serde_json::json!([{
+                    "type": "greater_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be greater than or equal to 1",
+                    "input": input,
+                    "ctx": {"ge": 1}
+                }]),
+                "raw={raw}"
+            );
+        }
+
+        let le_cases = [
+            ("4", "4"),
+            ("4.0", "4.0"),
+            ("1_0", "1_0"),
+            ("1e1", "1e1"),
+            ("99999999999999999999", "99999999999999999999"),
+        ];
+        for (raw, input) in le_cases {
+            let err = parse_limit(Some(raw.to_string())).unwrap_err();
+            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(
+                err.structured_detail().unwrap(),
+                &serde_json::json!([{
+                    "type": "less_than_equal",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be less than or equal to 3",
+                    "input": input,
+                    "ctx": {"le": 3}
+                }]),
+                "raw={raw}"
+            );
+        }
+
+        let int_parsing_cases = ["", "abc", "--2", "2.5", "1e", "inf", "NaN"];
+        for raw in int_parsing_cases {
+            let err = parse_limit(Some(raw.to_string())).unwrap_err();
+            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(
+                err.structured_detail().unwrap(),
+                &serde_json::json!([{
+                    "type": "int_parsing",
+                    "loc": ["query", "limit"],
+                    "msg": "Input should be a valid integer, unable to parse string as an integer",
+                    "input": raw
+                }]),
+                "raw={raw:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn taste_routes_require_auth_through_service_router() {
         use crate::{config::Config, router, AppState};
@@ -866,7 +1126,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_limit_returns_validation_envelope_through_service_router() {
+    async fn invalid_limit_returns_python_validation_envelope_through_service_router() {
         use crate::{config::Config, router, AppState};
         use axum::{
             body::Body,
@@ -911,7 +1171,22 @@ mod tests {
         )
         .unwrap();
 
-        for limit in ["abc", "0", "4"] {
+        let cases = [
+            (
+                "abc",
+                json!([{"type":"int_parsing","loc":["query","limit"],"msg":"Input should be a valid integer, unable to parse string as an integer","input":"abc"}]),
+            ),
+            (
+                "0",
+                json!([{"type":"greater_than_equal","loc":["query","limit"],"msg":"Input should be greater than or equal to 1","input":"0","ctx":{"ge":1}}]),
+            ),
+            (
+                "4",
+                json!([{"type":"less_than_equal","loc":["query","limit"],"msg":"Input should be less than or equal to 3","input":"4","ctx":{"le":3}}]),
+            ),
+        ];
+
+        for (limit, expected) in cases {
             let response = app
                 .clone()
                 .oneshot(
@@ -933,9 +1208,75 @@ mod tests {
             let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(
                 payload,
-                json!({"detail": "Validation failed"}),
-                "invalid limit {limit} must preserve the FastAPI validation envelope"
+                json!({"detail": expected}),
+                "invalid limit {limit} must preserve the Python validation envelope"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn repeated_limit_uses_last_value_through_service_router() {
+        use crate::{config::Config, router, AppState};
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode},
+        };
+        use chrono::{Duration, Utc};
+        use http_body_util::BodyExt;
+        use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+        use serde::Serialize;
+        use tower::ServiceExt;
+
+        #[derive(Serialize)]
+        struct Claims {
+            sub: &'static str,
+            jti: &'static str,
+            iat: i64,
+            exp: i64,
+            #[serde(rename = "type")]
+            token_type: &'static str,
+            pc: i64,
+        }
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let now = Utc::now();
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &Claims {
+                sub: "reader-one",
+                jti: "test-jti",
+                iat: now.timestamp(),
+                exp: (now + Duration::minutes(5)).timestamp(),
+                token_type: "access",
+                pc: 0,
+            },
+            &EncodingKey::from_secret(b"synthetic-secret").unwrap(),
+        )
+        .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/taste/discoveries?limit=1&limit=2")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap_or(json!(null));
+        assert_ne!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "repeated limit must use last value (2), not reject as duplicate/invalid: {payload}"
+        );
     }
 }
