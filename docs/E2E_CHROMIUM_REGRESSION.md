@@ -45,17 +45,6 @@ database uses the browser-suite contract (rate limits disabled — the fixture
 layer registers users and creates data at test speed, exactly like
 `docker-compose.test.yml` does for `api-test`).
 
-**One database for both runtimes.** In test mode Python settings prefer
-`TEST_DATABASE_URL` over `DATABASE_URL`, and the tracked `.env.test` supplies a
-`TEST_DATABASE_URL` on `:5437`. When you point `DATABASE_URL` at another port
-(or a private slot), pin `TEST_DATABASE_URL` to that same database too —
-otherwise Python and the native service register fixtures in different
-databases. The CI workflow pins `DATABASE_URL`, `TEST_DATABASE_URL` and
-`RUST_ROLL_DATABASE_URL` to the same disposable endpoint; see the
-`e2e-chromium-regression` skill for the local slot-safe command. This is a
-fixture/CI contract only — application database-precedence behavior is
-unchanged.
-
 Native v2 resources are real production paths, so the same-origin server must
 route `/api/v2/*` to the Rust service and everything else to FastAPI. The CI
 workflow uses `scripts/e2e_native_ingress.py` (Python on `:9001`, native Roll on
@@ -74,10 +63,6 @@ native path's 404/401 rather than exercising the product.
   FastAPI and the native service behind the `:9000` ingress, runs the
   inventory-selected suite with Chromium only, and uploads artifacts for every
   run — including failures.
-- A single disposable PostgreSQL database is shared by `DATABASE_URL`,
-  `TEST_DATABASE_URL` and `RUST_ROLL_DATABASE_URL`, so Python and native v2
-  fixtures meet on one database. `tests/test_e2e_chromium_shared_db.py` guards
-  that contract and the preserved schedule/dispatch/permissions shape.
 
 ### Artifacts
 

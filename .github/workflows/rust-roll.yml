@@ -7,8 +7,6 @@ on:
       - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
       - 'api/native_roll.rs'
       - '.vercelignore'
@@ -29,8 +27,6 @@ on:
       - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
       - 'api/native_roll.rs'
       - '.vercelignore'
@@ -87,16 +83,6 @@ jobs:
           fi
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
-      - name: Verify unified Cargo workspace lockfile
-        # Same guard the production @vercel/rust build.sh runs: fail on a
-        # second lockfile, divergent resolution or lock mutation, then export
-        # the canonical digest so build.rs asserts it on every cargo step.
-        working-directory: .
-        run: |
-          set -euo pipefail
-          node check-rust-workspace-lock.mjs
-          lock_sha256="$(node check-rust-workspace-lock.mjs --lock-sha256)"
-          printf 'COMICPILE_EXPECTED_LOCK_SHA256=%s\n' "$lock_sha256" >> "$GITHUB_ENV"
       - name: Formatting
         run: cargo fmt --all --check
       - name: Clippy
@@ -158,7 +144,6 @@ jobs:
           (
             cd "$bundle"
             COMICPILE_BUILD_SHA="$GITHUB_SHA" \
-            COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
               cargo build --release --locked --bin native_roll
           )

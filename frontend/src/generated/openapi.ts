@@ -742,9 +742,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["continuity_plans_list"];
+        /**
+         * List Continuity Plans
+         * @description List every continuity plan owned by the authenticated user.
+         *
+         *     Plans are returned in descending ``updated_at`` order so the most
+         *     recently modified plan appears first.
+         */
+        get: operations["list_continuity_plans_api_v1_continuity_plans__get"];
         put?: never;
-        post: operations["continuity_plans_create"];
+        /**
+         * Create Continuity Plan
+         * @description Create a plan and compile rules only when strict intent is explicit.
+         */
+        post: operations["create_continuity_plan_api_v1_continuity_plans__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -760,7 +771,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["continuity_plans_adopt_reading_order"];
+        /**
+         * Adopt Reading Order
+         * @description Adopt a legacy reading order into the canonical continuity plan. The source reading order is not mutated; the new plan is the canonical owner of the ordering intent. See docs/READING_PLAN_CANONICAL_MODEL.md.
+         */
+        post: operations["adopt_reading_order_api_v1_continuity_plans_from_reading_order_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -776,7 +791,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["release_sources_create"];
+        /**
+         * Create Release Source
+         * @description Subscribe a plan+thread to a confirmed ComicVine volume.
+         */
+        post: operations["create_release_source_api_v1_continuity_plans_release_sources__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -793,10 +812,18 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["release_sources_delete"];
+        /**
+         * Delete Release Source
+         * @description Remove a release source subscription.
+         */
+        delete: operations["delete_release_source_api_v1_continuity_plans_release_sources__source_id__delete"];
         options?: never;
         head?: never;
-        patch: operations["release_sources_update"];
+        /**
+         * Update Release Source
+         * @description Enable or disable a release source (non-destructive).
+         */
+        patch: operations["update_release_source_api_v1_continuity_plans_release_sources__source_id__patch"];
         trace?: never;
     };
     "/api/v1/continuity-plans/{plan_id}": {
@@ -806,10 +833,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["continuity_plans_get"];
-        put: operations["continuity_plans_update"];
+        /**
+         * Get Continuity Plan
+         * @description Return one owned continuity plan from normalized membership.
+         */
+        get: operations["get_continuity_plan_api_v1_continuity_plans__plan_id__get"];
+        /**
+         * Update Continuity Plan
+         * @description Replace a plan atomically, including rules explicitly owned by that plan.
+         */
+        put: operations["update_continuity_plan_api_v1_continuity_plans__plan_id__put"];
         post?: never;
-        delete: operations["continuity_plans_delete"];
+        /**
+         * Delete Continuity Plan
+         * @description Delete one plan and only the hard rules compiled by that plan.
+         */
+        delete: operations["delete_continuity_plan_api_v1_continuity_plans__plan_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -824,8 +863,22 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["continuity_plans_link_dependency"];
-        delete: operations["continuity_plans_unlink_dependency"];
+        /**
+         * Link Plan Dependency Edge
+         * @description Reference one canonical Dependency edge from one owned plan.
+         *
+         *     Linking records provenance only; it never creates, modifies, or deletes
+         *     the canonical edge and never changes Roll eligibility.
+         */
+        post: operations["link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post"];
+        /**
+         * Unlink Plan Dependency Edge
+         * @description Remove one plan's reference to a Dependency edge.
+         *
+         *     Only this plan's link is removed; the canonical edge and every other
+         *     plan's references are untouched.
+         */
+        delete: operations["unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -838,7 +891,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["continuity_plans_membership"];
+        /**
+         * Get Continuity Plan Membership
+         * @description Return the normalized membership view for one owned plan.
+         *
+         *     Membership, Dependency provenance, source snapshots, placements, and
+         *     progress derived from global Issue read state are read through the
+         *     normalized relational representation.
+         */
+        get: operations["get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -856,7 +917,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["continuity_plans_project_to_reading_order"];
+        /**
+         * Confirm Plan Projection
+         * @description Apply a projection atomically after a successful preview.
+         *
+         *     The confirm endpoint re-computes the projection and rejects the request
+         *     if any conflict is detected. A failed or cancelled projection leaves
+         *     both the plan and the reading order unchanged because all mutations are
+         *     performed in a single transaction that rolls back on any error.
+         */
+        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -895,7 +965,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["release_sources_list"];
+        /**
+         * List Release Sources
+         * @description List release sources for one plan.
+         */
+        get: operations["list_release_sources_api_v1_continuity_plans__plan_id__release_sources__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -911,7 +985,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["release_sources_list_reader"];
+        /**
+         * List Release Sources For Reader
+         * @description List reader-facing release source status for one plan.
+         *
+         *     Returns enabled and disabled sources so the reader can re-enable a
+         *     previously disabled volume without leaving the plan reader view.
+         */
+        get: operations["list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2804,8 +2885,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the versioned list. */
-        get: operations["list_sessions_v1_documentation"];
+        /**
+         * List Sessions
+         * @description List sessions with cursor-based pagination.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         page_size: Number of sessions to return per page (default 50, max 200).
+         *         page_token: Token for pagination continuation (started_at timestamp, session_id).
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
+         */
+        get: operations["list_sessions_api_v1_sessions__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2902,8 +2995,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the versioned details. */
-        get: operations["get_session_details_v1_documentation"];
+        /**
+         * Get Session Details
+         * @description Get session details with all events for expanded view.
+         *
+         *     Args:
+         *         session_id: The session ID to retrieve details for.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SessionDetailsResponse with events and narrative summary.
+         *
+         *     Raises:
+         *         HTTPException: If session not found.
+         */
+        get: operations["get_session_details_api_v1_sessions__session_id__details_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3902,8 +4009,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the versioned undo snapshots. */
-        get: operations["list_undo_snapshots_v1_documentation"];
+        /**
+         * List Session Snapshots
+         * @description List all snapshots for a session.
+         *
+         *     Args:
+         *         session_id: Session whose snapshots should be listed.
+         *         current_user: Authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Typed snapshot list in reverse chronological order.
+         *
+         *     Raises:
+         *         HTTPException: If the session is not owned by the current user.
+         */
+        get: operations["list_session_snapshots_api_v1_undo__session_id__snapshots_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3921,8 +4042,24 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the versioned undo apply. */
-        post: operations["undo_to_snapshot_v1_documentation"];
+        /**
+         * Undo To Snapshot
+         * @description Undo session state to a snapshot.
+         *
+         *     Args:
+         *         session_id: Session to restore.
+         *         snapshot_id: Snapshot to restore.
+         *         current_user: Authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Restored session response.
+         *
+         *     Raises:
+         *         HTTPException: If the session or snapshot is not found.
+         *         RuntimeError: If all deadlock retries fail.
+         */
+        post: operations["undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6560,17 +6697,34 @@ export interface components {
             /** Order */
             order: number;
         };
+        /**
+         * ContinuityPlanListItem
+         * @description Compact summary returned by the plans list endpoint.
+         */
         ContinuityPlanListItem: {
-            /** Format: int32 */
+            /** Id */
             id: number;
-            /** Format: int32 */
+            /** Lane Count */
             lane_count: number;
+            /** Name */
             name: string;
-            ordering_mode: string;
-            source_names?: unknown;
+            /**
+             * Ordering Mode
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Source Names */
+            source_names?: {
+                [key: string]: string;
+            };
+            /** Source Paths */
             source_paths?: string[];
-            /** Format: int32 */
+            /** Step Count */
             step_count: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
             updated_at: string;
         };
         /**
@@ -6623,41 +6777,65 @@ export interface components {
             /** Source Target Story Arc Id */
             source_target_story_arc_id?: string | null;
         };
+        /**
+         * ContinuityPlanResponse
+         * @description Persisted continuity plan response.
+         *
+         *     Read-only: never runs ``validate_structure`` write invariants. Legacy
+         *     plans whose ``nodes_json`` predates the #3037 unique constraint and
+         *     contains the same issue twice therefore load without a 500 (issue #3347);
+         *     writes remain gated by ``ContinuityPlanWrite.validate_structure``.
+         */
         ContinuityPlanResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            /** Lanes */
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            /** Name */
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
-            ordering_mode: string;
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /**
+             * Updated At
+             * Format: date-time
+             */
             updated_at: string;
-            /** Format: int32 */
+            /** User Id */
             user_id: number;
         };
+        /**
+         * ContinuityPlanWrite
+         * @description Create/replace payload for a persisted continuity plan.
+         */
         ContinuityPlanWrite: {
+            /**
+             * Expected Updated At
+             * @description Optimistic-concurrency token from GET ``updated_at``. When present on PUT, a mismatch returns 409 ``plan_version_conflict``.
+             */
             expected_updated_at?: string | null;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            /** Lanes */
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            /** Name */
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
-            ordering_mode: string;
-        };
-        ContinuityReleaseSourceResponse: {
-            created_at: string;
-            enabled: boolean;
-            /** Format: int32 */
-            external_identity_id: number;
-            /** Format: int32 */
-            id: number;
-            last_synced_at?: string | null;
-            /** Format: int32 */
-            plan_id: number;
-            provider: string;
-            provider_title?: string | null;
-            provider_volume_id: string;
-            /** Format: int32 */
-            thread_id: number;
-            updated_at: string;
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
         };
         ContinuityRuleRequest: {
             /** Format: int32 */
@@ -9832,38 +10010,6 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
-        NativeContinuityPlanLane: {
-            id: string;
-            inferred_gate_kind?: string | null;
-            migration_contract?: unknown;
-            name: string;
-            /** Format: int32 */
-            order: number;
-        };
-        NativeContinuityPlanNode: {
-            /** Format: int32 */
-            checkpoint_target_ref_id?: number | null;
-            checkpoint_target_ref_ids?: number[];
-            convergence_gate?: unknown[];
-            id: string;
-            is_checkpoint?: boolean;
-            label?: string | null;
-            lane_id: string;
-            node_type: string;
-            /** Format: int32 */
-            position: number;
-            reader_optional?: boolean | null;
-            reader_role?: string | null;
-            /** Format: int32 */
-            ref_id: number;
-            source_cbl_placements?: unknown[] | null;
-            source_confidence?: string | null;
-            source_explanation?: string | null;
-            source_paths?: string[] | null;
-            source_role?: string | null;
-            source_story_arc_ids?: string[] | null;
-            source_target_story_arc_id?: string | null;
-        };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
             rated_issues_total: number;
@@ -9955,56 +10101,12 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        NativeReadingOrderProjectionConflict: {
-            code: string;
-            existing_positions: number[];
-            message: string;
-            node_id: string;
-            /** Format: int32 */
-            thread_id?: number | null;
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        NativeReleaseSourceResponse: {
+            exists: boolean;
+            release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
-        NativeReadingOrderProjectionEntry: {
-            /** Format: int32 */
-            position: number;
-            source: string;
-            source_node_id?: string | null;
-            /** Format: int32 */
-            thread_id: number;
-            thread_title?: string | null;
-        };
-        NativeReadingOrderProjectionPreview: {
-            conflicts: components["schemas"]["NativeReadingOrderProjectionConflict"][];
-            dropped_node_ids: string[];
-            entries: components["schemas"]["NativeReadingOrderProjectionEntry"][];
-            /** Format: int32 */
-            plan_id: number;
-            plan_name: string;
-            plan_ordering_mode: string;
-            /** Format: int32 */
-            reading_order_id: number;
-            reading_order_name: string;
-            /** Format: int32 */
-            total_positions: number;
-        };
-        NativeReadingOrderProjectionRequest: {
-            /** Format: int32 */
-            reading_order_id: number;
-        };
-        NativeReadingOrderProjectionResult: {
-            /** Format: int32 */
-            added_count: number;
-            /** Format: int32 */
-            kept_count: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            reading_order_id: number;
-            /** Format: int32 */
-            total_positions: number;
-            /** Format: int32 */
-            updated_count: number;
-        };
-        /** @description Canonical bandwidth state. */
+        /** @description Canonical bandwidth state; invalid stored values normalize to `null`. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;
             /** Format: double */
@@ -10013,29 +10115,7 @@ export interface components {
             predicted_bandwidth?: string | null;
             source?: string | null;
         };
-        /** @description Full session details response with events and narrative summary. */
-        NativeSessionDetailsResponse: {
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            events: components["schemas"]["SessionEventDetail"][];
-            ladder_path: string;
-            narrative_summary: {
-                [key: string]: string[];
-            };
-            /** Format: int32 */
-            session_id: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-        };
-        /** @description Paginated session history list response. */
-        NativeSessionHistoryListResponse: {
-            next_page_token?: string | null;
-            sessions: components["schemas"]["SessionListItemResponse"][];
-        };
-        /** @description Canonical intent state. */
+        /** @description Canonical intent state; invalid stored values normalize to `null`. */
         NativeSessionIntentState: {
             active_intent?: string | null;
             /** Format: double */
@@ -11325,11 +11405,24 @@ export interface components {
             intent?: string | null;
             source: string;
         };
+        /**
+         * ReadingOrderAdoptRequest
+         * @description Request to adopt a legacy reading order into the canonical plan.
+         */
         ReadingOrderAdoptRequest: {
-            lane_id?: string | null;
-            lane_name?: string | null;
+            /**
+             * Lane Id
+             * @default adopted
+             */
+            lane_id: string;
+            /**
+             * Lane Name
+             * @default Adopted
+             */
+            lane_name: string;
+            /** Plan Name */
             plan_name?: string | null;
-            /** Format: int32 */
+            /** Reading Order Id */
             reading_order_id: number;
         };
         /**
@@ -11473,83 +11566,149 @@ export interface components {
             /** Format: int64 */
             total_items: number;
         };
+        /**
+         * ReadingPlanDependencyLink
+         * @description One plan provenance reference to a canonical Dependency edge.
+         */
         ReadingPlanDependencyLink: {
-            /** Format: int32 */
+            /** Dependency Id */
             dependency_id: number;
+            /** Explanation */
             explanation?: string | null;
-            /** Format: int32 */
+            /** Source Issue Id */
             source_issue_id: number;
-            /** Format: int32 */
+            /** Target Issue Id */
             target_issue_id: number;
         };
+        /**
+         * ReadingPlanDependencyLinkRequest
+         * @description Request to reference one canonical Dependency edge from a plan.
+         */
         ReadingPlanDependencyLinkRequest: {
+            /** Explanation */
             explanation?: string | null;
         };
+        /**
+         * ReadingPlanMemberIssue
+         * @description One normalized Issue occurrence inside a Reading Plan.
+         */
         ReadingPlanMemberIssue: {
-            /** Format: int32 */
+            /** Display Position */
             display_position: number;
+            /**
+             * Is Checkpoint
+             * @default false
+             */
             is_checkpoint: boolean;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Label */
             label?: string | null;
+            /** Lane Id */
             lane_id: string;
+            /** Occurrence Id */
             occurrence_id: string;
+            /** Reader Optional */
             reader_optional?: boolean | null;
+            /** Reader Role */
             reader_role?: string | null;
-            source_metadata?: unknown;
+            /** Source Metadata */
+            source_metadata?: {
+                [key: string]: unknown;
+            } | null;
         };
-        /** @description Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`. */
+        /**
+         * ReadingPlanMembershipResponse
+         * @description Normalized membership, provenance, and progress for one Reading Plan.
+         */
         ReadingPlanMembershipResponse: {
+            /** Dependencies */
             dependencies: components["schemas"]["ReadingPlanDependencyLink"][];
+            /** Issues */
             issues: components["schemas"]["ReadingPlanMemberIssue"][];
+            /** Placements */
             placements: components["schemas"]["ReadingPlanSourcePlacementView"][];
-            /** Format: int32 */
+            /** Plan Id */
             plan_id: number;
             progress: components["schemas"]["ReadingPlanProgress"];
+            /** Sources */
             sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
         };
+        /**
+         * ReadingPlanProgress
+         * @description Plan progress derived from global Issue read state.
+         */
         ReadingPlanProgress: {
-            /** Format: int32 */
+            /** Read Issues */
             read_issues: number;
-            /** Format: int32 */
+            /** Total Issues */
             total_issues: number;
         };
+        /**
+         * ReadingPlanReleaseSourceStatus
+         * @description One followed ComicVine volume and its sync state on a Reading Plan.
+         */
         ReadingPlanReleaseSourceStatus: {
+            /** Enabled */
             enabled: boolean;
-            /** Format: int32 */
+            /** External Identity Id */
             external_identity_id: number;
+            /** Last Synced At */
             last_synced_at?: string | null;
-            /** Format: int32 */
+            /** Provider Issue Count */
             provider_issue_count?: number | null;
+            /** Provider Publisher */
             provider_publisher?: string | null;
-            /** Format: int32 */
+            /** Provider Start Year */
             provider_start_year?: number | null;
+            /** Provider Title */
             provider_title?: string | null;
+            /** Provider Volume Id */
             provider_volume_id: string;
-            /** Format: int32 */
+            /** Source Id */
             source_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
+        /**
+         * ReadingPlanSourcePlacementView
+         * @description One preserved source-position observation for a plan occurrence.
+         */
         ReadingPlanSourcePlacementView: {
-            /** Format: int32 */
+            /** Id */
             id: number;
+            /** Occurrence Id */
             occurrence_id: string;
-            /** Format: int32 */
+            /** Plan Source Id */
             plan_source_id: number;
-            /** Format: int32 */
+            /** Source Position */
             source_position?: number | null;
         };
+        /**
+         * ReadingPlanSourceSnapshot
+         * @description One preserved import snapshot referenced by a Reading Plan.
+         */
         ReadingPlanSourceSnapshot: {
+            /** Adopted At */
             adopted_at?: string | null;
+            /** Content Hash */
             content_hash?: string | null;
+            /** Display Name */
             display_name?: string | null;
-            /** Format: int32 */
+            /** Id */
             id: number;
+            /** Raw Source Path */
             raw_source_path: string;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
             recorded_at: string;
+            /** Repository */
             repository?: string | null;
+            /** Revision Sha */
             revision_sha?: string | null;
+            /** Source Path */
             source_path?: string | null;
         };
         /** @description Result of the explicit v2 reading-session initialization write. */
@@ -11655,20 +11814,58 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        /**
+         * ReleaseSourceCreate
+         * @description Create a release source subscription.
+         */
         ReleaseSourceCreate: {
-            /** Format: int32 */
+            /** External Identity Id */
             external_identity_id: number;
-            /** Format: int32 */
+            /** Plan Id */
             plan_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
-        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        /**
+         * ReleaseSourceResponse
+         * @description A release source with provider display metadata.
+         */
         ReleaseSourceResponse: {
-            exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Id */
+            id: number;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Plan Id */
+            plan_id: number;
+            /** Provider */
+            provider: string;
+            /** Provider Title */
+            provider_title: string | null;
+            /** Provider Volume Id */
+            provider_volume_id: string;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
+        /**
+         * ReleaseSourceUpdate
+         * @description Update a release source (enable/disable).
+         */
         ReleaseSourceUpdate: {
+            /** Enabled */
             enabled: boolean;
         };
         /** @description Idempotent release publication payload from trusted automation. */
@@ -12203,7 +12400,7 @@ export interface components {
              */
             status: string;
         };
-        /** @description Active thread projection. */
+        /** @description Active (pending or freshly rolled) thread projection for one session. */
         SessionActiveThread: {
             format: string;
             /** Format: int32 */
@@ -12313,29 +12510,6 @@ export interface components {
             /** Timezone */
             timezone?: string | null;
         };
-        /** @description Event detail for session details response. */
-        SessionEventDetail: {
-            description?: string | null;
-            /** Format: int32 */
-            die?: number | null;
-            /** Format: int32 */
-            die_after?: number | null;
-            /** Format: int32 */
-            id: number;
-            issue_number?: string | null;
-            /** Format: int32 */
-            issues_read?: number | null;
-            queue_move?: string | null;
-            /** Format: double */
-            rating?: number | null;
-            /** Format: int32 */
-            result?: number | null;
-            selection_method?: string | null;
-            thread_deleted: boolean;
-            thread_title?: string | null;
-            timestamp: string;
-            type: string;
-        };
         /**
          * SessionHistoryListResponse
          * @description Schema for paginated session history list response.
@@ -12410,41 +12584,6 @@ export interface components {
             started_at: string | null;
             /** User Id */
             user_id: number;
-        };
-        /** @description List-item session response (history list endpoint). */
-        SessionListItemResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            /** Format: int32 */
-            snapshot_count: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            /** Format: int32 */
-            user_id: number;
-        };
-        /** @description Query parameters for session history pagination. */
-        SessionListParams: {
-            /**
-             * Format: int32
-             * @default 50
-             */
-            page_size: number | null;
-            page_token?: string | null;
         };
         /**
          * SessionResponse
@@ -12531,7 +12670,7 @@ export interface components {
             session_id: number;
             snapshots: components["schemas"]["SessionSnapshotItem"][];
         };
-        /** @description Direct visible tag. */
+        /** @description One direct visible tag on the active thread. */
         SessionTag: {
             color: string;
             created_at: string;
@@ -12544,7 +12683,10 @@ export interface components {
             scope: string;
             updated_at: string;
         };
-        /** @description Compact thread summary. */
+        /**
+         * @description Compact thread summary used for the (empty on this endpoint) snoozed and
+         *     skipped lists, kept typed so the contract stays explicit.
+         */
         SessionThreadSummary: {
             /** Format: int32 */
             id: number;
@@ -13242,58 +13384,6 @@ export interface components {
              * @description Stable identifier for this process instance.
              */
             instance_id: string;
-        };
-        /** @description Full session response matching Python SessionResponse. */
-        UndoApplyResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            /** Format: int32 */
-            pending_thread_id?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            skipped_thread_ids: number[];
-            skipped_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            snapshot_count: number;
-            snoozed_thread_ids: number[];
-            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-            /** Format: int32 */
-            user_id: number;
-        };
-        /** @description Snapshot item in the list response. */
-        UndoSnapshotItem: {
-            created_at: string;
-            description?: string | null;
-            /** Format: int32 */
-            event_id?: number | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            session_id: number;
-        };
-        /** @description Undo snapshots list response. */
-        UndoSnapshotsResponse: {
-            /** Format: int32 */
-            session_id: number;
-            snapshots: components["schemas"]["UndoSnapshotItem"][];
         };
         UpdateTagRequest: {
             color?: string | null;
@@ -14509,7 +14599,7 @@ export interface operations {
             };
         };
     };
-    continuity_plans_list: {
+    list_continuity_plans_api_v1_continuity_plans__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14518,6 +14608,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14528,7 +14619,7 @@ export interface operations {
             };
         };
     };
-    continuity_plans_create: {
+    create_continuity_plan_api_v1_continuity_plans__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14541,6 +14632,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14549,9 +14641,18 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_adopt_reading_order: {
+    adopt_reading_order_api_v1_continuity_plans_from_reading_order_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14564,6 +14665,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14572,9 +14674,18 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    release_sources_create: {
+    create_release_source_api_v1_continuity_plans_release_sources__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14587,17 +14698,27 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    release_sources_delete: {
+    delete_release_source_api_v1_continuity_plans_release_sources__source_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -14608,15 +14729,25 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    release_sources_update: {
+    update_release_source_api_v1_continuity_plans_release_sources__source_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -14631,17 +14762,27 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    continuity_plans_get: {
+    get_continuity_plan_api_v1_continuity_plans__plan_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14652,6 +14793,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14660,9 +14802,18 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_update: {
+    update_continuity_plan_api_v1_continuity_plans__plan_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -14677,6 +14828,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14685,9 +14837,18 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_delete: {
+    delete_continuity_plan_api_v1_continuity_plans__plan_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -14698,15 +14859,25 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_link_dependency: {
+    link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14722,6 +14893,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14730,9 +14902,18 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingPlanDependencyLink"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_unlink_dependency: {
+    unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -14744,15 +14925,25 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_membership: {
+    get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14763,6 +14954,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14771,9 +14963,18 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    continuity_plans_project_to_reading_order: {
+    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14784,16 +14985,26 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
             };
         };
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -14833,7 +15044,7 @@ export interface operations {
             };
         };
     };
-    release_sources_list: {
+    list_release_sources_api_v1_continuity_plans__plan_id__release_sources__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14844,17 +15055,27 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    release_sources_list_reader: {
+    list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14865,12 +15086,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -17640,7 +17871,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                    "application/json": components["schemas"]["NativeReleaseSourceResponse"];
                 };
             };
             /** @description Invalid release writer credential */
@@ -17861,11 +18092,13 @@ export interface operations {
             };
         };
     };
-    list_sessions_v1_documentation: {
+    list_sessions_api_v1_sessions__get: {
         parameters: {
             query?: {
+                /** @description Number of sessions to return per page (default 50, max 200) */
                 page_size?: number;
-                page_token?: string;
+                /** @description Token for pagination continuation (started_at,session_id) */
+                page_token?: string | null;
             };
             header?: never;
             path?: never;
@@ -17873,28 +18106,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated session history */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSessionHistoryListResponse"];
+                    "application/json": components["schemas"]["SessionHistoryListResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -17982,47 +18210,34 @@ export interface operations {
             };
         };
     };
-    get_session_details_v1_documentation: {
+    get_session_details_api_v1_sessions__session_id__details_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Session details with events */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSessionDetailsResponse"];
+                    "application/json": components["schemas"]["SessionDetailsResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -19560,100 +19775,66 @@ export interface operations {
             };
         };
     };
-    list_undo_snapshots_v1_documentation: {
+    list_session_snapshots_api_v1_undo__session_id__snapshots_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Session restore snapshots */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UndoSnapshotsResponse"];
+                    "application/json": components["schemas"]["SnapshotsListResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    undo_to_snapshot_v1_documentation: {
+    undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
-                /** @description Snapshot to restore */
                 snapshot_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Restored session */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UndoApplyResponse"];
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session or snapshot not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Only the latest rating can be undone */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

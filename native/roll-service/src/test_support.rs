@@ -3,11 +3,7 @@
 //! The native Roll service is a pure cutover of the Roll API: it reads and
 //! writes rows and never issues schema DDL. Tests therefore must not hand-write
 //! tables, either — hand-rolled fixtures only approximated production, which is
-//! how a production-only schema difference escaped the suite (#4578). The
-//! #4535 incident itself was ultimately an axum path-parameter defect
-//! (#4583); the dead-pooled-connection retry (#4572, #4732) is a separate
-//! robustness path, and a clean `pg_terminate_backend` may not exercise that
-//! retry branch (#4578).
+//! how a production-only schema difference (#4535) escaped the suite.
 //!
 //! Every test loads the canonical Alembic fixture, a `pg_dump --schema-only` of a database
 //! that Alembic migrated to head. Regenerate it with `make roll-test-schema`;
@@ -365,7 +361,7 @@ pub async fn test_state(pool_size: usize) -> Option<std::sync::Arc<AppState>> {
 ///
 /// Hold the returned guard for the whole test; dropping it releases the next
 /// test. This replaces the per-test `CREATE SCHEMA`/`CREATE TABLE` fixtures that
-/// let production-only schema differences escape the suite (#4578).
+/// let production-only schema differences escape the suite (#4535).
 pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static, ()> {
     let guard = DB_LOCK.lock().await;
     reset(state).await;

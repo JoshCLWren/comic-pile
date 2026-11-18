@@ -165,18 +165,6 @@ export const queryKeys = {
     /** Prefix of every session snapshot list, for scanning invalidations. */
     snapshotsAll: () => ['session', 'snapshots'] as const,
   },
-  /**
-   * Owner-scoped activity history (`GET /api/v2/activity`).
-   *
-   * The cursor lives in `pageParam`, not the key, so every activity page shares
-   * one stable key and a refresh reloads the stream from its first page.
-   */
-  activity: {
-    all: ['activity'] as const,
-    pages: () => ['activity', 'pages'] as const,
-    list: ({ pageSize }: { pageSize: number }) =>
-      ['activity', 'pages', { pageSize }] as const,
-  },
   roll: {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,

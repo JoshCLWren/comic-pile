@@ -48,17 +48,6 @@ changed checkouts and timeouts exit unsuccessfully. Only normal completion,
 `state=complete`, confirmed model and the captured report establish actual review.
 Synthetic protocol tests validate the launcher, never an independent approval.
 
-### Diagnosing a blocked prompt
-
-`status.json` records the structured ACP error cause in `reason`, for example
-`ACP session/prompt failed (code -32603 provider.free-limit)`. An advertised free
-model can be quota-limited at runtime; automatic selection cannot detect that in
-advance. Supply an advertised model with available quota explicitly, e.g.
-`--model opencode/hy4-flash-free` (or `--model opencode-go/hy4-flash-free`). Only
-advertised models are accepted; an unavailable override fails without substitution.
-The default selection is unchanged and the actual confirmed model is recorded in
-`model-choice.json`.
-
 ## Manual local review ownership
 
 Re-read labels immediately before claiming; preserve another live owner.

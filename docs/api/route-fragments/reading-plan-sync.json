@@ -1,7 +1,6 @@
 {
   "family": "reading-plan-sync",
   "owned_path_patterns": [
-    "^/api/v1/cron/release-sync$",
     "^/api/v1/reading-plan-sync/status$",
     "^/api/v1/reading-plan-sync/sync$"
   ],
@@ -14,15 +13,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/cron/release-sync",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/cron/release-sync$",
-      "owning_issue": 5276,
-      "exclude_from_inventory": true
-    },
     {
       "bucket": "v1_operations",
       "method": "GET",

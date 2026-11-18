@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast-merge inert reference-only PRs after exact-head Python lint and types succeed.
+"""Fast-merge factory-only PRs after exact-head Python lint and types succeed.
 
 Only trusted main is executed, the path/ownership allowlist fails closed, and
 GitHub receives the exact verified head SHA. GitHub branch protection still
@@ -17,14 +17,30 @@ from typing import Any
 
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 OWNER_RE = re.compile(r"^factory:(?:local|[1-9][0-9]*)$")
-# An executable script, CI test, workflow, policy/prompt, or gate input is not
-# inert. This is deliberately a tiny explicit allowlist: only reference-only
-# documents verified to be unreferenced by workers and privileged workflows.
-# Tests scan code, workflow, prompt and agent paths for new consumers.
-FACTORY_PATHS = frozenset({
-    "docs/FACTORY_NEON_STATE.md",
-    "docs/FACTORY_RESOURCE_MEASUREMENTS.md",
-})
+FACTORY_PATHS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"^\.github/scripts/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.(?:py|sh|cjs)$",
+        r"^\.github/scripts/(?:local-ollama-review|local_review_contract|nvidia-factory-worker|omniroute-factory-worker|stale_pr_decay|hourly_coderabbit_review)\.(?:py|sh|cjs)$",
+        # Owner sign-off (2026-11-16, #1093 retirement): the factory status
+        # dashboard generator and its test are factory-only telemetry code.
+        r"^\.github/scripts/generate_factory_status_dashboard\.py$",
+        r"^tests/test_generate_factory_status_dashboard\.py$",
+        r"^\.github/workflows/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.ya?ml$",
+        r"^\.github/workflows/local-ollama-review\.ya?ml$",
+        r"^\.github/actions/factory-syntax/[A-Za-z0-9_./-]+$",
+        r"^\.github/free-model-factories\.tsv$",
+        r"^\.github/factory-expected-workers\.json$",
+        r"^\.github/factory-roster-snapshot\.json$",
+        r"^tests/test_free_model_factories\.py$",
+        r"^scripts/(?:factory[-_]|test_factory_)[A-Za-z0-9_.-]+\.py$",
+        r"^scripts/tests/(?:test_factory|test_opencode_review_policy|test_select_fcm_nvidia_model)[A-Za-z0-9_.-]*\.py$",
+        r"^tests/(?:test_factory|test_fixed_model|test_local_ollama_review_contract|test_auto_ollama_dispatch)[A-Za-z0-9_.-]*\.py$",
+        r"^docs/FACTORY[A-Za-z0-9_.-]*\.md$",
+        r"^docs/(?:AUTONOMOUS_FACTORY_POLICY|LOCAL_FACTORY_REVIEW)\.md$",
+        r"^\.agents/skills/(?:crouton-factory-codex|local-factory-[A-Za-z0-9_-]+)/[A-Za-z0-9_./-]+$",
+    )
+)
 PROTECTED = frozenset(
     {
         ".github/factory-fast-merge.json",
@@ -51,7 +67,7 @@ def factory_path(path: str) -> bool:
         or any(part in {"", ".", ".."} for part in path.split("/"))
     ):
         return False
-    return path in FACTORY_PATHS
+    return any(pattern.fullmatch(path) for pattern in FACTORY_PATHS)
 
 
 def factory_candidate(

@@ -17,6 +17,7 @@ ROUTER_SUBMODULES = (
     "cbl_comicvine_lookup",
     "cbl_sources",
     "collection_exclusions",
+    "continuity_plan",
     "custom_cbl",
     "dependency",
     "dependency_group",

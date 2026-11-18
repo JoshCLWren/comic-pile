@@ -94,15 +94,10 @@ def test_targeted_issue_snapshot_retains_rust_freeze(controller, monkeypatch):
 
 
 def test_worker_ownership_check_is_independent_of_narrow_candidate_view(controller, monkeypatch):
-    observed: list[list[str]] = []
+    observed = []
     monkeypatch.setattr(controller, 'list_issues', lambda: pytest.fail('candidate inventory is not ownership'))
     monkeypatch.setattr(controller, 'list_prs', lambda: pytest.fail('candidate inventory is not ownership'))
-
-    def _record_ownership_observation(args: list[str]) -> list[dict[str, int]]:
-        observed.append(args)
-        return [{'number': 99}]
-
-    monkeypatch.setattr(controller, 'gh_json', _record_ownership_observation)
+    monkeypatch.setattr(controller, 'gh_json', lambda args: observed.append(args) or [{'number': 99}])
     assert controller.worker_has_active_lease('54') is True
     assert observed == [['api', 'repos/JoshCLWren/comic-pile/issues?state=open&labels=factory%3A54&per_page=1']]
 

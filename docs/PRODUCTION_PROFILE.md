@@ -81,40 +81,28 @@ Each run attaches `production-profile.json` with:
 - observed account thread/session counts;
 - every normalized browser API request;
 - response status and wall-clock duration;
-- request ID, `Server-Timing`, `X-App-Cache`, and `X-App-DB-Queries` (local Python container only; native Rust production emits none);
+- request ID, `Server-Timing`, `X-App-Cache`, and `X-App-DB-Queries`;
 - median, p95, and maximum latency;
 - observed/source request ratio;
 - duplicate GET bursts, transport failures, and slow responses.
 
 The report is evidence, not a synthetic pass badge. A large drop in request count is expected when fan-out is removed, but a tiny request count or small-account guard failure means the profile is no longer representative.
 
-## Production deployment is native Rust; Python middleware headers are absent
+## `Server-Timing` is absent from the current Vercel deployment
 
-Production traffic is served by the native Rust ingress (`/api/native_roll.rs`
-via Vercel). That binary emits only `X-ComicPile-API-Runtime: rust` and the
-JSON body's `build`/`process` identity; it does not run the Python
-`PerformanceMiddleware`, so none of `X-Request-ID`, `X-App-Cache`,
-`X-App-DB-Queries`, or `Server-Timing` are present on production responses
-(since #4740 the retired public bare routes `/health`, `/docs`, `/redoc`,
-and `/openapi.json` return Vercel 404s and never start Python). Production
-liveness is `GET /api/v2/health`.
+Observed during the Python deployment era against the now-retired public bare
+`/health` URL (it returns a Vercel 404 since #4740; production liveness is
+`GET /api/v2/health`), alongside the local container path:
 
-The local Python container still runs the middleware and returns all four
-headers (`X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and
-`Server-Timing`), so the two environments are not header-compatible.
+- Running the same middleware over real HTTP locally returns all four headers: `X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and `Server-Timing`.
+- Responses observed through the current Vercel container deployment include `X-Request-ID`, `X-App-Cache`, and `X-App-DB-Queries`, but not `Server-Timing`.
+- This proves a deployment-path discrepancy, but the precise layer removing or suppressing `Server-Timing` has not been isolated. Vercel's documented system response headers are not an allowlist for application-defined headers.
 
 Consequences for the production profile report:
 
-- `serverTiming` (and the other Python-middleware diagnostics) are expected to
-  be `null` for records captured against production. Treat that as an observed
-  property of the native Rust deployment, not a regression.
-- Timing and diagnostics evidence for production comes from the Rust health
-  body's `build`/`process` identity, the `X-ComicPile-API-Runtime` marker, and
-  Vercel runtime logs such as request `x-vercel-id` and invocation timing.
-- Local profiling against the Python container remains the place to exercise
-  `Slow HTTP request` warnings and the middleware headers. ComicPile
-  intentionally does not provision Vercel Preview deployments for comparison
-  testing.
+- `serverTiming` is currently expected to be `null` for records captured against this deployment. Treat that as an observed limitation of the current deployment path, not a permanent or documented Vercel platform guarantee.
+- Timing and diagnostics evidence remains available from the per-request `X-Request-ID`, `X-App-DB-Queries`, and `X-App-Cache` headers, from the structured `Slow HTTP request` warning logs, and from Vercel runtime logs such as request `x-vercel-id` and invocation timing information.
+- Investigate the missing header with local origin-versus-proxy captures or production runtime evidence. ComicPile intentionally does not provision Vercel Preview deployments for comparison testing.
 
 ## Production slow-request warnings are enabled
 

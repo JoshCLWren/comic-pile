@@ -163,7 +163,7 @@ The application accepts standard `postgresql://` or `postgres://` connection str
 ## Stack
 
 - **Frontend:** React, Vite, Tailwind CSS
-- **API:** FastAPI (Python) and native Rust, with per-operation ingress routing
+- **API:** FastAPI
 - **Database:** PostgreSQL with SQLAlchemy and `asyncpg`
 - **Migrations:** Alembic with `psycopg`
 - **Production database:** Neon
