@@ -1234,27 +1234,6 @@
       ]
     },
     {
-      "path": "app/api/creators.py",
-      "module": "app.api.creators",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 13,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 12
-        }
-      ]
-    },
-    {
       "path": "app/api/cron.py",
       "module": "app.api.cron",
       "package": "app",
