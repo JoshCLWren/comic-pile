@@ -467,7 +467,7 @@ async fn load_issue_progress(
 }
 
 async fn owned_group(
-    connection: &deadpool_postgres::Object,
+    connection: &impl deadpool_postgres::GenericClient,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -483,7 +483,7 @@ async fn owned_group(
 }
 
 async fn owned_thread_id(
-    connection: &deadpool_postgres::Object,
+    connection: &impl deadpool_postgres::GenericClient,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -495,7 +495,7 @@ async fn owned_thread_id(
 }
 
 async fn owned_issue_thread_id(
-    connection: &deadpool_postgres::Object,
+    connection: &impl deadpool_postgres::GenericClient,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
