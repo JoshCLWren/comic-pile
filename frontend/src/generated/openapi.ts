@@ -284,7 +284,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for committing an adoption plan. */
+        /**
+         * Documentation-only operation for committing an adoption plan.
+         * @description Adopt a CBL source into a Reading Plan in one decision. Creates the plan from the source when this source has no adopted plan yet, or merges into the existing source-backed plan otherwise.
+         */
         post: operations["cbl_adoption_commit_documentation"];
         delete?: never;
         options?: never;
@@ -301,7 +304,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for targeted adoption into an existing plan. */
+        /**
+         * Documentation-only operation for targeted adoption into an existing plan.
+         * @description Commit reviewed CBL material into the exact existing Reading Plan.
+         */
         post: operations["cbl_targeted_adoption_commit_documentation"];
         delete?: never;
         options?: never;
@@ -1631,7 +1637,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for CBL source discovery. */
+        /**
+         * Documentation-only operation for CBL source discovery.
+         * @description Return bounded active CBL lists for the Reading Plan Add-material flow.
+         *
+         *     Args:
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         q: Optional case-insensitive match against list name or source path.
+         *         limit: Maximum number of lists to return.
+         *
+         *     Returns:
+         *         Bounded summaries of the matching active CBL source lists.
+         */
         get: operations["discover_cbl_source_lists_documentation"];
         put?: never;
         post?: never;
@@ -1665,7 +1683,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for Comic Vine occurrence lookup. */
+        /**
+         * Documentation-only operation for Comic Vine occurrence lookup.
+         * @description Return every CBL source position that holds one exact Comic Vine issue.
+         *
+         *     The match is exact on the Comic Vine issue identity, so a shared series
+         *     title, a shared volume, or the same issue number in another volume never
+         *     produces a false positive. Repeated occurrences inside one source list
+         *     stay separate rows, and the same identity in several source lists is
+         *     reported once per list. The answer is shared catalog data: it never
+         *     depends on the calling reader's owned Issues.
+         *
+         *     Args:
+         *         comicvine_issue_id: Exact Comic Vine issue external ID.
+         *         current_user: Authenticated reader. Unused: the shared catalog answer
+         *             must not vary by reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         The matching source occurrences with the total occurrence count and
+         *         the number of distinct source lists containing the identity.
+         *
+         *     Raises:
+         *         HTTPException: 422 when the supplied Comic Vine issue ID is blank.
+         */
         get: operations["find_cbl_sources_by_comicvine_issue_documentation"];
         put?: never;
         post?: never;
@@ -1684,7 +1727,26 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for CBL source comparison. */
+        /**
+         * Documentation-only operation for CBL source comparison.
+         * @description Rank shared CBL sources by exact coverage and relative order.
+         *
+         *     The comparison receives confirmed Comic Vine issue IDs, never reader Issue
+         *     IDs. It reads only the shared catalog, so one reader's owned collection
+         *     cannot change the answer. Coverage counts distinct exact identities while
+         *     repeated source occurrences remain visible, and same-titled volumes never
+         *     match by title or issue number.
+         *
+         *     Args:
+         *         payload: Distinct confirmed Comic Vine issue IDs in intended order.
+         *         current_user: Authenticated reader. Unused: the shared catalog answer
+         *             must not vary by reader.
+         *         db: Async database session.
+         *         limit: Maximum number of ranked source lists to return.
+         *
+         *     Returns:
+         *         Ranked source comparisons with coverage, duplicate, and order evidence.
+         */
         post: operations["compare_cbl_sources_documentation"];
         delete?: never;
         options?: never;
@@ -1716,7 +1778,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for one CBL source list. */
+        /**
+         * Documentation-only operation for one CBL source list.
+         * @description Return every ordered source occurrence for one CBL list (read-only).
+         *
+         *     Source occurrences keep their original position, including repeated
+         *     positions for duplicated issues. Large lists are returned as a bounded page
+         *     so no list is silently truncated; ``entries_total`` reports the full count
+         *     so callers can page through every occurrence.
+         *
+         *     Args:
+         *         list_id: CBL source list identifier.
+         *         current_user: Authenticated reader.
+         *         db: Async database session.
+         *         offset: Zero-based index of the first returned source occurrence.
+         *         limit: Maximum number of source occurrences to return.
+         *
+         *     Returns:
+         *         One CBL source list with its ordered source occurrences.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the list does not exist or is inactive.
+         */
         get: operations["get_cbl_source_list_documentation"];
         put?: never;
         post?: never;
@@ -1735,7 +1818,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the CBL adoption preview. */
+        /**
+         * Documentation-only operation for the CBL adoption preview.
+         * @description Calculate a dry-run CBL adoption plan with explicit selection overrides.
+         */
         post: operations["cbl_adoption_plan_documentation"];
         delete?: never;
         options?: never;
@@ -1805,7 +1891,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for reading-list CBL candidates. */
+        /**
+         * Documentation-only operation for reading-list CBL candidates.
+         * @description Find shared CBL sources that cover one owned Reading List.
+         *
+         *     Only distinct confirmed Comic Vine issue IDs from the reader's Issues are
+         *     used to query the shared catalog. Entries without a confirmed ID, and
+         *     entries with conflicting confirmed IDs, are returned as explicit gaps so
+         *     the caller never substitutes a title/issue-number guess or claims that no
+         *     CBL exists.
+         *
+         *     Args:
+         *         list_id: Owned Reading List identifier.
+         *         current_user: Authenticated owner of the Reading List.
+         *         db: Async database session.
+         *         limit: Maximum number of ranked source lists to return.
+         *
+         *     Returns:
+         *         Every list entry's identity state plus ranked source comparisons.
+         */
         get: operations["find_cbl_candidates_for_reading_list_documentation"];
         put?: never;
         post?: never;
@@ -2516,6 +2620,103 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["dismiss_pending_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roll Recommendation Explanation
+         * @description Return human-readable explanations for a historical roll event.
+         *
+         *     Derives explanations solely from the recommendation context persisted at
+         *     roll decision time, never recomputing scores from current mutable state.
+         *     Unknown or absent context degrades gracefully to an empty explanation list.
+         *
+         *     Args:
+         *         event_id: Identifier of the roll event to explain.
+         *         current_user: Authenticated owner of the session that generated the event.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         RecommendationExplanationResponse carrying the event identifier and
+         *         ordered list of human-readable explanation factors.
+         *
+         *     Raises:
+         *         HTTPException 404: When the event does not exist or does not belong
+         *             to the current user's session.
+         *         HTTPException 422: When the event type is not ``"roll"``.
+         */
+        get: operations["get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Override Roll
+         * @description Manually select a thread.
+         *
+         *     Args:
+         *         request: Override request containing thread_id.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         RollResponse with selected thread.
+         *
+         *     Raises:
+         *         HTTPException: If thread not found.
+         */
+        post: operations["override_roll_api_v1_roll_override_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roll/switch-prerequisite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Roll Prerequisite
+         * @description Replace a blocked pending roll with one still-readable prerequisite.
+         *
+         *     Args:
+         *         request: Selected prerequisite issue from the current recovery guidance.
+         *         current_user: Authenticated owner of the pending Roll.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         The durable active Roll target after accepting the prerequisite.
+         */
+        post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9236,6 +9437,23 @@ export interface components {
             type: string;
         };
         /**
+         * ExplainableFactorResponse
+         * @description One human-readable explanation element returned by the API.
+         *
+         *     Attributes:
+         *         code: Stable machine-readable code identifying the factor family.
+         *         label: Short user-facing description.
+         *         detail: Optional extended context or sub-note.
+         */
+        ExplainableFactorResponse: {
+            /** Code */
+            code: string;
+            /** Detail */
+            detail?: string | null;
+            /** Label */
+            label: string;
+        };
+        /**
          * ExplicitReaderOrderMigrationContract
          * @description Server-owned proof that a plan replaced classified reader-order edges.
          */
@@ -10490,7 +10708,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-<<<<<<< HEAD
         NativeReadingOrderProjectionResult: {
             /** Format: int32 */
             added_count: number;
@@ -10510,8 +10727,6 @@ export interface components {
             comicvine_issue_id: number;
             reason?: string | null;
         };
-=======
->>>>>>> origin/main
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;
@@ -10727,6 +10942,14 @@ export interface components {
             thread_title: string;
             /** Volume Id */
             volume_id: string;
+        };
+        /**
+         * OverrideRequest
+         * @description Schema for manual thread override.
+         */
+        OverrideRequest: {
+            /** Thread Id */
+            thread_id: number;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         PasswordResetResponse: {
@@ -11943,18 +12166,40 @@ export interface components {
             /** Reading Order Id */
             reading_order_id: number;
         };
+        /**
+         * ReadingOrderProjectionResult
+         * @description Response contract for the confirm endpoint.
+         */
         ReadingOrderProjectionResult: {
-            /** Format: int32 */
+            /**
+             * Added Count
+             * Format: int32
+             */
             added_count: number;
-            /** Format: int32 */
+            /**
+             * Kept Count
+             * Format: int32
+             */
             kept_count: number;
-            /** Format: int32 */
+            /**
+             * Plan Id
+             * Format: int32
+             */
             plan_id: number;
-            /** Format: int32 */
+            /**
+             * Reading Order Id
+             * Format: int32
+             */
             reading_order_id: number;
-            /** Format: int32 */
+            /**
+             * Total Positions
+             * Format: int32
+             */
             total_positions: number;
-            /** Format: int32 */
+            /**
+             * Updated Count
+             * Format: int32
+             */
             updated_count: number;
         };
         /**
@@ -12080,6 +12325,22 @@ export interface components {
             /** Format: int32 */
             start_die: number;
             started_at: string;
+        };
+        /**
+         * RecommendationExplanationResponse
+         * @description Aggregate recommendation explanation for a single roll event.
+         *
+         *     Attributes:
+         *         event_id: The roll event whose recommendation context was explained.
+         *         factors: Ordered list of human-readable explanation elements derived
+         *             from the persisted decision-time context. Up to ``MAX_EXPLANATIONS``
+         *             factors are returned, ordered deterministically by factor family.
+         */
+        RecommendationExplanationResponse: {
+            /** Event Id */
+            event_id: number;
+            /** Factors */
+            factors: components["schemas"]["ExplainableFactorResponse"][];
         };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
@@ -12335,6 +12596,37 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        };
+        /**
+         * RollPrerequisiteSwitchRequest
+         * @description One recovery recommendation selected from the current Roll guidance.
+         */
+        RollPrerequisiteSwitchRequest: {
+            /** Node Id */
+            node_id: number;
+            /**
+             * Node Type
+             * @constant
+             */
+            node_type: "issue";
+        };
+        /**
+         * RollPrerequisiteSwitchResponse
+         * @description Durable active-target state after accepting a recovery recommendation.
+         */
+        RollPrerequisiteSwitchResponse: {
+            /** Changed */
+            changed: boolean;
+            /** Original Thread Id */
+            original_thread_id: number;
+            /** Target Issue Id */
+            target_issue_id: number;
+            /** Target Issue Number */
+            target_issue_number: string;
+            /** Target Thread Id */
+            target_thread_id: number;
+            /** Target Thread Title */
+            target_thread_title: string;
         };
         /**
          * RollResponse
@@ -14390,7 +14682,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             /** @description Database temporarily unavailable */
             503: {
@@ -14440,7 +14734,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             /** @description Database temporarily unavailable */
             503: {
@@ -18495,6 +18791,103 @@ export interface operations {
             };
         };
     };
+    get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationExplanationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_roll_api_v1_roll_override_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_sessions_v1_documentation: {
         parameters: {
             query?: {
@@ -19101,7 +19494,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             /** @description Database temporarily unavailable */
             503: {
