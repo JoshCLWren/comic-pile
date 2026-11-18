@@ -6,8 +6,10 @@ import {
   applyRatedThreadCache,
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
+  invalidateAfterIssueMappingChange,
   invalidateAfterQueueMovement,
   invalidateAfterResumeRecovery,
+  invalidateAfterThreadMetadataEdit,
   invalidateAfterUndo,
   invalidateCurrentSessionAfterSnooze,
   applyCreatedCustomCBL,
@@ -493,13 +495,17 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -527,7 +533,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(4)
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -535,6 +541,10 @@ describe('targeted cache effects', () => {
     // Roll state still goes stale so the next bootstrap mount refetches.
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -549,6 +559,54 @@ describe('targeted cache effects', () => {
     })
   })
 
+  it('refreshes Roll, session, and plan views after a thread rename without resetting queue pages (#5264)', async () => {
+    const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
+
+    await invalidateAfterThreadMetadataEdit(client)
+
+    expect(setQueryData).not.toHaveBeenCalled()
+    expect(resetQueries).not.toHaveBeenCalled()
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
+  })
+
+  it('refreshes queue mapping counts and roll surfaces after a mapping change (#5264)', async () => {
+    const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
+
+    await invalidateAfterIssueMappingChange(client)
+
+    expect(setQueryData).not.toHaveBeenCalled()
+    expect(resetQueries).not.toHaveBeenCalled()
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
+  })
+
   it('refreshes undo surfaces and reconciles open views while leaving session detail to its caller', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
 
@@ -557,7 +615,7 @@ describe('targeted cache effects', () => {
     // Exact-count guards restored: two queue-movement resets and the full
     // invalidation set below. No extra key may creep into either pass.
     expect(resetQueries).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(14)
+    expect(invalidateQueries).toHaveBeenCalledTimes(15)
     // The queue half is composed from the queue-movement effect, not re-implemented.
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
@@ -567,6 +625,10 @@ describe('targeted cache effects', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
       exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
