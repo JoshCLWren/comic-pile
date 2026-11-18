@@ -134,7 +134,7 @@ def test_bounded_pages_reconcile_runs_beyond_first_hundred() -> None:
     def api(path: str, *, raw: bool = False) -> str:
         if "/workflows/" in path:
             calls.append(path)
-            return json.dumps({"workflow_runs": first if "page=1" in path else second})
+            return json.dumps({"workflow_runs": first if "&page=1" in path else second})
         raise AssertionError("No per-run reads needed during candidate discovery")
 
     found = RECONCILE.candidate_runs(REPO, api, now=NOW, hours=24,
