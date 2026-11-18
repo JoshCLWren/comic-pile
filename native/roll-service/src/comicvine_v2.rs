@@ -1277,8 +1277,8 @@ pub async fn import_series(
             tx.query_one(
                 "INSERT INTO threads \
                     (title, format, issues_remaining, total_issues, queue_position, status, \
-                     user_id, created_at, updated_at, is_test, is_blocked) \
-                 VALUES ($1, 'Comic', 0, 0, $2, 'active', $3, now(), now(), false, false) \
+                     user_id, created_at, is_test, is_blocked) \
+                 VALUES ($1, 'Comic', 0, 0, $2, 'active', $3, now(), false, false) \
                  RETURNING id",
                 &[&series_name.trim(), &next_position, &user.id()],
             )
@@ -1416,8 +1416,8 @@ pub async fn import_series(
     tx.execute(
         "UPDATE threads SET total_issues = $2, issues_remaining = $3, \
             next_unread_issue_id = $4, reading_progress = $5, status = $6, \
-            is_blocked = CASE WHEN $3 = 0 THEN false ELSE is_blocked END, \
-            updated_at = now() WHERE id = $1",
+            is_blocked = CASE WHEN $3 = 0 THEN false ELSE is_blocked END \
+            WHERE id = $1",
         &[
             &thread_id,
             &total_issues,
