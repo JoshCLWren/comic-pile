@@ -20,7 +20,7 @@
       "runtime": "native-rust",
       "status": "target",
       "consumers": [
-        "frontend/src/pages/HistoryPage.tsx"
+        "frontend/src/services/api-activity.ts"
       ],
       "method": "GET",
       "path": "/api/v2/activity",
