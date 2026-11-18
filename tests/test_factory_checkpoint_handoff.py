@@ -293,7 +293,8 @@ def test_ordinary_commit_tip_keeps_immutable_origin_and_never_resets(
         if path.endswith(later):
             return {'sha': later, 'message': 'Continue implementation normally',
                     'tree': {'sha': later}, 'parents': [{'sha': HEAD}]}
-        return {'sha': HEAD, 'message': origin, 'parents': [{'sha': BASE}]}
+        return {'sha': HEAD, 'message': origin,
+                'tree': {'sha': 'f' * 40}, 'parents': [{'sha': BASE}]}
     monkeypatch.setattr(handoff, 'obj', read)
     saved = handoff.checkpoint(REPO, RUN)
     assert saved is not None
