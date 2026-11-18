@@ -849,7 +849,8 @@ mod tests {
             }),
             &jsonwebtoken::EncodingKey::from_secret(
                 crate::test_support::TEST_JWT_SECRET.as_bytes(),
-            ),
+            )
+            .unwrap(),
         )
         .unwrap();
         let response = app

@@ -140,15 +140,21 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/connected",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/connected$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/connected$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/dependency-order-check",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -162,7 +168,8 @@
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/issues$"
+      "src": "^/api/v1/threads/[^/]+/issues$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -182,15 +189,21 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/reading-orders",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/reading\\-orders$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/reading\\-orders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -217,8 +230,11 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -245,11 +261,14 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads:getBlockingInfo",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads:getBlockingInfo$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     }
   ]
 }
