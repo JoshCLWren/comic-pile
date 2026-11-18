@@ -901,6 +901,10 @@ async fn other_crossovers(
     Ok(result)
 }
 
+fn linked_plan_containment(group_id: i32) -> serde_json::Value {
+    serde_json::json!([{ "node_type": "crossover", "ref_id": group_id }])
+}
+
 async fn linked_plans(
     connection: &deadpool_postgres::Object,
     group_id: i32,
@@ -909,7 +913,7 @@ async fn linked_plans(
     let rows = connection
         .query(
             LINKED_PLANS_SQL,
-            &[&user_id, &serde_json::json!({ "node_type": "crossover", "ref_id": group_id })],
+            &[&user_id, &linked_plan_containment(group_id)],
         )
         .await
         .map_err(db::query_error)?;
@@ -971,7 +975,7 @@ async fn group_response(
     Ok(DependencyGroupResponse {
         id: group.id,
         name: group.name.clone(),
-        created_at: format_created_at(group.created_at),
+        created_at: format_python_datetime(group.created_at),
         memberships: build_member_responses(memberships, &thread_titles, &issue_metadata),
         read_issues,
         total_issues,
@@ -1051,7 +1055,7 @@ pub async fn list_groups(
         responses.push(DependencyGroupResponse {
             id: group.id,
             name: group.name,
-            created_at: format_created_at(group.created_at),
+            created_at: format_python_datetime(group.created_at),
             memberships: build_member_responses(&memberships, &thread_titles, &issue_metadata),
             read_issues,
             total_issues,
@@ -1221,7 +1225,7 @@ pub async fn get_group_detail(
     Ok(Json(DependencyGroupDetailResponse {
         id: group.id,
         name: group.name,
-        created_at: format_created_at(group.created_at),
+        created_at: format_python_datetime(group.created_at),
         memberships: enriched,
         linked_plans,
     }))
@@ -1234,7 +1238,7 @@ pub async fn update_group(
     Path(group_id): Path<i32>,
     Json(request): Json<DependencyGroupUpdateRequest>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
-    let name = normalize_group_name(&request.name)?;
+    validate_group_name_schema(&request.name)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1242,7 +1246,7 @@ pub async fn update_group(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = update_group_tx(&tx, group_id, user.id(), &name).await;
+    let result = update_group_tx(&tx, group_id, user.id(), &request.name).await;
     match result {
         Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -1835,7 +1839,7 @@ mod tests {
     #[test]
     fn format_created_at_matches_python_rfc3339_utc() {
         let whole = Utc.with_ymd_and_hms(2026, 11, 17, 12, 34, 56).unwrap();
-        assert_eq!(format_created_at(whole), "2026-11-17T12:34:56Z");
+        assert_eq!(format_python_datetime(whole), "2026-11-17T12:34:56Z");
     }
 
     #[tokio::test]
