@@ -33,8 +33,9 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 
 #: Ordered rehearsal steps executed against the disposable database (full cycle).
 REHEARSAL_STEPS: tuple[str, ...] = (
@@ -142,10 +143,71 @@ def _run_step(step: str, action: Callable[[], object]) -> RehearsalStepResult:
         action()
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-        raise MigrationRehearsalError(f"migration rehearsal step {step!r} failed: {error}") from exc
+        duration_ms = (time.monotonic() - started) * 1000
+        raise MigrationRehearsalError(
+            f"migration rehearsal step {step!r} failed after {duration_ms:.3f}ms: {error}"
+        ) from exc
     finally:
         duration_ms = (time.monotonic() - started) * 1000
     return RehearsalStepResult(step=step, duration_ms=round(duration_ms, 3), error=error)
+
+
+def verify_data_dependent_failure_guard(engine: Engine) -> None:
+    """Prove a real PostgreSQL data violation fails, then its repair passes.
+
+    A synthetic historical row violates a proposed ``NOT NULL`` constraint.
+    PostgreSQL must reject that constraint before the migration repair and
+    accept exactly the same constraint after the violating value is repaired.
+    The probe uses its own temporary table and never prints row values.
+
+    Args:
+        engine: Synchronous engine bound to the disposable rehearsal database.
+
+    Raises:
+        MigrationRehearsalError: If the database does not reject the violating
+            fixture, the repaired fixture still fails, or the engine is not
+            PostgreSQL.
+    """
+    if engine.dialect.name != "postgresql":
+        raise MigrationRehearsalError("the data-dependent guard requires disposable PostgreSQL")
+
+    table = "migration_rehearsal_not_null_guard"
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f"DROP TABLE IF EXISTS {table}"))
+            connection.execute(
+                text(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, required_value INTEGER NULL)")
+            )
+            connection.execute(text(f"INSERT INTO {table} (id, required_value) VALUES (1, NULL)"))
+
+        try:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(f"ALTER TABLE {table} ALTER COLUMN required_value SET NOT NULL")
+                )
+        except IntegrityError:
+            # Expected: this is the data-dependent failure mode being proven.
+            pass
+        else:
+            raise MigrationRehearsalError(
+                "the NULL fixture unexpectedly accepted a NOT NULL constraint"
+            )
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(f"UPDATE {table} SET required_value = 0 WHERE required_value IS NULL")
+            )
+            connection.execute(
+                text(f"ALTER TABLE {table} ALTER COLUMN required_value SET NOT NULL")
+            )
+            remaining = connection.execute(
+                text(f"SELECT COUNT(*) FROM {table} WHERE required_value IS NULL")
+            ).scalar_one()
+            if remaining != 0:
+                raise MigrationRehearsalError("the repaired guard fixture still contains NULLs")
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 
 def _normalize_mode(mode: str) -> str:
@@ -166,6 +228,7 @@ def run_migration_rehearsal(
     mode: str = "full",
     upgrade_only: bool = False,
     skip_downgrade: bool = False,
+    verify_data_guard: bool = False,
 ) -> MigrationRehearsalResult:
     """Run the disposable-Postgres migration rehearsal cycle.
 
@@ -183,6 +246,8 @@ def run_migration_rehearsal(
         upgrade_only: Alias for ``upgrade-only`` mode.
         skip_downgrade: Skip the downgrade step (make downgrade-to-base not
             required).
+        verify_data_guard: Also prove that a real PostgreSQL NOT NULL violation
+            fails before repair and passes after repair on the same fixture.
 
     Returns:
         The per-step results and the final revision reached by the cycle.
@@ -199,7 +264,11 @@ def run_migration_rehearsal(
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
     sync_url = _sync_database_url(database_url)
-    engine = create_engine(sync_url) if fixture_applier is not None else None
+    engine = (
+        create_engine(sync_url)
+        if fixture_applier is not None or verify_data_guard
+        else None
+    )
 
     def _upgrade_head() -> None:
         nonlocal final_revision
@@ -234,6 +303,13 @@ def run_migration_rehearsal(
             if not skip_downgrade:
                 steps.append(_run_step("downgrade_base", _downgrade_base))
             steps.append(_run_step("upgrade_head", _upgrade_head))
+        if verify_data_guard and engine is not None:
+            steps.append(
+                _run_step(
+                    "data_dependent_guard",
+                    lambda: verify_data_dependent_failure_guard(engine),
+                )
+            )
     finally:
         if previous_database_url is None:
             os.environ.pop("DATABASE_URL", None)
