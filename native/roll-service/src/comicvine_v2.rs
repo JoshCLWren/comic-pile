@@ -2051,9 +2051,46 @@ pub async fn series_issues(
 /// response whose rows do not belong to the requested volume (the Python
 /// provider applies the same guard so a bad filter cannot import mixed data).
 const ROSTER_PAGE_SIZE: usize = 100;
-const MAX_ROSTER_PAGES: usize = 10;
+const ROSTER_PAGE_CONCURRENCY: usize = 4;
 
-async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
+#[derive(Debug)]
+struct ProviderRosterPage {
+    rows: Vec<Value>,
+    total: Option<usize>,
+}
+
+fn decode_roster_page(payload: &Value) -> Result<ProviderRosterPage, ProviderFailure> {
+    let rows = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or(ProviderFailure::InvalidPayload)?;
+    let total = payload
+        .get("number_of_total_results")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok());
+    Ok(ProviderRosterPage { rows, total })
+}
+
+fn validate_roster_volume(rows: &[Value], volume_id: i32) -> Result<(), ProviderFailure> {
+    for row in rows {
+        if let Some(volume_id_value) = row
+            .get("volume")
+            .and_then(Value::as_object)
+            .and_then(|volume| volume.get("id"))
+        {
+            if coerce_provider_int(Some(volume_id_value)) != Some(volume_id) {
+                return Err(ProviderFailure::InvalidPayload);
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn provider_roster(
+    volume_id: i32,
+    key: &str,
+) -> Result<Vec<Value>, ProviderFailure> {
     async fn fetch_page(
         volume_id: i32,
         key: &str,
@@ -2065,45 +2102,55 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
         );
         provider_response("issues", &extra, key).await
     }
-    let first = fetch_page(volume_id, key, 0)
-        .await
-        .map_err(map_provider_failure)?;
-    let mut rows: Vec<Value> = first
-        .get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let total = coerce_provider_int(first.get("number_of_total_results")).unwrap_or(0);
-    let mut offset = rows.len();
-    while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
-    {
-        let page = fetch_page(volume_id, key, offset)
-            .await
-            .map_err(map_provider_failure)?;
-        let page_rows: Vec<Value> = page
-            .get("results")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        if page_rows.is_empty() {
-            break;
-        }
-        offset += page_rows.len();
-        rows.extend(page_rows);
+
+    let first = decode_roster_page(&fetch_page(volume_id, key, 0).await?)?;
+    let first_is_full = first.rows.len() == ROSTER_PAGE_SIZE;
+    if !first_is_full || first.total.is_some_and(|total| first.rows.len() >= total) {
+        validate_roster_volume(&first.rows, volume_id)?;
+        return Ok(first.rows);
     }
-    for row in &rows {
-        if let Some(volume_id_value) = row
-            .get("volume")
-            .and_then(Value::as_object)
-            .and_then(|v| v.get("id"))
-        {
-            if coerce_provider_int(Some(volume_id_value)) != Some(volume_id) {
-                return Err(ApiError::ServiceUnavailable(
-                    "provider_invalid_payload".to_owned(),
-                ));
+
+    let mut rows = first.rows;
+    if let Some(total) = first.total {
+        let pages_needed = total.div_ceil(ROSTER_PAGE_SIZE);
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(ROSTER_PAGE_CONCURRENCY));
+        let mut tasks = tokio::task::JoinSet::new();
+        for page in 1..pages_needed {
+            let offset = page * ROSTER_PAGE_SIZE;
+            let key = key.to_owned();
+            let semaphore = semaphore.clone();
+            tasks.spawn(async move {
+                let _permit = semaphore
+                    .acquire_owned()
+                    .await
+                    .map_err(|_| ProviderFailure::Unavailable)?;
+                let payload = fetch_page(volume_id, &key, offset).await?;
+                let page = decode_roster_page(&payload)?;
+                Ok((offset, page.rows))
+            });
+        }
+        let mut remaining_pages = Vec::new();
+        while let Some(result) = tasks.join_next().await {
+            let page = result.map_err(|_| ProviderFailure::Unavailable)??;
+            remaining_pages.push(page);
+        }
+        remaining_pages.sort_by_key(|(offset, _)| *offset);
+        for (_, page_rows) in remaining_pages {
+            rows.extend(page_rows);
+        }
+    } else {
+        let mut offset = rows.len();
+        loop {
+            let page = decode_roster_page(&fetch_page(volume_id, key, offset).await?)?;
+            let page_is_full = page.rows.len() == ROSTER_PAGE_SIZE;
+            offset += page.rows.len();
+            rows.extend(page.rows);
+            if !page_is_full {
+                break;
             }
         }
     }
+    validate_roster_volume(&rows, volume_id)?;
     Ok(rows)
 }
 
