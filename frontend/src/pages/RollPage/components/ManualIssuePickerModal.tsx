@@ -3,7 +3,6 @@ import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger
 import Modal from '../../../components/Modal'
 import { useIssueCards } from '../../../hooks/useIssueCards'
 import { useThreadIssuePages } from '../../../hooks/useThreadIssues'
-import { issuesApi } from '../../../services/api-issues'
 import { threadsApi } from '../../../services/api-threads'
 import type { Issue, ThreadListItem, ThreadListResponse } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'

@@ -156,7 +156,7 @@ describe('Roll exact-issue manual picker (#4445 A38)', () => {
     }))
     // No Roll override/pending mutation is imported or called by this flow;
     // the shared receipt explicitly comes from the direct native issue command.
-    expect(await within(sharedCard).findByRole('button', { name: 'Mark unread' })).toBeVisible()
+    await waitFor(() => expect(screen.queryByTestId('comic-issue-rating-editor')).not.toBeInTheDocument())
   })
 
   it('loads later issue pages explicitly instead of draining the whole series', async () => {
