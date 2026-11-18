@@ -1073,11 +1073,17 @@ async fn record_undo_event(
         context["automatic_die_after"] = json!(automatic_die);
     }
 
+    // `clock_timestamp()` is evaluated at insert time, after the undo has
+    // waited on the per-reader lock. `NOW()` would freeze at transaction start
+    // (before that wait) and a dice command that ran while we waited stamps its
+    // event with `clock_timestamp()`; because dice projections order by
+    // timestamp before id, such an event would wrongly win over the restored
+    // die recorded by this undo.
     tx.execute(
         "INSERT INTO events
             (user_id, session_id, type, timestamp, thread_id, selected_thread_id,
              die, die_after, rating, issue_id, issue_number, context)
-         VALUES ($1, $2, 'undo', NOW(), $3, $4, $5, $6, $7, $8, $9, $10::text::json)",
+         VALUES ($1, $2, 'undo', clock_timestamp(), $3, $4, $5, $6, $7, $8, $9, $10::text::json)",
         &[
             &user_id,
             &session_id,
@@ -2270,6 +2276,94 @@ mod tests {
             pending_thread,
             Some(9201),
             "undo must not overwrite a newer pending offer written before it acquired the lock"
+        );
+    }
+
+    /// Greptile 4621404676: undo now waits on the per-reader lock, so its event
+    /// must be stamped at insert time (`clock_timestamp`) rather than at
+    /// transaction start (`NOW`). A dice command that lands while undo waits
+    /// also uses `clock_timestamp`, and dice projections order by timestamp
+    /// before id, so a stale undo timestamp would let that command's die win.
+    #[tokio::test]
+    async fn undo_event_is_stamped_after_a_dice_change_written_while_it_waited() {
+        let (state, user, _guard) = rating_undo_fixture().await;
+
+        // Hold the per-reader lock so undo is forced to wait after its
+        // transaction (and `NOW()`) has started.
+        let holder_state = test_support::test_state(1)
+            .await
+            .expect("holder state requires RUST_ROLL_TEST_DATABASE_URL");
+        let holder = db::checkout(&holder_state)
+            .await
+            .expect("holder connection");
+        holder.batch_execute("BEGIN").await.expect("holder begin");
+        holder
+            .execute("SELECT pg_advisory_xact_lock($1::bigint)", &[&(9101_i64)])
+            .await
+            .expect("holder takes the per-reader lock");
+
+        let undo_state = state.clone();
+        let mut undo = tokio::spawn(async move {
+            undo_to_snapshot(Path((9301, 9401)), user, State(undo_state)).await
+        });
+
+        let blocked = tokio::time::timeout(std::time::Duration::from_millis(400), &mut undo)
+            .await
+            .is_err();
+        assert!(blocked, "undo must wait for the per-reader lock");
+
+        // A manual dice change lands while undo is still waiting on the lock.
+        holder
+            .execute(
+                "INSERT INTO events (user_id, session_id, type, timestamp, die, die_after)
+                 VALUES (9101, 9301, 'manual_die', clock_timestamp(), 12, 50)",
+                &[],
+            )
+            .await
+            .expect("holder writes a manual dice change while undo waits");
+        holder
+            .batch_execute("COMMIT")
+            .await
+            .expect("holder commit releases the lock");
+
+        let Json(response) = undo
+            .await
+            .expect("undo task joined")
+            .expect("undo completes");
+        assert_eq!(
+            response.current_die, 12,
+            "the session projection restores the die"
+        );
+
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let undo_is_newer: bool = connection
+            .query_one(
+                "SELECT (SELECT timestamp FROM events WHERE session_id = 9301 AND type = 'undo')
+                        > (SELECT timestamp FROM events WHERE session_id = 9301 AND type = 'manual_die')",
+                &[],
+            )
+            .await
+            .expect("timestamp comparison")
+            .get(0);
+        assert!(
+            undo_is_newer,
+            "undo must be stamped after a dice event written while it waited on the lock"
+        );
+        let latest: i32 = connection
+            .query_one(
+                "SELECT die_after FROM events
+                 WHERE user_id = 9101
+                   AND type IN ('rate','snooze','undo','manual_die','reset_dice')
+                   AND die_after IN (2,4,6,8,10,12,20,30,50,100)
+                 ORDER BY timestamp DESC, id DESC LIMIT 1",
+                &[],
+            )
+            .await
+            .expect("latest owner-scoped die")
+            .get(0);
+        assert_eq!(
+            latest, 12,
+            "the restored die must win the timestamp-first ordering"
         );
     }
 }
