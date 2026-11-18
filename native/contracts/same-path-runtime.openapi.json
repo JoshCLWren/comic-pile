@@ -7474,6 +7474,805 @@
           }
         }
       },
+      "CreatorComparisonCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "upcoming_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorComparisonIssueRef": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorComparisonItem": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "rating_distribution",
+          "role_stats",
+          "strongest_series",
+          "min_rated_issues_per_series",
+          "unread_upcoming_count",
+          "read_unrated_count",
+          "unread_issue_refs",
+          "read_unrated_issue_refs",
+          "max_issue_refs_per_group",
+          "insufficient_data"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "insufficient_data": {
+            "type": "boolean"
+          },
+          "max_issue_refs_per_group": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "min_rated_issues_per_series": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "normalized_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rating_distribution": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
+            }
+          },
+          "role_stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonRoleStat"
+            }
+          },
+          "strongest_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonSeriesAggregate"
+            }
+          },
+          "top_rating_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "unread_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
+            }
+          },
+          "unread_upcoming_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorComparisonResponse": {
+        "type": "object",
+        "required": [
+          "comparisons",
+          "coverage",
+          "insufficient_data_keys"
+        ],
+        "properties": {
+          "comparisons": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CreatorComparisonItem"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorComparisonCoverage"
+          },
+          "insufficient_data_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreatorComparisonRoleStat": {
+        "type": "object",
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorComparisonSeriesAggregate": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_count",
+          "rated_issue_count",
+          "average_rating"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorDetailResponse": {
+        "type": "object",
+        "required": [
+          "summary",
+          "coverage",
+          "role_stats",
+          "series_groups",
+          "series_groups_total",
+          "series_groups_complete",
+          "rated_issues",
+          "rated_population_scope",
+          "headline_roles",
+          "read_unrated_issues",
+          "upcoming_issues"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorSummaryCoverage"
+          },
+          "headline_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "insights": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorInsights"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "rated_population_scope": {
+            "type": "string"
+          },
+          "rating_distribution": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorRatingDistribution"
+              }
+            ]
+          },
+          "read_unrated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "role_stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorRoleStat"
+            }
+          },
+          "series_groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorSeriesGroup"
+            }
+          },
+          "series_groups_complete": {
+            "type": "boolean"
+          },
+          "series_groups_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CreatorSummaryItem"
+          },
+          "upcoming_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          }
+        }
+      },
+      "CreatorDiscoveryCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorDiscoveryEntry": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "rated_issue_count",
+          "top_rating_count",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "trend_sample_count",
+          "reasons"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "max_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "min_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "normalized_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_spread": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "rating_stddev": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "read_unrated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryReason"
+            }
+          },
+          "recent_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "top_rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "top_rating_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "trend_delta": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "trend_direction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trend_sample_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorDiscoveryReason": {
+        "type": "object",
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "properties": {
+          "comparison": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CreatorDiscoveryResponse": {
+        "type": "object",
+        "required": [
+          "views",
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorDiscoveryCoverage"
+          },
+          "max_entries_per_view": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "minimum_reliable_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryView"
+            }
+          }
+        }
+      },
+      "CreatorDiscoveryView": {
+        "type": "object",
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries",
+          "entries"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryEntry"
+            }
+          },
+          "max_entries": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "min_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorInsights": {
+        "type": "object",
+        "required": [
+          "min_series_sample",
+          "series_sample_met",
+          "excluded_incomplete_series_count",
+          "individual_issue_limit",
+          "individual_issues_combined",
+          "highest_rated_issues",
+          "lowest_rated_issues"
+        ],
+        "properties": {
+          "excluded_incomplete_series_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "highest_rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            }
+          },
+          "individual_issue_limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "individual_issues_combined": {
+            "type": "boolean"
+          },
+          "lowest_rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            }
+          },
+          "min_series_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "most_rated_series": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              }
+            ]
+          },
+          "series_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_sample_met": {
+            "type": "boolean"
+          },
+          "strongest_series": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              }
+            ]
+          },
+          "weakest_series": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              }
+            ]
+          }
+        }
+      },
+      "CreatorIssueInsight": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "effective_rating",
+          "roles",
+          "sort_key"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorIssueRow": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "roles",
+          "sort_key"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "CreatorListItem": {
         "type": "object",
         "required": [
@@ -7534,6 +8333,555 @@
           "offset": {
             "type": "integer",
             "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorMetricCalculation": {
+        "type": "object",
+        "required": [
+          "formula",
+          "numerator"
+        ],
+        "properties": {
+          "denominator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formula": {
+            "type": "string"
+          },
+          "numerator": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreatorMetricDrilldown": {
+        "type": "object",
+        "required": [
+          "metric_type",
+          "creator_key",
+          "calculation",
+          "total_count",
+          "included_issues",
+          "excluded_issues",
+          "pagination"
+        ],
+        "properties": {
+          "bucket_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "bucket_percentage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/CreatorMetricCalculation"
+          },
+          "creator_key": {
+            "type": "string"
+          },
+          "excluded_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorMetricIssue"
+            }
+          },
+          "included_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorMetricIssue"
+            }
+          },
+          "metric_type": {
+            "type": "string"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/CreatorMetricPagination"
+          },
+          "rating_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "role_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "role_rated_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "series_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_rated_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorMetricIssue": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "creator_roles"
+        ],
+        "properties": {
+          "creator_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "effective_rating_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "missing_rating_cause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorMetricPagination": {
+        "type": "object",
+        "required": [
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorRatingBucket": {
+        "type": "object",
+        "required": [
+          "rating",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CreatorRatingDistribution": {
+        "type": "object",
+        "required": [
+          "buckets",
+          "sample_count",
+          "mean_rating",
+          "median_rating",
+          "min_rating",
+          "max_rating"
+        ],
+        "properties": {
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorRatingBucket"
+            }
+          },
+          "max_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "mean_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "median_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "min_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "sample_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorRoleStat": {
+        "type": "object",
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorSeriesGroup": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "roles",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "metadata_complete",
+          "sort_key",
+          "population_scope"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "unread_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorSeriesInsight": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
+          "roles",
+          "metadata_complete",
+          "sort_key"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "lowest_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorSeriesIssueListResponse": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "roles",
+          "rated_issue_count",
+          "metadata_complete",
+          "population_scope",
+          "issues",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
           },
           "total": {
             "type": "integer",
@@ -7652,6 +9000,225 @@
           "upcoming_count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreatorTeamChemistryResponse": {
+        "type": "object",
+        "required": [
+          "pairs",
+          "pairs_total",
+          "min_shared_team_sample",
+          "max_ranked_pairs",
+          "coverage"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorTeamCoverage"
+          },
+          "max_ranked_pairs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "min_shared_team_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamPair"
+            }
+          },
+          "pairs_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorTeamCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorTeamIssueRef": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorTeamMember": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "properties": {
+          "baseline_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "baseline_rated_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreatorTeamPair": {
+        "type": "object",
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count",
+          "shared_rating_distribution",
+          "shared_series",
+          "shared_issue_refs",
+          "max_shared_issue_refs"
+        ],
+        "properties": {
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamMember"
+            }
+          },
+          "max_shared_issue_refs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pair_key": {
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "shared_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamIssueRef"
+            }
+          },
+          "shared_median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "shared_rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shared_rating_distribution": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "shared_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
+            }
+          }
+        }
+      },
+      "CreatorTeamSeriesRef": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
+        ],
+        "properties": {
+          "shared_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
           }
         }
       },
