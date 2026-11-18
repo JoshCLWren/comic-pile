@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.read_without_rating_audit import ThreadHistoricalRating
-from app.services.creator_metric_drilldown import get_creator_metric_drilldown
 from app.services.read_without_rating_audit import (
     CAUSE_AMBIGUOUS_THREAD_RATING,
     CAUSE_EDITION_CONFLICT,
