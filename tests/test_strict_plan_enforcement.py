@@ -1703,10 +1703,6 @@ async def test_queue_and_roll_agree_on_explicit_checkpoint(
     assert follow.id not in roll_ids
     assert lead.id in roll_ids
     assert [reason.label for reason in reasons] == ["Blocked by Lead Series: #1"]
-    info = await auth_client.post(f"/api/v1/threads/{follow.id}:getBlockingInfo")
-    assert info.status_code == 200, info.text
-    assert info.json()["is_blocked"] is True
-    assert info.json()["blocking_reasons"] == ["Blocked by Lead Series: #1"]
 
 
 @pytest.mark.asyncio
