@@ -2001,11 +2001,29 @@ def test_reconcile_keeps_blocked_issue_blocked_after_releasing_old_owner(
     assert "ralph-status:blocked" in writes[0]["labels"]
 
 
+def _local_lease_ttl_seconds() -> int:
+    """Read the current local lease TTL from policy without test-global coupling."""
+    scripts_dir = str(REPO_ROOT / ".github" / "scripts")
+    added = scripts_dir not in sys.path
+    if added:
+        sys.path.insert(0, scripts_dir)
+    try:
+        import factory_work_policy as policy
+
+        return int(policy.LOCAL_LEASE_TTL_SECONDS)
+    finally:
+        if added:
+            sys.path.remove(scripts_dir)
+
+
 @pytest.mark.parametrize(
     ("live_labels", "live_updated"),
     [
         (("factory", "factory:local", "factory:building"), -120),
-        (("factory", "factory:62", "factory:building"), -7200),
+        (
+            ("factory", "factory:62", "factory:building"),
+            -(_local_lease_ttl_seconds() + 1),
+        ),
     ],
 )
 def test_reconcile_does_not_steal_a_refreshed_or_reassigned_lease(
