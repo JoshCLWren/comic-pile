@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import create_engine
 
 from scripts import migration_rehearsal as rehearsal_module
 from scripts.migration_rehearsal import (
@@ -16,6 +17,7 @@ from scripts.migration_rehearsal import (
     _run_step,
     _sync_database_url,
     run_migration_rehearsal,
+    verify_data_dependent_failure_guard,
 )
 
 

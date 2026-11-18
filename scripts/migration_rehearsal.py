@@ -379,6 +379,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Load the prod-shaped migration fixture before upgrading",
     )
+    parser.add_argument(
+        "--verify-data-dependent-guard",
+        action="store_true",
+        dest="verify_data_guard",
+        help="Prove a real NOT NULL data failure is rejected before repair and accepted after it",
+    )
     args = parser.parse_args(argv)
 
     # Importing app models loads settings that require DATABASE_URL; make sure
@@ -406,6 +412,7 @@ def main(argv: list[str] | None = None) -> int:
             mode=args.mode,
             upgrade_only=args.upgrade_only,
             skip_downgrade=args.skip_downgrade,
+            verify_data_guard=args.verify_data_guard,
         )
     except MigrationRehearsalError as error:
         print(f"MIGRATION REHEARSAL FAILED: {error}")
