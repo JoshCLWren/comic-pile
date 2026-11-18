@@ -22,7 +22,7 @@ The separate [E2E behavior inventory](../e2e-behavior-inventory.yaml) tracks aut
 | [Queue](queue.md) | Durable order, blocked state, snooze, eligibility, mapping health |
 | [Queue ComicVine mapping](queue-mapping.md) | Volume search, safe mapping, full and partial unmapped repair |
 | [Thread detail](thread-detail.md) | Issue order, read state, ratings, identity |
-| [Tags](tags.md) | Creation, reuse, color, bulk application, inheritance, dedicated page |
+| [Tags](tags.md) | Creation, reuse, color, bulk application, inheritance (no standalone Tags page: retired 2026-11-18) |
 | [Reading plans and lists](reading-plans.md) | Ordering, strict/loose, prerequisites, exclusions, overlap |
 | [CBL browser](cbl-browser.md) | Source discovery, preview, adoption |
 | [Identity inbox](identity-inbox.md) | Review and correct canonical identities |
