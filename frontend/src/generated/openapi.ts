@@ -10314,7 +10314,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-<<<<<<< HEAD
         NativeReadingOrderProjectionResult: {
             /** Format: int32 */
             added_count: number;
@@ -10334,8 +10333,6 @@ export interface components {
             comicvine_issue_id: number;
             reason?: string | null;
         };
-=======
->>>>>>> origin/main
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;

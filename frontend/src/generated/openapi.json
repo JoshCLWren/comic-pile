@@ -12979,7 +12979,6 @@
         ],
         "type": "object"
       },
-<<<<<<< HEAD
       "NativeReadingOrderProjectionResult": {
         "properties": {
           "added_count": {
@@ -13035,8 +13034,6 @@
         ],
         "type": "object"
       },
-=======
->>>>>>> origin/main
       "NativeSessionBandwidthState": {
         "description": "Canonical bandwidth state.",
         "properties": {
