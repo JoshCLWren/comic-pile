@@ -122,6 +122,13 @@ test('test coverage requires both the real DB harness and an owned route URI', (
   assert(!testCoversModule(DB_ALPHA_TEST, 'beta', table));
 });
 
+test('commented-out DB harnesses and route URIs do not count as coverage', () => {
+  const table = buildRouteTable(routeModulesFromLib(LIB_RS));
+  assert(!testCoversModule('// test_support::database_url();\n// uri("/api/v1/alphas/7")\n', 'alpha', table));
+  assert(!testCoversModule('/* test_support::database_url().await; let _ = "/api/v1/alphas/7"; */\n', 'alpha', table));
+  assert(!testCoversModule('/*\ntest_support::reset_for_test(&state).await;\nRequest::builder().uri("/api/v1/alphas/7")\n*/\n', 'alpha', table));
+});
+
 test('a fixed path is credited to its owner, not to another module\'s wildcard', () => {
   const table = [
     {module: 'wild', route: '/api/v1/issue-identity/cbl-sources/{list_id}'},

@@ -247,18 +247,121 @@ const DB_HARNESS = [
 const DB_ENV_ACCESS = /std::env::var\(\s*"RUST_ROLL_TEST_DATABASE_URL"/;
 
 /**
+ * Strip Rust line and block comments while preserving string literals, so
+ * commented-out tests and doc comments cannot satisfy the guard.
+ */
+export function stripRustComments(source) {
+  let result = '';
+  let index = 0;
+  let inString = false;
+  let inRawString = false;
+  let rawHashes = 0;
+  let inLineComment = false;
+  let blockDepth = 0;
+  while (index < source.length) {
+    const ch = source[index];
+    const next = source[index + 1];
+    if (inLineComment) {
+      if (ch === '\n') {
+        inLineComment = false;
+        result += ch;
+      }
+      index += 1;
+      continue;
+    }
+    if (blockDepth > 0) {
+      if (ch === '/' && next === '*') {
+        blockDepth += 1;
+        index += 2;
+        continue;
+      }
+      if (ch === '*' && next === '/') {
+        blockDepth -= 1;
+        index += 2;
+        continue;
+      }
+      if (ch === '\n') result += ch;
+      index += 1;
+      continue;
+    }
+    if (inString) {
+      result += ch;
+      if (ch === '\\') {
+        result += next ?? '';
+        index += 2;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      index += 1;
+      continue;
+    }
+    if (inRawString) {
+      result += ch;
+      if (ch === '"') {
+        let hashes = 0;
+        while (hashes < rawHashes && source[index + 1 + hashes] === '#') hashes += 1;
+        if (hashes === rawHashes) {
+          result += '#'.repeat(hashes);
+          index += 1 + hashes;
+          inRawString = false;
+          continue;
+        }
+      }
+      index += 1;
+      continue;
+    }
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      index += 2;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      blockDepth = 1;
+      index += 2;
+      continue;
+    }
+    if (ch === 'r') {
+      let hashes = 0;
+      let probe = index + 1;
+      while (source[probe] === '#') {
+        hashes += 1;
+        probe += 1;
+      }
+      if (source[probe] === '"') {
+        inRawString = true;
+        rawHashes = hashes;
+        result += source.slice(index, probe + 1);
+        index = probe + 1;
+        continue;
+      }
+    }
+    if (ch === '"') {
+      inString = true;
+      result += ch;
+      index += 1;
+      continue;
+    }
+    result += ch;
+    index += 1;
+  }
+  return result;
+}
+
+/**
  * Decide whether one test file both uses the real database harness and
  * exercises a route actually owned by `module` in the full route table.
  *
  * A doc comment that merely mentions `RUST_ROLL_TEST_DATABASE_URL` is not
  * enough: the file must actually call a `test_support` helper that provisions
- * the canonical schema or read that environment variable.
+ * the canonical schema or read that environment variable. Commented-out code
+ * is ignored so the guard cannot be satisfied by inactive tests.
  */
 export function testCoversModule(testSource, module, routeTable) {
-  if (!DB_HARNESS.some(marker => testSource.includes(marker)) && !DB_ENV_ACCESS.test(testSource)) {
+  const activeSource = stripRustComments(testSource);
+  if (!DB_HARNESS.some(marker => activeSource.includes(marker)) && !DB_ENV_ACCESS.test(activeSource)) {
     return false;
   }
-  return [...testSource.matchAll(/"([^"\n]+)"/g)].some(
+  return [...activeSource.matchAll(/"([^"\n]+)"/g)].some(
     match => match[1].startsWith('/api/')
       && resolveRouteOwners(match[1], routeTable).includes(module),
   );
