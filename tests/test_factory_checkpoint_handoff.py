@@ -458,3 +458,69 @@ def test_merged_checkpoint_requires_actual_incorporated_bytes(
     result = handoff.publish(REPO, RUN, cleanup=True)
     assert result["merged"] is True and result["merge_sha"] == "d" * 40
     assert result["published"] is True
+
+
+
+def test_checkpoint_second_page_missing_connection_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A null cursor continuation cannot silently truncate a 101-ref sweep."""
+    seen: list[str | None] = []
+
+    def graphql(_endpoint: str, _method: str = "GET", **fields: object) -> dict:
+        variables = fields["variables"]
+        assert isinstance(variables, dict)
+        seen.append(variables["after"])
+        if len(seen) == 1:
+            return {"data": {"repository": {"refs": {
+                "nodes": [{"name": BRANCH, "target": {"oid": HEAD}}],
+                "pageInfo": {"hasNextPage": True, "endCursor": "next"},
+            }}}}
+        return {"data": {"repository": {"refs": None}}}
+
+    monkeypatch.setattr(handoff, "api", graphql)
+    with pytest.raises(RuntimeError, match="Missing checkpoint connection"):
+        handoff.checkpoint_refs(REPO)
+    assert seen == [None, "next"]
+
+
+def test_closed_recovery_requires_main_and_source_run_bytes(harness: dict) -> None:
+    """A resumed branch's new bytes cannot award its earlier source run a merge."""
+    saved = harness["saved"]
+    saved["resumed"] = True
+    saved["origin_head"] = "d" * 40
+    saved["origin_tree"] = "e" * 40
+    harness["pr"]["state"] = "closed"
+    harness["pr"]["merged"] = True
+    harness["pr"]["merge_commit_sha"] = "f" * 40
+    harness["drafts"] = [harness["pr"]]
+    observed: list[dict] = []
+
+    def incorporated(_repo: str, snapshot: dict, _merged: str) -> bool:
+        observed.append(snapshot)
+        # Simulate B's tip appearing in main, but A's original work reverted.
+        return snapshot["tree"] == saved["tree"]
+
+    handoff.incorporated = incorporated
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert not result["published"] and not result.get("merged")
+    assert observed and observed[-1]["head"] == saved["origin_head"]
+    assert observed[-1]["tree"] == saved["origin_tree"]
+    harness["pr"]["base"] = {"ref": "release"}
+    harness["incorporated"] = True
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert not result["published"] and not result.get("merged")
+    assert result["worker"] == "46"
+    assert result["checkpoint_sha"] == saved["origin_head"]
+
+
+def test_worker_evidence_survives_checkpoint_retirement_without_second_run_read(
+    harness: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """The receipt carries trusted worker identity from the publication step."""
+    result = handoff.publish(REPO, RUN)
+    assert result["worker"] == "46" and result["checkpoint_sha"] == HEAD
+    def no_second_read(*_args: object) -> None:
+        raise AssertionError("publishing must not re-fetch source-run worker")
+    monkeypatch.setattr(handoff, "verified_run", no_second_read)
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps(result))
+    assert json.loads(path.read_text())["worker"] == "46"
