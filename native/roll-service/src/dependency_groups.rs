@@ -341,6 +341,21 @@ fn validate_group_order_request(
     Ok(())
 }
 
+fn group_order_update_parameters(
+    member_by_issue: &BTreeMap<i32, i32>,
+    ordered_positions: &BTreeMap<i32, i32>,
+) -> (Vec<i32>, Vec<Option<i32>>) {
+    member_by_issue
+        .iter()
+        .map(|(issue_id, membership_id)| {
+            (
+                *membership_id,
+                ordered_positions.get(issue_id).copied(),
+            )
+        })
+        .unzip()
+}
+
 fn member_response(
     id: i32,
     thread_id: Option<i32>,
@@ -1511,15 +1526,14 @@ async fn set_group_order_tx(
         .iter()
         .map(|item| (item.issue_id, item.sequence_order))
         .collect();
-    for (issue_id, membership_id) in &member_by_issue {
-        let sequence_order = ordered_positions.get(issue_id).copied();
-        tx.execute(
-            "UPDATE dependency_group_memberships SET sequence_order = $2 WHERE id = $1",
-            &[membership_id, &sequence_order],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
+    let (membership_ids, sequence_orders) =
+        group_order_update_parameters(&member_by_issue, &ordered_positions);
+    tx.execute(
+        UPDATE_GROUP_ORDER_SQL,
+        &[&membership_ids, &sequence_orders],
+    )
+    .await
+    .map_err(db::query_error)?;
     issue_service::refresh_blocked_threads(tx, user_id).await?;
     let row = tx
         .query_one(
