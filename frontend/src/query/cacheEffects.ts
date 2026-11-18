@@ -1002,11 +1002,11 @@ async function invalidateReadingEligibility(
     client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.roll.dieState(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.lastRead(), exact: true }),
-    client.invalidateQueries({
-      queryKey: queryKeys.roll.bootstrap(),
-      exact: true,
-      ...(refetchRollBootstrap ? {} : { refetchType: 'none' as const }),
-    }),
+    client.invalidateQueries(
+      refetchRollBootstrap
+        ? { queryKey: queryKeys.roll.bootstrap(), exact: true }
+        : { queryKey: queryKeys.roll.bootstrap(), exact: true, refetchType: 'none' },
+    ),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
