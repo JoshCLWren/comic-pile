@@ -442,6 +442,15 @@ def handoff_comment(repo: str, pr: dict, saved: dict, run: dict, run_id: str) ->
     ))
 
 
+def merged_checkpoint_receipt(repo: str, saved: dict, pr: dict) -> dict:
+    """Credit merge only after the real GitHub merge contains checkpoint bytes."""
+    merge_sha = str(pr.get("merge_commit_sha") or "")
+    if (pr.get("merged") is True and SHA.fullmatch(merge_sha)
+            and incorporated(repo, saved, merge_sha)):
+        return {"merged": True, "merge_sha": merge_sha}
+    return {}
+
+
 def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool = False) -> dict:
     """Persist ordinary issue work, preserving live ownership and real merge gates."""
     run = verified_run(repo, run_id)
@@ -468,10 +477,14 @@ def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool
             pr = obj(f"repos/{repo}/pulls/{open_prs[0]['number']}")
         elif branches:
             pr = obj(f"repos/{repo}/pulls/{branches[0]['number']}")
-            if cleanup and pr.get("merged"):
-                return retire(repo, run_id, saved, [pr], pr["merge_commit_sha"])
-            return {"saved": True, "published": False, "validated": False,
-                    "work_pr": pr["number"], "detail": "closed issue work retained"}
+            merge = merged_checkpoint_receipt(repo, saved, pr)
+            if cleanup and merge:
+                retired = retire(repo, run_id, saved, [pr], pr["merge_commit_sha"])
+                return {**retired, **merge, "saved": True, "published": True,
+                        "checkpoint_sha": saved["head"], "work_pr": pr["number"]}
+            return {"saved": True, "published": bool(merge), "validated": False,
+                    "checkpoint_sha": saved["head"], "work_pr": pr["number"],
+                    **merge, "detail": "closed issue work retained"}
         else:
             if run.get("status") != "completed" and not check_write(
                     repo, run_id, saved["mode"], saved["number"], saved["worker"]):
@@ -482,11 +495,14 @@ def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool
             if not isinstance(pr, dict):
                 raise RuntimeError("GitHub did not return the normal issue PR")
     if pr.get("state") != "open":
-        if cleanup and original and incorporated(repo, saved, pr.get("merge_commit_sha") or
-                                                pr["head"]["sha"]):
-            return retire(repo, run_id, saved, branches, pr["head"]["sha"])
-        return {"saved": True, "published": False, "validated": False,
-                "work_pr": pr["number"], "detail": "closed work retained"}
+        merge = merged_checkpoint_receipt(repo, saved, pr)
+        if cleanup and original and merge:
+            retired = retire(repo, run_id, saved, branches, merge["merge_sha"])
+            return {**retired, **merge, "saved": True, "published": True,
+                    "checkpoint_sha": saved["head"], "work_pr": pr["number"]}
+        return {"saved": True, "published": bool(merge), "validated": False,
+                "checkpoint_sha": saved["head"], "work_pr": pr["number"],
+                **merge, "detail": "closed work retained"}
     generated = pr.get("title", "").startswith("Recovery:") or pr.get("draft")
     if generated:
         api(f"repos/{repo}/pulls/{pr['number']}", "PATCH", title=issue["title"],
@@ -607,6 +623,8 @@ def main() -> int:
                 if saved:
                     result = record_delivery(args.repo, run_id, saved, args.delivered_pr)
             result["run_id"] = run_id
+            if result.get("saved"):
+                result["worker"] = source_worker(verified_run(args.repo, run_id))
             results.append(result)
             if args.state_file:
                 args.state_file.write_text(json.dumps(result) + "\n")
