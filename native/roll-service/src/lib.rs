@@ -65,6 +65,7 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_ordering;
 pub mod threads;
 pub mod undo_apply;
 pub mod undo_snapshots;
@@ -684,6 +685,33 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues",
             get(issue_read::list_thread_issues),
+        )
+        // axum/matchit rejects a parameter followed by literal text, so the
+        // `{thread_id}:action` operation family is routed through the single
+        // `{thread_id}` segment and dispatched on the action suffix.
+        .route(
+            "/api/v1/threads/{thread_id}",
+            post(thread_ordering::post_thread_action),
+        )
+        .route(
+            "/api/v1/threads:getBlockingInfo",
+            post(thread_ordering::get_threads_blocking_info),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(thread_ordering::get_thread_connected_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/dependency-order-check",
+            get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:validateOrder",
+            get(thread_ordering::validate_issue_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/reading-orders",
+            get(thread_ordering::get_thread_reading_orders),
         )
         .route(
             "/api/v1/threads/completed/threads",
