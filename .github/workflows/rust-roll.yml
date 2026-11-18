@@ -87,6 +87,10 @@ jobs:
           fi
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: native/roll-service -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Verify unified Cargo workspace lockfile
         # Same guard the production @vercel/rust build.sh runs: fail on a
         # second lockfile, divergent resolution or lock mutation, then export
