@@ -519,6 +519,7 @@ def test_delivery_funnel_render_prioritizes_outcomes_and_escapes_metadata() -> N
 
 
 def test_trusted_delivery_evidence_does_not_equate_saved_work_with_success():
+    """A failed model session and its eventual saved work have separate counts."""
     snapshot = sample_snapshot()
     snapshot["delivery_evidence"] = {
         "terminal_runs": 127, "successful_runs": 4, "failed_runs": 123,
