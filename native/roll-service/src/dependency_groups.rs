@@ -211,6 +211,7 @@ pub struct DependencyGroupDetailResponse {
 }
 
 /// Persisted group membership as the service resolves it.
+#[derive(Clone)]
 struct GroupMemberInput {
     id: i32,
     group_id: i32,
@@ -241,6 +242,16 @@ fn unprocessable(detail: impl Into<String>) -> ApiError {
 
 fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
+}
+
+/// True when a server-rejected statement broke the unique constraint
+/// (`23505`), e.g. a duplicate group name or membership. Classified by SQLSTATE
+/// rather than message text so reworded server errors keep their contract.
+fn is_unique_violation(error: &tokio_postgres::Error) -> bool {
+    error
+        .as_db_error()
+        .map(|db_error| db_error.code().code() == "23505")
+        .unwrap_or(false)
 }
 
 /// Strip and validate a group name (Python `app/services/dependency_group_service.py::_normalize_name`).
@@ -351,7 +362,7 @@ fn crossover_progress(
     let progress = if total_issues == 0 {
         "0%".to_string()
     } else {
-        format!("{read_issues * 100 / total_issues}%")
+        format!("{}%", read_issues * 100 / total_issues)
     };
     (read_issues as i32, total_issues, progress)
 }
@@ -823,7 +834,7 @@ async fn create_group_tx(
         )
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if is_unique_violation(&error) {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1002,7 +1013,7 @@ async fn update_group_tx(
         )
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if is_unique_violation(&error) {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1254,7 +1265,7 @@ async fn add_member_tx(
         .query_one(INSERT_MEMBERSHIP_SQL, &[&group_id, &thread_id, &issue_id, &sequence_order])
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if is_unique_violation(&error) {
                 return conflict("This member is already in the group");
             }
             db::query_error(error)
