@@ -229,7 +229,6 @@ export default function ManualIssuePickerModal({
                     issueNumber={issue.issue_number}
                     status={issue.status}
                     card={cardsById.get(issue.id)}
-                    actionLabel="Open Read / Rate / Map"
                   />
                 ))}
               </div>
