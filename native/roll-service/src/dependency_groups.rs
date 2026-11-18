@@ -357,10 +357,7 @@ fn greater_than_error(location: &[serde_json::Value], input: i32) -> serde_json:
     )
 }
 
-fn model_validation_error(
-    message: &str,
-    input: serde_json::Value,
-) -> serde_json::Value {
+fn model_validation_error(message: &str, input: serde_json::Value) -> serde_json::Value {
     pydantic_error(
         "value_error",
         &[],
@@ -452,10 +449,7 @@ fn validate_issue_range_request(
         ("end_position", request.end_position),
     ] {
         if value <= 0 {
-            errors.push(greater_than_error(
-                &[serde_json::json!(field)],
-                value,
-            ));
+            errors.push(greater_than_error(&[serde_json::json!(field)], value));
         }
     }
     if !errors.is_empty() {
@@ -2090,9 +2084,8 @@ mod tests {
             "x".repeat(MAX_GROUP_NAME_CHARS + 1),
             format!(" {} ", "x".repeat(MAX_GROUP_NAME_CHARS)),
         ] {
-            let detail = validation_detail(
-                normalize_group_name(&overlong).expect_err("overlong raw name"),
-            );
+            let detail =
+                validation_detail(normalize_group_name(&overlong).expect_err("overlong raw name"));
             assert_eq!(detail[0]["type"], "string_too_long");
             assert_eq!(detail[0]["loc"], serde_json::json!(["body", "name"]));
             assert_eq!(detail[0]["input"], overlong);
@@ -2163,9 +2156,8 @@ mod tests {
         );
 
         let empty_order = DependencyGroupOrderUpdateRequest { items: Vec::new() };
-        let empty_detail = validation_detail(
-            validate_group_order_request(&empty_order).expect_err("empty order"),
-        );
+        let empty_detail =
+            validation_detail(validate_group_order_request(&empty_order).expect_err("empty order"));
         assert_eq!(empty_detail[0]["type"], "too_short");
         assert_eq!(empty_detail[0]["loc"], serde_json::json!(["body", "items"]));
 
@@ -2278,10 +2270,7 @@ mod tests {
         let micros = whole
             .with_nanosecond(123_456_000)
             .expect("valid microseconds");
-        assert_eq!(
-            format_python_datetime(whole),
-            "2026-11-17T12:34:56Z"
-        );
+        assert_eq!(format_python_datetime(whole), "2026-11-17T12:34:56Z");
         assert_eq!(
             format_python_datetime(micros),
             "2026-11-17T12:34:56.123456Z"
@@ -2423,30 +2412,31 @@ mod tests {
         )
         .await
         .expect("load enriched detail");
-        assert_eq!(
-            detail.linked_plans,
-            vec![DependencyGroupSummary {
-                id: 301,
-                name: "Matching".into(),
-            }]
-        );
+        assert_eq!(detail.linked_plans.len(), 1);
+        assert_eq!(detail.linked_plans[0].id, 301);
+        assert_eq!(detail.linked_plans[0].name, "Matching");
         let member = detail.memberships.first().expect("one enriched member");
         let thread = member.thread.as_ref().expect("thread projection");
         assert_eq!(thread.format, "Comics");
         assert_eq!(thread.created_at, "2026-11-17T12:34:56.123456Z");
-        assert_eq!(thread.last_activity_at.as_deref(), Some("2026-11-17T12:34:56Z"));
+        assert_eq!(
+            thread.last_activity_at.as_deref(),
+            Some("2026-11-17T12:34:56Z")
+        );
         let issue = member.issue.as_ref().expect("issue projection");
         assert_eq!(issue.created_at, "2026-11-17T12:34:56Z");
-        assert_eq!(issue.read_at.as_deref(), Some("2026-11-17T12:34:56.123456Z"));
+        assert_eq!(
+            issue.read_at.as_deref(),
+            Some("2026-11-17T12:34:56.123456Z")
+        );
 
-        let Json(plans) = list_crossover_plans(
-            State(state),
-            AuthenticatedUser::for_test(7),
-            Path(101),
-        )
-        .await
-        .expect("list linked plans");
-        assert_eq!(plans, detail.linked_plans);
+        let Json(plans) =
+            list_crossover_plans(State(state), AuthenticatedUser::for_test(7), Path(101))
+                .await
+                .expect("list linked plans");
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].id, detail.linked_plans[0].id);
+        assert_eq!(plans[0].name, detail.linked_plans[0].name);
     }
 
     #[tokio::test]
@@ -2474,8 +2464,8 @@ mod tests {
             connection
                 .execute(
                     "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) \
-                     VALUES ($1, 11, $2, $2, 'unread', NOW())",
-                    &[&issue_id, &position],
+                     VALUES ($1, 11, $2, $3, 'unread', NOW())",
+                    &[&issue_id, &position.to_string(), &position],
                 )
                 .await
                 .expect("seed issue");
@@ -2526,7 +2516,12 @@ mod tests {
         let response_orders: BTreeMap<i32, Option<i32>> = response
             .memberships
             .iter()
-            .map(|member| (member.issue_id.expect("issue member"), member.sequence_order))
+            .map(|member| {
+                (
+                    member.issue_id.expect("issue member"),
+                    member.sequence_order,
+                )
+            })
             .collect();
         assert_eq!(
             response_orders,
