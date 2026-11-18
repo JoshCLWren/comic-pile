@@ -1,9 +1,11 @@
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReadingGraphProblemCard } from '../components/ReadingGraphProblemCard'
 import { readingGraphProblemApi } from '../services/api-reading-graph'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 vi.mock('../services/api-reading-graph', () => ({
   readingGraphProblemApi: {

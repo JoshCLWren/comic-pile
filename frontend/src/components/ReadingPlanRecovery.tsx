@@ -1,24 +1,34 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   type RecoveryCandidate,
   type RecoveryStep,
 } from '../services/api-reading-plan-recovery'
 import { useReadingPlanRecoveryPreview, useRelinkReadingPlan } from '../hooks/useReadingPlans'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 
-function StepNames({ steps }: { steps: RecoveryStep[] }) {
+function StepNames({ steps, cardsByIssue }: { steps: RecoveryStep[]; cardsByIssue: Map<number, IssueCard> }) {
   return (
     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[var(--theme-text-muted)]">
       {steps.map((step) => (
-        <li key={step.issue_id}>
-          {step.label} <span className="text-xs">(issue ID {step.issue_id})</span>
+        <li key={step.issue_id} className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0">{step.label}</span>
+          <CompactIssueCardTrigger
+            issueId={step.issue_id}
+            threadTitle={step.label}
+            issueNumber="?"
+            card={cardsByIssue.get(step.issue_id) ?? null}
+            hideTitle
+          />
         </li>
       ))}
     </ul>
   )
 }
 
-function CandidateChanges({ candidate }: { candidate: RecoveryCandidate }) {
+function CandidateChanges({ candidate, cardsByIssue }: { candidate: RecoveryCandidate; cardsByIssue: Map<number, IssueCard> }) {
   return (
     <div className="mt-3 space-y-3 text-sm" data-testid="plan-recovery-diff">
       <p className="font-semibold text-[var(--theme-text-primary)]">
@@ -27,13 +37,13 @@ function CandidateChanges({ candidate }: { candidate: RecoveryCandidate }) {
       {candidate.added_steps.length > 0 && (
         <div>
           <p>Newly authoritative issues ({candidate.added_steps.length}):</p>
-          <StepNames steps={candidate.added_steps} />
+          <StepNames steps={candidate.added_steps} cardsByIssue={cardsByIssue} />
         </div>
       )}
       {candidate.removed_steps.length > 0 && (
         <div>
           <p>Saved Plan issues absent from this list ({candidate.removed_steps.length}):</p>
-          <StepNames steps={candidate.removed_steps} />
+          <StepNames steps={candidate.removed_steps} cardsByIssue={cardsByIssue} />
         </div>
       )}
       {candidate.order_changed && (
@@ -48,7 +58,7 @@ function CandidateChanges({ candidate }: { candidate: RecoveryCandidate }) {
         )}
       <details>
         <summary className="cursor-pointer font-semibold">View the complete proposed reading order</summary>
-        <StepNames steps={candidate.steps} />
+        <StepNames steps={candidate.steps} cardsByIssue={cardsByIssue} />
       </details>
     </div>
   )
@@ -69,6 +79,24 @@ export function ReadingPlanRecovery({
   const [acknowledged, setAcknowledged] = useState(false)
   const recovery = useReadingPlanRecoveryPreview(planId)
   const apply = useRelinkReadingPlan(planId, onRecovered)
+
+  // One bounded batch for every exact owned issue named by the recovery
+  // preview; hooks run before early returns so hook order is stable.
+  const previewForCards = recovery.data
+  const stepIssueIds = useMemo(
+    () => {
+      if (!previewForCards) return []
+      const ids = new Set<number>()
+      for (const step of previewForCards.retained_steps) ids.add(step.issue_id)
+      for (const candidate of previewForCards.candidates) {
+        for (const step of candidate.steps) ids.add(step.issue_id)
+      }
+      return [...ids]
+    },
+    [previewForCards],
+  )
+  const cardsQuery = useIssueCards(stepIssueIds, { enabled: stepIssueIds.length > 0 })
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (recovery.isPending) return <p role="status">Checking Reading Plan references…</p>
   if (recovery.isError || !recovery.data) {
@@ -97,7 +125,7 @@ export function ReadingPlanRecovery({
       </p>
       <details>
         <summary className="cursor-pointer font-semibold">Show saved Plan references</summary>
-        <StepNames steps={preview.retained_steps} />
+        <StepNames steps={preview.retained_steps} cardsByIssue={cardsByIssue} />
       </details>
       <p>
         Choose an existing Reading List as the new authority, or{' '}
@@ -125,7 +153,7 @@ export function ReadingPlanRecovery({
       </label>
       {selected && (
         <>
-          <CandidateChanges candidate={selected} />
+          <CandidateChanges candidate={selected} cardsByIssue={cardsByIssue} />
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
