@@ -20,6 +20,56 @@ test.describe('Auth Outage Recovery', () => {
     preferences: { theme: 'classic' },
   }
 
+  type MockChain = {
+    as: (name: string) => MockChain
+    replyAlways: (status: number, body?: unknown) => MockChain
+  }
+  type MockApi = {
+    setupAuthUser: () => Promise<void>
+    get: (path: string) => MockChain
+    post: (path: string) => MockChain
+  }
+
+  /**
+   * Mock every non-auth request the authenticated shell fires on `/` and
+   * `/queue`: Queue reads (active/completed/excluded), the Roll bootstrap
+   * chain (CSRF setup, reading-session resolution, bootstrap, die-state,
+   * eligible ids), prefs, taste, identity inbox and the reading graph.
+   *
+   * Any request left unmocked reaches the real backend with the fake token,
+   * answers 401, and triggers a token refresh — which both breaks the
+   * `refreshCalls` assertion and paints error UI (e.g. a second "Try again"
+   * button) that collides with the degraded overlay's locators.
+   */
+  function mockShellRequests(mockApi: MockApi): void {
+    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
+    mockApi.get('/api/v1/threads/completed/threads').as('completedThreads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/threads/excluded/threads').as('excludedThreads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/identity-inbox').as('identityInbox').replyAlways(200, { items: [], total: 0, offset: 0, limit: 50 })
+    mockApi.get('/api/v2/reading-graph').as('readingGraph').replyAlways(200, {
+      status: 'ok',
+      cycles: [],
+      cyclic_issue_ids: [],
+      affected_lists: [],
+      affected_threads: [],
+      repairs: [],
+      unresolved_reference_count: 0,
+    })
+    mockApi.get('/api/v2/auth/csrf').as('csrf').replyAlways(200, { csrf_token: 'test-csrf-token' })
+    mockApi.post('/api/v2/reading-sessions').as('readingSession').replyAlways(200, { session_id: 1, created: true })
+    mockApi.get('/api/v2/roll/bootstrap').as('rollBootstrap').replyAlways(404, { detail: 'No active session' })
+    mockApi.get('/api/v2/roll/die-state').as('dieState').replyAlways(200, {
+      die: 6,
+      ladder: [4, 6, 8, 10, 12, 20],
+      default_die: 6,
+      last_roll: null,
+    })
+    mockApi.get('/api/v2/roll/eligible-issue-ids').as('eligibleIssueIds').replyAlways(200, { die: 6, issue_ids: [] })
+    mockApi.get('/api/v1/users/me/preferences').as('preferences').replyAlways(200, { theme: 'classic', user_id: 1 })
+    mockApi.get('/api/v1/taste/discoveries').as('tasteDiscoveries').replyAlways(200, { discoveries: [], generated_at: '' })
+  }
+
   test('reproduces incident: authenticated visit -> auth/me failure -> degraded state -> recovery -> original route', async ({
     page,
     mockApi,
@@ -31,16 +81,16 @@ test.describe('Auth Outage Recovery', () => {
     await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
     // Step 1: Start with authenticated user
     await mockApi.setupAuthUser()
+    // Isolate every shell request before the first navigation so no request
+    // reaches the real backend with the fake token (a real 401 there triggers
+    // a refresh and breaks the `refreshCalls` assertion below).
+    mockShellRequests(mockApi)
     await page.goto('/')
 
     // Verify we're on the roll page and authenticated
     await expect(page.locator('[data-app-shell-ready]')).toBeVisible()
     await expect(page.getByText('Checking authentication...')).not.toBeVisible()
     await expect(page.getByLabel('Desktop navigation')).toBeVisible() // Navigation indicates authenticated state
-
-    // Isolate non-auth data requests so unrelated 401s cannot trigger refresh.
-    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
 
     // Step 2: Persistent auth/me outage (survives bounded retries)
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
@@ -127,8 +177,7 @@ test.describe('Auth Outage Recovery', () => {
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
       message: 'Service unavailable',
     })
-    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
+    mockShellRequests(mockApi)
 
     // Fill and submit login form
     await page.fill('input[name="username"]', 'testuser')
@@ -158,12 +207,10 @@ test.describe('Auth Outage Recovery', () => {
   }) => {
     // Start with authenticated user
     await mockApi.setupAuthUser()
+    // Isolate non-auth data requests so unrelated 401s cannot trigger refresh.
+    mockShellRequests(mockApi)
     await page.goto('/')
     await expect(page.getByLabel('Desktop navigation')).toBeVisible()
-
-    // Isolate non-auth data requests so unrelated 401s cannot trigger refresh.
-    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
 
     // Degrade first, then make auth/me definitively unauthorized
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, { message: 'Service unavailable' })

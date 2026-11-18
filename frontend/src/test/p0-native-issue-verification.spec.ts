@@ -245,7 +245,9 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     const issueTrigger = page.getByTestId(`issue-card-trigger-${issueId}`)
     await expect(issueTrigger).toBeVisible({ timeout: 15000 })
-    await issueTrigger.click()
+    // Click the action button inside the trigger: the wrapper div can be taller
+    // than the button (stretched grid row), so clicking the div's center misses.
+    await issueTrigger.locator('button').first().click()
 
     const card = page.getByTestId('comic-issue-card').filter({ hasText: `#${responseBody1.issue.issue_number}` }).first()
     await expect(card).toBeVisible({ timeout: 15000 })
@@ -274,8 +276,11 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
     const responseBody2 = (await response2.json()) as IssueReadRateResponse
     expect(responseBody2.replayed).toBe(false)
+    // Mark-unread only flips issues.status; the previous `rate` event keeps
+    // rating 5, so re-saving 5 is a fresh read but not a rating change
+    // (issue_service.rs: rating_changed = requested != old_rating).
     expect(responseBody2.read_event_created).toBe(true)
-    expect(responseBody2.rating_event_created).toBe(true)
+    expect(responseBody2.rating_event_created).toBe(false)
   })
 
   test('verified OpenAPI schema compliance for IssueReadRateResponse', async ({
@@ -326,9 +331,9 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(issue).toHaveProperty('has_confirmed_identity')
     expect(issue).toHaveProperty('mapping_state')
 
-    // Validate status enum values
-    const validStatuses = ['read', 'unread', 'skipped']
-    expect(validStatuses).toContain(issue.status)
+    // Validate issue status enum values
+    const validIssueStatuses = ['read', 'unread', 'skipped']
+    expect(validIssueStatuses).toContain(issue.status)
 
     // Optional fields that should exist but can be null
     expect(issue).toHaveProperty('read_at') // Can be null
@@ -354,8 +359,9 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(thread).toHaveProperty('status')
     expect(thread).toHaveProperty('issues_remaining')
 
-    // Validate thread status enum
-    expect(validStatuses).toContain(thread.status)
+    // Validate thread status enum (a fully read thread reports 'completed')
+    const validThreadStatuses = ['active', 'completed']
+    expect(validThreadStatuses).toContain(thread.status)
 
     // Validate issues_remaining type (integer)
     expect(thread.issues_remaining).toBeGreaterThanOrEqual(0)
@@ -371,10 +377,10 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
       expect(thread.last_rating).toBeLessThanOrEqual(5)
     }
 
-    // Validate reading_progress type (number or null)
+    // Validate reading_progress type per the OpenAPI schema: string or null
+    // (the DB column holds free-form strings such as "completed"), never a number.
     if (thread.reading_progress !== null) {
-      expect(thread.reading_progress).toBeGreaterThanOrEqual(0)
-      expect(thread.reading_progress).toBeLessThanOrEqual(1)
+      expect(thread.reading_progress).toEqual(expect.any(String))
     }
 
     // die_after is optional and null for direct source
