@@ -975,3 +975,108 @@ async fn roll_offer_queue_position_matches_queue_and_detail() {
         "position must be canonical, not the stored 20"
     );
 }
+
+#[tokio::test]
+async fn bootstrap_reload_pending_offer_queue_position_matches_queue_and_detail() {
+    // Reloading a pending Roll through bootstrap must return the same canonical
+    // display position as the Queue list and Thread Detail, not the raw stored
+    // queue_position (issue #5263, bootstrap/reload surface).
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-boot").await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    let early = thread(&conn, user_id, "Early").await;
+    let pick = thread(&conn, user_id, "Pick").await;
+    let late = thread(&conn, user_id, "Late").await;
+    for (id, position) in [(early, 10i32), (pick, 20), (late, 30)] {
+        conn.execute(
+            "UPDATE threads SET queue_position = $1 WHERE id = $2",
+            &[&position, &id],
+        )
+        .await
+        .unwrap();
+    }
+    let issue_id = issue(&conn, pick, "1", 1, "unread").await;
+    frontier(&conn, pick, issue_id).await;
+    conn.execute(
+        "UPDATE threads SET issues_remaining = 1 WHERE id = $1",
+        &[&pick],
+    )
+    .await
+    .unwrap();
+
+    let (list_status, list_body) = send(&state, get("/api/v2/threads", &token, &csrf)).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+    let threads = list_body["threads"].as_array().unwrap();
+    let pick_list_pos = threads
+        .iter()
+        .find(|row| row["id"].as_i64() == Some(pick as i64))
+        .unwrap()["queue_position"]
+        .as_i64()
+        .unwrap();
+
+    let (detail_status, detail_body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
+    let pick_detail_pos = detail_body["queue_position"].as_i64().unwrap();
+
+    let (offer_status, offer_body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-offer-bootstrap-001",
+                "snoozed_thread_ids": []
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+    assert_eq!(
+        offer_body["thread_id"].as_i64().unwrap(),
+        pick as i64,
+        "{offer_body:?}"
+    );
+    let pick_offer_pos = offer_body["queue_position"].as_i64().unwrap();
+
+    let (bootstrap_status, bootstrap_body) =
+        send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(bootstrap_status, StatusCode::OK, "{bootstrap_body:?}");
+    let active = bootstrap_body["active_thread"]
+        .as_object()
+        .expect("bootstrap should report the pending offer as active_thread");
+    assert_eq!(
+        active["id"].as_i64().unwrap(),
+        pick as i64,
+        "{bootstrap_body:?}"
+    );
+    let pick_bootstrap_pos = active["queue_position"].as_i64().unwrap();
+
+    assert_eq!(
+        pick_detail_pos, pick_list_pos,
+        "detail must match queue list"
+    );
+    assert_eq!(
+        pick_offer_pos, pick_list_pos,
+        "roll offer must match queue list"
+    );
+    assert_eq!(
+        pick_bootstrap_pos, pick_list_pos,
+        "bootstrap reload must match queue list"
+    );
+    assert_ne!(
+        pick_bootstrap_pos, 20,
+        "bootstrap position must be canonical, not the stored 20"
+    );
+}
