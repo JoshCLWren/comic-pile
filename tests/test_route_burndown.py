@@ -731,10 +731,22 @@ def test_vercel_is_fully_derived_from_fragments() -> None:
             assert dest == operation["dest"]
 
 
-def test_hidden_cron_exception_is_preserved() -> None:
-    """The hidden cron release-sync route stays on Python after derivation."""
-    routes = _load_routes(VERCEL_PATH)
-    assert _resolve_destination("GET", "/api/v1/cron/release-sync", routes) == "/api/index.py"
+def test_hidden_cron_fragment_declares_native_rust() -> None:
+    """The hidden cron release-sync family declares native ingress (#5276).
+
+    The checked-in ingress is bot-owned and regenerated after the fragment
+    lands, so this pins the source fragment's declaration and the cron
+    schedule rather than a pre-regeneration destination.
+    """
+    fragment = _fragment_named("reading-plan-sync")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    cron = operations[("GET", "/api/v1/cron/release-sync")]
+    assert cron["dest"] == "/api/native_roll.rs"
+    assert cron["exclude_from_inventory"] is True
+    assert cron["owning_issue"] == 5276
     document = load_json(VERCEL_PATH)
     crons = document.get("crons")
     assert isinstance(crons, list)

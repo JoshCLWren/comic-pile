@@ -14,6 +14,7 @@ pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
+pub mod cron_auth;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -377,6 +378,21 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Per-route request deadlines used by `bound_request`. Cron drains run longer
+/// than ordinary requests. The release-sync deadline is derived from the
+/// handler's own wall-clock budget (`CRON_MAX_DURATION`) with a margin so the
+/// budget-exhaustion branch can actually return its truncated 200 report
+/// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
+fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
+    match path {
+        "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        "/api/v1/cron/release-sync" => {
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        }
+        _ => default_timeout,
+    }
+}
+
 async fn bound_request(
     State(state): State<Arc<AppState>>,
     request: Request,
@@ -385,11 +401,7 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
-        Duration::from_secs(50)
-    } else {
-        state.request_timeout
-    };
+    let timeout = request_timeout_for(request.uri().path(), state.request_timeout);
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|e| {
@@ -613,6 +625,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
+        )
+        .route(
+            "/api/v1/cron/release-sync",
+            get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
             "/api/v1/reading-plan-sync/status",
@@ -903,6 +919,28 @@ mod tests {
     use super::*;
     use axum::body::{to_bytes, Body};
     use tower::ServiceExt;
+
+    #[test]
+    fn release_sync_ingress_deadline_exceeds_handler_budget() {
+        let default = Duration::from_secs(3);
+        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        assert!(
+            bound > reading_plan_sync::CRON_MAX_DURATION,
+            "the release-sync ingress deadline must be reachable after the handler budget"
+        );
+        assert_eq!(
+            bound,
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
+            Duration::from_secs(50)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v1/roll/bootstrap", default),
+            default
+        );
+    }
 
     #[tokio::test]
     async fn timeout_cancels_work_and_returns_json() {
