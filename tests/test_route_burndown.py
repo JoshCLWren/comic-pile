@@ -226,11 +226,13 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert not any(item.get("path") == "/api/v1/threads/{thread_id}/issue-dependencies" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/roll/dismiss-pending" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/auth/login" for item in v1_ops)
+    # The taste-discoveries family was cut over to same-path native Rust
+    # (#4896 dismiss, #5178 listing) and its Python handlers were retired
+    # (#4853), so both operations are excluded from the Python inventory
+    # surface entirely; native ingress is pinned by
+    # test_taste_discoveries_fragment_routes_both_operations_to_native_rust.
     assert not any(item.get("path") == "/api/v1/taste/discoveries/{signal_id}/dismiss" for item in v1_ops)
-    discoveries = _operation(v1_ops, "GET", "/api/v1/taste/discoveries")
-    assert discoveries["burndown_status"] == "native Rust"
-    assert discoveries["runtime"] == "native-rust"
-    assert discoveries["ingress_destination"] == "/api/native_roll.rs"
+    assert not any(item.get("path") == "/api/v1/taste/discoveries" for item in v1_ops)
     assert not any(
         item.get("method") == "GET" and item.get("path") == "/api/v1/threads/{thread_id}"
         for item in v1_ops
