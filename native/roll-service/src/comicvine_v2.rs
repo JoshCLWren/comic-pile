@@ -11,7 +11,9 @@
 
 use crate::{
     auth::AuthenticatedUser,
-    comicvine_repair::{provider_issue, provider_response, ProviderFailure},
+    comicvine_repair::{
+        normalize_roster_issue_metadata, provider_issue, provider_response, ProviderFailure,
+    },
     db, ApiError, AppState,
 };
 use axum::{
@@ -20,7 +22,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 use tokio_postgres::Transaction;
 
@@ -431,6 +433,22 @@ fn map_provider_failure(error: ProviderFailure) -> ApiError {
     }
 }
 
+/// Preserve the structured `SeriesImportError` envelope used by the retired
+/// FastAPI route. The client distinguishes an upstream failure (502) from an
+/// unconfigured provider (503), an empty roster, and invalid reading progress.
+fn series_import_error(
+    status: StatusCode,
+    code: &'static str,
+    message: impl Into<String>,
+) -> ApiError {
+    let message = message.into();
+    ApiError::structured(status, json!({"code": code, "message": message}))
+}
+
+fn series_provider_failure(message: impl Into<String>) -> ApiError {
+    series_import_error(StatusCode::BAD_GATEWAY, "provider_failure", message)
+}
+
 // ---------------------------------------------------------------------------
 // Owner-scoped database helpers. Every caller passes the authenticated user
 // id as a bind parameter, never as interpolated SQL.
@@ -554,21 +572,33 @@ async fn corrections_list(
 }
 
 /// Upsert the canonical ComicVine comic identity and return its id.
+///
+/// Roster facts are written only when the identity is first created. A retry
+/// may refresh its provider URL, but must not replace richer deep metadata
+/// with a shallow roster row (the same boundary as provider issue adoption).
 async fn upsert_issue_identity(
     tx: &Transaction<'_>,
     comicvine_issue_id: i32,
+    roster_row: Option<&Value>,
 ) -> Result<i32, ApiError> {
     let external_id = comicvine_issue_id.to_string();
-    let external_url = format!("https://comicvine.gamespot.com/issue/4000-{comicvine_issue_id}/");
+    let external_url = roster_row
+        .and_then(|row| provider_string(row.get("site_detail_url")))
+        .unwrap_or_else(|| {
+            format!("https://comicvine.gamespot.com/issue/4000-{comicvine_issue_id}/")
+        });
+    let metadata = roster_row
+        .map(normalize_roster_issue_metadata)
+        .unwrap_or_else(|| json!({}));
     let row = tx
         .query_one(
             "INSERT INTO external_identities \
                 (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
-             VALUES ('comicvine', 'issue', $1, $2, '{}'::jsonb, now(), now()) \
+             VALUES ('comicvine', 'issue', $1, $2, $3::jsonb, now(), now()) \
              ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
              DO UPDATE SET external_url = EXCLUDED.external_url, updated_at = now() \
              RETURNING id",
-            &[&external_id, &external_url],
+            &[&external_id, &external_url, &metadata],
         )
         .await
         .map_err(db::query_error)?;
@@ -583,7 +613,25 @@ async fn link_confirmed(
     comicvine_issue_id: i32,
 ) -> Result<i32, ApiError> {
     owned_issue(tx, user, issue_id).await?;
-    let identity_id = upsert_issue_identity(tx, comicvine_issue_id).await?;
+    let conflict = tx
+        .query_opt(
+            "SELECT m.id FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             JOIN issues i ON i.id = m.issue_id \
+             WHERE m.issue_id = $1 AND i.thread_id IN \
+                 (SELECT id FROM threads WHERE user_id = $2) \
+               AND m.status = 'confirmed' AND e.provider = 'comicvine' \
+               AND e.external_id <> $3 LIMIT 1 FOR UPDATE OF m",
+            &[&issue_id, &user, &comicvine_issue_id.to_string()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if conflict.is_some() {
+        return Err(bad_request(
+            "issue already has a confirmed comicvine identity",
+        ));
+    }
+    let identity_id = upsert_issue_identity(tx, comicvine_issue_id, None).await?;
     tx.execute(
         "INSERT INTO issue_external_identity_mappings \
             (issue_id, external_identity_id, status, evidence_source, evidence_json, \
@@ -980,10 +1028,19 @@ pub async fn import_issue(
         .map_err(db::query_error)?
         .map(|row| row.get(0));
     if let Some(existing_issue_id) = duplicate {
-        return Err(ApiError::Conflict(format!(
+        let message = format!(
             "ComicVine issue {} already exists as issue {}",
             request.comicvine_issue_id, existing_issue_id
-        )));
+        );
+        return Err(ApiError::structured(
+            StatusCode::CONFLICT,
+            json!({
+                "code": "duplicate_physical_issue",
+                "comicvine_issue_id": request.comicvine_issue_id,
+                "existing_issue_id": existing_issue_id,
+                "message": message,
+            }),
+        ));
     }
 
     let next_position: i32 = tx
