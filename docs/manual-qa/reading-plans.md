@@ -90,7 +90,7 @@ Some currently deployed routes may still implement older Reading Plans behavior.
 
 **Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload.
 
-**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Its "open the Plan authoring UI" link opens that saved plan, not a blank new one. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462) (open; fix PR #5467).
+**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Its "open the Plan authoring UI" link opens that saved plan, not a blank new one. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462).
 
 ## MQA-LIST-012: Orphaned plans recover only through explicit preview and relink
 
