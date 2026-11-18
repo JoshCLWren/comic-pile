@@ -184,10 +184,6 @@ def test_no_new_bare_api_client_routes() -> None:
     # existing clients.
     grandfathered_bare_api = frozenset(
         {
-            "/api/health",
-            "/api/health/dependencies",
-            "/api/health/live",
-            "/api/health/warmup",
             "/api/instance/warm",
             "/api/roll/bootstrap",
             "/api/tasks/",

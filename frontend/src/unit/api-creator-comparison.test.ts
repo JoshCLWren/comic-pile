@@ -30,7 +30,7 @@ describe('creatorComparisonApi', () => {
     await expect(
       comparisonApi.getComparison(['creator:7', 'creator:12']),
     ).resolves.toEqual(RESPONSE)
-    expect(client.get).toHaveBeenCalledWith('/v1/creators/compare', {
+    expect(client.get).toHaveBeenCalledWith('/v2/creators/compare', {
       params: { keys: 'creator:7,creator:12' },
     })
   })

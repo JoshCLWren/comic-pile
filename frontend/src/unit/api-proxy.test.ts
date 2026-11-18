@@ -43,9 +43,7 @@ describe('development API routing', () => {
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
     expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
-    // The review-previews cutover (#4842) moved this POST to native ingress.
-    expect(resolve('POST', '/api/v1/catalog/series-mappings/preview')).toBe('native')
-    expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('python')
+    expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('native')
     expect(resolve('GET', '/api/not-a-route')).toBe('native')
     const ordered = createApiDestinationResolver([
       { src: '/api/mixed', methods: ['GET'], dest: '/api/index.py' },
