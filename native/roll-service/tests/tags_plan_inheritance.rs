@@ -360,12 +360,13 @@ async fn single_read_inherits_plan_tags_from_linked_authoritative_list_for_unrea
 async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
     let (state, _guard) = database().await;
     let (_user_id, token, csrf) = seed_list_linked_plan_scenario(&state, "tag-list-owner").await;
-    create_and_assign_plan_tag(&state, &token, &csrf, "QA B5 PlanTag").await;
+    let tag_id = create_and_assign_plan_tag(&state, &token, &csrf, "QA B5 PlanTag").await;
 
-    // A second owner links their own list (containing the same issue ids of
-    // their own thread) to their own plan with a private tag: none of it may
-    // surface in the first viewer's effective tags.
-    let (foreign_token, foreign_csrf) = register_and_login(&state, "tag-list-foreign").await;
+    // Case A (plan-ownership filter): a foreign plan linked to a foreign list
+    // whose entries reference the *requested* issues (1, 2, 3), carrying a
+    // viewer-visible private tag. Without `cp.user_id = viewer` these would
+    // surface as ContinuityPlan sources.
+    register_and_login(&state, "tag-list-foreign").await;
     let conn = db::checkout(&state).await.expect("foreign seed connection");
     let foreign_user_id: i32 = conn
         .query_one(
@@ -375,22 +376,14 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
         .await
         .expect("foreign user row")
         .get(0);
-    conn.execute(
-        "INSERT INTO threads (id, title, format, issues_remaining, queue_position, status, user_id)
-         VALUES (2, 'Foreign Superman', 'single', 1, 2, 'active', $1)",
-        &[&foreign_user_id],
-    )
-    .await
-    .expect("foreign thread");
-    for (id, number) in [(11, "1"), (12, "2"), (13, "3")] {
-        conn.execute(
-            "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
-             VALUES ($1, 2, $2, 'unread', NOW(), $1)",
-            &[&id, &number],
+    let viewer_id: i32 = conn
+        .query_one(
+            "SELECT id FROM users WHERE username = 'tag-list-owner'",
+            &[],
         )
         .await
-        .expect("foreign issue");
-    }
+        .expect("viewer user row")
+        .get(0);
     conn.execute(
         "INSERT INTO continuity_plans (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
          VALUES (2, $1, 'Foreign plan', 'informational', '[]'::json, '[]'::json, NOW(), NOW())",
@@ -405,14 +398,14 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
     )
     .await
     .expect("foreign list");
-    for (entry_id, issue_id) in [(21, 11), (22, 12), (23, 13)] {
+    for (entry_id, issue_id) in [(21, 1), (22, 2), (23, 3)] {
         conn.execute(
             "INSERT INTO custom_cbl_entries (id, list_id, issue_id, position, created_at, is_checkpoint)
              VALUES ($1, 2, $2, $1, NOW(), false)",
             &[&entry_id, &issue_id],
         )
         .await
-        .expect("foreign list entry");
+        .expect("foreign list entry referencing a requested issue");
     }
     conn.execute(
         "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
@@ -421,25 +414,48 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
     )
     .await
     .expect("foreign link");
-    drop(conn);
-    let (status, foreign_tag) = authed(
-        &state,
-        "POST",
-        "/api/v1/tags/",
-        &foreign_token,
-        &foreign_csrf,
-        Some(json!({"name": "Foreign Secret", "color": "blue"})),
+    // Viewer-visible private tag sitting on the foreign plan (seeded directly;
+    // the API would refuse it, the SQL ownership filter is what must hold).
+    conn.execute(
+        "INSERT INTO tags (id, name, normalized_name, scope, owner_user_id, color, created_at, updated_at)
+         VALUES (90, 'Viewer Visible', 'viewer visible', 'private', $1, '#123456', NOW(), NOW())",
+        &[&viewer_id],
     )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{foreign_tag}");
-    let foreign_tag_id = foreign_tag["tag"]["id"].as_i64().expect("tag id") as i32;
+    .await
+    .expect("viewer-visible tag on foreign plan");
+    conn.execute(
+        "INSERT INTO tag_assignments (tag_id, target_type, target_id, created_at)
+         VALUES (90, 'ContinuityPlan', 2, NOW())",
+        &[],
+    )
+    .await
+    .expect("assignment on foreign plan");
+    // Case B (list-ownership filter): the viewer's own plan 3 has no
+    // reading_plan_issues rows at all and is linked to the *foreign* list 2,
+    // which references issue 2. Without `l.user_id = cp.user_id` issue 2 would
+    // inherit plan 3's tag through the foreign list.
+    conn.execute(
+        "INSERT INTO continuity_plans (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+         VALUES (3, $1, 'Viewer plan linked to a foreign list', 'informational', '[]'::json, '[]'::json, NOW(), NOW())",
+        &[&viewer_id],
+    )
+    .await
+    .expect("viewer plan 3");
+    conn.execute(
+        "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES (3, 'custom-cbl:2', 2, NOW())",
+        &[],
+    )
+    .await
+    .expect("viewer plan linked to foreign list");
+    drop(conn);
     let (status, assigned) = authed(
         &state,
         "POST",
-        &format!("/api/v1/tags/{foreign_tag_id}/assign/"),
-        &foreign_token,
-        &foreign_csrf,
-        Some(json!({"target_type": "ContinuityPlan", "target_id": 2})),
+        &format!("/api/v1/tags/{tag_id}/assign/"),
+        &token,
+        &csrf,
+        Some(json!({"target_type": "ContinuityPlan", "target_id": 3})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{assigned}");
@@ -464,16 +480,83 @@ async fn foreign_plan_and_linked_list_never_leak_as_inheritance_source() {
             })
             .unwrap_or_default();
         assert!(
-            !names.contains(&"Foreign Secret"),
-            "foreign private tag leaked into effective tags: {entry}"
+            !names.contains(&"Viewer Visible"),
+            "viewer-visible tag on a foreign plan leaked into effective tags: {entry}"
         );
         for tag in entry["effective_tags"].as_array().expect("effective tags") {
             for source in tag["sources"].as_array().expect("sources") {
                 assert!(
-                    !(source["target_type"] == "ContinuityPlan" && source["target_id"] == 2),
-                    "foreign plan leaked as inheritance source: {entry}"
+                    !(source["target_type"] == "ContinuityPlan"
+                        && (source["target_id"] == 2 || source["target_id"] == 3)),
+                    "plan membership leaked through a foreign plan or foreign list: {entry}"
                 );
             }
         }
     }
+    // The viewer's own plan 1 must still contribute via its owned linked list.
+    let issue_two = body["issues"]
+        .as_array()
+        .expect("issues array")
+        .iter()
+        .find(|entry| entry["target_id"] == 2)
+        .expect("issue 2 entry");
+    assert!(
+        plan_source_present(issue_two, "QA B5 PlanTag"),
+        "owned plan 1 must still be a source for issue 2: {issue_two}"
+    );
+}
+
+#[tokio::test]
+async fn bulk_unassign_keeps_list_member_in_still_inherited_ids() {
+    let (state, _guard) = database().await;
+    let (_user_id, token, csrf) = seed_list_linked_plan_scenario(&state, "tag-unassign-list").await;
+    let tag_id = create_and_assign_plan_tag(&state, &token, &csrf, "QA B5 PlanTag").await;
+    // Direct assignment on the unread issue only; no Thread assignment, so no
+    // thread source can mask a missing plan source.
+    let (status, assigned) = authed(
+        &state,
+        "POST",
+        &format!("/api/v1/tags/{tag_id}/assign/"),
+        &token,
+        &csrf,
+        Some(json!({"target_type": "Issue", "target_id": 2})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{assigned}");
+
+    let (status, body) = authed(
+        &state,
+        "POST",
+        &format!("/api/v1/tags/{tag_id}/bulk-unassign/"),
+        &token,
+        &csrf,
+        Some(json!({"target_type": "Issue", "target_ids": [2]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body["affected_ids"],
+        json!([2]),
+        "direct assignment removed: {body}"
+    );
+    assert!(
+        body["still_inherited_ids"]
+            .as_array()
+            .map(|ids| ids.contains(&json!(2)))
+            .unwrap_or(false),
+        "issue 2 belongs to the plan via the linked authoritative list, so it must stay in still_inherited_ids: {body}"
+    );
+    let remaining: i64 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM tag_assignments WHERE tag_id = $1 AND target_type = 'Issue' AND target_id = 2",
+            &[&tag_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(remaining, 0, "the direct Issue assignment must be deleted");
 }
