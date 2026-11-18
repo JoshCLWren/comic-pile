@@ -109,6 +109,8 @@ const INSERT_MEMBERSHIP_SQL: &str = "INSERT INTO dependency_group_memberships \
      VALUES ($1, $2, $3, $4) RETURNING id, group_id, thread_id, issue_id, sequence_order";
 const INSERT_ISSUE_MEMBERSHIPS_SQL: &str = "INSERT INTO dependency_group_memberships (group_id, issue_id) \
      SELECT $1, issue_id FROM unnest($2::int[]) AS issue_ids(issue_id) ON CONFLICT DO NOTHING RETURNING issue_id";
+const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name) \
+     VALUES ($1, $2) RETURNING id, name, created_at";
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
@@ -880,15 +882,6 @@ pub async fn get_group_detail(
             series_title = None;
             issue_number = None;
         }
-        let membership = member_response(
-            member.id,
-            member.thread_id,
-            member.issue_id,
-            member.sequence_order,
-            &thread_titles_cache(&threads, &issue_metadata_cache(&issues, &thread_ids)),
-            &BTreeMap::new(),
-        );
-        let _ = membership;
         enriched.push(DependencyGroupDetailMemberResponse {
             membership: DependencyGroupMemberResponse {
                 id: member.id,
