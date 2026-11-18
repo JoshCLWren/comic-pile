@@ -735,6 +735,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/continuity-plans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_list"];
+        put?: never;
+        post: operations["continuity_plans_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/from-reading-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_adopt_reading_order"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/release-sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["release_sources_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/release-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["release_sources_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["release_sources_update"];
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_get"];
+        put: operations["continuity_plans_update"];
+        post?: never;
+        delete: operations["continuity_plans_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_link_dependency"];
+        delete: operations["continuity_plans_unlink_dependency"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["continuity_plans_membership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
         parameters: {
             query?: never;
@@ -744,16 +856,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Confirm Plan Projection
-         * @description Apply a projection atomically after a successful preview.
-         *
-         *     The confirm endpoint re-computes the projection and rejects the request
-         *     if any conflict is detected. A failed or cancelled projection leaves
-         *     both the plan and the reading order unchanged because all mutations are
-         *     performed in a single transaction that rolls back on any error.
-         */
-        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
+        post: operations["continuity_plans_project_to_reading_order"];
         delete?: never;
         options?: never;
         head?: never;
@@ -779,6 +882,38 @@ export interface paths {
          *     nodes are reported as conflicts before any mutation is permitted.
          */
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["release_sources_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["release_sources_list_reader"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6425,6 +6560,19 @@ export interface components {
             /** Order */
             order: number;
         };
+        ContinuityPlanListItem: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            lane_count: number;
+            name: string;
+            ordering_mode: string;
+            source_names?: unknown;
+            source_paths?: string[];
+            /** Format: int32 */
+            step_count: number;
+            updated_at: string;
+        };
         /**
          * ContinuityPlanNode
          * @description One ordered reference in a continuity plan.
@@ -6474,6 +6622,42 @@ export interface components {
             source_story_arc_ids?: string[] | null;
             /** Source Target Story Arc Id */
             source_target_story_arc_id?: string | null;
+        };
+        ContinuityPlanResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            name: string;
+            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ContinuityPlanWrite: {
+            expected_updated_at?: string | null;
+            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            name: string;
+            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
+        };
+        ContinuityReleaseSourceResponse: {
+            created_at: string;
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            plan_id: number;
+            provider: string;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            thread_id: number;
+            updated_at: string;
         };
         ContinuityRuleRequest: {
             /** Format: int32 */
@@ -9648,6 +9832,38 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
+        NativeContinuityPlanLane: {
+            id: string;
+            inferred_gate_kind?: string | null;
+            migration_contract?: unknown;
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        NativeContinuityPlanNode: {
+            /** Format: int32 */
+            checkpoint_target_ref_id?: number | null;
+            checkpoint_target_ref_ids?: number[];
+            convergence_gate?: unknown[];
+            id: string;
+            is_checkpoint?: boolean;
+            label?: string | null;
+            lane_id: string;
+            node_type: string;
+            /** Format: int32 */
+            position: number;
+            reader_optional?: boolean | null;
+            reader_role?: string | null;
+            /** Format: int32 */
+            ref_id: number;
+            source_cbl_placements?: unknown[] | null;
+            source_confidence?: string | null;
+            source_explanation?: string | null;
+            source_paths?: string[] | null;
+            source_role?: string | null;
+            source_story_arc_ids?: string[] | null;
+            source_target_story_arc_id?: string | null;
+        };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
             rated_issues_total: number;
@@ -9738,6 +9954,55 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        };
+        NativeReadingOrderProjectionConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        NativeReadingOrderProjectionEntry: {
+            /** Format: int32 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        NativeReadingOrderProjectionPreview: {
+            conflicts: components["schemas"]["NativeReadingOrderProjectionConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["NativeReadingOrderProjectionEntry"][];
+            /** Format: int32 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            /** Format: int32 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int32 */
+            total_positions: number;
+        };
+        NativeReadingOrderProjectionRequest: {
+            /** Format: int32 */
+            reading_order_id: number;
+        };
+        NativeReadingOrderProjectionResult: {
+            /** Format: int32 */
+            added_count: number;
+            /** Format: int32 */
+            kept_count: number;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            reading_order_id: number;
+            /** Format: int32 */
+            total_positions: number;
+            /** Format: int32 */
+            updated_count: number;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -11060,6 +11325,13 @@ export interface components {
             intent?: string | null;
             source: string;
         };
+        ReadingOrderAdoptRequest: {
+            lane_id?: string | null;
+            lane_name?: string | null;
+            plan_name?: string | null;
+            /** Format: int32 */
+            reading_order_id: number;
+        };
         /**
          * ReadingOrderItemResponse
          * @description Response schema for a single item within a reading order.
@@ -11201,6 +11473,85 @@ export interface components {
             /** Format: int64 */
             total_items: number;
         };
+        ReadingPlanDependencyLink: {
+            /** Format: int32 */
+            dependency_id: number;
+            explanation?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            /** Format: int32 */
+            target_issue_id: number;
+        };
+        ReadingPlanDependencyLinkRequest: {
+            explanation?: string | null;
+        };
+        ReadingPlanMemberIssue: {
+            /** Format: int32 */
+            display_position: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            label?: string | null;
+            lane_id: string;
+            occurrence_id: string;
+            reader_optional?: boolean | null;
+            reader_role?: string | null;
+            source_metadata?: unknown;
+        };
+        /** @description Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`. */
+        ReadingPlanMembershipResponse: {
+            dependencies: components["schemas"]["ReadingPlanDependencyLink"][];
+            issues: components["schemas"]["ReadingPlanMemberIssue"][];
+            placements: components["schemas"]["ReadingPlanSourcePlacementView"][];
+            /** Format: int32 */
+            plan_id: number;
+            progress: components["schemas"]["ReadingPlanProgress"];
+            sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
+        };
+        ReadingPlanProgress: {
+            /** Format: int32 */
+            read_issues: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        ReadingPlanReleaseSourceStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ReadingPlanSourcePlacementView: {
+            /** Format: int32 */
+            id: number;
+            occurrence_id: string;
+            /** Format: int32 */
+            plan_source_id: number;
+            /** Format: int32 */
+            source_position?: number | null;
+        };
+        ReadingPlanSourceSnapshot: {
+            adopted_at?: string | null;
+            content_hash?: string | null;
+            display_name?: string | null;
+            /** Format: int32 */
+            id: number;
+            raw_source_path: string;
+            recorded_at: string;
+            repository?: string | null;
+            revision_sha?: string | null;
+            source_path?: string | null;
+        };
         /** @description Result of the explicit v2 reading-session initialization write. */
         ReadingSessionCreatedResponse: {
             created: boolean;
@@ -11304,10 +11655,21 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        ReleaseSourceCreate: {
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
             exists: boolean;
             release?: null | components["schemas"]["MinimalReleaseResponse"];
+        };
+        ReleaseSourceUpdate: {
+            enabled: boolean;
         };
         /** @description Idempotent release publication payload from trusted automation. */
         ReleaseUpsertRequest: {
@@ -14147,7 +14509,160 @@ export interface operations {
             };
         };
     };
-    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+    continuity_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanListItem"][];
+                };
+            };
+        };
+    };
+    continuity_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_adopt_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderAdoptRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    release_sources_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    release_sources_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    release_sources_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -14158,26 +14673,127 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+        };
+    };
+    continuity_plans_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_link_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingPlanDependencyLinkRequest"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ReadingPlanDependencyLink"];
+                };
+            };
+        };
+    };
+    continuity_plans_unlink_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_project_to_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
                 };
             };
         };
@@ -14213,6 +14829,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_sources_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
+                };
+            };
+        };
+    };
+    release_sources_list_reader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
                 };
             };
         };

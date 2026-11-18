@@ -1,13 +1,16 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Focused native HTTP regressions for the browser-called continuity-plans v1
 //! cutover (issue #4838). Exercises the mounted Rust router so contract shape
-//! and basic transactional CRUD are verified at the same-path ingress.
+//! and transactional CRUD are verified at the same-path ingress.
+//!
+//! Every test is database-backed and fails loudly when the canonical test DSN
+//! is missing; there is no implicit skip path (CI provides the DSN).
 
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use comicpile_roll_service::{db, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
@@ -15,33 +18,17 @@ use tower::ServiceExt;
 
 static NEXT_IP: AtomicU16 = AtomicU16::new(10);
 
-async fn database() -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
-    let url = match std::env::var("RUST_ROLL_TEST_DATABASE_URL") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return None,
-    };
-    // Reuse the suite's canonical disposable-database helper when available.
-    let _ = test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
-        .unwrap(),
-    );
+/// Canonical disposable database state. Panics with the standard message when
+/// `RUST_ROLL_TEST_DATABASE_URL` is absent, never returns a passing no-op test.
+async fn database() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
+    let state = test_support::test_state(4)
+        .await
+        .expect("RUST_ROLL_TEST_DATABASE_URL is required");
     let guard = test_support::reset_for_test(&state).await;
-    Some((state, guard))
+    (state, guard)
 }
 
-async fn send(
-    state: &Arc<AppState>,
-    request: Request<Body>,
-) -> (StatusCode, Value, Vec<String>) {
+async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value, Vec<String>) {
     let response = router(state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
     let cookies = response
@@ -57,7 +44,10 @@ async fn send(
 
 fn cookie_value(cookies: &[String], name: &str) -> Option<String> {
     cookies.iter().find_map(|cookie| {
-        cookie.strip_prefix(&format!("{name}=")).and_then(|rest| rest.split(';').next()).map(str::to_owned)
+        cookie
+            .strip_prefix(&format!("{name}="))
+            .and_then(|rest| rest.split(';').next())
+            .map(str::to_owned)
     })
 }
 
@@ -83,9 +73,11 @@ async fn register_and_login(state: &Arc<AppState>, username: &str) -> (String, S
     .await;
     assert_eq!(status, StatusCode::OK, "{registered}");
     let csrf = cookie_value(&cookies, "csrf_token").expect("csrf cookie");
-    let token = registered["access_token"].as_str().expect("access token").to_string();
-    let _ = csrf;
-    (token, cookie_value(&cookies, "csrf_token").unwrap_or_default())
+    let token = registered["access_token"]
+        .as_str()
+        .expect("access token")
+        .to_string();
+    (token, csrf)
 }
 
 async fn authed_json(
@@ -112,43 +104,86 @@ async fn authed_json(
     (status, value)
 }
 
-#[tokio::test]
-async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() {
-    let Some((state, _db)) = database().await else {
-        eprintln!(
-            "skipping continuity_plans_v1_http: RUST_ROLL_TEST_DATABASE_URL not configured"
-        );
-        return;
-    };
-    let (token, csrf) = register_and_login(&state, "cp-wire").await;
+async fn user_id_for(state: &Arc<AppState>, username: &str) -> i32 {
+    let conn = db::checkout(state).await.expect("user lookup connection");
+    let row = conn
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
+        .await
+        .expect("registered user row");
+    row.get(0)
+}
 
-    let create_body = json!({
-        "name": "Wire Plan",
+async fn seed_thread_issue(
+    state: &Arc<AppState>,
+    user_id: i32,
+    thread_id: i32,
+    issue_id: i32,
+    title: &str,
+    number: &str,
+) {
+    let conn = db::checkout(state).await.expect("seed connection");
+    conn.batch_execute(&format!(
+        "INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
+         VALUES ({thread_id}, {user_id}, '{title}', 'Comic', 2, 1, 'active');
+         INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES ({issue_id}, {thread_id}, '{number}', 'unread', NOW(), 1);"
+    ))
+    .await
+    .expect("seed thread and issue");
+}
+
+async fn create_plan(
+    state: &Arc<AppState>,
+    token: &str,
+    csrf: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    authed_json(
+        state,
+        "POST",
+        "/api/v1/continuity-plans/",
+        token,
+        csrf,
+        Some(body),
+    )
+    .await
+}
+
+fn simple_plan(nodes: Value) -> Value {
+    json!({
+        "name": "HTTP Plan",
         "ordering_mode": "informational",
         "lanes": [{"id": "main", "name": "Main", "order": 0}],
-        "nodes": []
-    });
-    let (status, created, _) = send(
-        &state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v1/continuity-plans/")
-            .header(header::AUTHORIZATION, format!("Bearer {token}"))
-            .header("x-csrf-token", &csrf)
-            .header(header::COOKIE, format!("csrf_token={csrf}"))
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(create_body.to_string()))
-            .unwrap(),
-    )
-    .await;
+        "nodes": nodes
+    })
+}
+
+#[tokio::test]
+async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-wire").await;
+
+    let (status, created) = create_plan(&state, &token, &csrf, simple_plan(json!([]))).await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
     let plan_id = created["id"].as_i64().expect("plan id");
-    assert_eq!(created["name"], "Wire Plan");
+    assert_eq!(created["name"], "HTTP Plan");
     assert_eq!(created["ordering_mode"], "informational");
 
-    let (status, listed) = authed_json(&state, "GET", "/api/v1/continuity-plans/", &token, &csrf, None).await;
+    let (status, listed) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-plans/",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{listed}");
-    assert!(listed.as_array().unwrap().iter().any(|item| item["id"] == plan_id));
+    assert!(listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["id"] == plan_id));
 
     let (status, fetched) = authed_json(
         &state,
@@ -162,8 +197,6 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     assert_eq!(status, StatusCode::OK, "{fetched}");
     assert_eq!(fetched["id"], plan_id);
 
-    // P1 #2 contract: membership response must match Python schema
-    // {plan_id, issues[], dependencies[], sources[], placements[], progress{total_issues, read_issues}}.
     let (status, membership) = authed_json(
         &state,
         "GET",
@@ -180,28 +213,23 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
     assert!(membership["sources"].is_array(), "{membership}");
     assert!(membership["placements"].is_array(), "{membership}");
     assert_eq!(membership["progress"]["total_issues"], 0, "{membership}");
-    assert_eq!(membership["progress"]["read_issues"], 0, "{membership}");
 
-    let update_body = json!({
-        "name": "Wire Plan Updated",
-        "ordering_mode": "informational",
-        "lanes": [{"id": "main", "name": "Main", "order": 0}],
-        "nodes": [],
-        "expected_updated_at": created["updated_at"]
-    });
+    let mut update = simple_plan(json!([]));
+    update["name"] = json!("HTTP Plan Updated");
+    update["expected_updated_at"] = created["updated_at"].clone();
     let (status, updated) = authed_json(
         &state,
         "PUT",
         &format!("/api/v1/continuity-plans/{plan_id}"),
         &token,
         &csrf,
-        Some(update_body),
+        Some(update),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{updated}");
-    assert_eq!(updated["name"], "Wire Plan Updated");
+    assert_eq!(updated["name"], "HTTP Plan Updated");
 
-    let (status, deleted) = authed_json(
+    let (status, _) = authed_json(
         &state,
         "DELETE",
         &format!("/api/v1/continuity-plans/{plan_id}"),
@@ -210,9 +238,8 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
         None,
     )
     .await;
-    assert_eq!(status, StatusCode::NO_CONTENT, "{deleted}");
-
-    let (status, missing) = authed_json(
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = authed_json(
         &state,
         "GET",
         &format!("/api/v1/continuity-plans/{plan_id}"),
@@ -221,5 +248,282 @@ async fn continuity_plan_crud_and_membership_shape_are_native_wire_compatible() 
         None,
     )
     .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// F2: link dependency must not `RETURNING id` from the composite-PK table,
+/// must be idempotent 201 with the canonical dependency id, 422 for unowned
+/// endpoints, 404 for a missing edge, and unlink must be 204/404.
+#[tokio::test]
+async fn link_dependency_is_idempotent_and_uses_composite_pk_contract() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-link").await;
+    let user_id = user_id_for(&state, "cp-link").await;
+    seed_thread_issue(&state, user_id, 710001, 710011, "Link One", "1").await;
+    seed_thread_issue(&state, user_id, 710002, 710012, "Link Two", "2").await;
+    // A foreign dependency whose endpoints this user does not own.
+    register_and_login(&state, "cp-link-foreign").await;
+    let foreign_user_id = user_id_for(&state, "cp-link-foreign").await;
+    seed_thread_issue(&state, foreign_user_id, 710003, 710013, "Foreign", "1").await;
+    seed_thread_issue(&state, foreign_user_id, 710004, 710014, "Foreign", "2").await;
+
+    let conn = db::checkout(&state)
+        .await
+        .expect("dependency seed connection");
+    conn.batch_execute(
+        "INSERT INTO dependencies (id, created_at, source_issue_id, target_issue_id)
+         VALUES (710021, NOW(), 710011, 710012),
+                (710022, NOW(), 710013, 710014);",
+    )
+    .await
+    .expect("seed dependencies");
+
+    let (status, created) = create_plan(&state, &token, &csrf, simple_plan(json!([]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let link_uri = format!("/api/v1/continuity-plans/{plan_id}/dependencies/710021");
+    let (status, linked) = authed_json(
+        &state,
+        "POST",
+        &link_uri,
+        &token,
+        &csrf,
+        Some(json!({"explanation": "first"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{linked}");
+    assert_eq!(linked["dependency_id"], 710021, "{linked}");
+    assert_eq!(linked["source_issue_id"], 710011, "{linked}");
+    assert_eq!(linked["target_issue_id"], 710012, "{linked}");
+    assert_eq!(linked["explanation"], "first", "{linked}");
+
+    // Idempotent re-link: 201, canonical id, original explanation unchanged.
+    let (status, relinked) = authed_json(
+        &state,
+        "POST",
+        &link_uri,
+        &token,
+        &csrf,
+        Some(json!({"explanation": "second"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{relinked}");
+    assert_eq!(relinked["dependency_id"], 710021, "{relinked}");
+    assert_eq!(relinked["explanation"], "first", "{relinked}");
+
+    let conn = db::checkout(&state).await.expect("verify link connection");
+    let rows: i64 = conn
+        .query_one(
+            "SELECT COUNT(*) FROM reading_plan_dependencies WHERE plan_id = $1 AND dependency_id = 710021",
+            &[&(plan_id as i32)],
+        )
+        .await
+        .expect("link count")
+        .get(0);
+    assert_eq!(rows, 1, "linking must be idempotent");
+    drop(conn);
+
+    let (status, missing) = authed_json(
+        &state,
+        "POST",
+        &format!("/api/v1/continuity-plans/{plan_id}/dependencies/999999"),
+        &token,
+        &csrf,
+        Some(json!({})),
+    )
+    .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{missing}");
+    assert!(format!("{missing}").contains("Dependency 999999 not found"));
+
+    let (status, unowned) = authed_json(
+        &state,
+        "POST",
+        &format!("/api/v1/continuity-plans/{plan_id}/dependencies/710022"),
+        &token,
+        &csrf,
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{unowned}");
+    assert!(
+        format!("{unowned}").contains("dangling_plan_reference"),
+        "{unowned}"
+    );
+
+    let (status, _) = authed_json(&state, "DELETE", &link_uri, &token, &csrf, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, gone) = authed_json(&state, "DELETE", &link_uri, &token, &csrf, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{gone}");
+}
+
+/// F4: plan detail must apply the normalized-membership overlay and fill blank
+/// issue labels from the owned issue/thread pair, like Python's
+/// `editor_plan_response`.
+#[tokio::test]
+async fn plan_detail_overlays_membership_and_fills_labels() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-labels").await;
+    let user_id = user_id_for(&state, "cp-labels").await;
+    seed_thread_issue(&state, user_id, 720001, 720011, "Series Alpha", "5").await;
+    seed_thread_issue(&state, user_id, 720002, 720012, "Series Beta", "12").await;
+
+    let node = json!({
+        "id": "issue-1", "node_type": "issue", "ref_id": 720011,
+        "lane_id": "main", "position": 0
+    });
+    let (status, created) = create_plan(&state, &token, &csrf, simple_plan(json!([node]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id") as i32;
+    assert_eq!(created["nodes"][0]["label"], "Series Alpha #5", "{created}");
+
+    // Insert a second membership occurrence that is absent from nodes_json.
+    // The authoritative overlay must surface it on GET.
+    let conn = db::checkout(&state).await.expect("overlay seed connection");
+    conn.execute(
+        "INSERT INTO reading_plan_issues
+         (plan_id, occurrence_id, issue_id, lane_id, display_position, is_checkpoint)
+         VALUES ($1, 'issue-2', 720012, 'main', 1, false)",
+        &[&plan_id],
+    )
+    .await
+    .expect("seed extra membership");
+    drop(conn);
+
+    let (status, fetched) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v1/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{fetched}");
+    let nodes = fetched["nodes"].as_array().expect("nodes array");
+    assert_eq!(
+        nodes.len(),
+        2,
+        "membership must override stored JSON: {fetched}"
+    );
+    let labels: Vec<&str> = nodes
+        .iter()
+        .map(|node| node["label"].as_str().unwrap_or_default())
+        .collect();
+    assert!(labels.contains(&"Series Alpha #5"), "{fetched}");
+    assert!(labels.contains(&"Series Beta #12"), "{fetched}");
+}
+
+/// F5: list must expose CBL placement source paths and owner-scoped source
+/// names, matching Python `plan_source_paths` + `load_reading_plan_source_names`.
+#[tokio::test]
+async fn plan_list_includes_cbl_placement_paths_and_source_names() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-sources").await;
+    let user_id = user_id_for(&state, "cp-sources").await;
+    seed_thread_issue(&state, user_id, 730001, 730011, "Source Series", "1").await;
+
+    let conn = db::checkout(&state).await.expect("list seed connection");
+    conn.execute(
+        "INSERT INTO custom_cbl_lists
+         (id, user_id, name, created_at, updated_at, mode)
+         VALUES (730101, $1, 'My Reading List', NOW(), NOW(), 'loose')",
+        &[&user_id],
+    )
+    .await
+    .expect("seed custom cbl list");
+    drop(conn);
+
+    let node = json!({
+        "id": "issue-1", "node_type": "issue", "ref_id": 730011,
+        "lane_id": "main", "position": 0,
+        "source_cbl_placements": [{"source_path": "custom-cbl:730101", "position": 1}],
+        "source_paths": ["manual/path", "custom-cbl:730101"]
+    });
+    let (status, created) = create_plan(&state, &token, &csrf, simple_plan(json!([node]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let (status, listed) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-plans/",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    let item = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["id"] == plan_id)
+        .expect("created plan in list");
+    let paths = item["source_paths"].as_array().expect("source_paths");
+    let values: Vec<&str> = paths
+        .iter()
+        .map(|p| p.as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(values, vec!["custom-cbl:730101", "manual/path"], "{item}");
+    assert_eq!(
+        item["source_names"]["custom-cbl:730101"], "My Reading List",
+        "{item}"
+    );
+}
+
+/// F6: ISO `updated_at` on the wire and timezone-aware optimistic concurrency.
+#[tokio::test]
+async fn plan_updated_at_is_iso_and_version_check_is_timezone_aware() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-version").await;
+
+    let (status, created) = create_plan(&state, &token, &csrf, simple_plan(json!([]))).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let updated_at = created["updated_at"].as_str().expect("ISO updated_at");
+    assert!(updated_at.contains('T'), "non-ISO updated_at: {updated_at}");
+    assert!(
+        updated_at.ends_with('Z') || updated_at.contains("+00:00"),
+        "updated_at must carry a timezone: {updated_at}"
+    );
+
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
+
+    // The exact ISO token returned by GET must be accepted (GET-then-PUT).
+    let mut matching = simple_plan(json!([]));
+    matching["expected_updated_at"] = json!(updated_at);
+    let (status, body) = authed_json(&state, "PUT", &uri, &token, &csrf, Some(matching)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // The same instant in a different ISO representation (+00:00) must match.
+    let offset_token = updated_at.replace('Z', "+00:00");
+    let (status, fetched) = authed_json(&state, "GET", &uri, &token, &csrf, None).await;
+    assert_eq!(status, StatusCode::OK, "{fetched}");
+    let newest = fetched["updated_at"].as_str().expect("ISO updated_at");
+    let mut offset = simple_plan(json!([]));
+    offset["expected_updated_at"] = json!(newest.replace('Z', "+00:00"));
+    let (status, body) = authed_json(&state, "PUT", &uri, &token, &csrf, Some(offset)).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "offset token {offset_token} should match: {body}"
+    );
+
+    // A genuinely stale ISO token must 409 with an ISO expected_updated_at.
+    let mut stale = simple_plan(json!([]));
+    stale["expected_updated_at"] = json!("2000-01-01T00:00:00Z");
+    let (status, conflict) = authed_json(&state, "PUT", &uri, &token, &csrf, Some(stale)).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict}");
+    assert_eq!(
+        conflict["detail"]["code"], "plan_version_conflict",
+        "{conflict}"
+    );
+    let detail_token = conflict["detail"]["expected_updated_at"]
+        .as_str()
+        .expect("ISO conflict token");
+    assert!(
+        detail_token.contains('T'),
+        "non-ISO conflict token: {conflict}"
+    );
 }

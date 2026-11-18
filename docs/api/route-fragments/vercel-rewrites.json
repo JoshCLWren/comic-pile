@@ -6,6 +6,7 @@
     "catalog",
     "comicvine",
     "completed-threads",
+    "continuity-plans",
     "continuity-rules",
     "creators",
     "custom-cbl",
@@ -121,6 +122,81 @@
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+$",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/membership$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/reader$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/from\\-reading\\-order$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
+      "methods": [
+        "PATCH",
+        "DELETE"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -685,10 +761,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
       "methods": [
         "POST",
-        "DELETE",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

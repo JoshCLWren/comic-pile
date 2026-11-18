@@ -4088,6 +4088,47 @@
         "title": "ContinuityPlanLane",
         "type": "object"
       },
+      "ContinuityPlanListItem": {
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lane_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "source_names": {},
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "step_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ordering_mode",
+          "lane_count",
+          "step_count",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "ContinuityPlanNode": {
         "description": "One ordered reference in a continuity plan.",
         "properties": {
@@ -4303,6 +4344,144 @@
           "position"
         ],
         "title": "ContinuityPlanNode",
+        "type": "object"
+      },
+      "ContinuityPlanResponse": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/NativeContinuityPlanLane"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NativeContinuityPlanNode"
+            },
+            "type": "array"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ContinuityPlanWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/NativeContinuityPlanLane"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NativeContinuityPlanNode"
+            },
+            "type": "array"
+          },
+          "ordering_mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ordering_mode"
+        ],
+        "type": "object"
+      },
+      "ContinuityReleaseSourceResponse": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
         "type": "object"
       },
       "ContinuityRuleRequest": {
@@ -10974,6 +11153,152 @@
         ],
         "type": "object"
       },
+      "NativeContinuityPlanLane": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inferred_gate_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "migration_contract": {},
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order"
+        ],
+        "type": "object"
+      },
+      "NativeContinuityPlanNode": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_target_ref_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "checkpoint_target_ref_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "convergence_gate": {
+            "items": {},
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_cbl_placements": {
+            "items": {},
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_confidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_story_arc_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_target_story_arc_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position"
+        ],
+        "type": "object"
+      },
       "NativeCreatorSummaryCoverage": {
         "properties": {
           "rated_issues_total": {
@@ -11324,6 +11649,178 @@
           "skipped",
           "checkpoint_target_issue_ids",
           "availability"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionConflict": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionEntry": {
+        "properties": {
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionPreview": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingOrderProjectionConflict"
+            },
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingOrderProjectionEntry"
+            },
+            "type": "array"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionResult": {
+        "properties": {
+          "added_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kept_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_positions": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
         ],
         "type": "object"
       },
@@ -14970,6 +15467,37 @@
         ],
         "type": "object"
       },
+      "ReadingOrderAdoptRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "lane_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "type": "object"
+      },
       "ReadingOrderItemResponse": {
         "description": "Response schema for a single item within a reading order.",
         "properties": {
@@ -15316,6 +15844,302 @@
         ],
         "type": "object"
       },
+      "ReadingPlanDependencyLink": {
+        "properties": {
+          "dependency_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanDependencyLinkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ReadingPlanMemberIssue": {
+        "properties": {
+          "display_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_metadata": {}
+        },
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position",
+          "is_checkpoint"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanMembershipResponse": {
+        "description": "Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`.",
+        "properties": {
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanMemberIssue"
+            },
+            "type": "array"
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourcePlacementView"
+            },
+            "type": "array"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReadingPlanProgress"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "plan_id",
+          "issues",
+          "dependencies",
+          "sources",
+          "placements",
+          "progress"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanProgress": {
+        "properties": {
+          "read_issues": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanReleaseSourceStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanSourcePlacementView": {
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "plan_source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_position": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "occurrence_id",
+          "plan_source_id"
+        ],
+        "type": "object"
+      },
+      "ReadingPlanSourceSnapshot": {
+        "properties": {
+          "adopted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "raw_source_path": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
+        ],
+        "type": "object"
+      },
       "ReadingSessionCreatedResponse": {
         "description": "Result of the explicit v2 reading-session initialization write.",
         "properties": {
@@ -15642,6 +16466,29 @@
         ],
         "type": "object"
       },
+      "ReleaseSourceCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "thread_id",
+          "external_identity_id"
+        ],
+        "type": "object"
+      },
       "ReleaseSourceResponse": {
         "description": "Result of reconciling a GitHub source identity with the ledger.",
         "properties": {
@@ -15661,6 +16508,18 @@
         },
         "required": [
           "exists"
+        ],
+        "type": "object"
+      },
+      "ReleaseSourceUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
         ],
         "type": "object"
       },
@@ -21834,17 +22693,174 @@
         ]
       }
     },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+    "/api/v1/continuity-plans/": {
+      "get": {
+        "operationId": "continuity_plans_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityPlanListItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      },
       "post": {
-        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
-        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+        "operationId": "continuity_plans_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/from-reading-order": {
+      "post": {
+        "operationId": "continuity_plans_adopt_reading_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/": {
+      "post": {
+        "operationId": "release_sources_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/{source_id}": {
+      "delete": {
+        "operationId": "release_sources_delete",
         "parameters": [
           {
             "in": "path",
-            "name": "plan_id",
+            "name": "source_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      },
+      "patch": {
+        "operationId": "release_sources_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21853,7 +22869,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
               }
             }
           },
@@ -21864,21 +22880,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -21886,10 +22892,287 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Confirm Plan Projection",
         "tags": [
-          "dependencies",
-          "dependencies",
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}": {
+      "delete": {
+        "operationId": "continuity_plans_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      },
+      "get": {
+        "operationId": "continuity_plans_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      },
+      "put": {
+        "operationId": "continuity_plans_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "delete": {
+        "operationId": "continuity_plans_unlink_dependency",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dependency_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      },
+      "post": {
+        "operationId": "continuity_plans_link_dependency",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dependency_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "operationId": "continuity_plans_membership",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "operationId": "continuity_plans_project_to_reading_order",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeReadingOrderProjectionResult"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
           "reading-orders"
         ]
       }
@@ -21951,6 +23234,84 @@
           "dependencies",
           "dependencies",
           "reading-orders"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
+      "get": {
+        "operationId": "release_sources_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "operationId": "release_sources_list_reader",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
         ]
       }
     },

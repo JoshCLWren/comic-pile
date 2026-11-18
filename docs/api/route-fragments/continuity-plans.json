@@ -1,8 +1,6 @@
 {
   "family": "continuity-plans",
-  "owned_path_patterns": [
-    "^/api/v1/continuity\\-plans(?:/.*)?$"
-  ],
+  "owned_path_patterns": [],
   "defaults": {
     "runtime": "native-rust",
     "status": "target",
@@ -11,6 +9,7 @@
   "operations": [
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/",
       "dest": "/api/native_roll.rs",
@@ -25,6 +24,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/",
       "dest": "/api/native_roll.rs",
@@ -39,6 +39,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/from-reading-order",
       "dest": "/api/native_roll.rs",
@@ -53,6 +54,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/release-sources/",
       "dest": "/api/native_roll.rs",
@@ -67,6 +69,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "DELETE",
       "path": "/api/v1/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
@@ -81,6 +84,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "PATCH",
       "path": "/api/v1/continuity-plans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
@@ -95,6 +99,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "DELETE",
       "path": "/api/v1/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
@@ -109,6 +114,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
@@ -123,6 +129,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "PUT",
       "path": "/api/v1/continuity-plans/{plan_id}",
       "dest": "/api/native_roll.rs",
@@ -137,6 +144,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/membership",
       "dest": "/api/native_roll.rs",
@@ -151,6 +159,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
       "dest": "/api/native_roll.rs",
@@ -165,6 +174,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
       "dest": "/api/index.py",
@@ -178,6 +188,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
       "dest": "/api/native_roll.rs",
@@ -192,6 +203,7 @@
     },
     {
       "bucket": "v1_operations",
+      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
       "dest": "/api/native_roll.rs",

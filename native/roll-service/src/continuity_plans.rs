@@ -33,7 +33,8 @@
 //! * Uses owner-scoped SQL queries similar to other native Rust handlers
 //! * Preserves 404 messages from Python for plan/thread ownership checks
 //! * Mirrors Python 409 conflict responses with same message structure
-//! * Note: the Python continuity-graph advisory lock is not taken yet
+//! * Serializes graph mutations with the same per-user advisory lock the Python
+//!   writer uses (`pg_advisory_xact_lock(CONTINUITY_LOCK_NAMESPACE, user_id)`).
 
 #![forbid(unsafe_code)]
 
@@ -43,6 +44,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
@@ -171,6 +173,10 @@ pub struct ReleaseSourceUpdate {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+// Distinct schema name: the releases surface already owns `ReleaseSourceResponse`
+// with a different `{exists, release}` shape. Keeping the continuity shape under
+// its own name prevents a collision in the generated client contract.
+#[schema(as = ContinuityReleaseSourceResponse)]
 pub struct ReleaseSourceResponse {
     pub id: i32,
     pub plan_id: i32,
@@ -338,6 +344,54 @@ fn dangling_node(node_id: &str) -> ApiError {
 /// 409 domain-conflict envelope (`detail.code`) used by plan writers.
 fn domain_conflict(detail: serde_json::Value) -> ApiError {
     structured(StatusCode::CONFLICT, detail)
+}
+
+/// Per-user advisory-lock namespace shared with the Python continuity writer
+/// (`app/repositories/continuity_repository.py::CONTINUITY_LOCK_NAMESPACE`).
+const CONTINUITY_LOCK_NAMESPACE: i32 = 1_129_274_964;
+
+/// Serialize continuity-graph mutations for one owner.
+///
+/// Mirrors Python `lock_continuity_graph`: the transaction-scoped advisory lock
+/// is released on commit or rollback, so callers only need to take it once at
+/// the start of a write transaction.
+async fn lock_continuity_graph(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&CONTINUITY_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// Parse an optimistic-concurrency token into a timezone-aware UTC instant.
+///
+/// The frontend sends ISO-8601 tokens (`2026-08-12T00:00:00Z`); Python's
+/// Pydantic parser accepts both `Z` and explicit offsets and normalizes naive
+/// values to UTC. Compare instants, never raw text.
+fn parse_aware_utc(value: &str) -> Option<DateTime<Utc>> {
+    let value = value.trim();
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
+        return Some(parsed.with_timezone(&Utc));
+    }
+    for format in [
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%d %H:%M:%S",
+    ] {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(value, format) {
+            return Some(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+        }
+    }
+    None
+}
+
+/// Render a UTC instant in the ISO-8601 wire shape Python emits for plan
+/// timestamps (`datetime.isoformat()`), so GET-then-PUT round-trips.
+fn iso_utc(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::AutoSi, true)
 }
 
 /// Port of Python `validate_node_ownership`: every referenced issue, thread and
@@ -935,6 +989,166 @@ async fn rebuild_plan_membership(
     Ok(())
 }
 
+/// Reconstruct editor nodes the way Python `editor_nodes_for_plan` +
+/// `labeled_plan_nodes` do: normalized membership is authoritative for issue
+/// nodes, non-issue nodes survive from the stored JSON, and blank labels are
+/// filled from the owned issue/thread pair. Called by GET/create/update so the
+/// wire response never returns raw, stale `nodes_json`.
+async fn editor_nodes_for_plan(
+    tx: &Transaction<'_>,
+    plan_id: i32,
+    stored_nodes: &serde_json::Value,
+) -> Result<Vec<ContinuityPlanNode>, ApiError> {
+    let member_rows = tx
+        .query(
+            "SELECT occurrence_id, issue_id, lane_id, display_position, label, \
+             reader_role, reader_optional, is_checkpoint, source_metadata_json \
+             FROM reading_plan_issues WHERE plan_id = $1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if member_rows.is_empty() {
+        return Ok(serde_json::from_value(stored_nodes.clone()).unwrap_or_default());
+    }
+
+    let mut json_by_id: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+    let mut extra_non_issue: Vec<serde_json::Value> = Vec::new();
+    if let Some(nodes) = stored_nodes.as_array() {
+        for raw in nodes {
+            match raw.get("node_type").and_then(|value| value.as_str()) {
+                Some("issue") => {
+                    if let Some(id) = raw.get("id").and_then(|value| value.as_str()) {
+                        if !id.is_empty() {
+                            json_by_id.insert(id.to_string(), raw.clone());
+                        }
+                    }
+                }
+                Some("crossover") | Some("thread") => extra_non_issue.push(raw.clone()),
+                _ => {}
+            }
+        }
+    }
+
+    let mut nodes: Vec<ContinuityPlanNode> = Vec::new();
+    for row in &member_rows {
+        let occurrence_id: String = row.get(0);
+        let mut overlay = json_by_id
+            .get(&occurrence_id)
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(map) = overlay.as_object_mut() {
+            map.insert(
+                "id".into(),
+                serde_json::Value::String(occurrence_id.clone()),
+            );
+            map.insert(
+                "node_type".into(),
+                serde_json::Value::String("issue".into()),
+            );
+            map.insert("ref_id".into(), serde_json::json!(row.get::<_, i32>(1)));
+            map.insert("lane_id".into(), serde_json::json!(row.get::<_, String>(2)));
+            map.insert("position".into(), serde_json::json!(row.get::<_, i32>(3)));
+            map.insert(
+                "is_checkpoint".into(),
+                serde_json::json!(row.get::<_, bool>(7)),
+            );
+            if let Some(label) = row.get::<_, Option<String>>(4) {
+                map.insert("label".into(), serde_json::Value::String(label));
+            }
+            if let Some(role) = row.get::<_, Option<String>>(5) {
+                map.insert("reader_role".into(), serde_json::Value::String(role));
+            }
+            if let Some(optional) = row.get::<_, Option<bool>>(6) {
+                map.insert("reader_optional".into(), serde_json::json!(optional));
+            }
+            if let Some(metadata) = row.get::<_, Option<serde_json::Value>>(8) {
+                if let Some(metadata) = metadata.as_object() {
+                    for (key, value) in metadata {
+                        if map.get(key).is_none_or(|value| value.is_null()) {
+                            map.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+            }
+        }
+        let node = serde_json::from_value::<ContinuityPlanNode>(overlay).unwrap_or_else(|_| {
+            ContinuityPlanNode {
+                id: occurrence_id.clone(),
+                node_type: "issue".to_string(),
+                ref_id: row.get(1),
+                lane_id: row.get(2),
+                position: row.get(3),
+                label: row.get(4),
+                source_role: None,
+                source_confidence: None,
+                source_explanation: None,
+                source_paths: None,
+                source_cbl_placements: None,
+                source_story_arc_ids: None,
+                source_target_story_arc_id: None,
+                reader_role: row.get(5),
+                reader_optional: row.get(6),
+                is_checkpoint: row.get(7),
+                checkpoint_target_ref_id: None,
+                checkpoint_target_ref_ids: Vec::new(),
+                convergence_gate: Vec::new(),
+            }
+        });
+        nodes.push(node);
+    }
+    for raw in extra_non_issue {
+        if let Ok(node) = serde_json::from_value::<ContinuityPlanNode>(raw) {
+            nodes.push(node);
+        }
+    }
+    nodes.sort_by(|a, b| (a.position, &a.lane_id, &a.id).cmp(&(b.position, &b.lane_id, &b.id)));
+
+    let missing_ids: Vec<i32> = nodes
+        .iter()
+        .filter(|node| {
+            node.node_type == "issue" && node.label.as_deref().unwrap_or_default().trim().is_empty()
+        })
+        .map(|node| node.ref_id)
+        .collect();
+    if !missing_ids.is_empty() {
+        let label_rows = tx
+            .query(
+                "SELECT i.id, t.title, i.issue_number FROM issues i \
+                 JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1::int[])",
+                &[&missing_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut labels: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
+        for row in &label_rows {
+            let number = row
+                .get::<_, String>(2)
+                .trim_start_matches('#')
+                .trim()
+                .to_string();
+            let title: String = row.get(1);
+            let label = match (title.trim(), number.as_str()) {
+                (series, n) if !series.is_empty() && !n.is_empty() => format!("{series} #{n}"),
+                (series, _) if !series.is_empty() => series.to_string(),
+                (_, n) => n.to_string(),
+            };
+            labels.insert(row.get::<_, i32>(0), label);
+        }
+        for node in &mut nodes {
+            if node.node_type == "issue"
+                && node.label.as_deref().unwrap_or_default().trim().is_empty()
+            {
+                if let Some(label) = labels.get(&node.ref_id) {
+                    node.label = Some(label.clone());
+                }
+            }
+        }
+    }
+    Ok(nodes)
+}
+
 /// A persisted plan-owned rule, decoded by column name.
 struct StoredRule {
     id: i32,
@@ -1493,7 +1707,7 @@ pub async fn list_continuity_plans(
     let rows = conn
         .query(
             r#"
-            SELECT p.id, p.name, p.ordering_mode, p.lanes_json, p.nodes_json, p.created_at::text, p.updated_at::text
+            SELECT p.id, p.name, p.ordering_mode, p.lanes_json, p.nodes_json, p.updated_at
             FROM continuity_plans p
             WHERE p.user_id = $1
             ORDER BY p.updated_at DESC
@@ -1503,46 +1717,76 @@ pub async fn list_continuity_plans(
         .await
         .map_err(db::query_error)?;
 
-    let plans: Vec<ContinuityPlanListItem> = rows
-        .iter()
-        .map(|row| {
-            let lanes_json_val: serde_json::Value = row.get(3);
-            let lanes_json: Vec<serde_json::Value> =
-                serde_json::from_value(lanes_json_val).unwrap_or_default();
-            let lane_count = lanes_json.len().saturating_sub(0).max(1);
+    let mut plans = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let lanes_json_val: serde_json::Value = row.get(3);
+        let lanes_json: Vec<serde_json::Value> =
+            serde_json::from_value(lanes_json_val).unwrap_or_default();
+        let lane_count = lanes_json.len().max(1);
 
-            // Calculate step count from nodes_json
-            let nodes_json_val: serde_json::Value = row.get(4);
-            let nodes: Vec<serde_json::Value> =
-                serde_json::from_value(nodes_json_val).unwrap_or_default();
-            let step_count = nodes.len() as i32;
+        let nodes_json_val: serde_json::Value = row.get(4);
+        let nodes: Vec<serde_json::Value> =
+            serde_json::from_value(nodes_json_val).unwrap_or_default();
+        let step_count = nodes.len() as i32;
 
-            // Extract source paths from nodes
-            let mut source_paths = Vec::new();
-            for node in &nodes {
-                if let Some(paths) = node.get("source_paths").and_then(|v| v.as_array()) {
-                    for path in paths {
-                        if let Some(s) = path.as_str() {
-                            if !source_paths.contains(&s.to_string()) {
-                                source_paths.push(s.to_string());
-                            }
+        // Python `plan_source_paths`: retain CBL placement paths first, then
+        // explicit source paths, in source order and deduplicated.
+        let mut source_paths: Vec<String> = Vec::new();
+        for node in &nodes {
+            if let Some(placements) = node.get("source_cbl_placements").and_then(|v| v.as_array()) {
+                for placement in placements {
+                    if let Some(path) = placement.get("source_path").and_then(|v| v.as_str()) {
+                        if !source_paths.iter().any(|existing| existing == path) {
+                            source_paths.push(path.to_string());
                         }
                     }
                 }
             }
-
-            ContinuityPlanListItem {
-                id: row.get(0),
-                name: row.get(1),
-                ordering_mode: row.get(2),
-                lane_count: lane_count as i32,
-                step_count,
-                source_paths,
-                source_names: serde_json::json!({}),
-                updated_at: row.get(6),
+            if let Some(paths) = node.get("source_paths").and_then(|v| v.as_array()) {
+                for path in paths.iter().filter_map(|value| value.as_str()) {
+                    if !source_paths.iter().any(|existing| existing == path) {
+                        source_paths.push(path.to_string());
+                    }
+                }
             }
-        })
-        .collect();
+        }
+
+        // Python `load_reading_plan_source_names`: resolve `custom-cbl:<id>`
+        // references to names of Reading Lists owned by this user only.
+        let list_ids: Vec<i32> = source_paths
+            .iter()
+            .filter_map(|path| {
+                path.strip_prefix("custom-cbl:")
+                    .and_then(|rest| rest.parse::<i32>().ok())
+            })
+            .collect();
+        let mut source_names = serde_json::Map::new();
+        if !list_ids.is_empty() {
+            let name_rows = conn
+                .query(
+                    "SELECT id, name FROM custom_cbl_lists \
+                     WHERE user_id = $1 AND id = ANY($2::int[])",
+                    &[&user.id(), &list_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            for name_row in &name_rows {
+                let path = format!("custom-cbl:{}", name_row.get::<_, i32>(0));
+                source_names.insert(path, serde_json::json!(name_row.get::<_, String>(1)));
+            }
+        }
+
+        plans.push(ContinuityPlanListItem {
+            id: row.get(0),
+            name: row.get(1),
+            ordering_mode: row.get(2),
+            lane_count: lane_count as i32,
+            step_count,
+            source_paths,
+            source_names: serde_json::Value::Object(source_names),
+            updated_at: iso_utc(row.get::<_, DateTime<Utc>>(5)),
+        });
+    }
 
     Ok(Json(plans))
 }
@@ -1578,6 +1822,7 @@ pub async fn create_continuity_plan(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Ownership of every referenced node (issue/thread/crossover) must match
     // the Python `validate_node_ownership` guard, including the 422 envelope.
@@ -1631,7 +1876,7 @@ pub async fn create_continuity_plan(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-            RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
+            RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at
             "#,
             &[
                 &user.id(),
@@ -1644,18 +1889,16 @@ pub async fn create_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    // Extract values before commit to avoid MissingGreenlet issues
+    // Extract values before commit to avoid MissingGreenlet issues.
     let plan_id: i32 = row.get(0);
-    let plan_response = ContinuityPlanResponse {
-        id: plan_id,
-        user_id: row.get(1),
-        name: row.get(2),
-        ordering_mode: row.get(3),
-        lanes: serde_json::from_value(row.get(4)).unwrap_or_default(),
-        nodes: serde_json::from_value(row.get(5)).unwrap_or_default(),
-        created_at: row.get(6),
-        updated_at: row.get(7),
-    };
+    let (user_id, name, ordering_mode) = (
+        row.get::<_, i32>(1),
+        row.get::<_, String>(2),
+        row.get::<_, String>(3),
+    );
+    let lanes_out: serde_json::Value = row.get(4);
+    let created_at = iso_utc(row.get::<_, DateTime<Utc>>(6));
+    let updated_at = iso_utc(row.get::<_, DateTime<Utc>>(7));
 
     // Compile the plan's strict/checkpoint/convergence intent into rules and
     // canonical edges, and rebuild normalized membership, in this transaction.
@@ -1676,6 +1919,19 @@ pub async fn create_continuity_plan(
         let _ = tx.rollback().await;
         return Err(error);
     }
+
+    // Python `editor_plan_response`: membership-authoritative, labeled nodes.
+    let nodes = editor_nodes_for_plan(&tx, plan_id, &nodes_value).await?;
+    let plan_response = ContinuityPlanResponse {
+        id: plan_id,
+        user_id,
+        name,
+        ordering_mode,
+        lanes: serde_json::from_value(lanes_out).unwrap_or_default(),
+        nodes,
+        created_at,
+        updated_at,
+    };
 
     tx.commit().await.map_err(db::query_error)?;
     refresh_blocked_state(&state, user.id()).await?;
@@ -1705,11 +1961,16 @@ pub async fn get_continuity_plan(
     user: AuthenticatedUser,
     Path(plan_id): Path<i32>,
 ) -> Result<Json<ContinuityPlanResponse>, ApiError> {
-    let conn = db::checkout(&state).await?;
-    let row = conn
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    let row = tx
         .query_opt(
             r#"
-            SELECT id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
+            SELECT id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at
             FROM continuity_plans
             WHERE id = $1 AND user_id = $2
             "#,
@@ -1719,16 +1980,21 @@ pub async fn get_continuity_plan(
         .map_err(db::query_error)?
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
-    Ok(Json(ContinuityPlanResponse {
+    let stored_nodes: serde_json::Value = row.get(5);
+    let nodes = editor_nodes_for_plan(&tx, plan_id, &stored_nodes).await?;
+    let response = ContinuityPlanResponse {
         id: row.get(0),
         user_id: row.get(1),
         name: row.get(2),
         ordering_mode: row.get(3),
         lanes: serde_json::from_value(row.get(4)).unwrap_or_default(),
-        nodes: serde_json::from_value(row.get(5)).unwrap_or_default(),
-        created_at: row.get(6),
-        updated_at: row.get(7),
-    }))
+        nodes,
+        created_at: iso_utc(row.get::<_, DateTime<Utc>>(6)),
+        updated_at: iso_utc(row.get::<_, DateTime<Utc>>(7)),
+    };
+    tx.commit().await.map_err(db::query_error)?;
+
+    Ok(Json(response))
 }
 
 // ============================================================================
@@ -1765,11 +2031,12 @@ pub async fn update_continuity_plan(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Check plan ownership and get the current version and ordering mode.
     let existing = tx
         .query_opt(
-            "SELECT id, lanes_json, nodes_json, ordering_mode, updated_at::text
+            "SELECT id, lanes_json, nodes_json, ordering_mode, updated_at
              FROM continuity_plans WHERE id = $1 AND user_id = $2",
             &[&plan_id, &user.id()],
         )
@@ -1778,17 +2045,22 @@ pub async fn update_continuity_plan(
         .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
     let expected_version: Option<String> = payload.expected_updated_at.clone();
-    let current_updated_at: String = existing.get(4);
+    let current_updated_at: DateTime<Utc> = existing.get(4);
+    let current_updated_at_iso = iso_utc(current_updated_at);
     let prior_ordering_mode: String = existing.get(3);
     let prior_lanes: serde_json::Value = existing.get(1);
     let prior_nodes: serde_json::Value = existing.get(2);
 
+    // Python `guard_plan_write` compares timezone-aware UTC instants, so an
+    // ISO token such as `2026-08-12T00:00:00Z` matches the stored instant even
+    // though Postgres text differs. The 409 detail uses `isoformat()`.
     if let Some(ref expected) = expected_version {
-        if expected != &current_updated_at {
+        let matches = parse_aware_utc(expected).is_some_and(|value| value == current_updated_at);
+        if !matches {
             tx.rollback().await.map_err(db::query_error)?;
             return Err(domain_conflict(serde_json::json!({
                 "code": "plan_version_conflict",
-                "expected_updated_at": current_updated_at,
+                "expected_updated_at": current_updated_at_iso,
             })));
         }
     }
@@ -1895,24 +2167,13 @@ pub async fn update_continuity_plan(
     let row = tx
         .query_one(
             r#"
-            SELECT id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
+            SELECT id, user_id, name, ordering_mode, lanes_json, created_at, updated_at
             FROM continuity_plans WHERE id = $1
             "#,
             &[&plan_id],
         )
         .await
         .map_err(db::query_error)?;
-
-    let plan_response = ContinuityPlanResponse {
-        id: row.get(0),
-        user_id: row.get(1),
-        name: row.get(2),
-        ordering_mode: row.get(3),
-        lanes: serde_json::from_value(row.get(4)).unwrap_or_default(),
-        nodes: serde_json::from_value(row.get(5)).unwrap_or_default(),
-        created_at: row.get(6),
-        updated_at: row.get(7),
-    };
 
     if let Err(error) = compile_plan_rules(
         &tx,
@@ -1927,6 +2188,19 @@ pub async fn update_continuity_plan(
         let _ = tx.rollback().await;
         return Err(error);
     }
+
+    // Python `editor_plan_response`: membership-authoritative, labeled nodes.
+    let nodes = editor_nodes_for_plan(&tx, plan_id, &nodes_value).await?;
+    let plan_response = ContinuityPlanResponse {
+        id: row.get(0),
+        user_id: row.get(1),
+        name: row.get(2),
+        ordering_mode: row.get(3),
+        lanes: serde_json::from_value(row.get(4)).unwrap_or_default(),
+        nodes,
+        created_at: iso_utc(row.get::<_, DateTime<Utc>>(5)),
+        updated_at: iso_utc(row.get::<_, DateTime<Utc>>(6)),
+    };
 
     tx.commit().await.map_err(db::query_error)?;
     refresh_blocked_state(&state, user.id()).await?;
@@ -1963,6 +2237,7 @@ pub async fn delete_continuity_plan(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Check plan ownership
     tx.query_opt(
@@ -2062,6 +2337,7 @@ pub async fn adopt_reading_order(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Load the reading order (owned by the authenticated user).
     let order = tx
@@ -2125,7 +2401,10 @@ pub async fn adopt_reading_order(
             .map_err(db::query_error)?;
         let owned: std::collections::HashSet<i32> =
             owned_rows.iter().map(|row| row.get::<_, i32>(0)).collect();
-        if let Some(first) = items.iter().find(|item| !owned.contains(&item.get::<_, i32>(1))) {
+        if let Some(first) = items
+            .iter()
+            .find(|item| !owned.contains(&item.get::<_, i32>(1)))
+        {
             tx.rollback().await.map_err(db::query_error)?;
             let item_id: i32 = first.get(0);
             return Err(dangling_node(&format!("ro-{item_id}")));
@@ -2193,7 +2472,7 @@ pub async fn adopt_reading_order(
             r#"
             INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
             VALUES ($1, $2, 'informational', $3, $4, NOW(), NOW())
-            RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at::text, updated_at::text
+            RETURNING id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at
             "#,
             &[&user.id(), &resolved_name, &lanes_value, &nodes_value],
         )
@@ -2209,8 +2488,8 @@ pub async fn adopt_reading_order(
         ordering_mode: row.get(3),
         lanes: serde_json::from_value(row.get(4)).unwrap_or_default(),
         nodes: serde_json::from_value(row.get(5)).unwrap_or_default(),
-        created_at: row.get(6),
-        updated_at: row.get(7),
+        created_at: iso_utc(row.get::<_, DateTime<Utc>>(6)),
+        updated_at: iso_utc(row.get::<_, DateTime<Utc>>(7)),
     };
 
     Ok((StatusCode::CREATED, Json(result)))
@@ -2485,8 +2764,9 @@ pub async fn link_plan_dependency_edge(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
-    // Check plan ownership
+    // Check plan ownership (Python `Continuity plan {id} not found`).
     tx.query_opt(
         "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
         &[&plan_id, &user.id()],
@@ -2495,61 +2775,80 @@ pub async fn link_plan_dependency_edge(
     .map_err(db::query_error)?
     .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
-    // Get dependency and check ownership
+    // Resolve the canonical dependency edge before the endpoint ownership guard.
     let dep_row = tx
         .query_opt(
-            r#"
-            SELECT d.source_issue_id, d.target_issue_id
-            FROM dependencies d
-            JOIN issues si ON si.id = d.source_issue_id
-            JOIN threads st ON st.id = si.thread_id
-            JOIN issues ti ON ti.id = d.target_issue_id
-            JOIN threads tt ON tt.id = ti.thread_id
-            WHERE d.id = $1 AND st.user_id = $2 AND tt.user_id = $2
-            "#,
-            &[&dependency_id, &user.id()],
+            "SELECT source_issue_id, target_issue_id FROM dependencies WHERE id = $1",
+            &[&dependency_id],
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| not_found("Dependency not found or not owned"))?;
-
+        .ok_or_else(|| not_found(format!("Dependency {dependency_id} not found")))?;
     let source_issue_id: i32 = dep_row.get(0);
     let target_issue_id: i32 = dep_row.get(1);
 
-    // Check if already linked
-    let existing = tx
-        .query_opt(
-            "SELECT id FROM reading_plan_dependencies WHERE plan_id = $1 AND dependency_id = $2",
-            &[&plan_id, &dependency_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-
-    if existing {
-        tx.rollback().await.map_err(db::query_error)?;
-        return Err(crate::ApiError::Conflict(format!(
-            "Dependency {} is already linked to plan {}",
-            dependency_id, plan_id
-        )));
-    }
-
-    // Create the reading_plan_dependency
-    let linked_id: i32 = tx
+    // Python `require_dependency_endpoints_owned`: unowned endpoints yield a
+    // structured 422 dangling_plan_reference, never a 404.
+    let endpoints_owned: i64 = tx
         .query_one(
-            "INSERT INTO reading_plan_dependencies (plan_id, dependency_id, explanation) VALUES ($1, $2, $3) RETURNING id",
-            &[&plan_id, &dependency_id, &payload.explanation],
+            "SELECT COUNT(*) FROM issues i \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = ANY($1::int[]) AND t.user_id = $2",
+            &[&vec![source_issue_id, target_issue_id], &user.id()],
         )
         .await
         .map_err(db::query_error)?
         .get(0);
+    if endpoints_owned < 2 {
+        return Err(structured(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            serde_json::json!({
+                "code": "dangling_plan_reference",
+                "dependency_id": dependency_id,
+            }),
+        ));
+    }
+
+    // Python linking is idempotent: an existing link is returned unchanged
+    // with 201, not rejected with 409.
+    let existing = tx
+        .query_opt(
+            "SELECT explanation FROM reading_plan_dependencies \
+             WHERE plan_id = $1 AND dependency_id = $2",
+            &[&plan_id, &dependency_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if let Some(row) = existing {
+        let explanation: Option<String> = row.get(0);
+        tx.commit().await.map_err(db::query_error)?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(ReadingPlanDependencyLink {
+                dependency_id,
+                source_issue_id,
+                target_issue_id,
+                explanation,
+            }),
+        ));
+    }
+
+    // Composite PK (plan_id, dependency_id): there is no `id` column to
+    // RETURN. The response carries the canonical dependency id from the path.
+    tx.execute(
+        "INSERT INTO reading_plan_dependencies (plan_id, dependency_id, explanation) \
+         VALUES ($1, $2, $3)",
+        &[&plan_id, &dependency_id, &payload.explanation],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
 
     Ok((
         StatusCode::CREATED,
         Json(ReadingPlanDependencyLink {
-            dependency_id: linked_id,
+            dependency_id,
             source_issue_id,
             target_issue_id,
             explanation: payload.explanation,
@@ -2589,6 +2888,7 @@ pub async fn unlink_plan_dependency_edge(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Check plan ownership
     let plan_owned: Option<i32> = tx
@@ -2661,6 +2961,7 @@ pub async fn confirm_plan_projection(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Load the owned plan. `continuity_plans` is keyed by `id`; there is no
     // `plan_id` column (the #4838 review's original P1). Read ordering_mode
@@ -2970,6 +3271,7 @@ pub async fn create_release_source(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Check plan ownership
     tx.query_opt(
@@ -3300,6 +3602,7 @@ pub async fn update_release_source(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Get the release source with ownership check
     let source_row = tx
@@ -3430,6 +3733,7 @@ pub async fn delete_release_source(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_continuity_graph(&tx, user.id()).await?;
 
     // Check ownership and delete
     let deleted = tx
@@ -3541,6 +3845,47 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
 
     serde_json::Value::Object(display)
 }
+
+// ============================================================================
+// Documentation-only declarations for the same-path v1 contract.
+//
+// The mounted handlers above carry their own `#[utoipa::path]` attributes.
+// These empty shims register the identical operations in the generated native
+// OpenAPI document so the client contract keeps the migrated v1 paths and
+// schemas after the transitional Python handlers are deleted. This mirrors the
+// established `continuity_rules` documentation pattern.
+// ============================================================================
+
+#[utoipa::path(get, path = "/api/v1/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_list", responses((status = 200, body = Vec<ContinuityPlanListItem>)), security(("HTTPBearer" = [])))]
+pub fn list_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/", tag = "continuity-plans", operation_id = "continuity_plans_create", request_body = ContinuityPlanWrite, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+pub fn create_documentation() {}
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_get", params(("plan_id" = i32, Path)), responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+pub fn get_documentation() {}
+#[utoipa::path(put, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_update", params(("plan_id" = i32, Path)), request_body = ContinuityPlanWrite, responses((status = 200, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+pub fn update_documentation() {}
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/{plan_id}", tag = "continuity-plans", operation_id = "continuity_plans_delete", params(("plan_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+pub fn delete_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/from-reading-order", tag = "continuity-plans", operation_id = "continuity_plans_adopt_reading_order", request_body = ReadingOrderAdoptRequest, responses((status = 201, body = ContinuityPlanResponse)), security(("HTTPBearer" = [])))]
+pub fn adopt_reading_order_documentation() {}
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/membership", tag = "continuity-plans", operation_id = "continuity_plans_membership", params(("plan_id" = i32, Path)), responses((status = 200, body = ReadingPlanMembershipResponse)), security(("HTTPBearer" = [])))]
+pub fn membership_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_link_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), request_body = ReadingPlanDependencyLinkRequest, responses((status = 201, body = ReadingPlanDependencyLink)), security(("HTTPBearer" = [])))]
+pub fn link_dependency_documentation() {}
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}", tag = "continuity-plans", operation_id = "continuity_plans_unlink_dependency", params(("plan_id" = i32, Path), ("dependency_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+pub fn unlink_dependency_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project", tag = "reading-orders", operation_id = "continuity_plans_project_to_reading_order", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionResult)), security(("HTTPBearer" = [])))]
+pub fn project_reading_order_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/release-sources/", tag = "continuity-plans", operation_id = "release_sources_create", request_body = ReleaseSourceCreate, responses((status = 201, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
+pub fn release_source_create_documentation() {}
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/release-sources/", tag = "continuity-plans", operation_id = "release_sources_list", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReleaseSourceResponse>)), security(("HTTPBearer" = [])))]
+pub fn release_source_list_documentation() {}
+#[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/release-sources/reader", tag = "continuity-plans", operation_id = "release_sources_list_reader", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReadingPlanReleaseSourceStatus>)), security(("HTTPBearer" = [])))]
+pub fn release_source_list_reader_documentation() {}
+#[utoipa::path(patch, path = "/api/v1/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_update", params(("source_id" = i32, Path)), request_body = ReleaseSourceUpdate, responses((status = 200, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
+pub fn release_source_update_documentation() {}
+#[utoipa::path(delete, path = "/api/v1/continuity-plans/release-sources/{source_id}", tag = "continuity-plans", operation_id = "release_sources_delete", params(("source_id" = i32, Path)), responses((status = 204)), security(("HTTPBearer" = [])))]
+pub fn release_source_delete_documentation() {}
 
 #[cfg(test)]
 mod tests {
@@ -3837,5 +4182,27 @@ mod tests {
         .expect_err("a stale version must be rejected");
         assert_eq!(error.status(), StatusCode::CONFLICT);
         assert!(error.detail().contains("plan_version_conflict"));
+    }
+
+    #[tokio::test]
+    async fn continuity_graph_advisory_lock_is_taken_in_a_transaction() {
+        // Python `lock_continuity_graph` serializes plan writes with this
+        // namespace; the native writer must take the identical transaction lock.
+        assert_eq!(CONTINUITY_LOCK_NAMESPACE, 1_129_274_964);
+        let (state, _user, _guard) = plan_db_fixture().await;
+        let mut conn = db::checkout(&state).await.expect("lock connection");
+        let tx = conn
+            .build_transaction()
+            .start()
+            .await
+            .expect("lock transaction");
+        lock_continuity_graph(&tx, 4838)
+            .await
+            .expect("pg_advisory_xact_lock must execute");
+        // Advisory locks are reentrant within one session/transaction.
+        lock_continuity_graph(&tx, 4838)
+            .await
+            .expect("reentrant advisory lock");
+        tx.commit().await.expect("commit lock transaction");
     }
 }
