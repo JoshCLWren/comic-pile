@@ -4998,6 +4998,109 @@ export interface components {
             target_type: string;
         };
         /**
+         * CBLAdoptionEntryResponse
+         * @description Typed reconciliation and adoption state for one source position.
+         */
+        CBLAdoptionEntryResponse: {
+            /** Adopted */
+            adopted: boolean;
+            /**
+             * Adoption Class
+             * @enum {string}
+             */
+            adoption_class: "existing" | "missing_importable" | "ambiguous_unresolved";
+            /**
+             * Adoption Decision
+             * @enum {string}
+             */
+            adoption_decision: "included_existing" | "would_create_missing" | "awaiting_opt_in" | "excluded" | "unresolved";
+            /** Canonical Issue Id */
+            canonical_issue_id: number | null;
+            /** Cbl Entry Id */
+            cbl_entry_id: number;
+            /** Cbl Position */
+            cbl_position: number;
+            /**
+             * Collection Excluded
+             * @default false
+             */
+            collection_excluded: boolean;
+            /** Collection Exclusion Ids */
+            collection_exclusion_ids?: number[];
+            /** Collection Exclusion Reason */
+            collection_exclusion_reason?: string | null;
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string | null;
+            /** Comicvine Series Id */
+            comicvine_series_id: string | null;
+            /** Is Duplicate Identity */
+            is_duplicate_identity: boolean;
+            /** Issue Number */
+            issue_number: string;
+            /** Publication Year */
+            publication_year?: number | null;
+            /** Read At */
+            read_at: string | null;
+            /** Read Status */
+            read_status: string | null;
+            /** Resolution Status */
+            resolution_status: string;
+            /** Resolved Issue Id */
+            resolved_issue_id: number | null;
+            /** Series External Id */
+            series_external_id: string | null;
+            /** Series Group Id */
+            series_group_id: string;
+            /** Series Name */
+            series_name: string;
+            /** Series Provider */
+            series_provider: string | null;
+            /** Volume Year */
+            volume_year?: number | null;
+        };
+        /**
+         * CBLAdoptionPreviewResponse
+         * @description Complete typed, read-only CBL adoption preview contract.
+         */
+        CBLAdoptionPreviewResponse: {
+            /** Entries */
+            entries: components["schemas"]["CBLAdoptionEntryResponse"][];
+            source: components["schemas"]["CBLSourceFingerprintResponse"];
+            summary: components["schemas"]["CBLAdoptionSummaryResponse"];
+            /** Total Positions */
+            total_positions: number;
+        };
+        /**
+         * CBLAdoptionSummaryResponse
+         * @description Dry-run counts and source-position order for an adoption plan.
+         */
+        CBLAdoptionSummaryResponse: {
+            /** Awaiting Opt In Count */
+            awaiting_opt_in_count: number;
+            /** Awaiting Opt In Positions */
+            awaiting_opt_in_positions: number[];
+            /** Excluded Count */
+            excluded_count: number;
+            /** Excluded Positions */
+            excluded_positions: number[];
+            /** Final Adopted Count */
+            final_adopted_count: number;
+            /** Final Adopted Order */
+            final_adopted_order: number[];
+            /** Missing Would Create Count */
+            missing_would_create_count: number;
+            /** Missing Would Create Positions */
+            missing_would_create_positions: number[];
+            /** Reused Existing Count */
+            reused_existing_count: number;
+            /** Reused Existing Positions */
+            reused_existing_positions: number[];
+            /** Unresolved Count */
+            unresolved_count: number;
+            /** Unresolved Positions */
+            unresolved_positions: number[];
+        };
+        /**
          * CBLBreadcrumb
          * @description One step in the folder breadcrumb, from the catalog root to the folder.
          */
@@ -5144,6 +5247,22 @@ export interface components {
             position: number;
             /** Source Path */
             source_path: string;
+        };
+        /**
+         * CBLSourceFingerprintResponse
+         * @description Immutable source evidence needed to review and later accept a plan.
+         */
+        CBLSourceFingerprintResponse: {
+            /** Content Hash */
+            content_hash: string;
+            /** Revision Sha */
+            revision_sha: string;
+            /** Source List Id */
+            source_list_id: number;
+            /** Source Path */
+            source_path: string;
+            /** Source Repository */
+            source_repository: string;
         };
         /**
          * CBLSourceFolder

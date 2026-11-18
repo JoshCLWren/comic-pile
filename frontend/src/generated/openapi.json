@@ -1493,6 +1493,336 @@
         ],
         "type": "object"
       },
+      "CBLAdoptionEntryResponse": {
+        "description": "Typed reconciliation and adoption state for one source position.",
+        "properties": {
+          "adopted": {
+            "title": "Adopted",
+            "type": "boolean"
+          },
+          "adoption_class": {
+            "enum": [
+              "existing",
+              "missing_importable",
+              "ambiguous_unresolved"
+            ],
+            "title": "Adoption Class",
+            "type": "string"
+          },
+          "adoption_decision": {
+            "enum": [
+              "included_existing",
+              "would_create_missing",
+              "awaiting_opt_in",
+              "excluded",
+              "unresolved"
+            ],
+            "title": "Adoption Decision",
+            "type": "string"
+          },
+          "canonical_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Issue Id"
+          },
+          "cbl_entry_id": {
+            "title": "Cbl Entry Id",
+            "type": "integer"
+          },
+          "cbl_position": {
+            "title": "Cbl Position",
+            "type": "integer"
+          },
+          "collection_excluded": {
+            "default": false,
+            "title": "Collection Excluded",
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Exclusion Ids",
+            "type": "array"
+          },
+          "collection_exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Exclusion Reason"
+          },
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_series_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comicvine Series Id"
+          },
+          "is_duplicate_identity": {
+            "title": "Is Duplicate Identity",
+            "type": "boolean"
+          },
+          "issue_number": {
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Year"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "read_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Status"
+          },
+          "resolution_status": {
+            "title": "Resolution Status",
+            "type": "string"
+          },
+          "resolved_issue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Issue Id"
+          },
+          "series_external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series External Id"
+          },
+          "series_group_id": {
+            "title": "Series Group Id",
+            "type": "string"
+          },
+          "series_name": {
+            "title": "Series Name",
+            "type": "string"
+          },
+          "series_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Provider"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Year"
+          }
+        },
+        "required": [
+          "cbl_position",
+          "cbl_entry_id",
+          "series_name",
+          "issue_number",
+          "series_group_id",
+          "adoption_class",
+          "adoption_decision",
+          "adopted",
+          "comicvine_issue_id",
+          "comicvine_series_id",
+          "series_provider",
+          "series_external_id",
+          "resolved_issue_id",
+          "canonical_issue_id",
+          "read_status",
+          "read_at",
+          "resolution_status",
+          "is_duplicate_identity"
+        ],
+        "title": "CBLAdoptionEntryResponse",
+        "type": "object"
+      },
+      "CBLAdoptionPreviewResponse": {
+        "description": "Complete typed, read-only CBL adoption preview contract.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CBLAdoptionEntryResponse"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CBLSourceFingerprintResponse"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CBLAdoptionSummaryResponse"
+          },
+          "total_positions": {
+            "title": "Total Positions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "total_positions",
+          "entries",
+          "summary"
+        ],
+        "title": "CBLAdoptionPreviewResponse",
+        "type": "object"
+      },
+      "CBLAdoptionSummaryResponse": {
+        "description": "Dry-run counts and source-position order for an adoption plan.",
+        "properties": {
+          "awaiting_opt_in_count": {
+            "title": "Awaiting Opt In Count",
+            "type": "integer"
+          },
+          "awaiting_opt_in_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Awaiting Opt In Positions",
+            "type": "array"
+          },
+          "excluded_count": {
+            "title": "Excluded Count",
+            "type": "integer"
+          },
+          "excluded_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Positions",
+            "type": "array"
+          },
+          "final_adopted_count": {
+            "title": "Final Adopted Count",
+            "type": "integer"
+          },
+          "final_adopted_order": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Final Adopted Order",
+            "type": "array"
+          },
+          "missing_would_create_count": {
+            "title": "Missing Would Create Count",
+            "type": "integer"
+          },
+          "missing_would_create_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Missing Would Create Positions",
+            "type": "array"
+          },
+          "reused_existing_count": {
+            "title": "Reused Existing Count",
+            "type": "integer"
+          },
+          "reused_existing_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Reused Existing Positions",
+            "type": "array"
+          },
+          "unresolved_count": {
+            "title": "Unresolved Count",
+            "type": "integer"
+          },
+          "unresolved_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unresolved Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reused_existing_count",
+          "missing_would_create_count",
+          "excluded_count",
+          "unresolved_count",
+          "awaiting_opt_in_count",
+          "final_adopted_count",
+          "final_adopted_order",
+          "reused_existing_positions",
+          "missing_would_create_positions",
+          "excluded_positions",
+          "unresolved_positions",
+          "awaiting_opt_in_positions"
+        ],
+        "title": "CBLAdoptionSummaryResponse",
+        "type": "object"
+      },
       "CBLBreadcrumb": {
         "description": "One step in the folder breadcrumb, from the catalog root to the folder.",
         "properties": {
@@ -1789,6 +2119,40 @@
           "position"
         ],
         "title": "CBLPlacement",
+        "type": "object"
+      },
+      "CBLSourceFingerprintResponse": {
+        "description": "Immutable source evidence needed to review and later accept a plan.",
+        "properties": {
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "revision_sha": {
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "source_list_id": {
+            "title": "Source List Id",
+            "type": "integer"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_repository": {
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_list_id",
+          "source_repository",
+          "source_path",
+          "content_hash",
+          "revision_sha"
+        ],
+        "title": "CBLSourceFingerprintResponse",
         "type": "object"
       },
       "CBLSourceFolder": {
