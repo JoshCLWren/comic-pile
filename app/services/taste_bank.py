@@ -35,10 +35,6 @@ from app.services.prompt_eligibility import evaluate_prompt_eligibility
 # Upper bound on discoveries returned at once; Roll shows one at a time.
 MAX_ACTIVE_DISCOVERIES = 3
 
-# A dismissal suppresses re-prompting for this long. It is not a verdict.
-DISMISSAL_SUPPRESSION_DAYS = 14
-DISMISSAL_SUPPRESSION = timedelta(days=DISMISSAL_SUPPRESSION_DAYS)
-
 
 def _is_creator_role(signal: TasteSignal) -> bool:
     """Return whether a creator signal carries a specific role segment.
