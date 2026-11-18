@@ -2290,6 +2290,267 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_group_persists_timestamp_and_keeps_duplicate_conflict() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "INSERT INTO users (id, username) VALUES (7, 'reader-7')",
+                &[],
+            )
+            .await
+            .expect("seed user");
+        drop(connection);
+
+        let (status, Json(created)) = create_group(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Json(DependencyGroupCreateRequest {
+                name: "  Event  ".into(),
+            }),
+        )
+        .await
+        .expect("create group against the canonical schema");
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(created.name, "Event");
+        assert!(created.created_at.ends_with('Z'));
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verification connection");
+        let persisted: DateTime<Utc> = connection
+            .query_one(
+                "SELECT created_at FROM dependency_groups WHERE id = $1",
+                &[&created.id],
+            )
+            .await
+            .expect("persisted group timestamp")
+            .get(0);
+        assert_eq!(created.created_at, format_python_datetime(persisted));
+        drop(connection);
+
+        let duplicate = create_group(
+            State(state),
+            AuthenticatedUser::for_test(7),
+            Json(DependencyGroupCreateRequest {
+                name: "Event".into(),
+            }),
+        )
+        .await
+        .expect_err("normalized duplicate name must conflict");
+        assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+        assert_eq!(duplicate.detail(), "A group with this name already exists");
+    }
+
+    #[tokio::test]
+    async fn detail_preserves_wire_datetimes_format_and_owned_linked_plans() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        for user_id in [7_i32, 8_i32] {
+            connection
+                .execute(
+                    "INSERT INTO users (id, username) VALUES ($1, $2)",
+                    &[&user_id, &format!("reader-{user_id}")],
+                )
+                .await
+                .expect("seed user");
+        }
+        let whole = Utc.with_ymd_and_hms(2026, 11, 17, 12, 34, 56).unwrap();
+        let micros = whole.with_nanosecond(123_456_000).unwrap();
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                 queue_position, is_blocked, created_at, last_activity_at) \
+                 VALUES (11, 7, 'Legacy Series', 'Comics', 0, 'active', 1, false, $1, $2)",
+                &[&micros, &whole],
+            )
+            .await
+            .expect("seed legacy thread");
+        connection
+            .execute(
+                "INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at) \
+                 VALUES (21, 11, '1', 1, 'read', $1, $2)",
+                &[&micros, &whole],
+            )
+            .await
+            .expect("seed issue");
+        connection
+            .execute(
+                "INSERT INTO dependency_groups (id, user_id, name, created_at) \
+                 VALUES (101, 7, 'Event', $1)",
+                &[&whole],
+            )
+            .await
+            .expect("seed group");
+        connection
+            .execute(
+                "INSERT INTO dependency_group_memberships (id, group_id, issue_id) \
+                 VALUES (201, 101, 21)",
+                &[],
+            )
+            .await
+            .expect("seed membership");
+        for (plan_id, user_id, name, group_id) in [
+            (301_i32, 7_i32, "Matching", 101_i32),
+            (302, 7, "Unrelated", 999),
+            (303, 8, "Foreign", 101),
+        ] {
+            let nodes = serde_json::json!([{
+                "id": format!("crossover-{group_id}"),
+                "node_type": "crossover",
+                "ref_id": group_id,
+            }]);
+            connection
+                .execute(
+                    "INSERT INTO continuity_plans \
+                     (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at) \
+                     VALUES ($1, $2, $3, 'informational', $4, '[]', $5, $5)",
+                    &[&plan_id, &user_id, &name, &nodes, &whole],
+                )
+                .await
+                .expect("seed continuity plan");
+        }
+        drop(connection);
+
+        let Json(detail) = get_group_detail(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Path(101),
+        )
+        .await
+        .expect("load enriched detail");
+        assert_eq!(
+            detail.linked_plans,
+            vec![DependencyGroupSummary {
+                id: 301,
+                name: "Matching".into(),
+            }]
+        );
+        let member = detail.memberships.first().expect("one enriched member");
+        let thread = member.thread.as_ref().expect("thread projection");
+        assert_eq!(thread.format, "Comics");
+        assert_eq!(thread.created_at, "2026-11-17T12:34:56.123456Z");
+        assert_eq!(thread.last_activity_at.as_deref(), Some("2026-11-17T12:34:56Z"));
+        let issue = member.issue.as_ref().expect("issue projection");
+        assert_eq!(issue.created_at, "2026-11-17T12:34:56Z");
+        assert_eq!(issue.read_at.as_deref(), Some("2026-11-17T12:34:56.123456Z"));
+
+        let Json(plans) = list_crossover_plans(
+            State(state),
+            AuthenticatedUser::for_test(7),
+            Path(101),
+        )
+        .await
+        .expect("list linked plans");
+        assert_eq!(plans, detail.linked_plans);
+    }
+
+    #[tokio::test]
+    async fn set_group_order_executes_one_set_based_update_and_clears_omissions() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "INSERT INTO users (id, username) VALUES (7, 'reader-7')",
+                &[],
+            )
+            .await
+            .expect("seed user");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                 queue_position, is_blocked) VALUES (11, 7, 'Series', 'Comic', 3, 'active', 1, false)",
+                &[],
+            )
+            .await
+            .expect("seed thread");
+        for (issue_id, position) in [(21_i32, 1_i32), (22, 2), (23, 3)] {
+            connection
+                .execute(
+                    "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) \
+                     VALUES ($1, 11, $2, $2, 'unread', NOW())",
+                    &[&issue_id, &position],
+                )
+                .await
+                .expect("seed issue");
+        }
+        connection
+            .execute(
+                "INSERT INTO dependency_groups (id, user_id, name, created_at) \
+                 VALUES (101, 7, 'Event', NOW())",
+                &[],
+            )
+            .await
+            .expect("seed group");
+        for (member_id, issue_id, sequence_order) in
+            [(201_i32, 21_i32, 1_i32), (202, 22, 2), (203, 23, 3)]
+        {
+            connection
+                .execute(
+                    "INSERT INTO dependency_group_memberships \
+                     (id, group_id, issue_id, sequence_order) VALUES ($1, 101, $2, $3)",
+                    &[&member_id, &issue_id, &sequence_order],
+                )
+                .await
+                .expect("seed membership");
+        }
+        drop(connection);
+
+        let request = DependencyGroupOrderUpdateRequest {
+            items: vec![
+                DependencyGroupOrderItem {
+                    issue_id: 23,
+                    sequence_order: 1,
+                },
+                DependencyGroupOrderItem {
+                    issue_id: 21,
+                    sequence_order: 2,
+                },
+            ],
+        };
+        let (status, Json(response)) = set_group_order(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Path(101),
+            Json(request),
+        )
+        .await
+        .expect("replace crossover order");
+        assert_eq!(status, StatusCode::OK);
+        let response_orders: BTreeMap<i32, Option<i32>> = response
+            .memberships
+            .iter()
+            .map(|member| (member.issue_id.expect("issue member"), member.sequence_order))
+            .collect();
+        assert_eq!(
+            response_orders,
+            BTreeMap::from([(21, Some(2)), (22, None), (23, Some(1))])
+        );
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verification connection");
+        let persisted: BTreeMap<i32, Option<i32>> = connection
+            .query(
+                "SELECT issue_id, sequence_order FROM dependency_group_memberships \
+                 WHERE group_id = 101",
+                &[],
+            )
+            .await
+            .expect("persisted crossover order")
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        assert_eq!(persisted, response_orders);
+    }
+
+    #[tokio::test]
     async fn remove_member_deletes_only_the_requested_owned_member() {
         let _guard = DB_LOCK.lock().await;
         let state = test_state().await;
