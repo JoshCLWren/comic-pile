@@ -284,11 +284,12 @@ def test_adversarial_fixture_has_dangling_rule_not_allowlisted() -> None:
 def test_rehearsal_fails_closed_on_data_dependent_migration_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A data-dependent migration failure aborts the rehearsal and stops later steps.
+    """A data-dependent migration failure on the re-upgrade aborts and stops later steps.
 
     Simulates the #3359 replay failure: the first upgrade succeeds on an empty
-    database, the adversarial fixture loads, but the re-upgrade step aborts on
-    the dangling ContinuityRule. Later steps must never run after the failure.
+    database, the downgrade runs, then the re-upgrade step aborts on the
+    dangling ContinuityRule loaded by the adversarial fixture. The later
+    upgrade step must never run after the failure.
     """
     attempted: list[str] = []
     upgrade_count = 0
@@ -327,9 +328,13 @@ def test_rehearsal_fails_closed_on_data_dependent_migration_failure(
             base_revision=BASE_REVISION,
         )
 
-    # fixture_applier=None means no engine is created; the failing step is the
-    # first upgrade_head, so no later step runs.
-    assert attempted == [("upgrade_head", "head")]
+    # First upgrade and downgrade ran; the failing re-upgrade appended its
+    # attempt before raising, so all three steps were attempted.
+    assert attempted == [
+        ("upgrade_head", "head"),
+        ("downgrade_base", BASE_REVISION),
+        ("upgrade_head", "head"),
+    ]
 
 
 def test_rehearsal_records_step_durations(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -338,10 +343,18 @@ def test_rehearsal_records_step_durations(monkeypatch: pytest.MonkeyPatch) -> No
     def _noop(config: object, revision: str) -> None:
         return None
 
+    class _FakeScriptDirectory:
+        @classmethod
+        def from_config(cls, config: object) -> "_FakeScriptDirectory":
+            return cls()
+
+        def get_current_head(self) -> str:
+            return "head"
+
     monkeypatch.setattr(rehearsal_module.command, "upgrade", _noop)
     monkeypatch.setattr(rehearsal_module.command, "downgrade", _noop)
     monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: None)
-    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", type("_SD", (), {"get_current_head": lambda self: "head"})())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
 
     result = run_migration_rehearsal(
         "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
@@ -350,6 +363,11 @@ def test_rehearsal_records_step_durations(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     assert result.final_revision == "head"
+    assert tuple(step.step for step in result.steps) == (
+        "upgrade_head",
+        "downgrade_base",
+        "upgrade_head",
+    )
     for step in result.steps:
         assert step.error is None
         assert step.duration_ms >= 0
