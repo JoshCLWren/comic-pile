@@ -286,6 +286,7 @@ pub struct RelatedIssue {
     name: Option<String>,
     cover_date: Option<String>,
     comicvine_url: Option<String>,
+    image_url: Option<String>,
     comicpile_matches: Vec<ComicPileMatch>,
 }
 
@@ -529,6 +530,7 @@ fn response(
                         .external_url
                         .clone()
                         .or_else(|| as_string(&item.metadata["site_detail_url"])),
+                    image_url: image(&item.metadata),
                     comicpile_matches: item.comicpile_matches.clone(),
                 }
             })

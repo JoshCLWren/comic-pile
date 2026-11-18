@@ -270,7 +270,8 @@ describe('ComicVineIssueCard', () => {
         related_issues: [
           {
             comicvine_issue_id: '301', series_name: 'Batman', issue_number: '126',
-            name: null, cover_date: null, comicvine_url: null, comicpile_matches: [],
+            name: null, cover_date: null, comicvine_url: null,
+            image_url: 'https://images.example/related-301.jpg', comicpile_matches: [],
           },
         ],
       }],

@@ -31,6 +31,8 @@ export interface ComicVineRelatedIssue {
   name: string | null
   cover_date: string | null
   comicvine_url: string | null
+  /** This related issue's own provider CDN art; never the active Roll cover. */
+  image_url?: string | null
   comicpile_matches: ComicVineComicPileMatch[]
 }
 

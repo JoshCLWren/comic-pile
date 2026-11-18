@@ -4,6 +4,7 @@ import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 import { CreatorName } from './CreatorName'
@@ -47,6 +48,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
     comicvineIssueId: string,
     seriesName: string | null,
     issueNumber: string | null,
+    imageUrl: string | null,
     relatedIssues: ComicVineRelatedIssue[],
   ) => {
     const missingIndex = relatedIssues.findIndex(

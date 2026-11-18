@@ -491,6 +491,14 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           return (
                             <div key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-black/15 border border-white/5">
                               <div className="flex gap-2 justify-between items-start">
+                                {state === 'missing' && (
+                                  <ComicIssueCover
+                                    coverImageUrl={issue.image_url ?? null}
+                                    threadTitle={issue.series_name ?? 'ComicVine issue'}
+                                    issueNumber={issue.issue_number ?? '?'}
+                                    variant="compact"
+                                  />
+                                )}
                                 <div className="flex-1 min-w-0">
                                   <span className="text-[11px] font-bold text-stone-300 truncate block">{identity.primary}</span>
                                   {identity.secondary && (
@@ -507,7 +515,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                   {state === 'missing' && (
                                     <button
                                       type="button"
-                                      onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, null)}
+                                      onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, issue.image_url ?? null)}
                                       className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
