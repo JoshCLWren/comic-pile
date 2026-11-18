@@ -71,6 +71,7 @@ function mockState(
     setRolledResult: noop,
     setSelectedThreadId: noop,
     setIsOverrideOpen: noop,
+    setIsDirectIssueOpen: noop,
     setOverrideThreadId: noop,
     setOverrideErrorMessage: noop,
     setSnoozedExpanded: noop,

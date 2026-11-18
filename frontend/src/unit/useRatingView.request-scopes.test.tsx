@@ -81,6 +81,7 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     setRolledResult: vi.fn(),
     setSelectedThreadId: vi.fn(),
     setIsOverrideOpen: vi.fn(),
+    setIsDirectIssueOpen: vi.fn(),
     setOverrideThreadId: vi.fn(),
     setOverrideErrorMessage: vi.fn(),
     setSnoozedExpanded: vi.fn(),

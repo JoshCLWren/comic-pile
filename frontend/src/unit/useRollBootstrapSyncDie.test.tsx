@@ -171,6 +171,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
       setRolledResult: setRolled,
       setSelectedThreadId: vi.fn(),
       setIsOverrideOpen: vi.fn(),
+      setIsDirectIssueOpen: vi.fn(),
       setOverrideThreadId: vi.fn(),
       setOverrideErrorMessage: vi.fn(),
       setSnoozedExpanded: vi.fn(),
