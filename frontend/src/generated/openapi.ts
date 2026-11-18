@@ -2700,103 +2700,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Roll Recommendation Explanation
-         * @description Return human-readable explanations for a historical roll event.
-         *
-         *     Derives explanations solely from the recommendation context persisted at
-         *     roll decision time, never recomputing scores from current mutable state.
-         *     Unknown or absent context degrades gracefully to an empty explanation list.
-         *
-         *     Args:
-         *         event_id: Identifier of the roll event to explain.
-         *         current_user: Authenticated owner of the session that generated the event.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RecommendationExplanationResponse carrying the event identifier and
-         *         ordered list of human-readable explanation factors.
-         *
-         *     Raises:
-         *         HTTPException 404: When the event does not exist or does not belong
-         *             to the current user's session.
-         *         HTTPException 422: When the event type is not ``"roll"``.
-         */
-        get: operations["get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Override Roll
-         * @description Manually select a thread.
-         *
-         *     Args:
-         *         request: Override request containing thread_id.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         RollResponse with selected thread.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        post: operations["override_roll_api_v1_roll_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/switch-prerequisite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Switch Roll Prerequisite
-         * @description Replace a blocked pending roll with one still-readable prerequisite.
-         *
-         *     Args:
-         *         request: Selected prerequisite issue from the current recovery guidance.
-         *         current_user: Authenticated owner of the pending Roll.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         The durable active Roll target after accepting the prerequisite.
-         */
-        post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/": {
         parameters: {
             query?: never;
@@ -9022,23 +8925,6 @@ export interface components {
             type: string;
         };
         /**
-         * ExplainableFactorResponse
-         * @description One human-readable explanation element returned by the API.
-         *
-         *     Attributes:
-         *         code: Stable machine-readable code identifying the factor family.
-         *         label: Short user-facing description.
-         *         detail: Optional extended context or sub-note.
-         */
-        ExplainableFactorResponse: {
-            /** Code */
-            code: string;
-            /** Detail */
-            detail?: string | null;
-            /** Label */
-            label: string;
-        };
-        /**
          * ExplicitReaderOrderMigrationContract
          * @description Server-owned proof that a plan replaced classified reader-order edges.
          */
@@ -10201,14 +10087,6 @@ export interface components {
             thread_title: string;
             /** Volume Id */
             volume_id: string;
-        };
-        /**
-         * OverrideRequest
-         * @description Schema for manual thread override.
-         */
-        OverrideRequest: {
-            /** Thread Id */
-            thread_id: number;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         PasswordResetResponse: {
@@ -11567,22 +11445,6 @@ export interface components {
             start_die: number;
             started_at: string;
         };
-        /**
-         * RecommendationExplanationResponse
-         * @description Aggregate recommendation explanation for a single roll event.
-         *
-         *     Attributes:
-         *         event_id: The roll event whose recommendation context was explained.
-         *         factors: Ordered list of human-readable explanation elements derived
-         *             from the persisted decision-time context. Up to ``MAX_EXPLANATIONS``
-         *             factors are returned, ordered deterministically by factor family.
-         */
-        RecommendationExplanationResponse: {
-            /** Event Id */
-            event_id: number;
-            /** Factors */
-            factors: components["schemas"]["ExplainableFactorResponse"][];
-        };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
             /** Format: int32 */
@@ -11837,37 +11699,6 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
-        };
-        /**
-         * RollPrerequisiteSwitchRequest
-         * @description One recovery recommendation selected from the current Roll guidance.
-         */
-        RollPrerequisiteSwitchRequest: {
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @constant
-             */
-            node_type: "issue";
-        };
-        /**
-         * RollPrerequisiteSwitchResponse
-         * @description Durable active-target state after accepting a recovery recommendation.
-         */
-        RollPrerequisiteSwitchResponse: {
-            /** Changed */
-            changed: boolean;
-            /** Original Thread Id */
-            original_thread_id: number;
-            /** Target Issue Id */
-            target_issue_id: number;
-            /** Target Issue Number */
-            target_issue_number: string;
-            /** Target Thread Id */
-            target_thread_id: number;
-            /** Target Thread Title */
-            target_thread_title: string;
         };
         /**
          * RollResponse
@@ -17761,103 +17592,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                event_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationExplanationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    override_roll_api_v1_roll_override_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OverrideRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };

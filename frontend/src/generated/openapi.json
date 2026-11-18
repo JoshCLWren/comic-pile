@@ -8908,36 +8908,6 @@
         "title": "EventDetail",
         "type": "object"
       },
-      "ExplainableFactorResponse": {
-        "description": "One human-readable explanation element returned by the API.\n\nAttributes:\n    code: Stable machine-readable code identifying the factor family.\n    label: Short user-facing description.\n    detail: Optional extended context or sub-note.",
-        "properties": {
-          "code": {
-            "title": "Code",
-            "type": "string"
-          },
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detail"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "label"
-        ],
-        "title": "ExplainableFactorResponse",
-        "type": "object"
-      },
       "ExplicitReaderOrderMigrationContract": {
         "description": "Server-owned proof that a plan replaced classified reader-order edges.",
         "properties": {
@@ -12358,20 +12328,6 @@
           "volume_id"
         ],
         "title": "OverlapVolumeCandidate",
-        "type": "object"
-      },
-      "OverrideRequest": {
-        "description": "Schema for manual thread override.",
-        "properties": {
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id"
-        ],
-        "title": "OverrideRequest",
         "type": "object"
       },
       "PasswordResetResponse": {
@@ -16185,28 +16141,6 @@
         ],
         "type": "object"
       },
-      "RecommendationExplanationResponse": {
-        "description": "Aggregate recommendation explanation for a single roll event.\n\nAttributes:\n    event_id: The roll event whose recommendation context was explained.\n    factors: Ordered list of human-readable explanation elements derived\n        from the persisted decision-time context. Up to ``MAX_EXPLANATIONS``\n        factors are returned, ordered deterministically by factor family.",
-        "properties": {
-          "event_id": {
-            "title": "Event Id",
-            "type": "integer"
-          },
-          "factors": {
-            "items": {
-              "$ref": "#/components/schemas/ExplainableFactorResponse"
-            },
-            "title": "Factors",
-            "type": "array"
-          }
-        },
-        "required": [
-          "event_id",
-          "factors"
-        ],
-        "title": "RecommendationExplanationResponse",
-        "type": "object"
-      },
       "RecoveryCandidate": {
         "properties": {
           "added_steps": {
@@ -16939,66 +16873,6 @@
           "offset",
           "snoozed_count"
         ],
-        "type": "object"
-      },
-      "RollPrerequisiteSwitchRequest": {
-        "additionalProperties": false,
-        "description": "One recovery recommendation selected from the current Roll guidance.",
-        "properties": {
-          "node_id": {
-            "title": "Node Id",
-            "type": "integer"
-          },
-          "node_type": {
-            "const": "issue",
-            "title": "Node Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "node_type",
-          "node_id"
-        ],
-        "title": "RollPrerequisiteSwitchRequest",
-        "type": "object"
-      },
-      "RollPrerequisiteSwitchResponse": {
-        "description": "Durable active-target state after accepting a recovery recommendation.",
-        "properties": {
-          "changed": {
-            "title": "Changed",
-            "type": "boolean"
-          },
-          "original_thread_id": {
-            "title": "Original Thread Id",
-            "type": "integer"
-          },
-          "target_issue_id": {
-            "title": "Target Issue Id",
-            "type": "integer"
-          },
-          "target_issue_number": {
-            "title": "Target Issue Number",
-            "type": "string"
-          },
-          "target_thread_id": {
-            "title": "Target Thread Id",
-            "type": "integer"
-          },
-          "target_thread_title": {
-            "title": "Target Thread Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "original_thread_id",
-          "target_thread_id",
-          "target_thread_title",
-          "target_issue_id",
-          "target_issue_number",
-          "changed"
-        ],
-        "title": "RollPrerequisiteSwitchResponse",
         "type": "object"
       },
       "RollResponse": {
@@ -27787,152 +27661,6 @@
           }
         ],
         "tags": [
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
-      "get": {
-        "description": "Return human-readable explanations for a historical roll event.\n\nDerives explanations solely from the recommendation context persisted at\nroll decision time, never recomputing scores from current mutable state.\nUnknown or absent context degrades gracefully to an empty explanation list.\n\nArgs:\n    event_id: Identifier of the roll event to explain.\n    current_user: Authenticated owner of the session that generated the event.\n    db: Async database session.\n\nReturns:\n    RecommendationExplanationResponse carrying the event identifier and\n    ordered list of human-readable explanation factors.\n\nRaises:\n    HTTPException 404: When the event does not exist or does not belong\n        to the current user's session.\n    HTTPException 422: When the event type is not ``\"roll\"``.",
-        "operationId": "get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "event_id",
-            "required": true,
-            "schema": {
-              "title": "Event Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecommendationExplanationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Roll Recommendation Explanation",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/override": {
-      "post": {
-        "description": "Manually select a thread.\n\nArgs:\n    request: Override request containing thread_id.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    RollResponse with selected thread.\n\nRaises:\n    HTTPException: If thread not found.",
-        "operationId": "override_roll_api_v1_roll_override_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OverrideRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RollResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Override Roll",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/switch-prerequisite": {
-      "post": {
-        "description": "Replace a blocked pending roll with one still-readable prerequisite.\n\nArgs:\n    request: Selected prerequisite issue from the current recovery guidance.\n    current_user: Authenticated owner of the pending Roll.\n    db: Async database session.\n\nReturns:\n    The durable active Roll target after accepting the prerequisite.",
-        "operationId": "switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RollPrerequisiteSwitchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RollPrerequisiteSwitchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Switch Roll Prerequisite",
-        "tags": [
-          "dependencies",
-          "dependencies",
           "roll"
         ]
       }
