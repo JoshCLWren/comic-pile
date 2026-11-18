@@ -199,6 +199,7 @@ describe('Roll rating header chrome (#2712)', () => {
     // The die controls belong to the die view. The rating chrome is an addition
     // to that view, never a replacement for controls the die view still needs.
     expect(screen.getByRole('button', { name: 'Pick manually' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read an issue' })).toBeInTheDocument()
     expect(container.querySelector('[data-roll-die-selector="primary"]')).not.toBeNull()
     // The die is event-derived, so there is no Auto/Manual segment (#4353).
     expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()

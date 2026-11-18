@@ -156,7 +156,7 @@ describe('Roll exact-issue manual picker (#4445 A38)', () => {
     }))
     // No Roll override/pending mutation is imported or called by this flow;
     // the shared receipt explicitly comes from the direct native issue command.
-    expect(await within(sharedCard).findByText(/Read/)).toBeVisible()
+    expect(await within(sharedCard).findByRole('button', { name: 'Mark unread' })).toBeVisible()
   })
 
   it('loads later issue pages explicitly instead of draining the whole series', async () => {
@@ -175,10 +175,11 @@ describe('Roll exact-issue manual picker (#4445 A38)', () => {
     const loadMore = await screen.findByRole('button', { name: 'Load more issues (1 of 2)' })
     expect(listIssues).toHaveBeenCalledExactlyOnceWith(22, { page_size: 100 })
     await user.click(loadMore)
-    await waitFor(() => expect(listIssues).toHaveBeenCalledExactlyOnceWith(22, {
+    await waitFor(() => expect(listIssues).toHaveBeenCalledTimes(2))
+    expect(listIssues).toHaveBeenLastCalledWith(22, {
       page_size: 100,
       page_token: 'next-page',
-    }))
+    })
     expect(await screen.findByRole('button', {
       name: 'Reading and mapping actions for Completed Saga #10',
     })).toBeVisible()
