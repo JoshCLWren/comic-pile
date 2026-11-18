@@ -96,6 +96,7 @@ use utoipa::OpenApi;
         crate::continuity_plans::link_dependency_documentation,
         crate::continuity_plans::unlink_dependency_documentation,
         crate::continuity_plans::project_reading_order_documentation,
+        crate::continuity_plans::preview_plan_projection,
         crate::continuity_plans::release_source_create_documentation,
         crate::continuity_plans::release_source_list_documentation,
         crate::continuity_plans::release_source_list_reader_documentation,
