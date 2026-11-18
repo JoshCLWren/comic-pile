@@ -183,32 +183,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/bootstrap-alias-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Bootstrap Alias Metrics
-         * @description Return this instance's bootstrap alias counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/bug-reports/": {
         parameters: {
             query?: never;
@@ -304,50 +278,6 @@ export interface paths {
         /** Documentation-only operation for targeted adoption into an existing plan. */
         post: operations["cbl_targeted_adoption_commit_documentation"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Exclusions
-         * @description Return exclusions explicitly entered by this reader.
-         */
-        get: operations["list_exclusions_api_v1_collection_exclusions_get"];
-        put?: never;
-        /**
-         * Create Exclusion
-         * @description Idempotently exclude one external volume, Thread or Issue.
-         */
-        post: operations["create_exclusion_api_v1_collection_exclusions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions/{exclusion_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Exclusion
-         * @description Remove one owned exclusion without changing the underlying comic.
-         */
-        delete: operations["delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2069,68 +1999,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reading-boundaries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Reading Boundary Batch
-         * @description Explain several owned series in one canonical eligibility snapshot.
-         *
-         *     Args:
-         *         payload: Owned Thread identifiers to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Explanations keyed by Thread identifier.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when a Thread is absent or foreign.
-         */
-        post: operations["get_reading_boundary_batch_api_v1_reading_boundaries_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-boundaries/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Reading Boundary
-         * @description Explain one owned series through the canonical Option E result.
-         *
-         *     Args:
-         *         thread_id: Owned Thread to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Named waiting Issues, live blockers, history, and editor targets.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when the Thread is absent or foreign.
-         */
-        get: operations["get_reading_boundary_api_v1_reading_boundaries__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-mode": {
         parameters: {
             query?: never;
@@ -3582,32 +3450,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/traffic-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Traffic Metrics
-         * @description Return this instance's per-route traffic counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_traffic_metrics_api_v1_traffic_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -4709,43 +4551,6 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /**
-         * BootstrapAliasCounterSchema
-         * @description One aggregated bootstrap alias tally.
-         */
-        BootstrapAliasCounterSchema: {
-            /**
-             * Alias
-             * @description Bootstrap alias: legacy, v1, or v2.
-             */
-            alias: string;
-            /**
-             * Count
-             * @description Number of observed hits.
-             */
-            count: number;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx.
-             */
-            status_class: string;
-            /**
-             * Web Origin
-             * @description True if request looked like a browser client.
-             */
-            web_origin: boolean;
-        };
-        /**
-         * BootstrapAliasSnapshotSchema
-         * @description Process-local bootstrap alias counters.
-         */
-        BootstrapAliasSnapshotSchema: {
-            /**
-             * Counters
-             * @description Aggregated counts per (alias, web_origin, status class).
-             */
-            counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
-        };
         /** @description Compact bandwidth block retained for existing Roll consumers. */
         BootstrapBandwidth: {
             active_bandwidth?: string | null;
@@ -4902,65 +4707,35 @@ export interface components {
             tags: components["schemas"]["BootstrapTag"][];
             title: string;
         };
-        /**
-         * BoundaryEditorTarget
-         * @description Where the reader can change the rule that produced a boundary.
-         *
-         *     The target is a descriptor, not a URL: the client owns routing so a
-         *     renamed surface never breaks a stored deep link.
-         */
         BoundaryEditorTarget: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "reading_list" | "prerequisite" | "issue";
-            /** Label */
+            kind: components["schemas"]["EditorKind"];
             label: string;
-            /** List Id */
+            /** Format: int32 */
             list_id?: number | null;
-            /** Prerequisite Id */
+            /** Format: int32 */
             prerequisite_id?: number | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id?: number | null;
         };
-        /**
-         * BoundaryIssue
-         * @description One named Issue, labeled with its Comic Vine volume when known.
-         */
         BoundaryIssue: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Label */
             label: string;
-            /** Reading Lists */
-            reading_lists?: components["schemas"]["BoundaryReadingList"][];
-            /** Thread Id */
+            reading_lists: components["schemas"]["BoundaryReadingList"][];
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
-            /** Volume Label */
             volume_label?: string | null;
         };
         /** @enum {string} */
         BoundaryListMode: "strict" | "loose";
-        /**
-         * BoundaryReadingList
-         * @description One owned Reading List that places an Issue.
-         */
         BoundaryReadingList: {
-            /** List Id */
+            /** Format: int32 */
             list_id: number;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
+            mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
         /** @enum {string} */
@@ -6218,43 +5993,6 @@ export interface components {
         CheckPotentialDuplicatesResponse: {
             /** Matches */
             matches?: components["schemas"]["PotentialDuplicateMatch"][];
-        };
-        /**
-         * CollectionExclusionCreate
-         * @description Exactly one target: external volume identity, Thread or Issue.
-         */
-        CollectionExclusionCreate: {
-            /** External Volume Id */
-            external_volume_id?: string | null;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Provider */
-            provider?: string | null;
-            /** Thread Id */
-            thread_id?: number | null;
-        };
-        /**
-         * CollectionExclusionResponse
-         * @description Stored exclusion, with an ID for explicit removal.
-         */
-        CollectionExclusionResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** External Volume Id */
-            external_volume_id: string | null;
-            /** Id */
-            id: number;
-            /** Issue Id */
-            issue_id: number | null;
-            /** Provider */
-            provider: string | null;
-            /** Thread Id */
-            thread_id: number | null;
-            /** User Id */
-            user_id: number;
         };
         /** @description Owner-scoped local representations of a related ComicVine issue. */
         ComicPileMatch: {
@@ -9708,35 +9446,6 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeBoundaryEditorTarget: {
-            /** Format: int32 */
-            issue_id?: number | null;
-            kind: components["schemas"]["EditorKind"];
-            label: string;
-            /** Format: int32 */
-            list_id?: number | null;
-            /** Format: int32 */
-            prerequisite_id?: number | null;
-            /** Format: int32 */
-            thread_id?: number | null;
-        };
-        NativeBoundaryIssue: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            label: string;
-            reading_lists: components["schemas"]["NativeBoundaryReadingList"][];
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-            volume_label?: string | null;
-        };
-        NativeBoundaryReadingList: {
-            /** Format: int32 */
-            list_id: number;
-            mode: components["schemas"]["BoundaryListMode"];
-            name: string;
-        };
         NativeCBLBreadcrumb: {
             name: string;
             path: string;
@@ -10009,20 +9718,6 @@ export interface components {
             volume?: string | null;
             /** Format: int32 */
             year?: number | null;
-        };
-        NativeReadingBoundaryBatchRequest: {
-            thread_ids: number[];
-        };
-        NativeReadingBoundaryBlocker: {
-            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
-            kind: components["schemas"]["BlockerKind"];
-            origin: components["schemas"]["BlockerOrigin"];
-            reason: string;
-            waiting_on: components["schemas"]["NativeBoundaryIssue"][];
-        };
-        NativeReadingBoundaryNext: {
-            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
-            issue: components["schemas"]["NativeBoundaryIssue"];
         };
         NativeReadingListEntryIntent: {
             gate: string;
@@ -10872,101 +10567,29 @@ export interface components {
             /** Series Name */
             series_name?: string | null;
         };
-        /**
-         * ReadingBoundaryBatchRequest
-         * @description Owned series IDs to explain in one request.
-         */
         ReadingBoundaryBatchRequest: {
-            /** Thread Ids */
             thread_ids: number[];
-        };
-        /**
-         * ReadingBoundaryBatchResponse
-         * @description Canonical explanations keyed by Thread ID.
-         */
-        ReadingBoundaryBatchResponse: {
-            /** Threads */
-            threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanation"];
-            };
         };
         ReadingBoundaryBatchResponseV2: {
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
         };
-        /**
-         * ReadingBoundaryBlocker
-         * @description One live Option E requirement that currently blocks the next Issue.
-         */
         ReadingBoundaryBlocker: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "reading_list" | "reader_prerequisite";
-            /** Reason */
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
             reason: string;
-            /** Waiting On */
-            waiting_on?: components["schemas"]["BoundaryIssue"][];
-        };
-        /**
-         * ReadingBoundaryExplanation
-         * @description Canonical explanation of one series' reading boundaries.
-         */
-        ReadingBoundaryExplanation: {
-            /** Blockers */
-            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
-            /** Historical */
-            historical?: components["schemas"]["ReadingBoundaryHistorical"][];
-            next?: components["schemas"]["ReadingBoundaryNext"] | null;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "blocked" | "available" | "complete" | "unavailable";
-            /** Summary */
-            summary: string;
-            /** Thread Id */
-            thread_id: number;
+            waiting_on: components["schemas"]["BoundaryIssue"][];
         };
         ReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: components["schemas"]["NativeReadingBoundaryNext"] | null;
+            blockers: components["schemas"]["ReadingBoundaryBlocker"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReadingBoundaryHistorical
-         * @description A reader-owned association that is not a live blocker.
-         *
-         *     Historical rows never gate execution. They are listed so the reader can
-         *     see an old association without it being presented as a live boundary.
-         */
-        ReadingBoundaryHistorical: {
-            /** Detail */
-            detail: string;
-            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "converted_prerequisite" | "legacy_dependency" | "skipped_entry";
-            /** Label */
-            label: string;
-        };
-        /**
-         * ReadingBoundaryNext
-         * @description The Issue the reader may read now.
-         */
         ReadingBoundaryNext: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
             issue: components["schemas"]["BoundaryIssue"];
@@ -11952,32 +11575,6 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
-        };
-        /**
-         * RouteTrafficCounter
-         * @description One aggregated (method, route template, status class) tally.
-         */
-        RouteTrafficCounter: {
-            /**
-             * Count
-             * @description Requests observed since process start.
-             */
-            count: number;
-            /**
-             * Method
-             * @description HTTP method, e.g. GET.
-             */
-            method: string;
-            /**
-             * Route
-             * @description Routed path template, e.g. /api/v1/threads/{thread_id}.
-             */
-            route: string;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx or 4xx.
-             */
-            status_class: string;
         };
         /**
          * SeriesDecision
@@ -13269,26 +12866,6 @@ export interface components {
             rating: number;
             title: string;
         };
-        /**
-         * TrafficMetricsSnapshot
-         * @description Process-local traffic counters for one serverless instance.
-         *
-         *     Counters are monotonic within a process lifetime, so a collector can
-         *     reconstruct fleet-wide totals by keeping the maximum count per key across
-         *     polls of the same ``instance_id``.
-         */
-        TrafficMetricsSnapshot: {
-            /**
-             * Counters
-             * @description Aggregated request tallies sorted deterministically.
-             */
-            counters?: components["schemas"]["RouteTrafficCounter"][];
-            /**
-             * Instance Id
-             * @description Stable identifier for this process instance.
-             */
-            instance_id: string;
-        };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
             active_thread?: components["schemas"]["SessionActiveThread"] | null;
@@ -13776,26 +13353,6 @@ export interface operations {
             };
         };
     };
-    get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BootstrapAliasSnapshotSchema"];
-                };
-            };
-        };
-    };
     create_v1_documentation: {
         parameters: {
             query?: never;
@@ -14028,88 +13585,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    list_exclusions_api_v1_collection_exclusions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"][];
-                };
-            };
-        };
-    };
-    create_exclusion_api_v1_collection_exclusions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CollectionExclusionCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                exclusion_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -17091,70 +16566,6 @@ export interface operations {
             };
         };
     };
-    get_reading_boundary_batch_api_v1_reading_boundaries_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryBatchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_reading_boundary_api_v1_reading_boundaries__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryExplanation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_reading_mode_documentation: {
         parameters: {
             query?: never;
@@ -19766,26 +19177,6 @@ export interface operations {
             };
         };
     };
-    get_traffic_metrics_api_v1_traffic_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrafficMetricsSnapshot"];
-                };
-            };
-        };
-    };
     list_undo_snapshots_v1_documentation: {
         parameters: {
             query?: never;
@@ -21009,7 +20400,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingBoundaryBatchRequest"];
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
             };
         };
         responses: {

@@ -425,7 +425,7 @@ export interface ReadReadingListRequest {
 export type ReadReadingListResponse = components['schemas']['ReadingListReader']
 
 export interface ReadingBoundaryBatchRequest {
-  body: components['schemas']['NativeReadingBoundaryBatchRequest']
+  body: components['schemas']['ReadingBoundaryBatchRequest']
 }
 
 export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
