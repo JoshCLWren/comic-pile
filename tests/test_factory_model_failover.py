@@ -371,3 +371,34 @@ def test_worker_blocks_only_proven_account_quota_for_one_assignment():
         {"source": "nvidia", "model": "generated/exhausted",
          "outcome": "provider_quota", "scope": "account"},
     ], "nvidia") == [("nvidia", "generated/exhausted", "provider_quota", "model")]
+
+
+
+def test_account_breaker_requires_direct_branded_provider_envelope(tmp_path: Path) -> None:
+    """A user quote of an account-refusal string must not block every model."""
+    import subprocess
+
+    script = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
+    begin = script.split("account_wide_failure() {", 1)[1]
+    code = begin.split("<<'PY'\n", 1)[1].split("\nPY", 1)[0]
+    path = tmp_path / "attempt.log"
+    model = "generated/synthetic-free"
+    message = (
+        "The account behind this API key doesn't have enough credits. "
+        "Please [top up](<https://enter.pollinations.ai/top-up?"
+        "ref=agent_low_balance_topup>) or [complete a quest]("
+        "<https://enter.pollinations.ai/quests?"
+        "ref=agent_low_balance_quests>), then try again."
+    )
+
+    def recognized(data: str) -> bool:
+        path.write_text(data)
+        proc = subprocess.run([sys.executable, "-c", code, str(path), model],
+                              text=True, capture_output=True, timeout=5, check=False)
+        assert not proc.stderr
+        return proc.returncode == 0
+
+    assert recognized(f"> build · {model}\n{message}\n")
+    assert not recognized(f"> build · {model}\nThe model says payment required\n{message}\n")
+    assert not recognized(f"> build · {model}\nNatural language mentions payment required\n")
+    assert not recognized(f"> build · generated/another\n{message}\n")
