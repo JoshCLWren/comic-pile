@@ -923,13 +923,11 @@ pub async fn get_group_detail(
         let mut thread: Option<&ThreadDetailResponse> = None;
         let mut issue: Option<&IssueDetailResponse> = None;
         let mut other: Vec<String> = Vec::new();
-        let mut blocking: Vec<String> = Vec::new();
         let (series_title, issue_number) = if let Some(thread_id) = member.thread_id {
             thread = threads.get(&thread_id).and_then(|t| t.as_ref());
             let series_title = thread.map(|t| t.title.clone());
             let issue_number: Option<String> = None;
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             (series_title, issue_number)
         } else if let Some(issue_id) = member.issue_id {
             issue = issues.get(&issue_id).and_then(|i| i.as_ref());
@@ -938,7 +936,6 @@ pub async fn get_group_detail(
             let series_title = thread.map(|t| t.title.clone());
             let issue_number = issue.map(|i| i.issue_number.clone());
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             (series_title, issue_number)
         } else {
             (None, None)
