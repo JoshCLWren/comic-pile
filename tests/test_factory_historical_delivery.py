@@ -140,7 +140,7 @@ def test_recent_pr_scan_is_bounded_and_deduplicated(
 
     def fake_api(path: str) -> list[dict]:
         calls.append(path)
-        return rows if "page=1" in path else second
+        return rows if "&page=1" in path else second
 
     monkeypatch.setattr(delivery, "api", fake_api)
     results = delivery.recent_candidate_prs(
