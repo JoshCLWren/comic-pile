@@ -383,7 +383,8 @@ describe('targeted cache effects', () => {
 
     // Exact-count guard: issue pages/creators/detail/summary plus the shared
     // reader-progress pass; dropped keys or extra invalidations fail here.
-    expect(invalidateQueries).toHaveBeenCalledTimes(16)
+    // Issue edits do not reorder the Queue, so they invalidate (not reset) it.
+    expect(invalidateQueries).toHaveBeenCalledTimes(17)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
@@ -402,9 +403,8 @@ describe('targeted cache effects', () => {
     })
     // Regression (#5264): read/progress edits must reconcile Queue, Roll,
     // History/activity, and plan/list reader state across open views.
-    // The paginated Queue is reset (not invalidated) to avoid #933 cursors.
-    expect(resetQueries).toHaveBeenCalledOnce()
-    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
+    // Only rating resets the Queue; issue edits keep isInvalidated semantics.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
@@ -415,10 +415,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
-    // The finished/excluded shelves are not reset unconditionally: only the
-    // paginated Queue reset above is shared by every read/progress edit.
-    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
-    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
+    // No shelf is reset unconditionally by a read/progress edit: the finished
+    // shelf is only reset by mutation-specific callers on completion.
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   it('limits snooze reconciliation to the exact current session key', async () => {

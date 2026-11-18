@@ -165,7 +165,10 @@ export async function applyRatedThreadCache(
     // Rating/read progress must reconcile every open view (Queue counts/rows,
     // Roll pool/bootstrap, History/activity, and plan/list reader blockers)
     // without requiring a hard reload.
-    invalidateAfterReaderProgress(client, { refetchRollBootstrap }),
+    // Rating reorders the Queue, so the paginated loader is reset (not just
+    // invalidated) to avoid refetching loaded pages through stale cursors
+    // (#933). Other read/progress flows keep ordinary invalidation semantics.
+    invalidateAfterReaderProgress(client, { refetchRollBootstrap, resetQueue: true }),
   ])
 }
 
@@ -978,6 +981,13 @@ interface ReadingEligibilityInvalidationOptions {
    * bootstrap itself (e.g. Roll rating flow) to avoid duplicate requests.
    */
   refetchRollBootstrap?: boolean
+  /**
+   * Reset the paginated Queue instead of invalidating it. Rating can reorder
+   * the Queue, and refetching loaded pages through their pre-mutation cursors
+   * can duplicate or skip rows (#933). Read/progress flows that do not reorder
+   * keep the default invalidation.
+   */
+  resetQueue?: boolean
 }
 
 /** A global read can release requirements in other series and overlapping lists. */
@@ -985,16 +995,21 @@ async function invalidateReadingEligibility(
   client: QueryClient,
   options: ReadingEligibilityInvalidationOptions = {},
 ): Promise<void> {
-  const { includeAuthoringLists = false, refetchRollBootstrap = true } = options
+  const {
+    includeAuthoringLists = false,
+    refetchRollBootstrap = true,
+    resetQueue = false,
+  } = options
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
     // Legacy read/unread and direct v2 writes change the shared card status too.
     client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
-    // Reset (not invalidate) the paginated Queue loader: re-fetching already
-    // loaded pages through pre-mutation cursors can duplicate or skip rows
-    // after a reorder (#933). Resetting drops every loaded page so each active
-    // list re-requests exactly one bounded first page.
-    client.resetQueries({ queryKey: queryKeys.queue.all }),
+    // Rating reorders the Queue; resetting drops loaded pages so they are not
+    // refetched through stale cursors (#933). Other read/progress mutations
+    // keep plain invalidation and its isInvalidated semantics.
+    resetQueue
+      ? client.resetQueries({ queryKey: queryKeys.queue.all })
+      : client.invalidateQueries({ queryKey: queryKeys.queue.all }),
     // Keep other Roll surfaces actively refreshed; bootstrap may be owned by an
     // explicit authoritative fetch in some rating flows.
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
@@ -1019,11 +1034,12 @@ async function invalidateReadingEligibility(
 /** Refresh global read state without refetching a just-saved authoring draft. */
 export async function invalidateAfterReaderProgress(
   client: QueryClient,
-  options: { refetchRollBootstrap?: boolean } = {},
+  options: { refetchRollBootstrap?: boolean; resetQueue?: boolean } = {},
 ): Promise<void> {
   await invalidateReadingEligibility(client, {
     includeAuthoringLists: true,
     refetchRollBootstrap: options.refetchRollBootstrap,
+    resetQueue: options.resetQueue,
   })
 }
 
