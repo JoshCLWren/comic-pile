@@ -4,9 +4,9 @@
     "^/api/v1/reading-order-groups(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
+    "runtime": "native-rust",
     "dest": "/api/native_roll.rs",
-    "status": "transitional",
+    "status": "target",
     "owning_issue": 4841,
     "consumers": [
       "frontend/src/services/api-dependency-groups.ts"

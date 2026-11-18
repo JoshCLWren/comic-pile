@@ -1003,7 +1003,7 @@
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 126,
-      "v1_shadowed_by_rust": 13,
+      "v1_shadowed_by_rust": 1,
       "v1_live_python": 100,
       "v1_orphaned": 7,
       "unversioned_total": 3,
@@ -1011,7 +1011,7 @@
       "unversioned_live_python": 1,
       "unversioned_orphaned": 1,
       "total_python_surface": 129,
-      "total_shadowed_by_rust": 13,
+      "total_shadowed_by_rust": 1,
       "total_live_python": 101,
       "total_orphaned": 8
     },
@@ -2070,8 +2070,8 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2080,11 +2080,11 @@
         "method": "GET",
         "path": "/api/v1/reading-order-groups/",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2093,11 +2093,11 @@
         "method": "POST",
         "path": "/api/v1/reading-order-groups/",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2106,11 +2106,11 @@
         "method": "GET",
         "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2119,11 +2119,11 @@
         "method": "DELETE",
         "path": "/api/v1/reading-order-groups/{group_id}",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2132,11 +2132,11 @@
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2145,11 +2145,11 @@
         "method": "PATCH",
         "path": "/api/v1/reading-order-groups/{group_id}",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2158,11 +2158,11 @@
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}/detail",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2171,11 +2171,11 @@
         "method": "POST",
         "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2184,11 +2184,11 @@
         "method": "POST",
         "path": "/api/v1/reading-order-groups/{group_id}/members",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2197,11 +2197,11 @@
         "method": "DELETE",
         "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2210,11 +2210,11 @@
         "method": "PUT",
         "path": "/api/v1/reading-order-groups/{group_id}/order",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
+        "runtime": "native-rust",
+        "status": "target",
         "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
@@ -2223,7 +2223,7 @@
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}/plans",
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust"
+        "burndown_status": "native Rust"
       },
       {
         "runtime": "native-rust",
