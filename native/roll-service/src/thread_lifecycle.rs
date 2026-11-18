@@ -866,6 +866,12 @@ async fn update_once(
     input: &UpdateInput,
 ) -> Result<(), LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
+        // Take the queue lock before the row lock when this update can mutate the
+        // active queue, matching every other queue writer (exclude/restore/delete/
+        // reactivate/renormalize) so concurrent operations cannot deadlock.
+        if input.issues_remaining.is_some() {
+            acquire_queue_lock(&tx, user.id()).await?;
+        }
         // Lock the owned row so a concurrent writer cannot change fields that this
         // partial PUT does not supply while we decide/apply queue transitions.
         let thread = find_owned(&tx, user.id(), thread_id, true).await?;
@@ -875,7 +881,6 @@ async fn update_once(
         // whole row from a stale snapshot.
         if let Some(remaining) = input.issues_remaining {
             if thread.total_issues.is_none() {
-                acquire_queue_lock(&tx, user.id()).await?;
                 let mut status = thread.status.clone();
                 let mut queue_position = thread.queue_position;
                 let mut manual_cleared = false;
@@ -1400,7 +1405,7 @@ async fn reactivate_once(
                 .await
                 .map_err(db::tx_error)?;
             let existing_total = rows.len() as i32;
-            let mut max_position = rows
+            let max_position = rows
                 .iter()
                 .map(|row| row.get::<_, i32>(1))
                 .max()
@@ -1415,21 +1420,24 @@ async fn reactivate_once(
                 })
                 .max()
                 .unwrap_or(0);
-            let mut first_new: Option<i32> = None;
-            for number in (max_numeric + 1)..=(max_numeric + i64::from(issues_to_add)) {
-                max_position += 1;
-                let row = tx
-                    .query_one(
-                        "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
-                     VALUES ($1, $2, 'unread', $3, NOW()) RETURNING id",
-                        &[&thread.id, &number.to_string(), &max_position],
-                    )
-                    .await
-                    .map_err(db::tx_error)?;
-                if first_new.is_none() {
-                    first_new = Some(row.get(0));
-                }
-            }
+            let numbers: Vec<i64> =
+                ((max_numeric + 1)..=(max_numeric + i64::from(issues_to_add))).collect();
+            let positions: Vec<i32> =
+                ((max_position + 1)..=(max_position + issues_to_add)).collect();
+            let first_new: Option<i32> = tx
+                .query_opt(
+                    "WITH inserted AS (
+                         INSERT INTO issues (thread_id, issue_number, status, position, created_at)
+                         SELECT $1, n::text, 'unread', p, NOW()
+                         FROM unnest($2::bigint[], $3::int[]) AS t(n, p)
+                         RETURNING id, position
+                     )
+                     SELECT id FROM inserted ORDER BY position LIMIT 1",
+                    &[&thread.id, &numbers, &positions],
+                )
+                .await
+                .map_err(db::tx_error)?
+                .map(|row| row.get(0));
             let total = existing_total + issues_to_add;
             tx.execute(
                 "UPDATE threads SET total_issues = $2, reading_progress = 'in_progress',
@@ -1510,6 +1518,9 @@ fn parse_set_pending(body: Option<Value>) -> Result<Option<i32>, LifecycleError>
     let Some(body) = body else {
         return Ok(None);
     };
+    if body.is_null() {
+        return Ok(None);
+    }
     let Value::Object(map) = &body else {
         return Err(LifecycleError::Validation {
             errors: vec![json!({

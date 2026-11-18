@@ -96,7 +96,7 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
         .filter_map(|cookie| cookie.to_str().ok())
         .find_map(|cookie| cookie.strip_prefix("csrf_token="))
         .and_then(|cookie| cookie.split(';').next())
-        .expect("csrf cookie")
+        .unwrap_or_else(|| panic!("csrf cookie missing (status {status})"))
         .to_owned();
     let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
     let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
@@ -171,8 +171,10 @@ async fn seed_thread(
         .unwrap()
         .query_one(
             "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position,
-                                  status, manual_creator_credits, created_at)
-             VALUES ($1, $2, 'Comic', $3, $4, $5, '[]'::json, NOW()) RETURNING id",
+                                  status, manual_creator_credits, is_test, is_blocked,
+                                  queue_position_is_manual, created_at)
+             VALUES ($1, $2, 'Comic', $3, $4, $5, '[]'::json, false, false, false, NOW())
+             RETURNING id",
             &[&user_id, &title, &remaining, &queue_position, &status],
         )
         .await
@@ -697,6 +699,71 @@ async fn update_partial_put_preserves_untouched_fields_under_concurrency() {
     assert_eq!(body["queue_position"], 1);
     assert_eq!(body["issues_remaining"], 5);
     assert_eq!(body["format"], "Comic");
+}
+
+#[tokio::test]
+async fn update_and_exclude_do_not_deadlock() {
+    for _ in 0..5 {
+        let ctx = setup("lcupexdead").await;
+        let id = seed_thread(&ctx, ctx.user_id, "Contended", "active", 1, 5).await;
+        let update = {
+            let state = ctx.state.clone();
+            let token = ctx.token.clone();
+            let csrf = ctx.csrf.clone();
+            tokio::spawn(async move {
+                send(
+                    &state,
+                    authed(
+                        "PUT",
+                        &format!("/api/v1/threads/{id}"),
+                        &token,
+                        &csrf,
+                        Some(json!({"issues_remaining": 3})),
+                    ),
+                )
+                .await
+            })
+        };
+        let exclude = {
+            let state = ctx.state.clone();
+            let token = ctx.token.clone();
+            let csrf = ctx.csrf.clone();
+            tokio::spawn(async move {
+                send(
+                    &state,
+                    authed(
+                        "POST",
+                        &format!("/api/v1/threads/{id}/exclude"),
+                        &token,
+                        &csrf,
+                        None,
+                    ),
+                )
+                .await
+            })
+        };
+        let (u, e) = tokio::join!(update, exclude);
+        let (u_status, u_body) = u.expect("update task");
+        let (e_status, e_body) = e.expect("exclude task");
+        assert_ne!(
+            u_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "update deadlocked or errored: {u_status} {u_body:?}"
+        );
+        assert_ne!(
+            e_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "exclude deadlocked or errored: {e_status} {e_body:?}"
+        );
+        assert!(
+            matches!(u_status, StatusCode::OK | StatusCode::BAD_REQUEST),
+            "unexpected update status: {u_status} {u_body:?}"
+        );
+        assert!(
+            matches!(e_status, StatusCode::OK | StatusCode::BAD_REQUEST),
+            "unexpected exclude status: {e_status} {e_body:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -1284,6 +1351,32 @@ async fn set_pending_selects_the_thread_and_records_the_manual_roll() {
     assert_eq!(event.get::<_, i32>(6), 0);
     assert_eq!(event.get::<_, i32>(7), ctx.user_id);
     assert!(event.get::<_, bool>(8));
+}
+
+#[tokio::test]
+async fn set_pending_accepts_omitted_and_null_body() {
+    let ctx = setup("lcpendnull").await;
+    let omitted = seed_thread(&ctx, ctx.user_id, "Omitted", "active", 1, 2).await;
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{omitted}/set-pending"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], omitted);
+
+    let null_body = seed_thread(&ctx, ctx.user_id, "Null", "active", 2, 2).await;
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{null_body}/set-pending"),
+        Some(Value::Null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], null_body);
 }
 
 #[tokio::test]
