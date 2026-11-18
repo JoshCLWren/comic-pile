@@ -153,7 +153,6 @@ def mount_subrouters() -> None:
     from app.api import dependency_group
     from app.api import dependency_group_batch
     from app.api import reading_order_projection
-    from app.api import roll_recovery_switch
 
     router.include_router(dependency_group.router)
     router.include_router(dependency_group_batch.router)
@@ -166,6 +165,5 @@ def mount_subrouters() -> None:
     router.include_router(cbl_comicvine_lookup.router)
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
-    router.include_router(roll_recovery_switch.router, prefix="/roll")
 
     _subrouters_mounted = True
