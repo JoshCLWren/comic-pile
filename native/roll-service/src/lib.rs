@@ -47,6 +47,7 @@ pub mod reading_boundary;
 pub mod reading_constraints;
 pub mod reading_eligibility;
 pub mod reading_graph;
+pub mod reading_graph_preview;
 pub mod reading_inputs;
 pub mod reading_list;
 pub mod reading_mode;
@@ -1011,6 +1012,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(issue_identity::cbl_adoption_preview),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(reading_graph_preview::preview_cbl_reading_graph),
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",

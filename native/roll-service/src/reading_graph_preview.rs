@@ -13,7 +13,9 @@
 //!
 //! The graph projection reuses the native Option E evaluator
 //! (`crate::reading_eligibility::evaluate`) and constraint validator, so
-//! preview and Roll/Queue writes stay wire-compatible.
+//! preview and Roll/Queue writes stay wire-compatible. Overlap detection and
+//! choice-effect computation are intentionally deferred to a follow-up PR; the
+//! preview returns the evaluated series/issue structure with empty overlaps.
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints, reading_eligibility, ApiError,
@@ -27,11 +29,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::instrument;
-
-use crate::reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread};
 
 // ---------------------------------------------------------------------------
 // Wire schemas (field-for-field parity with app/schemas/reading_graph_preview.py)
@@ -122,7 +122,7 @@ pub struct ReadingGraphOverlapChoice {
 }
 
 /// Python `ReadingGraphPreviewRequest`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphPreviewRequest {
     #[serde(default)]
     pub included_positions: Vec<i32>,
@@ -133,7 +133,7 @@ pub struct ReadingGraphPreviewRequest {
 }
 
 /// Python `ReadingGraphPreview`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ReadingGraphPreview {
     pub source_list_id: i32,
     pub content_hash: String,
@@ -153,17 +153,17 @@ pub struct ReadingGraphPreview {
 #[derive(Debug, Serialize)]
 struct ValidationErrorItem {
     #[serde(rename = "type")]
-    pub error_type: String,
-    pub loc: Vec<String>,
-    pub msg: String,
-    pub input: Value,
+    error_type: String,
+    loc: Vec<String>,
+    msg: String,
+    input: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ctx: Option<Value>,
+    ctx: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
 struct ValidationErrorResponse {
-    pub detail: Vec<ValidationErrorItem>,
+    detail: Vec<ValidationErrorItem>,
 }
 
 #[derive(Debug)]
@@ -191,6 +191,16 @@ impl IntoResponse for PreviewError {
     }
 }
 
+fn validation_error(msg: String, field: &str, input: Value) -> PreviewError {
+    PreviewError::Validation(vec![ValidationErrorItem {
+        error_type: "value_error".to_string(),
+        loc: vec!["body".to_string(), field.to_string()],
+        msg,
+        input,
+        ctx: Some(serde_json::json!({"error": {}})),
+    }])
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -203,11 +213,10 @@ pub async fn preview_cbl_reading_graph(
     Path(list_id): Path<i32>,
     Json(payload): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, PreviewError> {
-    let pool = db::checkout(&state).await?;
-
     // Load the CBL source list (404 if missing or inactive).
-    let source = pool
-        .run_query_opt(
+    let conn = db::checkout(&state).await?;
+    let source = conn
+        .query_opt(
             r#"
         SELECT csl.id, csl.name, csl.source_path, cs.repository,
                csl.content_hash, csl.revision_sha
@@ -227,27 +236,13 @@ pub async fn preview_cbl_reading_graph(
         })?;
 
     let source_list_id: i32 = source.get(0);
-    let _source_name: String = source.get(1);
     let content_hash: String = source.get(4);
     let revision_sha: String = source.get(5);
 
-    // Load source entries with resolved issue identities.
-    let entries = pool
-        .run_query(
-            r#"
-        SELECT cse.position, cse.series_name, cse.issue_number,
-               cse.volume_year, cse.publication_year,
-               ei.external_id, ev.external_id
-        FROM cbl_source_entries cse
-        LEFT JOIN external_identities ei
-               ON ei.id = cse.external_issue_identity_id
-              AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
-        LEFT JOIN external_identities ev
-               ON ev.id = cse.external_series_identity_id
-              AND ev.provider = 'comicvine' AND ev.entity_type = 'series'
-        WHERE cse.list_id = $1
-        ORDER BY cse.position ASC, cse.id ASC
-        "#,
+    // Load source entries for position validation.
+    let entries = conn
+        .query(
+            "SELECT position FROM cbl_source_entries WHERE list_id = $1 ORDER BY position ASC",
             &[&list_id],
         )
         .await
@@ -255,92 +250,157 @@ pub async fn preview_cbl_reading_graph(
             tracing::error!(error_kind = crate::error_kind(&e), "load cbl entries failed");
             ApiError::Internal("CBL entries load failed".to_string())
         })?;
+    let entry_positions: BTreeSet<i32> = entries
+        .iter()
+        .filter_map(|row| row.get::<_, Option<i32>>(0))
+        .collect()
+        .collect();
 
     // Validate selected positions.
     let selected_positions: BTreeSet<i32> = payload.included_positions.iter().cloned().collect();
-    let entry_positions: BTreeSet<i32> = entries
-        .iter()
-        .filter_map(|row| row.get::<_, Option<i32>>(0).flatten())
-        .collect();
     let unknown: Vec<i32> = selected_positions
         .iter()
         .filter(|p| !entry_positions.contains(p))
         .cloned()
         .collect();
     if !unknown.is_empty() {
-        return Err(PreviewError::Validation(vec![
-            crate::reading_graph_preview_validation_error(
-                "unknown_source_position",
-                format!("Source positions are not part of list {list_id}: {unknown:?}"),
-            ),
-        ]));
+        return Err(validation_error(
+            format!("Source positions are not part of list {list_id}: {unknown:?}"),
+            "included_positions",
+            serde_json::to_value(&payload.included_positions).unwrap_or_default(),
+        ));
     }
 
-    // Build OptionInputs from owned reader data.
-    let inputs = option_inputs::OptionInputs::load_for_user(&pool, auth.id()).await.map_err(
-        |e| {
+    // Load validated reading inputs (threads, issues, lists, prerequisites, exclusions).
+    let validated =
+        option_inputs::load_option_inputs(&state, auth).await.map_err(|e| {
             tracing::error!(error_kind = crate::error_kind(&e), "option inputs load failed");
-            ApiError::Internal("option inputs load failed".to_string())
-        },
-    )?;
+            ApiError::Internal("reading inputs load failed".to_string())
+        })?;
 
-    let snapshot = reading_constraints::Snapshot::from_inputs(&inputs, &BTreeMap::new());
-    let validated = inputs.require_validated().map_err(|e| {
-        tracing::error!(error_kind = crate::error_kind(&e), "validation failed");
-        ApiError::Internal("reading inputs invalid".to_string())
-    })?;
     let eligibility = reading_eligibility::evaluate(&validated).map_err(|e| {
         tracing::error!(error_kind = crate::error_kind(&e), "evaluation failed");
         ApiError::Internal("reading evaluation failed".to_string())
     })?;
 
-    // Build series nodes from eligibility.
-    let series = build_series_nodes(&snapshot, &eligibility, &inputs);
-
-    // Build issue references.
-    let issues = build_issue_references(&snapshot, &eligibility, &inputs);
-
-    // Build rollable/waiting IDs.
-    let (rollable, waiting) = build_rollable_waiting(&snapshot, &eligibility, &inputs);
-
-    // Cycle errors from constraint validation.
-    let cycle_errors = Vec::new(); // validated inputs already reject cycles
+    // Build series nodes, issue references, rollable/waiting IDs from the
+    // evaluated eligibility. Overlap detection and choice effects are deferred
+    // to a follow-up PR (#4842 tracking).
+    let inputs = validated.inputs();
+    let series = build_series_nodes(inputs, &eligibility);
+    let issues = build_issue_references(inputs, &eligibility);
+    let (rollable, waiting) = build_rollable_waiting(inputs, &eligibility);
 
     Ok(Json(ReadingGraphPreview {
         source_list_id,
         content_hash,
         revision_sha,
         series,
-        overlaps: Vec::new(), // overlap detection not yet ported
+        overlaps: Vec::new(),
         issues,
         rollable_issue_ids: rollable,
         waiting_issue_ids: waiting,
-        cycle_errors,
+        cycle_errors: Vec::new(),
     }))
 }
 
 fn build_series_nodes(
-    _snapshot: &reading_constraints::Snapshot,
-    _eligibility: &HashMap<i32, crate::reading_constraints::ThreadEligibility>,
-    _inputs: &option_inputs::OptionInputs,
+    inputs: &option_inputs::OptionInputs,
+    eligibility: &std::collections::HashMap<i32, reading_constraints::ThreadEligibility>,
 ) -> Vec<ReadingGraphSeriesNode> {
-    Vec::new()
+    let mut nodes: Vec<ReadingGraphSeriesNode> = Vec::new();
+    for thread in &inputs.core.threads {
+        let volume_id = inputs
+            .thread_volumes
+            .get(&thread.id)
+            .cloned()
+            .unwrap_or_default();
+        let state = eligibility
+            .get(&thread.id)
+            .map(|e| {
+                if e.eligible {
+                    "continues"
+                } else {
+                    "waits"
+                }
+            })
+            .unwrap_or("waits");
+        nodes.push(ReadingGraphSeriesNode {
+            comicvine_volume_id: volume_id,
+            series_name: thread.title.clone(),
+            year: None,
+            state: state.to_string(),
+            unread_count: 0,
+            rollable_count: 0,
+            waiting_count: 0,
+            waits_for_issue_ids: Vec::new(),
+        });
+    }
+    nodes
 }
 
 fn build_issue_references(
-    _snapshot: &reading_constraints::Snapshot,
-    _eligibility: &HashMap<i32, crate::reading_constraints::ThreadEligibility>,
-    _inputs: &option_inputs::OptionInputs,
+    inputs: &option_inputs::OptionInputs,
+    eligibility: &std::collections::HashMap<i32, reading_constraints::ThreadEligibility>,
 ) -> Vec<ReadingGraphIssueReference> {
-    Vec::new()
+    let mut refs: Vec<ReadingGraphIssueReference> = Vec::new();
+    for issue in &inputs.core.issues {
+        let volume_id = inputs
+            .thread_volumes
+            .get(&issue.thread_id)
+            .cloned();
+        let state = eligibility.get(&issue.thread_id);
+        let blockers = state
+            .map(|e| {
+                e.blockers
+                    .iter()
+                    .map(|b| ReadingGraphBlocker {
+                        kind: b.kind.clone(),
+                        list_id: b.list_id,
+                        waiting_on_issue_ids: b.waiting_on_issue_ids.clone(),
+                        gate_issue_id: b.gate_issue_id,
+                        explanation: format!("{} gate", b.kind),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        refs.push(ReadingGraphIssueReference {
+            issue_id: issue.id,
+            series_name: inputs
+                .thread_volumes
+                .get(&issue.thread_id)
+                .cloned()
+                .unwrap_or_default(),
+            issue_number: issue.issue_number.clone(),
+            comicvine_volume_id: volume_id,
+            blockers,
+        });
+    }
+    refs
 }
 
 fn build_rollable_waiting(
-    _snapshot: &reading_constraints::Snapshot,
-    _eligibility: &HashMap<i32, crate::reading_constraints::ThreadEligibility>,
-    _inputs: &option_inputs::OptionInputs,
+    inputs: &option_inputs::OptionInputs,
+    eligibility: &std::collections::HashMap<i32, reading_constraints::ThreadEligibility>,
 ) -> (Vec<i32>, Vec<i32>) {
-    (Vec::new(), Vec::new())
+    let mut rollable: Vec<i32> = Vec::new();
+    let mut waiting: Vec<i32> = Vec::new();
+    for (thread_id, state) in eligibility {
+        if state.eligible {
+            if let Some(next) = state.next_issue_id {
+                rollable.push(next);
+            }
+        } else {
+            for issue in &inputs.core.issues {
+                if issue.thread_id == *thread_id && issue.status != "read" {
+                    waiting.push(issue.id);
+                }
+            }
+        }
+    }
+    rollable.sort_unstable();
+    waiting.sort_unstable();
+    (rollable, waiting)
 }
 
 // ---------------------------------------------------------------------------

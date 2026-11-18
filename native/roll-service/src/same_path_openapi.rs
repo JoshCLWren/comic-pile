@@ -90,6 +90,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
+        .merge_from(crate::reading_graph_preview::preview_cbl_reading_graph_documentation)
         .merge_from(crate::custom_cbl::CustomCblApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi());
