@@ -12966,10 +12966,6 @@ export interface components {
              */
             generated_at: string;
         };
-        /** @description FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`. */
-        TasteDiscoveryValidationError: {
-            detail: components["schemas"]["ValidationErrorItem"][];
-        };
         /** @description Wire parity with Python `{"dismissed": True}`. */
         TasteDismissResponse: {
             dismissed: boolean;
@@ -18680,14 +18676,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation error */
+            /** @description limit is outside the allowed range */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["TasteDiscoveryValidationError"];
-                };
+                content?: never;
             };
             /** @description Database temporarily unavailable */
             503: {

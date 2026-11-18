@@ -5264,14 +5264,7 @@
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TasteDiscoveryValidationError"
-                }
-              }
-            }
+            "description": "limit is outside the allowed range"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -15203,21 +15196,6 @@
           },
           "generated_at": {
             "type": "string"
-          }
-        }
-      },
-      "TasteDiscoveryValidationError": {
-        "type": "object",
-        "description": "FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`.",
-        "required": [
-          "detail"
-        ],
-        "properties": {
-          "detail": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ValidationErrorItem"
-            }
           }
         }
       },

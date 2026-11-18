@@ -21161,21 +21161,6 @@
         "title": "TasteDiscoveryListResponse",
         "type": "object"
       },
-      "TasteDiscoveryValidationError": {
-        "description": "FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`.",
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationErrorItem"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "type": "object"
-      },
       "TasteDismissResponse": {
         "description": "Wire parity with Python `{\"dismissed\": True}`.",
         "properties": {
@@ -29994,14 +29979,7 @@
             "description": "Not authenticated"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TasteDiscoveryValidationError"
-                }
-              }
-            },
-            "description": "Validation error"
+            "description": "limit is outside the allowed range"
           },
           "503": {
             "description": "Database temporarily unavailable"

@@ -33,7 +33,6 @@
 
 use crate::{
     auth::{self, AuthenticatedUser, VerifiedAccessClaims},
-    cbl_catalog::ValidationErrorItem,
     db, ApiError, AppState,
 };
 use axum::{
@@ -89,7 +88,7 @@ pub struct TasteDiscoveryListResponse {
 }
 
 /// Raw string query params parsed at the handler boundary so malformed or
-/// out-of-range values can emit the exact FastAPI/Pydantic 422 envelope.
+/// out-of-range values are rejected with Python-identical status semantics.
 /// Mirrors the Python `Query(ge=1, le=MAX_ACTIVE_DISCOVERIES, description=...)`.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -114,48 +113,6 @@ fn limit_query_schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schem
         .into()
 }
 
-/// FastAPI/Pydantic `HTTPValidationError` body for an invalid `limit`.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct TasteDiscoveryValidationError {
-    pub detail: Vec<ValidationErrorItem>,
-}
-
-fn limit_int_parsing(input: &str) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: "int_parsing".to_string(),
-        loc: vec!["query".to_string(), "limit".to_string()],
-        msg: "Input should be a valid integer, unable to parse string as an integer".to_string(),
-        input: serde_json::Value::String(input.to_string()),
-        ctx: None,
-    }
-}
-
-fn limit_greater_than_equal(input: &str) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: "greater_than_equal".to_string(),
-        loc: vec!["query".to_string(), "limit".to_string()],
-        msg: format!("Input should be greater than or equal to {MIN_LIMIT}"),
-        input: serde_json::Value::String(input.to_string()),
-        ctx: Some(serde_json::json!({"ge": MIN_LIMIT})),
-    }
-}
-
-fn limit_less_than_equal(input: &str) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: "less_than_equal".to_string(),
-        loc: vec!["query".to_string(), "limit".to_string()],
-        msg: format!("Input should be less than or equal to {MAX_ACTIVE_DISCOVERIES}"),
-        input: serde_json::Value::String(input.to_string()),
-        ctx: Some(serde_json::json!({"le": MAX_ACTIVE_DISCOVERIES})),
-    }
-}
-
-/// Structured 422 carrying the Python validation envelope under `detail`.
-fn validation_error(items: Vec<ValidationErrorItem>) -> ApiError {
-    let detail = serde_json::json!(items);
-    ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, detail)
-}
-
 fn extract_last_limit(raw_query: Option<&str>) -> Option<String> {
     let raw_query = raw_query?;
     let mut last = None;
@@ -167,79 +124,108 @@ fn extract_last_limit(raw_query: Option<&str>) -> Option<String> {
     last
 }
 
-/// Parse the raw `limit` into the Python `Query(ge=1, le=3)` bound.
-/// Pydantic coerces query strings before bound checks, so whitespace, `+`,
-/// underscore separators, and whole-number float/scientific forms are accepted.
-/// Integer literals beyond `i64` still fail with bound errors when they are a
-/// well-formed integer magnitude. Errors carry the original raw string as
-/// `input`.
-fn parse_limit(raw: Option<String>) -> Result<i64, ApiError> {
-    let Some(value) = raw else {
-        return Ok(MAX_ACTIVE_DISCOVERIES);
+/// Why a raw `limit` was rejected, named after the Pydantic error `type` the
+/// frozen Python handler (`Annotated[int, Query(ge=1, le=3)]`) reports. The
+/// wire body is the house `{"detail": "Validation failed"}` 422 (the
+/// production branch of `app/exception_handlers.py`); the kind is kept so the
+/// parser can be pinned against Python's observed behaviour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LimitError {
+    IntParsing,
+    IntParsingSize,
+    GreaterThanEqual,
+    LessThanEqual,
+}
+
+/// Pydantic's maximum digit count for an integer parsed from a string.
+const INT_MAX_DIGITS: usize = 4300;
+
+/// Mirror pydantic 2.12 lax `int` parsing from a query string, then the
+/// `ge=1, le=3` bounds. Grammar: surrounding whitespace is trimmed; at most
+/// one leading sign; ASCII digits with single `_` only between two digits;
+/// optionally `.` followed by one or more `0` digits (whole-number float
+/// string, no exponent). Oversized integers (more than 4300 significant
+/// digits) are `int_parsing_size` only for unsigned/`-`, underscore-free,
+/// zero-prefix-free input; every other oversized shape is `int_parsing`.
+fn classify_limit(raw: &str) -> Result<i64, LimitError> {
+    let trimmed = raw.trim();
+    let (negative, plus, body) = match trimmed.as_bytes().first() {
+        Some(b'-') => (true, false, &trimmed[1..]),
+        Some(b'+') => (false, true, &trimmed[1..]),
+        _ => (false, false, trimmed),
     };
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(validation_error(vec![limit_int_parsing(&value)]));
-    }
-
-    let normalized: String = trimmed.chars().filter(|&c| c != '_').collect();
-    if normalized.is_empty() || normalized == "+" || normalized == "-" {
-        return Err(validation_error(vec![limit_int_parsing(&value)]));
-    }
-
-    let sign_count = normalized
-        .as_bytes()
-        .iter()
-        .take_while(|&&b| b == b'+' || b == b'-')
-        .count();
-    if sign_count > 1 {
-        return Err(validation_error(vec![limit_int_parsing(&value)]));
-    }
-
-    if let Ok(parsed) = normalized.parse::<i64>() {
-        if parsed < MIN_LIMIT {
-            return Err(validation_error(vec![limit_greater_than_equal(&value)]));
+    let (int_part, frac_part) = match body.split_once('.') {
+        Some((int_part, frac)) => (int_part, Some(frac)),
+        None => (body, None),
+    };
+    if let Some(frac) = frac_part {
+        if frac.is_empty() || !frac.bytes().all(|b| b == b'0') {
+            return Err(LimitError::IntParsing);
         }
-        if parsed > MAX_ACTIVE_DISCOVERIES {
-            return Err(validation_error(vec![limit_less_than_equal(&value)]));
-        }
-        return Ok(parsed);
     }
-
-    if let Ok(f) = normalized.parse::<f64>() {
-        if f.is_finite() && f.fract() == 0.0 {
-            if f.abs() <= 9_007_199_254_740_992.0 {
-                let as_i = f as i64;
-                if as_i < MIN_LIMIT {
-                    return Err(validation_error(vec![limit_greater_than_equal(&value)]));
-                }
-                if as_i > MAX_ACTIVE_DISCOVERIES {
-                    return Err(validation_error(vec![limit_less_than_equal(&value)]));
-                }
-                return Ok(as_i);
+    let int_bytes = int_part.as_bytes();
+    if int_bytes.is_empty()
+        || !int_bytes[0].is_ascii_digit()
+        || !int_bytes[int_bytes.len() - 1].is_ascii_digit()
+    {
+        return Err(LimitError::IntParsing);
+    }
+    let mut has_underscore = false;
+    let mut previous_underscore = false;
+    for &byte in int_bytes {
+        if byte == b'_' {
+            if previous_underscore {
+                return Err(LimitError::IntParsing);
             }
+            has_underscore = true;
+            previous_underscore = true;
+        } else if byte.is_ascii_digit() {
+            previous_underscore = false;
         } else {
-            return Err(validation_error(vec![limit_int_parsing(&value)]));
+            return Err(LimitError::IntParsing);
         }
     }
 
-    let (negative, digits_part) = if let Some(rest) = normalized.strip_prefix('-') {
-        (true, rest)
-    } else if let Some(rest) = normalized.strip_prefix('+') {
-        (false, rest)
-    } else {
-        (false, normalized.as_str())
+    let digits: Vec<u8> = int_bytes.iter().copied().filter(|&b| b != b'_').collect();
+    let significant = {
+        let first = digits.iter().position(|&b| b != b'0');
+        first.map_or(&digits[digits.len()..], |index| &digits[index..])
     };
-    if !digits_part.is_empty() && digits_part.bytes().all(|b| b.is_ascii_digit()) {
-        let error = if negative {
-            limit_greater_than_equal(&value)
+    let leading_zero = digits.len() > 1 && digits[0] == b'0' && !significant.is_empty();
+    let too_long = if negative {
+        significant.len() >= INT_MAX_DIGITS
+    } else {
+        significant.len() > INT_MAX_DIGITS
+    };
+    if too_long {
+        return if plus || has_underscore || leading_zero {
+            Err(LimitError::IntParsing)
         } else {
-            limit_less_than_equal(&value)
+            Err(LimitError::IntParsingSize)
         };
-        return Err(validation_error(vec![error]));
     }
 
-    Err(validation_error(vec![limit_int_parsing(&value)]))
+    if negative || significant.is_empty() {
+        return Err(LimitError::GreaterThanEqual);
+    }
+    if significant.len() > 1 {
+        return Err(LimitError::LessThanEqual);
+    }
+    let value = i64::from(significant[0] - b'0');
+    if value > MAX_ACTIVE_DISCOVERIES {
+        return Err(LimitError::LessThanEqual);
+    }
+    Ok(value)
+}
+
+/// Resolve the raw (last-wins) `limit` query value; a missing value is the
+/// default. Every rejection is the house 422 `Validation failed`.
+fn parse_limit(raw: Option<String>) -> Result<i64, ApiError> {
+    match raw {
+        None => Ok(MAX_ACTIVE_DISCOVERIES),
+        Some(value) => classify_limit(&value)
+            .map_err(|_| ApiError::Unprocessable("Validation failed".to_string())),
+    }
 }
 
 /// One persisted signal row used for eligibility evaluation.
@@ -550,7 +536,7 @@ pub async fn dismiss_taste_discovery(
     responses(
         (status = 200, description = "Ranked discoveries", body = TasteDiscoveryListResponse),
         (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Validation error", body = TasteDiscoveryValidationError),
+        (status = 422, description = "limit is outside the allowed range"),
         (status = 503, description = "Database temporarily unavailable")
     ),
     security(("HTTPBearer" = []))
@@ -884,44 +870,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_rejects_out_of_range_limit_with_python_envelope() {
+    async fn list_rejects_invalid_limit_with_house_validation_detail() {
         let (state, _user, _guard) = database_fixture().await;
-        let cases = [
-            (
-                "0",
-                serde_json::json!([{
-                    "type": "greater_than_equal",
-                    "loc": ["query", "limit"],
-                    "msg": "Input should be greater than or equal to 1",
-                    "input": "0",
-                    "ctx": {"ge": 1}
-                }]),
-            ),
-            (
-                "4",
-                serde_json::json!([{
-                    "type": "less_than_equal",
-                    "loc": ["query", "limit"],
-                    "msg": "Input should be less than or equal to 3",
-                    "input": "4",
-                    "ctx": {"le": 3}
-                }]),
-            ),
-        ];
-        for (raw, expected) in cases {
+        for raw in ["0", "4", "abc", "2e0"] {
             let error = list_taste_discoveries(
                 State(state.clone()),
                 RawQuery(Some(format!("limit={raw}"))),
                 VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
             )
             .await
-            .expect_err("out-of-range limit must 422");
+            .expect_err("invalid limit must 422");
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(
-                error.structured_detail().expect("structured detail"),
-                &expected,
-                "limit={raw}"
-            );
+            assert_eq!(error.detail(), "Validation failed", "limit={raw}");
         }
     }
 
@@ -1016,73 +976,134 @@ mod tests {
         assert_eq!(extract_last_limit(Some("limit=")), Some(String::new()));
     }
 
+    /// Golden table captured by running the frozen Python handler
+    /// (`limit: Annotated[int, Query(ge=1, le=3)] = 3`, pydantic 2.12.5)
+    /// under FastAPI TestClient. `Ok(n)` is HTTP 200 with that limit; `Err`
+    /// is HTTP 422 with that pydantic error type.
     #[test]
-    fn parse_limit_matches_python_query_semantics() {
+    fn classify_limit_matches_python_golden_table() {
+        use LimitError::LessThanEqual as Le;
+        use LimitError::{GreaterThanEqual as Ge, IntParsing as Ip, IntParsingSize as Size};
+        let nines = |n: usize| "9".repeat(n);
+        let table: Vec<(String, Result<i64, LimitError>)> = vec![
+            ("2".into(), Ok(2)),
+            ("1".into(), Ok(1)),
+            ("3".into(), Ok(3)),
+            ("2.0".into(), Ok(2)),
+            ("2.00".into(), Ok(2)),
+            (" 2 ".into(), Ok(2)),
+            ("\t2\n".into(), Ok(2)),
+            ("+2".into(), Ok(2)),
+            ("+2.0".into(), Ok(2)),
+            ("0002".into(), Ok(2)),
+            ("0_2".into(), Ok(2)),
+            ("2.".to_string() + &"0".repeat(5000), Ok(2)),
+            ("0".repeat(4301) + "1", Ok(1)),
+            ("1_0".into(), Err(Le)),
+            ("1_000".into(), Err(Le)),
+            ("1_0.0".into(), Err(Le)),
+            ("1_".into(), Err(Ip)),
+            ("_1".into(), Err(Ip)),
+            ("_".into(), Err(Ip)),
+            ("1__0".into(), Err(Ip)),
+            ("1__0.0".into(), Err(Ip)),
+            ("2_".into(), Err(Ip)),
+            ("1_.0".into(), Err(Ip)),
+            ("1.0_0".into(), Err(Ip)),
+            ("2.0_".into(), Err(Ip)),
+            ("1_0.0_0".into(), Err(Ip)),
+            ("1e1".into(), Err(Ip)),
+            ("2e0".into(), Err(Ip)),
+            ("2E0".into(), Err(Ip)),
+            ("1E1".into(), Err(Ip)),
+            ("1.0e0".into(), Err(Ip)),
+            ("1.5e0".into(), Err(Ip)),
+            ("1e-0".into(), Err(Ip)),
+            ("2.5".into(), Err(Ip)),
+            ("0.5".into(), Err(Ip)),
+            ("2.".into(), Err(Ip)),
+            (".0".into(), Err(Ip)),
+            ("  .0".into(), Err(Ip)),
+            ("1.0000000000000000000001".into(), Err(Ip)),
+            ("2.".to_string() + &"0".repeat(5000) + "1", Err(Ip)),
+            ("-1".into(), Err(Ge)),
+            ("-2.0".into(), Err(Ge)),
+            ("-0".into(), Err(Ge)),
+            ("-0.0".into(), Err(Ge)),
+            ("0".into(), Err(Ge)),
+            ("0.0".into(), Err(Ge)),
+            ("0".repeat(5000), Err(Ge)),
+            ("0".repeat(5000) + ".0", Err(Ge)),
+            ("4".into(), Err(Le)),
+            ("4.0".into(), Err(Le)),
+            ("99999999999999999999999999999".into(), Err(Le)),
+            ("-99999999999999999999999999999".into(), Err(Ge)),
+            ("99999999999999999999999.0".into(), Err(Le)),
+            ("-99999999999999999999999.0".into(), Err(Ge)),
+            ("".into(), Err(Ip)),
+            ("+".into(), Err(Ip)),
+            ("-".into(), Err(Ip)),
+            ("abc".into(), Err(Ip)),
+            ("--2".into(), Err(Ip)),
+            ("+-2".into(), Err(Ip)),
+            ("+ 2".into(), Err(Ip)),
+            ("2 0".into(), Err(Ip)),
+            ("1,0".into(), Err(Ip)),
+            ("0x2".into(), Err(Ip)),
+            ("Infinity".into(), Err(Ip)),
+            ("nan".into(), Err(Ip)),
+            ("\u{662}".into(), Err(Ip)),
+            ("\u{ff12}".into(), Err(Ip)),
+            // Digit-count boundaries (pydantic's 4300-digit limit).
+            (nines(4299), Err(Le)),
+            (nines(4300), Err(Le)),
+            (nines(4300) + ".0", Err(Le)),
+            (nines(4301), Err(Size)),
+            (nines(4301) + ".0", Err(Size)),
+            (nines(4302), Err(Size)),
+            (" ".to_string() + &nines(4301), Err(Size)),
+            ("+".to_string() + &nines(4299), Err(Le)),
+            ("+".to_string() + &nines(4300), Err(Le)),
+            ("+".to_string() + &nines(4301), Err(Ip)),
+            ("+".to_string() + &nines(4301) + ".0", Err(Ip)),
+            ("-".to_string() + &nines(4299), Err(Ge)),
+            ("-".to_string() + &nines(4299) + ".0", Err(Ge)),
+            ("-".to_string() + &nines(4300), Err(Size)),
+            ("-".to_string() + &nines(4300) + ".0", Err(Size)),
+            ("-".to_string() + &nines(4301), Err(Size)),
+            ("0".repeat(10) + &nines(4300), Err(Le)),
+            ("0".repeat(10) + &nines(4301), Err(Ip)),
+            ("-".to_string() + &"0".repeat(10) + &nines(4299), Err(Ge)),
+            ("-".to_string() + &"0".repeat(10) + &nines(4300), Err(Ip)),
+            ("+".to_string() + &"0".repeat(10) + &nines(4300), Err(Le)),
+            ("+".to_string() + &"0".repeat(10) + &nines(4301), Err(Ip)),
+            ("1_".to_string() + &nines(4299), Err(Le)),
+            ("1_".to_string() + &nines(4300), Err(Ip)),
+            (nines(4301) + "_0", Err(Ip)),
+            (nines(4300) + "_9.0", Err(Ip)),
+            ("-1_".to_string() + &nines(4298), Err(Ge)),
+            ("-1_".to_string() + &nines(4299), Err(Ip)),
+            ("-1_".to_string() + &nines(4300), Err(Ip)),
+        ];
+        for (raw, expected) in &table {
+            let shown: String = raw.chars().take(40).collect();
+            assert_eq!(
+                classify_limit(raw),
+                *expected,
+                "raw={shown:?} (len {})",
+                raw.len()
+            );
+        }
+    }
+
+    #[test]
+    fn parse_limit_defaults_missing_and_maps_rejections_to_house_422() {
         assert_eq!(parse_limit(None).unwrap(), MAX_ACTIVE_DISCOVERIES);
         assert_eq!(parse_limit(Some("2".to_string())).unwrap(), 2);
-        assert_eq!(parse_limit(Some(" 2 ".to_string())).unwrap(), 2);
-        assert_eq!(parse_limit(Some("+2".to_string())).unwrap(), 2);
-        assert_eq!(parse_limit(Some("2.0".to_string())).unwrap(), 2);
-
-        let ge_cases = [
-            ("0", "0"),
-            ("0.0", "0.0"),
-            ("-1", "-1"),
-            ("-99999999999999999999", "-99999999999999999999"),
-        ];
-        for (raw, input) in ge_cases {
-            let err = parse_limit(Some(raw.to_string())).unwrap_err();
-            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(
-                err.structured_detail().unwrap(),
-                &serde_json::json!([{
-                    "type": "greater_than_equal",
-                    "loc": ["query", "limit"],
-                    "msg": "Input should be greater than or equal to 1",
-                    "input": input,
-                    "ctx": {"ge": 1}
-                }]),
-                "raw={raw}"
-            );
-        }
-
-        let le_cases = [
-            ("4", "4"),
-            ("4.0", "4.0"),
-            ("1_0", "1_0"),
-            ("1e1", "1e1"),
-            ("99999999999999999999", "99999999999999999999"),
-        ];
-        for (raw, input) in le_cases {
-            let err = parse_limit(Some(raw.to_string())).unwrap_err();
-            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(
-                err.structured_detail().unwrap(),
-                &serde_json::json!([{
-                    "type": "less_than_equal",
-                    "loc": ["query", "limit"],
-                    "msg": "Input should be less than or equal to 3",
-                    "input": input,
-                    "ctx": {"le": 3}
-                }]),
-                "raw={raw}"
-            );
-        }
-
-        let int_parsing_cases = ["", "abc", "--2", "2.5", "1e", "inf", "NaN"];
-        for raw in int_parsing_cases {
-            let err = parse_limit(Some(raw.to_string())).unwrap_err();
-            assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(
-                err.structured_detail().unwrap(),
-                &serde_json::json!([{
-                    "type": "int_parsing",
-                    "loc": ["query", "limit"],
-                    "msg": "Input should be a valid integer, unable to parse string as an integer",
-                    "input": raw
-                }]),
-                "raw={raw:?}"
-            );
+        for raw in ["", "abc", "0", "4", "1e1", "1_"] {
+            let error = parse_limit(Some(raw.to_string())).unwrap_err();
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(error.detail(), "Validation failed", "raw={raw:?}");
         }
     }
 
@@ -1126,7 +1147,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_limit_returns_python_validation_envelope_through_service_router() {
+    async fn invalid_limit_returns_house_validation_detail_through_service_router() {
         use crate::{config::Config, router, AppState};
         use axum::{
             body::Body,
@@ -1171,22 +1192,9 @@ mod tests {
         )
         .unwrap();
 
-        let cases = [
-            (
-                "abc",
-                json!([{"type":"int_parsing","loc":["query","limit"],"msg":"Input should be a valid integer, unable to parse string as an integer","input":"abc"}]),
-            ),
-            (
-                "0",
-                json!([{"type":"greater_than_equal","loc":["query","limit"],"msg":"Input should be greater than or equal to 1","input":"0","ctx":{"ge":1}}]),
-            ),
-            (
-                "4",
-                json!([{"type":"less_than_equal","loc":["query","limit"],"msg":"Input should be less than or equal to 3","input":"4","ctx":{"le":3}}]),
-            ),
-        ];
+        let cases = ["abc", "0", "4", "1e1", "1_", "2.5"];
 
-        for (limit, expected) in cases {
+        for limit in cases {
             let response = app
                 .clone()
                 .oneshot(
@@ -1208,8 +1216,8 @@ mod tests {
             let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(
                 payload,
-                json!({"detail": expected}),
-                "invalid limit {limit} must preserve the Python validation envelope"
+                json!({"detail": "Validation failed"}),
+                "invalid limit {limit} must return the house validation body"
             );
         }
     }

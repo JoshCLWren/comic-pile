@@ -257,10 +257,6 @@ mod tests {
         assert_eq!(limit["schema"]["minimum"], 1);
         assert_eq!(limit["schema"]["maximum"], 3);
         assert_eq!(limit["schema"]["default"], 3);
-        assert_eq!(
-            listing["responses"]["422"]["content"]["application/json"]["schema"]["$ref"],
-            "#/components/schemas/TasteDiscoveryValidationError"
-        );
 
         let dismiss = &paths["/api/v1/taste/discoveries/{signal_id}/dismiss"]["post"];
         assert_eq!(dismiss["operationId"], "dismiss_documentation");
