@@ -893,92 +893,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/creators/compare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Compare Creators Endpoint
-         * @description Return bounded personal side-by-side comparison for the requested creator keys.
-         *
-         *     Compares 2-4 canonical creators using the same explainable personal analytics
-         *     already available on creator detail pages. Every metric remains explicitly
-         *     personal to the authenticated user.
-         *
-         *     Metrics included per creator:
-         *     - Average rating and median rating
-         *     - Rated sample count
-         *     - Rating distribution
-         *     - 5★/top-rating rate (proportion of 5.0 ratings)
-         *     - Role-specific averages and counts
-         *     - Strongest series/thread aggregates
-         *     - Unread attributed issue count (Issue.status == "unread", not queue/upcoming semantics)
-         *     - Read-but-unrated attributed issue count (no stored effective rating)
-         *     - Explicit "insufficient data" flag when rated sample < 3
-         *
-         *     Only creator keys visible in the authenticated user's own confirmed issue
-         *     metadata are compared; unknown or foreign keys are silently omitted so a
-         *     creator key can never leak another user's library state. Same-display-name
-         *     creators remain distinct via their canonical keys.
-         *
-         *     Args:
-         *         current_user: Authenticated user whose library is aggregated.
-         *         keys: Comma-separated canonical creator keys (2-4).
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Batch comparison keyed by requested visible creator keys, plus explicit
-         *         coverage state and list of keys with insufficient data.
-         *
-         *     Raises:
-         *         HTTPException: When the ``keys`` parameter is missing, out of bounds, or malformed.
-         */
-        get: operations["compare_creators_endpoint_api_v1_creators_compare_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/discoveries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Discoveries Endpoint
-         * @description Return explainable personal taste-discovery views for the authenticated user.
-         *
-         *     Every view is deterministic and derived only from the user's own latest
-         *     effective ratings and confirmed creator credits. A creator may appear in
-         *     multiple views, and each entry carries the supporting metrics and the exact
-         *     rules that qualified it, so no ranking is unexplained. Every view has an
-         *     explicit minimum sample before it ranks creators, and missing creator
-         *     metadata is reported as partial coverage rather than negative evidence.
-         *
-         *     Args:
-         *         current_user: Authenticated user whose library is aggregated.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Bounded discovery views in canonical order plus metadata-coverage state.
-         */
-        get: operations["get_creator_discoveries_endpoint_api_v1_creators_discoveries_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/creators/summaries": {
         parameters: {
             query?: never;
@@ -988,265 +902,6 @@ export interface paths {
         };
         /** Document native creator summaries with the mounted query and response types. */
         get: operations["get_summaries_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/team-chemistry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Team Chemistry Endpoint
-         * @description Return ranked recurring creator-team pairs for the authenticated user.
-         *
-         *     A team is a pair of stable canonical creator identities credited together
-         *     on shared rated issues with eligible interior-storytelling roles. Pairs
-         *     below ``min_shared_team_sample`` shared rated issues are never ranked, the
-         *     returned issue drilldown sample is bounded, and every metric stays
-         *     descriptive personal-reading data: no causation or significance is
-         *     expressed or implied.
-         *
-         *     Only creator identities visible in the authenticated user's own confirmed
-         *     issue metadata are considered, so a creator key can never leak another
-         *     user's library state, and same-name creators remain distinct via their
-         *     canonical keys.
-         *
-         *     Args:
-         *         current_user: Authenticated user whose library is aggregated.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Ranked bounded team pairs with shared sample, average, distribution,
-         *         baseline context, and navigable issue references, plus explicit
-         *         metadata-coverage state.
-         */
-        get: operations["get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Detail Endpoint
-         * @description Return full personal creator detail for the specified canonical key.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         current_user: Authenticated user owning the library.
-         *         limit: Max number of issues per collection.
-         *         offset: Pagination offset.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         The full creator detail response including summary, role stats, and issue lists.
-         *
-         *     Raises:
-         *         HTTPException: When the key is malformed or the creator is not found
-         *         in the user's library.
-         */
-        get: operations["get_creator_detail_endpoint_api_v1_creators__creator_key__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Rating Distribution Drilldown Endpoint
-         * @description Return detailed drilldown for a specific rating distribution bucket.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         rating_value: Specific rating value (e.g. ``5.0``, ``4.5``).
-         *         current_user: Authenticated user owning the library.
-         *         page: Page number for paginated results.
-         *         page_size: Number of issues per page.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Rating distribution drilldown for the specific bucket.
-         *
-         *     Raises:
-         *         HTTPException: When keys are malformed or data is not found.
-         */
-        get: operations["get_creator_rating_distribution_drilldown_endpoint_api_v1_creators__creator_key__metrics_rating_distribution__rating_value__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}/metrics/role-stats/{role}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Role Drilldown Endpoint
-         * @description Return detailed drilldown for a specific creator role.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         role: Specific role to drill down (e.g., ``Writer``, ``Artist``, ``Penciler``).
-         *         current_user: Authenticated user owning the library.
-         *         page: Page number for paginated results.
-         *         page_size: Number of issues per page.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Role drilldown with calculation, included issues, and role-specific data.
-         *
-         *     Raises:
-         *         HTTPException: When keys are malformed or data is not found.
-         */
-        get: operations["get_creator_role_drilldown_endpoint_api_v1_creators__creator_key__metrics_role_stats__role__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Series Drilldown Endpoint
-         * @description Return detailed drilldown for a specific creator series.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         series_key: Specific series key (e.g. ``thread:123``).
-         *         current_user: Authenticated user owning the library.
-         *         page: Page number for paginated results.
-         *         page_size: Number of issues per page.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Series drilldown with calculation, included issues, and series-specific data.
-         *
-         *     Raises:
-         *         HTTPException: When keys are malformed or data is not found.
-         */
-        get: operations["get_creator_series_drilldown_endpoint_api_v1_creators__creator_key__metrics_series_stats__series_key__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}/metrics/{metric_type}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Metric Drilldown Endpoint
-         * @description Return detailed drilldown for a specific creator metric.
-         *
-         *     This endpoint provides the exact calculation, supporting issues, and exclusion
-         *     reasoning for any creator metric shown on comparison or detail pages.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         metric_type: Type of metric to drill down (``average-rating``, ``median-rating``,
-         *             ``rated-issue-count``, ``five-star-rate``, ``rating-distribution``,
-         *             ``unread-count``, ``read-unrated-count``, ``role-stats``, ``series-stats``).
-         *         current_user: Authenticated user owning the library.
-         *         role: Specific role for role-based metrics (required for ``role-stats``).
-         *         rating_value: Specific rating value for distribution metrics (e.g. ``5.0``, ``4.5``).
-         *         series_key: Specific series key for series metrics (e.g. ``thread:123``).
-         *         page: Page number for paginated issue lists.
-         *         page_size: Number of issues per page.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Detailed drilldown with calculation, included issues, excluded issues, and pagination.
-         *
-         *     Raises:
-         *         HTTPException: When keys are malformed, metric type is invalid, or data is not found.
-         */
-        get: operations["get_creator_metric_drilldown_endpoint_api_v1_creators__creator_key__metrics__metric_type__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/{creator_key}/series/{series_key}/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Creator Series Issues Endpoint
-         * @description Return the bounded issues supporting one creator series/run group.
-         *
-         *     Every series aggregate on creator detail is explainable from these rows.
-         *     The series key must be the canonical ``thread:<id>`` identity; a group is
-         *     never addressed by display-title text, and a series belonging to another
-         *     user is indistinguishable from one that does not exist.
-         *
-         *     Args:
-         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
-         *         series_key: Canonical series key (e.g. ``thread:7``).
-         *         current_user: Authenticated user owning the library.
-         *         limit: Max number of issue rows.
-         *         offset: Pagination offset.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         The bounded drill-down page plus its group-level header aggregates.
-         *
-         *     Raises:
-         *         HTTPException: When either key is malformed, or the creator or series
-         *         group is not found in the user's library.
-         */
-        get: operations["get_creator_series_issues_endpoint_api_v1_creators__creator_key__series__series_key__issues_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2325,39 +1980,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/correction-examples": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Correction Sheet Examples
-         * @description Get personalized examples for the correction sheet steering choices.
-         *
-         *     Returns compact examples drawn from the user's own rated/read history for
-         *     each correction sheet option. Examples are explanatory only and do not
-         *     constrain the canonical recommendation behavior. Returns null for options
-         *     where no honest example exists.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         CorrectionSheetExamplesResponse with examples for each choice.
-         */
-        get: operations["get_correction_sheet_examples_api_v1_sessions_correction_examples_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -2849,14 +2471,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Thread Connected Threads
-         * @description Return threads connected to this one via dependencies.
-         *
-         *     When you are reading a thread, this tells you which other threads
-         *     are part of the same dependency web so you know there's a relationship.
-         */
-        get: operations["get_thread_connected_threads_api_v1_threads__thread_id__connected_get"];
+        /** Documentation-only operation for connected threads. */
+        get: operations["thread_ordering_connected_threads"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2892,14 +2508,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Check Thread Dependency Order
-         * @description Check for conflicts between dependency order and issue position order.
-         *
-         *     Returns a list of conflicts where dependencies imply issue X should come
-         *     before issue Y, but the current position order disagrees.
-         */
-        get: operations["check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get"];
+        /** Documentation-only operation for the dependency order check. */
+        get: operations["thread_ordering_dependency_order_check"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3010,22 +2620,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Validate Issue Order
-         * @description Report dependency edges that disagree with canonical issue positions.
-         *
-         *     Args:
-         *         thread_id: The thread ID whose in-thread ordering should be validated.
-         *         current_user: The authenticated user requesting the validation report.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         IssueOrderValidationResponse containing human-readable ordering warnings.
-         *
-         *     Raises:
-         *         HTTPException: If the thread does not exist or is not owned by the user.
-         */
-        get: operations["validate_issue_order_api_v1_threads__thread_id__issues_validateOrder_get"];
+        /** Documentation-only operation for issue order validation. */
+        get: operations["thread_ordering_validate_order"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3041,11 +2637,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Thread Reading Orders
-         * @description Get reading orders that contain this thread.
-         */
-        get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
+        /** Documentation-only operation for reading orders containing a thread. */
+        get: operations["thread_ordering_reading_orders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3138,11 +2731,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Get Thread Blocking Info
-         * @description Return blocked status and human-readable blocking reasons for a thread.
-         */
-        post: operations["get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post"];
+        /** Documentation-only operation for the single-thread blocking explanation. */
+        post: operations["thread_ordering_get_blocking_info"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3209,11 +2799,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Get Threads Blocking Info
-         * @description Return blocked status and human-readable blocking reasons for multiple threads.
-         */
-        post: operations["get_threads_blocking_info_api_v1_threads_getBlockingInfo_post"];
+        /** Documentation-only operation for the batch blocking explanation. */
+        post: operations["thread_ordering_get_threads_blocking_info"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3314,23 +2901,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_activity_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/analytics/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation used by the canonical Rust OpenAPI generator. */
-        get: operations["metrics_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4391,46 +3961,18 @@ export interface components {
             next_cursor?: string | null;
             next_page_token?: string | null;
         };
-        /** @description Reading metrics and analytics for the authenticated user. */
-        AnalyticsMetricsResponse: {
-            /** Format: int32 */
-            active_threads: number;
-            /** Format: double */
-            average_session_hours: number;
-            /** Format: int32 */
-            completed_threads: number;
-            /** Format: double */
-            completion_rate: number;
-            event_stats: {
-                [key: string]: number;
-            };
-            recent_sessions: components["schemas"]["RecentSession"][];
-            top_rated_threads: components["schemas"]["TopRatedThread"][];
-            /** Format: int32 */
-            total_threads: number;
-        };
         AssignTagRequest: {
             /** Format: int32 */
             target_id: number;
             target_type: string;
         };
-        /**
-         * BatchBlockingExplanationRequest
-         * @description Schema for batch blocking-info request.
-         */
+        /** @description Python `BatchBlockingExplanationRequest` (documentation schema). */
         BatchBlockingExplanationRequest: {
-            /** Thread Ids */
             thread_ids: number[];
         };
-        /**
-         * BatchBlockingExplanationResponse
-         * @description Schema for batch blocking-info response — keyed by thread ID.
-         */
+        /** @description Python `BatchBlockingExplanationResponse`. */
         BatchBlockingExplanationResponse: {
-            /** Threads */
-            threads: {
-                [key: string]: components["schemas"]["BlockingExplanation"];
-            };
+            threads: components["schemas"]["OrderedExplanations"];
         };
         /** @enum {string} */
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
@@ -4731,95 +4273,6 @@ export interface components {
             target_type: string;
         };
         /**
-         * CBLAdoptionCommitRequest
-         * @description Reader decisions for committing CBL adoption to a Reading Plan.
-         *
-         *     The source fingerprint from the preview response is required so the commit
-         *     can revalidate the source list before any write; a stale preview aborts the
-         *     transaction with a structured conflict and no partial writes.
-         */
-        CBLAdoptionCommitRequest: {
-            /**
-             * Content Hash
-             * @description Content hash from the client's preview response for stale check
-             */
-            content_hash: string;
-            /**
-             * Entry Decisions
-             * @description Decisions per entry (cbl_position -> decision)
-             */
-            entry_decisions?: {
-                [key: string]: components["schemas"]["SourceBackedDecision"];
-            };
-            /**
-             * Revision Sha
-             * @description Revision SHA from the client's preview response for stale check
-             */
-            revision_sha: string;
-            /**
-             * Series Decisions
-             * @description Series-level inclusion/exclusion decisions
-             */
-            series_decisions?: components["schemas"]["SeriesDecision"][];
-            /**
-             * Series Overrides
-             * @description Individual entry overrides of series decisions
-             */
-            series_overrides?: components["schemas"]["EntryOverride"][];
-        };
-        /**
-         * CBLAdoptionCommitResponse
-         * @description Updated Reading Plan plus machine-readable adoption source positions.
-         */
-        CBLAdoptionCommitResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Created Positions
-             * @description CBL source positions where a missing issue was materialized
-             */
-            created_positions?: number[];
-            /**
-             * Excluded Positions
-             * @description CBL source positions explicitly excluded or left unapproved
-             */
-            excluded_positions?: number[];
-            /** Id */
-            id: number;
-            /** Lanes */
-            lanes: components["schemas"]["ContinuityPlanLane"][];
-            /** Name */
-            name: string;
-            /** Nodes */
-            nodes?: components["schemas"]["ContinuityPlanNode"][];
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /**
-             * Reused Positions
-             * @description CBL source positions whose issue/plan node was reused
-             */
-            reused_positions?: number[];
-            /**
-             * Unresolved Positions
-             * @description CBL source positions that could not be adopted
-             */
-            unresolved_positions?: number[];
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** User Id */
-            user_id: number;
-        };
-        /**
          * CBLAdoptionEntryResponse
          * @description Typed reconciliation and adoption state for one source position.
          */
@@ -4881,20 +4334,6 @@ export interface components {
             volume_year?: number | null;
         };
         /**
-         * CBLAdoptionPlanRequest
-         * @description Optional per-series and per-entry choices for a read-only CBL plan.
-         */
-        CBLAdoptionPlanRequest: {
-            /** Entry Decisions */
-            entry_decisions?: {
-                [key: string]: boolean;
-            };
-            /** Series Decisions */
-            series_decisions?: {
-                [key: string]: boolean;
-            };
-        };
-        /**
          * CBLAdoptionPreviewResponse
          * @description Complete typed, read-only CBL adoption preview contract.
          */
@@ -4936,249 +4375,66 @@ export interface components {
             /** Unresolved Positions */
             unresolved_positions: number[];
         };
-        /**
-         * CBLBreadcrumb
-         * @description One step in the folder breadcrumb, from the catalog root to the folder.
-         */
         CBLBreadcrumb: {
-            /** Name */
             name: string;
-            /** Path */
             path: string;
         };
-        /**
-         * CBLCatalogBrowseResponse
-         * @description Paginated CBL results for one folder or one catalog-wide search.
-         */
         CBLCatalogBrowseResponse: {
-            /** Breadcrumbs */
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
-            /** Folder */
             folder: string;
-            /** Folders */
             folders: components["schemas"]["CBLSourceFolder"][];
-            /** Has Next */
             has_next: boolean;
-            /** Has Previous */
             has_previous: boolean;
-            /** Items */
             items: components["schemas"]["CBLCatalogListItem"][];
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Query */
-            query?: string | null;
             /**
-             * Scope
-             * @enum {string}
+             * Format: int64
+             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
              */
-            scope: "folder" | "search";
-            /** Total */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            query?: string | null;
+            scope: string;
+            /** Format: int64 */
             total: number;
-            /** Total Pages */
+            /** Format: int64 */
             total_pages: number;
         };
-        /**
-         * CBLCatalogListItem
-         * @description One active persisted source list shown in a catalog folder or search page.
-         *
-         *     The shape mirrors the Add-material discovery item, but it is a distinct
-         *     model so the catalog browsing surface never shares a schema title with the
-         *     discovery surface: two same-named models would collapse into one entry in
-         *     the generated OpenAPI components.
-         */
         CBLCatalogListItem: {
-            /** Content Hash */
             content_hash: string;
-            /** Declared Issue Count */
-            declared_issue_count: number | null;
-            /** Id */
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
             id: number;
-            /** Name */
             name: string;
-            /** Revision Sha */
             revision_sha: string;
-            /** Source Path */
             source_path: string;
-            /** Source Repository */
             source_repository: string;
         };
-        /**
-         * CBLComicvineOccurrenceDetail
-         * @description One source position that contains an exact Comic Vine issue identity.
-         */
-        CBLComicvineOccurrenceDetail: {
-            /**
-             * Comicvine Issue Id
-             * @description Exact Comic Vine issue ID that matched
-             */
-            comicvine_issue_id: string;
-            /**
-             * Comicvine Volume Id
-             * @description Comic Vine volume identity of the occurrence when the source has one
-             */
-            comicvine_volume_id?: string | null;
-            /**
-             * Issue Number
-             * @description Issue number recorded in the CBL source
-             */
-            issue_number: string;
-            /**
-             * List Id
-             * @description CBL source list ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Display name of the CBL source list
-             */
-            list_name: string;
-            /**
-             * Position
-             * @description Source position in original CBL order
-             */
-            position: number;
-            /**
-             * Publication Year
-             * @description Publication year recorded in the CBL source
-             */
-            publication_year?: number | null;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Series Name
-             * @description Series name recorded in the CBL source
-             */
-            series_name: string;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-            /**
-             * Volume Year
-             * @description Volume year recorded in the CBL source
-             */
-            volume_year?: number | null;
-        };
-        /**
-         * CBLComicvineOccurrencePage
-         * @description One page of CBL source occurrences for an exact Comic Vine issue identity.
-         */
-        CBLComicvineOccurrencePage: {
-            /**
-             * Comicvine Issue Id
-             * @description Exact Comic Vine issue ID queried
-             */
-            comicvine_issue_id: string;
-            /**
-             * Lists Total
-             * @description Number of distinct source lists containing the identity
-             */
-            lists_total: number;
-            /**
-             * Occurrences
-             * @description Matching source occurrences in this page
-             */
-            occurrences?: components["schemas"]["CBLComicvineOccurrenceDetail"][];
-            /**
-             * Occurrences Limit
-             * @description Maximum source occurrences per page
-             */
-            occurrences_limit: number;
-            /**
-             * Occurrences Offset
-             * @description Zero-based offset of the returned page
-             */
-            occurrences_offset: number;
-            /**
-             * Occurrences Total
-             * @description Total matching source occurrences in the shared catalog
-             */
-            occurrences_total: number;
-        };
-        /**
-         * CBLDatabaseUnavailableDetail
-         * @description Application-wide database acquisition error, before route execution.
-         */
+        /** @description Global dependency-acquisition outage shape. */
         CBLDatabaseUnavailableDetail: {
-            /**
-             * Code
-             * @constant
-             */
-            code: "database_unavailable";
-            /** Message */
+            code: string;
             message: string;
-            /**
-             * Status
-             * @constant
-             */
-            status: "SERVICE_UNAVAILABLE";
+            status: string;
         };
-        /**
-         * CBLDatabaseUnavailableResponse
-         * @description Global retryable outage envelope used when a dependency cannot connect.
-         */
         CBLDatabaseUnavailableResponse: {
             error: components["schemas"]["CBLDatabaseUnavailableDetail"];
         };
-        /**
-         * CBLErrorDetail
-         * @description Machine-readable error code and message for a catalog failure.
-         */
+        /** @description Error detail for catalog-originated failures (400/404/503). */
         CBLErrorDetail: {
-            /**
-             * Code
-             * @description Stable machine-readable error code.
-             */
             code: string;
-            /**
-             * Message
-             * @description Human-readable error message.
-             */
             message: string;
         };
-        /**
-         * CBLErrorResponse
-         * @description Envelope for catalog error responses: ``{"detail": {"code": ..., "message": ...}}``.
-         */
         CBLErrorResponse: {
             detail: components["schemas"]["CBLErrorDetail"];
         };
-        /**
-         * CBLFolderListingResponse
-         * @description Response for browsing one catalog folder's immediate subfolders.
-         */
         CBLFolderListingResponse: {
-            /** Breadcrumbs */
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
-            /**
-             * Direct List Count
-             * @description Active CBLs stored directly in the requested folder.
-             */
+            /** Format: int32 */
             direct_list_count: number;
-            /** Folder */
             folder: string;
-            /** Folders */
             folders: components["schemas"]["CBLSourceFolder"][];
-            /**
-             * Total List Count
-             * @description Active CBLs anywhere below the requested folder.
-             */
+            /** Format: int32 */
             total_list_count: number;
         };
         /**
@@ -5190,299 +4446,6 @@ export interface components {
             position: number;
             /** Source Path */
             source_path: string;
-        };
-        /**
-         * CBLReadingListCandidatesResponse
-         * @description Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.
-         */
-        CBLReadingListCandidatesResponse: {
-            /**
-             * Candidates
-             * @description Ranked source list comparisons in this page
-             */
-            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
-            /**
-             * Candidates Total
-             * @description Number of source lists containing at least one input comic
-             */
-            candidates_total: number;
-            /**
-             * Entries
-             * @description Every current list entry and its identity gap
-             */
-            entries?: components["schemas"]["CBLReadingListInputEntry"][];
-            /**
-             * Input Confirmed Total
-             * @description Distinct confirmed Comic Vine issue IDs compared
-             */
-            input_confirmed_total: number;
-            /**
-             * Input Conflict Count
-             * @description List entries with conflicting confirmed Comic Vine issue IDs
-             */
-            input_conflict_count: number;
-            /**
-             * Input Entry Count
-             * @description Every current list entry
-             */
-            input_entry_count: number;
-            /**
-             * Input Ids
-             * @description Distinct confirmed input IDs in list order
-             */
-            input_ids?: string[];
-            /**
-             * Input Missing Count
-             * @description List entries without a confirmed Comic Vine issue ID
-             */
-            input_missing_count: number;
-            /**
-             * List Id
-             * @description Owned Reading List ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Owned Reading List name
-             */
-            list_name: string;
-        };
-        /**
-         * CBLReadingListInputEntry
-         * @description One current Reading List entry and its confirmed Comic Vine identity state.
-         */
-        CBLReadingListInputEntry: {
-            /**
-             * Comicvine Issue Id
-             * @description Confirmed Comic Vine issue ID when exactly one is confirmed
-             */
-            comicvine_issue_id?: string | null;
-            /**
-             * Comicvine Issue Ids
-             * @description Every confirmed Comic Vine issue ID, including conflicting IDs
-             */
-            comicvine_issue_ids?: string[];
-            /**
-             * Identity Status
-             * @description Whether this entry has one usable confirmed exact identity
-             * @enum {string}
-             */
-            identity_status: "confirmed" | "missing" | "conflict";
-            /**
-             * Issue Id
-             * @description ComicPile issue ID
-             */
-            issue_id: number;
-            /**
-             * Issue Number
-             * @description Reader-facing issue number
-             */
-            issue_number: string;
-            /**
-             * Position
-             * @description Current order position in the Reading List
-             */
-            position: number;
-            /**
-             * Series Name
-             * @description Reader-facing series name
-             */
-            series_name: string;
-        };
-        /**
-         * CBLSourceComparisonMatch
-         * @description Coverage and order comparison for one shared CBL source list.
-         */
-        CBLSourceComparisonMatch: {
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Distinct Source Issues
-             * @description Distinct confirmed Comic Vine issues in the source list
-             */
-            distinct_source_issues: number;
-            /**
-             * Duplicate Match Count
-             * @description Matched positions beyond the first occurrence of each distinct input comic
-             */
-            duplicate_match_count: number;
-            /**
-             * Entries Total
-             * @description Every occurrence in the source list
-             */
-            entries_total: number;
-            /**
-             * Input Coverage Percentage
-             * @description Percentage of distinct input comics covered
-             */
-            input_coverage_percentage: number;
-            /**
-             * Input Total
-             * @description Distinct input comics compared
-             */
-            input_total: number;
-            /**
-             * List Id
-             * @description CBL source list ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Display name of the CBL source list
-             */
-            list_name: string;
-            /**
-             * Matched Input Count
-             * @description Distinct input comics found in this source list
-             */
-            matched_input_count: number;
-            /**
-             * Matched Input Ids
-             * @description Matched distinct IDs in input order
-             */
-            matched_input_ids?: string[];
-            /**
-             * Matched Occurrence Count
-             * @description Source positions that hold a matching input comic
-             */
-            matched_occurrence_count: number;
-            /**
-             * Missing Input Ids
-             * @description Input IDs absent from this source list
-             */
-            missing_input_ids?: string[];
-            /**
-             * Order Disagreement Count
-             * @description Matched pairs whose relative order differs from the input order
-             */
-            order_disagreement_count: number;
-            /**
-             * Order Pair Count
-             * @description Comparable matched comic pairs
-             */
-            order_pair_count: number;
-            /**
-             * Order Status
-             * @description Relative order of matched distinct comics
-             * @enum {string}
-             */
-            order_status: "same_order" | "reordered" | "not_comparable";
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Score
-             * @description Relevance score balancing coverage, precision, and order
-             */
-            score: number;
-            /**
-             * Source Coverage Percentage
-             * @description Percentage of this source's distinct comics that matched
-             */
-            source_coverage_percentage: number;
-            /**
-             * Source Only Issue Count
-             * @description Distinct source comics whose exact ID is not in the input list
-             */
-            source_only_issue_count: number;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-        };
-        /**
-         * CBLSourceComparisonRequest
-         * @description Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.
-         */
-        CBLSourceComparisonRequest: {
-            /**
-             * Comicvine Issue Ids
-             * @description Confirmed Comic Vine issue IDs in the caller's intended order
-             */
-            comicvine_issue_ids: string[];
-        };
-        /**
-         * CBLSourceComparisonResponse
-         * @description Ranked shared CBL source lists for one confirmed input set.
-         */
-        CBLSourceComparisonResponse: {
-            /**
-             * Candidates
-             * @description Ranked source list comparisons in this page
-             */
-            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
-            /**
-             * Candidates Total
-             * @description Number of source lists containing at least one input comic
-             */
-            candidates_total: number;
-            /**
-             * Comicvine Issue Ids
-             * @description Distinct input IDs that were compared
-             */
-            comicvine_issue_ids?: string[];
-            /**
-             * Input Total
-             * @description Distinct input comics compared
-             */
-            input_total: number;
-        };
-        /**
-         * CBLSourceEntryDetail
-         * @description One ordered source occurrence in a CBL list.
-         */
-        CBLSourceEntryDetail: {
-            /**
-             * Comicvine Issue Id
-             * @description Comic Vine issue ID when the source entry has one
-             */
-            comicvine_issue_id?: string | null;
-            /**
-             * Comicvine Volume Id
-             * @description Comic Vine volume ID when the source entry has one
-             */
-            comicvine_volume_id?: string | null;
-            /**
-             * Issue Number
-             * @description Issue number recorded in the CBL source
-             */
-            issue_number: string;
-            /**
-             * Position
-             * @description Source position in original CBL order
-             */
-            position: number;
-            /**
-             * Publication Year
-             * @description Publication year recorded in the CBL source
-             */
-            publication_year?: number | null;
-            /**
-             * Series Name
-             * @description Series name recorded in the CBL source
-             */
-            series_name: string;
-            /**
-             * Volume Year
-             * @description Volume year recorded in the CBL source
-             */
-            volume_year?: number | null;
         };
         /**
          * CBLSourceFingerprintResponse
@@ -5500,138 +4463,13 @@ export interface components {
             /** Source Repository */
             source_repository: string;
         };
-        /**
-         * CBLSourceFolder
-         * @description One immediate child folder of the requested catalog folder.
-         */
         CBLSourceFolder: {
-            /**
-             * Direct List Count
-             * @description Active CBLs stored directly in this folder.
-             */
+            /** Format: int32 */
             direct_list_count: number;
-            /**
-             * Name
-             * @description Folder name (one path segment).
-             */
             name: string;
-            /**
-             * Path
-             * @description Full source-relative folder path.
-             */
             path: string;
-            /**
-             * Total List Count
-             * @description Active CBLs anywhere below this folder.
-             */
+            /** Format: int32 */
             total_list_count: number;
-        };
-        /**
-         * CBLSourceListDetail
-         * @description Read-only detail for one CBL source list.
-         */
-        CBLSourceListDetail: {
-            /**
-             * Content Hash
-             * @description Content hash of the imported source list
-             */
-            content_hash: string;
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Entries
-             * @description Ordered source occurrences in this page
-             */
-            entries?: components["schemas"]["CBLSourceEntryDetail"][];
-            /**
-             * Entries Limit
-             * @description Maximum source occurrences per page
-             */
-            entries_limit: number;
-            /**
-             * Entries Offset
-             * @description Zero-based offset of the returned page
-             */
-            entries_offset: number;
-            /**
-             * Entries Total
-             * @description Total source occurrences in the list
-             */
-            entries_total: number;
-            /**
-             * Id
-             * @description CBL source list ID
-             */
-            id: number;
-            /**
-             * Name
-             * @description Display name of the CBL source list
-             */
-            name: string;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-        };
-        /**
-         * CBLSourceListDiscoveryItem
-         * @description One active persisted source list that may be previewed by Add material.
-         */
-        CBLSourceListDiscoveryItem: {
-            /**
-             * Content Hash
-             * @description Content hash of the imported source list
-             */
-            content_hash: string;
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Id
-             * @description CBL source list ID
-             */
-            id: number;
-            /**
-             * Name
-             * @description Display name of the CBL source list
-             */
-            name: string;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Source Path
-             * @description Stored path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
         };
         /**
          * CanonicalCorrection
@@ -6198,25 +5036,15 @@ export interface components {
              */
             comicvine_issue_id: number;
         };
-        /**
-         * ConnectedThreadInfo
-         * @description Lightweight info about a thread connected via dependencies.
-         */
+        /** @description Python `ConnectedThreadInfo`. */
         ConnectedThreadInfo: {
-            /** Connection Type */
             connection_type: string;
-            /** Dependency Id */
+            /** Format: int32 */
             dependency_id: number;
-            /**
-             * Is Circular
-             * @default false
-             */
             is_circular: boolean;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Title */
             title: string;
         };
         /**
@@ -6397,41 +5225,6 @@ export interface components {
             id: number;
             type: string;
         };
-        /**
-         * CorrectionSheetExamplesResponse
-         * @description Personalized examples for the correction sheet steering choices.
-         *
-         *     Each field corresponds to a correction choice and contains a compact
-         *     example drawn from the user's own rated/read history, or ``null`` when
-         *     no honest example exists for that option.
-         */
-        CorrectionSheetExamplesResponse: {
-            /**
-             * Even Easier
-             * @description Example for 'Give me something lighter' (lower-commitment read)
-             */
-            even_easier?: string | null;
-            /**
-             * Keep Level Different
-             * @description Example for 'Keep about the same effort' (same commitment, different comic)
-             */
-            keep_level_different?: string | null;
-            /**
-             * Pure Random
-             * @description Always null. 'Surprise me' disables similarity and effort steering, so no preference-derived example is shown.
-             */
-            pure_random?: string | null;
-            /**
-             * Something Different
-             * @description Example for 'Give me a change of pace' (different from recent/high-rated reads)
-             */
-            something_different?: string | null;
-            /**
-             * Something Familiar
-             * @description Example for 'Stay close to what I've liked' (similar to highly rated comics)
-             */
-            something_familiar?: string | null;
-        };
         CreateIssuesRequest: {
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
@@ -6461,271 +5254,86 @@ export interface components {
             name: string;
             roles: string[];
         };
-        /**
-         * CreatorComparisonCoverage
-         * @description Coverage state distinguishing complete from lower-bound statistics across compared creators.
-         */
         CreatorComparisonCoverage: {
-            /**
-             * Rated Issues Total
-             * @description Total owned issues with an effective rating across all compared creators.
-             * @default 0
-             */
+            /** Format: int64 */
             rated_issues_total: number;
-            /**
-             * Rated Issues With Creator Metadata
-             * @description Rated owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             rated_issues_with_creator_metadata: number;
-            /**
-             * Ratings Complete
-             * @description True only when every owned rated issue has confirmed usable creator metadata.
-             * @default true
-             */
             ratings_complete: boolean;
-            /**
-             * Read Unrated Complete
-             * @description True only when every owned read-but-unrated issue has confirmed usable creator metadata.
-             * @default true
-             */
             read_unrated_complete: boolean;
-            /**
-             * Read Unrated Issues Total
-             * @description Total owned read-but-unrated issues.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_issues_total: number;
-            /**
-             * Read Unrated Issues With Creator Metadata
-             * @description Read-but-unrated owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_issues_with_creator_metadata: number;
-            /**
-             * Unread Issues Total
-             * @description Total owned unread issues.
-             * @default 0
-             */
+            /** Format: int64 */
             unread_issues_total: number;
-            /**
-             * Unread Issues With Creator Metadata
-             * @description Unread owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             unread_issues_with_creator_metadata: number;
-            /**
-             * Upcoming Complete
-             * @description True only when every owned unread issue considered by the library has confirmed usable creator metadata. While false, per-creator unread counts are lower bounds: an unread issue without creator metadata cannot be attributed to any creator.
-             * @default true
-             */
             upcoming_complete: boolean;
         };
-        /**
-         * CreatorComparisonIssueRef
-         * @description Bounded navigable reference to one creator-attributed issue (issue #3174).
-         */
         CreatorComparisonIssueRef: {
-            /**
-             * Issue Id
-             * @description Local ComicPile issue ID.
-             */
+            /** Format: int64 */
             issue_id: number;
-            /**
-             * Issue Number
-             * @description Display issue number within its thread.
-             */
             issue_number: string;
-            /**
-             * Status
-             * @description Local issue status (``read`` or ``unread``) at aggregation time.
-             */
             status: string;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread ID owning the issue.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Title of the thread owning the issue.
-             */
             thread_title: string;
         };
-        /**
-         * CreatorComparisonItem
-         * @description Comparison data for one creator identity.
-         */
         CreatorComparisonItem: {
-            /**
-             * Average Rating
-             * @description Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no ratings.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Canonical Creator Key
-             * @description Stable normalized creator key (e.g. ``creator:12345``).
-             */
             canonical_creator_key: string;
-            /**
-             * Display Name
-             * @description Human-readable creator name from confirmed issue metadata.
-             */
             display_name: string;
-            /**
-             * Insufficient Data
-             * @description True when the creator has fewer than 5 rated issues, making statistics less reliable.
-             * @default false
-             */
             insufficient_data: boolean;
-            /**
-             * Max Issue Refs Per Group
-             * @description Maximum issue references returned per drilldown group. Exposed so the UI can explain a truncated list instead of silently hiding it.
-             * @default 5
-             */
+            /** Format: int64 */
             max_issue_refs_per_group: number;
-            /**
-             * Median Rating
-             * @description Median of the user's latest effective ratings across headline-eligible issues. ``null`` when fewer than 1 rated issue.
-             */
+            /** Format: double */
             median_rating?: number | null;
-            /**
-             * Min Rated Issues Per Series
-             * @description Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.
-             * @default 5
-             */
+            /** Format: int64 */
             min_rated_issues_per_series: number;
-            /**
-             * Normalized Roles
-             * @description Distinct roles seen for this creator across the user's issues.
-             */
-            normalized_roles?: string[];
-            /**
-             * Rating Distribution
-             * @description Distribution of ratings (e.g. {'5': 3, '4': 2, '3': 1}).
-             */
-            rating_distribution?: {
+            normalized_roles: string[];
+            rating_distribution: {
                 [key: string]: number;
             };
-            /**
-             * Ratings Count
-             * @description Number of distinct rated issues contributing to the headline average.
-             * @default 0
-             */
+            /** Format: int64 */
             ratings_count: number;
-            /**
-             * Read Unrated Count
-             * @description Number of read owned issues attributed to this creator with no stored effective rating.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_count: number;
-            /**
-             * Read Unrated Issue Refs
-             * @description Bounded sample of the read attributed issues behind ``read_unrated_count`` with no stored effective rating. At most ``max_issue_refs_per_group`` entries; the count remains the full total.
-             */
-            read_unrated_issue_refs?: components["schemas"]["CreatorComparisonIssueRef"][];
-            /**
-             * Role Stats
-             * @description Breakdown of statistics per role.
-             */
-            role_stats?: components["schemas"]["CreatorComparisonRoleStat"][];
-            /**
-             * Strongest Series
-             * @description Series ranked by rating strength, strongest first. Series with fewer than min_rated_issues_per_series rated issues are excluded.
-             */
-            strongest_series?: components["schemas"]["CreatorComparisonSeriesAggregate"][];
-            /**
-             * Top Rating Rate
-             * @description Proportion of ratings at the top of ComicPile's 1-5 scale (5★). ``null`` when no ratings.
-             */
+            read_unrated_issue_refs: components["schemas"]["CreatorComparisonIssueRef"][];
+            role_stats: components["schemas"]["CreatorComparisonRoleStat"][];
+            strongest_series: components["schemas"]["CreatorComparisonSeriesAggregate"][];
+            /** Format: double */
             top_rating_rate?: number | null;
-            /**
-             * Unread Issue Refs
-             * @description Bounded sample of the unread attributed issues behind ``unread_upcoming_count`` in stable display order. At most ``max_issue_refs_per_group`` entries; the count remains the full total.
-             */
-            unread_issue_refs?: components["schemas"]["CreatorComparisonIssueRef"][];
-            /**
-             * Unread Upcoming Count
-             * @description Number of unread owned issues attributed to this creator (``Issue.status == 'unread'``). This is unread attributed work already in the user's library, not queue position, roll eligibility, or upcoming scheduling.
-             * @default 0
-             */
+            unread_issue_refs: components["schemas"]["CreatorComparisonIssueRef"][];
+            /** Format: int64 */
             unread_upcoming_count: number;
         };
-        /**
-         * CreatorComparisonResponse
-         * @description Response body for the batch creator comparison API.
-         */
         CreatorComparisonResponse: {
-            /**
-             * Comparisons
-             * @description Mapping from canonical creator key to comparison data for every requested key visible in the authenticated user's library.
-             */
             comparisons: {
                 [key: string]: components["schemas"]["CreatorComparisonItem"];
             };
-            /** @description Coverage state distinguishing complete from lower-bound statistics. */
             coverage: components["schemas"]["CreatorComparisonCoverage"];
-            /**
-             * Insufficient Data Keys
-             * @description Canonical keys of creators with insufficient data (fewer than 5 rated issues).
-             */
-            insufficient_data_keys?: string[];
+            insufficient_data_keys: string[];
         };
-        /**
-         * CreatorComparisonRoleStat
-         * @description Role-specific statistics for a creator in comparison.
-         */
         CreatorComparisonRoleStat: {
-            /**
-             * Average Rating
-             * @description Average rating for issues where the creator held this specific role.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Issue Count
-             * @description Number of issues the creator held this role on.
-             */
+            /** Format: int64 */
             issue_count: number;
-            /**
-             * Rated Issue Count
-             * @description Number of rated issues backing the average_rating for this role.
-             */
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Role
-             * @description The normalized role name.
-             */
             role: string;
         };
-        /**
-         * CreatorComparisonSeriesAggregate
-         * @description Strongest series/thread aggregate for a creator.
-         */
         CreatorComparisonSeriesAggregate: {
-            /**
-             * Average Rating
-             * @description Average rating for this creator's rated issues in this series. Always present because only series meeting the minimum rated sample are returned.
-             */
+            /** Format: double */
             average_rating: number;
-            /**
-             * Issue Count
-             * @description Number of issues by this creator in this series.
-             */
+            /** Format: int64 */
             issue_count: number;
-            /**
-             * Rated Issue Count
-             * @description Number of rated issues backing average_rating. Series below the minimum rated sample are excluded from strongest_series entirely.
-             */
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread ID.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Title of the series/thread.
-             */
             thread_title: string;
         };
         /** @description One credited creator (Python `ComicVineCreator`). */
@@ -6735,468 +5343,137 @@ export interface components {
             name: string;
             roles: string[];
         };
-        /**
-         * CreatorDetailResponse
-         * @description Full detail response for a single creator identity.
-         */
         CreatorDetailResponse: {
-            /** @description Metadata coverage state (from #2028). */
             coverage: components["schemas"]["CreatorSummaryCoverage"];
-            /**
-             * Headline Roles
-             * @description The explicit role set that makes an issue headline-eligible. A credited role outside this set is visible in role stats and series groups but never in the headline Rated list.
-             */
-            headline_roles?: string[];
-            /** @description Evidence-backed strongest/weakest/most-read highlights (issue #3092). ``null`` when the creator has no headline-eligible ratings. */
+            headline_roles: string[];
             insights?: components["schemas"]["CreatorInsights"] | null;
-            /**
-             * Next Cursor
-             * @description Cursor for paginating long collections.
-             */
             next_cursor?: string | null;
-            /**
-             * Rated Issues
-             * @description Bounded list of headline-eligible rated issues, recent-first.
-             */
-            rated_issues?: components["schemas"]["CreatorIssueRow"][];
-            /**
-             * Rated Population Scope
-             * @description Population used by the headline summary and the Rated list. Only issues where the creator held a headline role count, matching the Rated heading and rating distribution denominator.
-             * @default headline_roles_only
-             * @constant
-             */
-            rated_population_scope: "headline_roles_only";
-            /** @description Headline-eligible rating distribution (half-star buckets, median, range, mean, sample count). ``null`` when the creator has no eligible ratings. */
+            rated_issues: components["schemas"]["CreatorIssueRow"][];
+            rated_population_scope: string;
             rating_distribution?: components["schemas"]["CreatorRatingDistribution"] | null;
-            /**
-             * Read Unrated Issues
-             * @description Bounded list of read-but-unrated issues.
-             */
-            read_unrated_issues?: components["schemas"]["CreatorIssueRow"][];
-            /**
-             * Role Stats
-             * @description Breakdown of statistics per role.
-             */
-            role_stats?: components["schemas"]["CreatorRoleStat"][];
-            /**
-             * Series Groups
-             * @description Bounded page of series/run-level aggregates, most-rated first.
-             */
-            series_groups?: components["schemas"]["CreatorSeriesGroup"][];
-            /**
-             * Series Groups Complete
-             * @description False when this page does not contain every series/run group, so the listed groups are a lower bound until further pages are loaded.
-             * @default true
-             */
+            read_unrated_issues: components["schemas"]["CreatorIssueRow"][];
+            role_stats: components["schemas"]["CreatorRoleStat"][];
+            series_groups: components["schemas"]["CreatorSeriesGroup"][];
             series_groups_complete: boolean;
-            /**
-             * Series Groups Total
-             * @description Total series/run groups with attributed rated work for this creator.
-             * @default 0
-             */
+            /** Format: int64 */
             series_groups_total: number;
-            /** @description The headline summary for the creator (from #2028). */
             summary: components["schemas"]["CreatorSummaryItem"];
-            /**
-             * Upcoming Issues
-             * @description Bounded list of upcoming unread issues.
-             */
-            upcoming_issues?: components["schemas"]["CreatorIssueRow"][];
+            upcoming_issues: components["schemas"]["CreatorIssueRow"][];
         };
-        /**
-         * CreatorDiscoveryCoverage
-         * @description Explicit metadata-coverage state for the discovery aggregation.
-         */
         CreatorDiscoveryCoverage: {
-            /**
-             * Rated Issues Total
-             * @description Rated issues in the library.
-             */
+            /** Format: int64 */
             rated_issues_total: number;
-            /**
-             * Rated Issues With Creator Metadata
-             * @description Rated issues carrying at least one usable confirmed credit.
-             */
+            /** Format: int64 */
             rated_issues_with_creator_metadata: number;
-            /**
-             * Ratings Complete
-             * @description True only when every rated issue carries confirmed creator metadata.
-             */
             ratings_complete: boolean;
         };
-        /**
-         * CreatorDiscoveryEntry
-         * @description One canonical creator inside a discovery view with supporting metrics.
-         */
         CreatorDiscoveryEntry: {
-            /**
-             * Average Rating
-             * @description Personal average across the rated sample.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Canonical Creator Key
-             * @description Stable normalized creator key (e.g. ``creator:12345``).
-             */
             canonical_creator_key: string;
-            /**
-             * Display Name
-             * @description Human-readable creator name from confirmed issue metadata.
-             */
             display_name: string;
-            /**
-             * Earlier Average Rating
-             * @description Average of the earlier half of a trend-eligible history.
-             */
+            /** Format: double */
             earlier_average_rating?: number | null;
-            /**
-             * Max Rating
-             * @description Highest effective rating.
-             */
+            /** Format: double */
             max_rating?: number | null;
-            /**
-             * Median Rating
-             * @description Personal median across the rated sample.
-             */
+            /** Format: double */
             median_rating?: number | null;
-            /**
-             * Min Rating
-             * @description Lowest effective rating.
-             */
+            /** Format: double */
             min_rating?: number | null;
-            /**
-             * Normalized Roles
-             * @description Distinct confirmed roles seen for this creator.
-             */
-            normalized_roles?: string[];
-            /**
-             * Rated Issue Count
-             * @description Headline-eligible rated issues contributing to the metrics.
-             */
+            normalized_roles: string[];
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Rating Spread
-             * @description Highest minus lowest effective rating, or null when unrated.
-             */
+            /** Format: double */
             rating_spread?: number | null;
-            /**
-             * Rating Stddev
-             * @description Population standard deviation across the rated sample, or null when unrated.
-             */
+            /** Format: double */
             rating_stddev?: number | null;
-            /**
-             * Read Unrated Issue Count
-             * @description Attributed read-but-unrated owned issues.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_issue_count: number;
-            /**
-             * Reasons
-             * @description Every deterministic rule that qualified this creator for this view.
-             */
-            reasons?: components["schemas"]["CreatorDiscoveryReason"][];
-            /**
-             * Recent Average Rating
-             * @description Average of the recent half of a trend-eligible history.
-             */
+            reasons: components["schemas"]["CreatorDiscoveryReason"][];
+            /** Format: double */
             recent_average_rating?: number | null;
-            /**
-             * Top Rating Count
-             * @description Count of ratings at the top of the scale.
-             * @default 0
-             */
+            /** Format: int64 */
             top_rating_count: number;
-            /**
-             * Top Rating Rate
-             * @description Proportion of ratings at the top of the scale (0.0-1.0).
-             */
+            /** Format: double */
             top_rating_rate?: number | null;
-            /**
-             * Trend Delta
-             * @description Recent average minus earlier average for the trend view.
-             */
+            /** Format: double */
             trend_delta?: number | null;
-            /**
-             * Trend Direction
-             * @description ``warmed`` or ``cooled`` for the trend view, otherwise null.
-             */
             trend_direction?: string | null;
-            /**
-             * Trend Sample Count
-             * @description Rated issues carrying a timestamp that supported a trend, else 0.
-             * @default 0
-             */
+            /** Format: int64 */
             trend_sample_count: number;
-            /**
-             * Unread Issue Count
-             * @description Attributed unread owned issues for this creator.
-             * @default 0
-             */
+            /** Format: int64 */
             unread_issue_count: number;
         };
-        /**
-         * CreatorDiscoveryMode
-         * @description The fixed, deterministic set of personal taste-discovery views.
-         *
-         *     Ordering in this enum is the canonical display order of the views.
-         * @enum {string}
-         */
-        CreatorDiscoveryMode: "consistently_loved" | "polarizing" | "most_read" | "highest_top_rating_rate" | "great_average_small_sample" | "loved_with_unread" | "moved_over_time";
-        /**
-         * CreatorDiscoveryReason
-         * @description One deterministic rule that qualified a creator for a view.
-         *
-         *     ``value`` is the observed metric and ``threshold`` is the fixed rule the
-         *     metric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,
-         *     ``lt`` so the UI can render the relationship without parsing prose.
-         */
         CreatorDiscoveryReason: {
-            /**
-             * Comparison
-             * @description One of gte, lte, gt, lt.
-             */
             comparison: string;
-            /**
-             * Label
-             * @description Human-readable metric name for UI copy.
-             */
             label: string;
-            /**
-             * Metric
-             * @description Machine key of the qualifying metric.
-             */
             metric: string;
-            /**
-             * Threshold
-             * @description Threshold the value had to satisfy.
-             */
+            /** Format: double */
             threshold: number;
-            /**
-             * Value
-             * @description Observed value of the metric.
-             */
+            /** Format: double */
             value: number;
         };
-        /**
-         * CreatorDiscoveryResponse
-         * @description Response body for the bounded personal taste-discovery endpoint.
-         */
         CreatorDiscoveryResponse: {
-            /** @description Metadata-coverage state distinguishing complete from lower bounds. */
             coverage: components["schemas"]["CreatorDiscoveryCoverage"];
-            /**
-             * Max Entries Per View
-             * @description Bounding constant applied per view.
-             */
+            /** Format: int64 */
             max_entries_per_view: number;
-            /**
-             * Minimum Reliable Sample
-             * @description The canonical personal-reliability rated-sample floor.
-             */
+            /** Format: int64 */
             minimum_reliable_sample: number;
-            /**
-             * Views
-             * @description One entry per view in canonical order, including empty views.
-             */
-            views?: components["schemas"]["CreatorDiscoveryView"][];
+            views: components["schemas"]["CreatorDiscoveryView"][];
         };
-        /**
-         * CreatorDiscoveryView
-         * @description One bounded taste-discovery view and its qualifying creators.
-         */
         CreatorDiscoveryView: {
-            /**
-             * Description
-             * @description Deterministic explanation of what qualifies a creator.
-             */
             description: string;
-            /** Entries */
-            entries?: components["schemas"]["CreatorDiscoveryEntry"][];
-            /**
-             * Max Entries
-             * @description Bounding constant applied to entries.
-             */
+            entries: components["schemas"]["CreatorDiscoveryEntry"][];
+            /** Format: int64 */
             max_entries: number;
-            /**
-             * Min Sample
-             * @description Minimum rated sample the view requires (0 = no floor).
-             */
+            /** Format: int64 */
             min_sample: number;
-            /** @description Stable view identifier. */
-            mode: components["schemas"]["CreatorDiscoveryMode"];
-            /**
-             * Title
-             * @description Short human-readable view title.
-             */
+            mode: string;
             title: string;
-            /**
-             * Total
-             * @description Qualifying creators before bounded truncation.
-             */
+            /** Format: int64 */
             total: number;
-            /**
-             * Truncated
-             * @description True when more creators qualified than the bounded response returns.
-             */
             truncated: boolean;
         };
-        /**
-         * CreatorInsights
-         * @description Evidence-backed strongest/weakest/most-read highlights (issue #3092).
-         *
-         *     Every highlight links back to its supporting series or issues so a reader
-         *     never has to trust an unexplained summary. Series conclusions require a
-         *     minimum rated-issue sample and complete creator metadata; individual issue
-         *     extremes are labeled separately from the aggregate series conclusions.
-         *
-         *     The explanation for a missing series comparison names the real reason
-         *     (issue #3946), and an individual issue never appears in both the highest
-         *     and the lowest list.
-         */
         CreatorInsights: {
-            /**
-             * Excluded Incomplete Series Count
-             * @description Series with attributed rated work excluded because their creator metadata is incomplete; a partial series is never presented as exhaustive evidence.
-             * @default 0
-             */
+            /** Format: int64 */
             excluded_incomplete_series_count: number;
-            /**
-             * Highest Rated Issues
-             * @description Top individual rated issues, distinct from aggregate series conclusions. Never overlaps with lowest_rated_issues.
-             */
-            highest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
-            /**
-             * Individual Issue Limit
-             * @description Maximum number of individual issue extremes listed per direction.
-             */
+            highest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
+            /** Format: int64 */
             individual_issue_limit: number;
-            /**
-             * Individual Issues Combined
-             * @description True when the rated set is too small to separate into distinct highest and lowest lists. The UI then shows every rated issue once in a single list instead of repeating the same issues as both the best and the worst work.
-             * @default false
-             */
             individual_issues_combined: boolean;
-            /**
-             * Lowest Rated Issues
-             * @description Bottom individual rated issues, distinct from aggregate series conclusions. Never overlaps with highest_rated_issues.
-             */
-            lowest_rated_issues?: components["schemas"]["CreatorIssueInsight"][];
-            /**
-             * Min Series Sample
-             * @description Rated issues a series needs before it can be ranked as best/worst.
-             */
+            lowest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
+            /** Format: int64 */
             min_series_sample: number;
-            /** @description Qualifying series with the most rated issues, or null when none qualify. */
             most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            /**
-             * Series Message
-             * @description Plain-language explanation when no series comparison is available. It names the real reason: incomplete creator metadata, credits that do not count toward the average, or a genuinely thin rated-issue sample.
-             */
             series_message?: string | null;
-            /**
-             * Series Sample Met
-             * @description True when at least one series meets the minimum rated-issue sample.
-             */
             series_sample_met: boolean;
-            /** @description Highest-average qualifying series, or null when the sample is too thin. */
             strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            /** @description Lowest-average qualifying series, or null when the sample is too thin. */
             weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
         };
-        /**
-         * CreatorIssueInsight
-         * @description One individual issue extreme backing a creator highlight (issue #3092).
-         *
-         *     Individual issue extremes are deliberately modeled separately from the
-         *     aggregate series conclusions so a one-off rating is never presented as a
-         *     creator's overall "best work".
-         */
         CreatorIssueInsight: {
-            /**
-             * Effective Rating
-             * @description Latest effective rating for this issue, one per issue.
-             */
+            /** Format: double */
             effective_rating: number;
-            /**
-             * Issue Id
-             * @description Local ComicPile issue ID.
-             */
+            /** Format: int64 */
             issue_id: number;
-            /**
-             * Issue Number
-             * @description Issue number of the comic.
-             */
             issue_number: string;
-            /**
-             * Roles
-             * @description Sorted distinct roles the creator held on this issue.
-             */
             roles: string[];
-            /**
-             * Sort Key
-             * @description Stable deterministic key for this issue extreme.
-             */
             sort_key: string;
-            /**
-             * Thread Id
-             * @description Local thread the issue belongs to.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Title of the containing thread.
-             */
             thread_title: string;
         };
-        /**
-         * CreatorIssueRow
-         * @description Detail for a specific issue attributed to the creator.
-         */
         CreatorIssueRow: {
-            /**
-             * Effective Rating
-             * @description The latest effective rating for this issue, if any.
-             */
+            /** Format: double */
             effective_rating?: number | null;
-            /**
-             * Issue Id
-             * @description Local ComicPile issue ID.
-             */
+            /** Format: int64 */
             issue_id: number;
-            /**
-             * Issue Number
-             * @description Issue number of the comic.
-             */
             issue_number: string;
-            /**
-             * Rating Timestamp
-             * @description Timestamp of the effective rating event, if any.
-             */
             rating_timestamp?: string | null;
-            /**
-             * Roles
-             * @description Roles the creator held on this specific issue.
-             */
             roles: string[];
-            /**
-             * Sort Key
-             * @description Deterministic local ordering information for the UI.
-             */
             sort_key: string;
-            /**
-             * Status
-             * @description Read/unread status.
-             */
             status: string;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread ID.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Title of the containing thread.
-             */
             thread_title: string;
         };
         CreatorListItem: {
@@ -7209,7 +5486,7 @@ export interface components {
             ratings_count: number;
         };
         CreatorListResponse: {
-            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
             items: components["schemas"]["CreatorListItem"][];
             /** Format: int64 */
             limit: number;
@@ -7218,131 +5495,57 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
-        /**
-         * CreatorMetricCalculation
-         * @description Human-readable calculation explaining how a metric was derived.
-         */
         CreatorMetricCalculation: {
-            /**
-             * Denominator
-             * @description Description of the denominator/lower value when applicable.
-             */
             denominator?: string | null;
-            /**
-             * Formula
-             * @description Human-readable formula showing the calculation.
-             */
             formula: string;
-            /**
-             * Numerator
-             * @description Description of the numerator/upper value.
-             */
             numerator: string;
-            /**
-             * Percentage
-             * @description Formatted percentage when applicable.
-             */
             percentage?: string | null;
         };
-        /**
-         * CreatorMetricDrilldown
-         * @description Response for a creator metric drilldown.
-         */
         CreatorMetricDrilldown: {
-            /** @description Human-readable calculation. */
+            /** Format: int64 */
+            bucket_count?: number | null;
+            /** Format: double */
+            bucket_percentage?: number | null;
             calculation: components["schemas"]["CreatorMetricCalculation"];
-            /**
-             * Creator Key
-             * @description Canonical creator key.
-             */
             creator_key: string;
-            /**
-             * Excluded Issues
-             * @description Issues excluded from the calculation with reasons.
-             */
-            excluded_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Included Issues
-             * @description Issues included in the calculation.
-             */
-            included_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Metric Type
-             * @description Type of metric being drilled down.
-             */
+            excluded_issues: components["schemas"]["CreatorMetricIssue"][];
+            included_issues: components["schemas"]["CreatorMetricIssue"][];
             metric_type: string;
-            /**
-             * Pagination
-             * @description Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).
-             */
-            pagination?: {
-                [key: string]: number | string | null;
-            };
-            /**
-             * Total Count
-             * @description Total number of issues in the calculation.
-             */
+            pagination: components["schemas"]["CreatorMetricPagination"];
+            rating_value?: string | null;
+            role?: string | null;
+            /** Format: double */
+            role_average_rating?: number | null;
+            /** Format: int64 */
+            role_issue_count?: number | null;
+            /** Format: int64 */
+            role_rated_issue_count?: number | null;
+            /** Format: double */
+            series_average_rating?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            /** Format: int64 */
+            series_issue_count?: number | null;
+            /** Format: int64 */
+            series_rated_issue_count?: number | null;
+            series_title?: string | null;
+            /** Format: int64 */
             total_count: number;
         };
-        /**
-         * CreatorMetricIssue
-         * @description Single issue with context for a metric drilldown.
-         */
         CreatorMetricIssue: {
-            /**
-             * Creator Roles
-             * @description Roles this creator held on this issue.
-             */
-            creator_roles?: string[];
-            /**
-             * Effective Rating
-             * @description Effective rating for this issue when applicable.
-             */
+            creator_roles: string[];
+            /** Format: double */
             effective_rating?: number | null;
-            /**
-             * Effective Rating Source
-             * @description Source of the effective rating (e.g., 'historical', 'manual', 'inferred').
-             */
             effective_rating_source?: string | null;
-            /**
-             * Effective Rating Timestamp
-             * @description ISO 8601 timestamp when the effective rating was established.
-             */
             effective_rating_timestamp?: string | null;
-            /**
-             * Exclusion Reason
-             * @description Why this issue is excluded from the calculation (if applicable).
-             */
             exclusion_reason?: string | null;
-            /**
-             * Issue Id
-             * @description Local ComicPile issue ID.
-             */
+            /** Format: int64 */
             issue_id: number;
-            /**
-             * Issue Number
-             * @description Display issue number within its thread.
-             */
             issue_number: string;
-            /**
-             * Missing Rating Cause
-             * @description Machine-readable cause for a read issue with no effective rating (issue #3175 classification, e.g. 'no_source_rating', 'missing_rate_event', 'unresolved_mapping', 'edition_conflict', 'ambiguous_thread_rating'). None when the issue is rated, unread, or the cause has not been classified.
-             */
             missing_rating_cause?: string | null;
-            /**
-             * Status
-             * @description Local issue status (``read`` or ``unread``).
-             */
             status: string;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread ID owning the issue.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Title of the thread owning the issue.
-             */
             thread_title: string;
         };
         CreatorMetricPagination: {
@@ -7355,779 +5558,195 @@ export interface components {
             /** Format: int64 */
             total_pages: number;
         };
-        /**
-         * CreatorRatingBucket
-         * @description One half-star bucket in a creator's rating distribution.
-         */
         CreatorRatingBucket: {
-            /**
-             * Count
-             * @description Number of issues whose effective rating falls in this bucket.
-             */
+            /** Format: int64 */
             count: number;
-            /**
-             * Rating
-             * @description Bucket center on the product's real half-star scale (0.5–5.0).
-             */
+            /** Format: double */
             rating: number;
         };
-        /**
-         * CreatorRatingDistribution
-         * @description Distribution, median, range, mean, and sample strength for one creator.
-         */
         CreatorRatingDistribution: {
-            /**
-             * Buckets
-             * @description Half-star buckets from 0.5 to 5.0, always a complete fixed shape with explicit zero counts.
-             */
             buckets: components["schemas"]["CreatorRatingBucket"][];
-            /**
-             * Max Rating
-             * @description Maximum effective rating observed for this creator.
-             */
+            /** Format: double */
             max_rating: number;
-            /**
-             * Mean Rating
-             * @description Mean of the latest effective ratings across contributing issues.
-             */
+            /** Format: double */
             mean_rating: number;
-            /**
-             * Median Rating
-             * @description Median of the latest effective ratings across contributing issues.
-             */
+            /** Format: double */
             median_rating: number;
-            /**
-             * Min Rating
-             * @description Minimum effective rating observed for this creator.
-             */
+            /** Format: double */
             min_rating: number;
-            /**
-             * Sample Count
-             * @description Number of distinct rated issues contributing (at most one per issue).
-             */
+            /** Format: int64 */
             sample_count: number;
         };
-        /**
-         * CreatorRatingDistributionDrilldown
-         * @description Specialized drilldown for rating distribution buckets.
-         */
-        CreatorRatingDistributionDrilldown: {
-            /**
-             * Bucket Count
-             * @description Number of issues in this rating bucket.
-             */
-            bucket_count: number;
-            /**
-             * Bucket Percentage
-             * @description Percentage of total rated issues.
-             */
-            bucket_percentage: number;
-            /** @description Human-readable calculation. */
-            calculation: components["schemas"]["CreatorMetricCalculation"];
-            /**
-             * Creator Key
-             * @description Canonical creator key.
-             */
-            creator_key: string;
-            /**
-             * Excluded Issues
-             * @description Issues excluded from the calculation with reasons.
-             */
-            excluded_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Included Issues
-             * @description Issues included in the calculation.
-             */
-            included_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Metric Type
-             * @description Type of metric being drilled down.
-             */
-            metric_type: string;
-            /**
-             * Pagination
-             * @description Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).
-             */
-            pagination?: {
-                [key: string]: number | string | null;
-            };
-            /**
-             * Rating Value
-             * @description The specific rating value (e.g., '5.0', '4.5').
-             */
-            rating_value: string;
-            /**
-             * Total Count
-             * @description Total number of issues in the calculation.
-             */
-            total_count: number;
-        };
-        /**
-         * CreatorRoleDrilldown
-         * @description Specialized drilldown for role statistics.
-         */
-        CreatorRoleDrilldown: {
-            /** @description Human-readable calculation. */
-            calculation: components["schemas"]["CreatorMetricCalculation"];
-            /**
-             * Creator Key
-             * @description Canonical creator key.
-             */
-            creator_key: string;
-            /**
-             * Excluded Issues
-             * @description Issues excluded from the calculation with reasons.
-             */
-            excluded_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Included Issues
-             * @description Issues included in the calculation.
-             */
-            included_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Metric Type
-             * @description Type of metric being drilled down.
-             */
-            metric_type: string;
-            /**
-             * Pagination
-             * @description Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).
-             */
-            pagination?: {
-                [key: string]: number | string | null;
-            };
-            /**
-             * Role
-             * @description The specific role being drilled down.
-             */
-            role: string;
-            /**
-             * Role Average Rating
-             * @description Average rating for this role.
-             */
-            role_average_rating?: number | null;
-            /**
-             * Role Issue Count
-             * @description Total issues with this role.
-             */
-            role_issue_count: number;
-            /**
-             * Role Rated Issue Count
-             * @description Rated issues with this role.
-             */
-            role_rated_issue_count: number;
-            /**
-             * Total Count
-             * @description Total number of issues in the calculation.
-             */
-            total_count: number;
-        };
-        /**
-         * CreatorRoleStat
-         * @description Statistics for a specific role for a creator.
-         */
         CreatorRoleStat: {
-            /**
-             * Average Rating
-             * @description Average rating for issues where the creator held this specific role (computed over rated_issue_count issues).
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Issue Count
-             * @description Number of distinct issues the creator held this role on (includes rated, unrated, and upcoming).
-             */
+            /** Format: int64 */
             issue_count: number;
-            /**
-             * Rated Issue Count
-             * @description Number of those issues that have an effective rating and contributed to average_rating.
-             */
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Role
-             * @description The normalized role name.
-             */
             role: string;
         };
-        /**
-         * CreatorSeriesDrilldown
-         * @description Specialized drilldown for series statistics.
-         */
-        CreatorSeriesDrilldown: {
-            /** @description Human-readable calculation. */
-            calculation: components["schemas"]["CreatorMetricCalculation"];
-            /**
-             * Creator Key
-             * @description Canonical creator key.
-             */
-            creator_key: string;
-            /**
-             * Excluded Issues
-             * @description Issues excluded from the calculation with reasons.
-             */
-            excluded_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Included Issues
-             * @description Issues included in the calculation.
-             */
-            included_issues?: components["schemas"]["CreatorMetricIssue"][];
-            /**
-             * Metric Type
-             * @description Type of metric being drilled down.
-             */
-            metric_type: string;
-            /**
-             * Pagination
-             * @description Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).
-             */
-            pagination?: {
-                [key: string]: number | string | null;
-            };
-            /**
-             * Series Average Rating
-             * @description Average rating for this series.
-             */
-            series_average_rating?: number | null;
-            /**
-             * Series Id
-             * @description Local thread ID for the series.
-             */
-            series_id: number;
-            /**
-             * Series Issue Count
-             * @description Total issues in this series.
-             */
-            series_issue_count: number;
-            /**
-             * Series Rated Issue Count
-             * @description Rated issues in this series.
-             */
-            series_rated_issue_count: number;
-            /**
-             * Series Title
-             * @description Title of the series.
-             */
-            series_title: string;
-            /**
-             * Total Count
-             * @description Total number of issues in the calculation.
-             */
-            total_count: number;
-        };
-        /**
-         * CreatorSeriesGroup
-         * @description Series/run-level aggregate of one creator's attributed rated work.
-         *
-         *     Grouping identity is the stable local ComicPile thread id, never the
-         *     display title: two distinct threads that happen to share a title stay in
-         *     separate groups. Every aggregate is computed over the creator's complete
-         *     attributed work for that thread, so the same group key always carries the
-         *     same numbers regardless of which page of issue rows was requested.
-         */
         CreatorSeriesGroup: {
-            /**
-             * Average Rating
-             * @description Personal average over this group's rated issues, or null when none are rated.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Highest Rating
-             * @description Highest effective rating in this group, or null when none are rated.
-             */
+            /** Format: double */
             highest_rating?: number | null;
-            /**
-             * Lowest Rating
-             * @description Lowest effective rating in this group, or null when none are rated.
-             */
+            /** Format: double */
             lowest_rating?: number | null;
-            /**
-             * Metadata Complete
-             * @description False when some issues in this thread still lack confirmed creator metadata, making this group's counts lower bounds.
-             */
             metadata_complete: boolean;
-            /**
-             * Population Scope
-             * @description Population used for this aggregate. Series groups cover every verified creator credit in the thread, not only headline roles, so their counts/averages may differ from the headline-only Rated list.
-             * @default all_verified_credits
-             * @constant
-             */
-            population_scope: "all_verified_credits";
-            /**
-             * Rated Issue Count
-             * @description Attributed issues in this thread with an effective rating. Equals the number of rows the drill-down can return for this group.
-             */
+            population_scope: string;
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Read Unrated Issue Count
-             * @description Attributed issues in this thread that were read but never rated.
-             */
+            /** Format: int64 */
             read_unrated_issue_count: number;
-            /**
-             * Roles
-             * @description Sorted distinct roles the creator held in this thread.
-             */
             roles: string[];
-            /**
-             * Series Key
-             * @description Stable series identity key (``thread:<thread_id>``).
-             */
             series_key: string;
-            /**
-             * Sort Key
-             * @description Stable final tie-breaker for the deterministic group ordering (most-rated first, then title, then this key).
-             */
             sort_key: string;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread (series/run) id used as the group identity.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Current local thread title. Display only; never a grouping identity.
-             */
             thread_title: string;
-            /**
-             * Unread Issue Count
-             * @description Attributed unread issues of this creator still in this thread. Includes an unread issue that is also already rated, matching the existing upcoming semantics.
-             */
+            /** Format: int64 */
             unread_issue_count: number;
         };
-        /**
-         * CreatorSeriesInsight
-         * @description One series/run extreme backed by a minimum rated-issue sample (#3092).
-         *
-         *     A series only qualifies as strongest/weakest/most-rated when it has at
-         *     least :attr:`CreatorInsights.min_series_sample` rated issues and complete
-         *     creator metadata, so a single 5★ issue cannot outrank a long loved run.
-         */
         CreatorSeriesInsight: {
-            /**
-             * Average Rating
-             * @description Personal average over the series' rated issues.
-             */
+            /** Format: double */
             average_rating: number;
-            /**
-             * Highest Rating
-             * @description Highest effective rating in the series.
-             */
+            /** Format: double */
             highest_rating: number;
-            /**
-             * Lowest Rating
-             * @description Lowest effective rating in the series.
-             */
+            /** Format: double */
             lowest_rating: number;
-            /**
-             * Metadata Complete
-             * @description Always true for a qualifying insight; incomplete series are excluded.
-             */
             metadata_complete: boolean;
-            /**
-             * Rated Issue Count
-             * @description Rated attributed issues backing this series insight.
-             */
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Roles
-             * @description Sorted distinct roles the creator held in this series.
-             */
             roles: string[];
-            /**
-             * Series Key
-             * @description Stable series identity key (``thread:<thread_id>``).
-             */
             series_key: string;
-            /**
-             * Sort Key
-             * @description Stable deterministic key for this series extreme.
-             */
             sort_key: string;
-            /**
-             * Thread Id
-             * @description Local thread (series/run) id.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Current local thread title.
-             */
             thread_title: string;
         };
-        /**
-         * CreatorSeriesIssueListResponse
-         * @description Bounded drill-down of the issues supporting one creator series group.
-         */
         CreatorSeriesIssueListResponse: {
-            /**
-             * Average Rating
-             * @description Personal average over the group's rated issues.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Highest Rating
-             * @description Highest effective rating in the group, or null when none are rated.
-             */
+            /** Format: double */
             highest_rating?: number | null;
-            /**
-             * Issues
-             * @description Bounded page of supporting rated issues, recent-first.
-             */
-            issues?: components["schemas"]["CreatorIssueRow"][];
-            /**
-             * Limit
-             * @description Echoed page size.
-             */
+            issues: components["schemas"]["CreatorIssueRow"][];
+            /** Format: int64 */
             limit: number;
-            /**
-             * Lowest Rating
-             * @description Lowest effective rating in the group, or null when none are rated.
-             */
+            /** Format: double */
             lowest_rating?: number | null;
-            /**
-             * Metadata Complete
-             * @description False when some issues in this thread still lack confirmed creator metadata, making this group's counts lower bounds.
-             */
             metadata_complete: boolean;
-            /**
-             * Next Cursor
-             * @description Cursor for paginating a long drill-down, null when exhausted.
-             */
             next_cursor?: string | null;
-            /**
-             * Offset
-             * @description Echoed page offset.
-             */
+            /** Format: int64 */
             offset: number;
-            /**
-             * Population Scope
-             * @description Population backing this drill-down. Rows include every verified creator credit in the thread, matching the parent series group exactly.
-             * @default all_verified_credits
-             * @constant
-             */
-            population_scope: "all_verified_credits";
-            /**
-             * Rated Issue Count
-             * @description Total attributed rated issues backing this group.
-             */
+            population_scope: string;
+            /** Format: int64 */
             rated_issue_count: number;
-            /**
-             * Roles
-             * @description Sorted distinct roles the creator held in this thread.
-             */
             roles: string[];
-            /**
-             * Series Key
-             * @description Stable series identity key echoed back.
-             */
             series_key: string;
-            /**
-             * Thread Id
-             * @description Local ComicPile thread id.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Current local thread title.
-             */
             thread_title: string;
-            /**
-             * Total
-             * @description Total supporting rated issues in the group.
-             */
+            /** Format: int64 */
             total: number;
         };
         CreatorSummariesResponse: {
-            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
             summaries: {
-                [key: string]: components["schemas"]["NativeCreatorSummaryItem"];
+                [key: string]: components["schemas"]["CreatorSummaryItem"];
             };
         };
-        /**
-         * CreatorSummaryCoverage
-         * @description Coverage state distinguishing complete from lower-bound statistics.
-         *
-         *     ``*_complete`` is true only when every owned issue in that category carries
-         *     confirmed usable creator metadata. Missing/unconfirmed metadata never
-         *     counts as negative attribution evidence; it only makes the matching result
-         *     explicitly partial.
-         */
         CreatorSummaryCoverage: {
-            /**
-             * Rated Issues Total
-             * @description Total owned issues with an effective rating.
-             * @default 0
-             */
+            /** Format: int64 */
             rated_issues_total: number;
-            /**
-             * Rated Issues With Creator Metadata
-             * @description Rated owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             rated_issues_with_creator_metadata: number;
-            /**
-             * Ratings Complete
-             * @description True only when every owned rated issue has confirmed usable creator metadata.
-             * @default true
-             */
             ratings_complete: boolean;
-            /**
-             * Read Unrated Complete
-             * @description True only when every owned read-but-unrated issue has confirmed usable creator metadata.
-             * @default true
-             */
             read_unrated_complete: boolean;
-            /**
-             * Read Unrated Issues Total
-             * @description Total owned read-but-unrated issues.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_issues_total: number;
-            /**
-             * Read Unrated Issues With Creator Metadata
-             * @description Read-but-unrated owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_issues_with_creator_metadata: number;
-            /**
-             * Unread Issues Total
-             * @description Total owned unread issues.
-             * @default 0
-             */
+            /** Format: int64 */
             unread_issues_total: number;
-            /**
-             * Unread Issues With Creator Metadata
-             * @description Unread owned issues with confirmed usable creator metadata.
-             * @default 0
-             */
+            /** Format: int64 */
             unread_issues_with_creator_metadata: number;
-            /**
-             * Upcoming Complete
-             * @description True only when every owned unread issue considered by the library has confirmed usable creator metadata.
-             * @default true
-             */
             upcoming_complete: boolean;
         };
-        /**
-         * CreatorSummaryItem
-         * @description Summary data for one creator identity in the batch response.
-         *
-         *     ``canonical_creator_key`` is the stable provider + external-ID key from the
-         *     #2036 creator identity contract (``creator:<external-person-id>``). It is
-         *     never display-name based.
-         */
         CreatorSummaryItem: {
-            /**
-             * Average Rating
-             * @description Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no ratings.
-             */
+            /** Format: double */
             average_rating?: number | null;
-            /**
-             * Canonical Creator Key
-             * @description Stable normalized creator key (e.g. ``creator:12345``).
-             */
             canonical_creator_key: string;
-            /**
-             * Display Name
-             * @description Human-readable creator name from confirmed issue metadata.
-             */
             display_name: string;
-            /**
-             * Normalized Roles
-             * @description Distinct roles seen for this creator across the user's issues.
-             */
-            normalized_roles?: string[];
-            /**
-             * Ratings Count
-             * @description Number of distinct rated issues contributing to the headline average.
-             * @default 0
-             */
+            normalized_roles: string[];
+            /** Format: int64 */
             ratings_count: number;
-            /**
-             * Read Unrated Count
-             * @description Number of read-but-unrated owned issues attributed to this creator.
-             * @default 0
-             */
+            /** Format: int64 */
             read_unrated_count: number;
-            /**
-             * Upcoming Count
-             * @description Number of unread owned issues already in the user's ComicPile attributed to this creator.
-             * @default 0
-             */
+            /** Format: int64 */
             upcoming_count: number;
         };
-        /**
-         * CreatorTeamChemistryResponse
-         * @description Response payload for the creator team-chemistry endpoint.
-         */
         CreatorTeamChemistryResponse: {
-            coverage?: components["schemas"]["CreatorTeamCoverage"] | null;
-            /**
-             * Max Ranked Pairs
-             * @description Bounding constant applied to the returned pair list.
-             */
+            coverage: components["schemas"]["CreatorTeamCoverage"];
+            /** Format: int64 */
             max_ranked_pairs: number;
-            /**
-             * Min Shared Team Sample
-             * @description Minimum shared sample required before a pair may rank.
-             * @default 3
-             */
+            /** Format: int64 */
             min_shared_team_sample: number;
-            /**
-             * Pairs
-             * @description Ranked recurring teams, strongest shared average first.
-             */
-            pairs?: components["schemas"]["CreatorTeamPair"][];
-            /**
-             * Pairs Total
-             * @description Pairs meeting the minimum shared sample before ranking truncation.
-             * @default 0
-             */
+            pairs: components["schemas"]["CreatorTeamPair"][];
+            /** Format: int64 */
             pairs_total: number;
         };
-        /**
-         * CreatorTeamCoverage
-         * @description Explicit metadata-coverage state for the team-chemistry aggregation.
-         */
         CreatorTeamCoverage: {
-            /**
-             * Rated Issues Total
-             * @description Rated issues in the library.
-             */
+            /** Format: int64 */
             rated_issues_total: number;
-            /**
-             * Rated Issues With Creator Metadata
-             * @description Rated issues carrying at least one usable confirmed credit.
-             */
+            /** Format: int64 */
             rated_issues_with_creator_metadata: number;
-            /**
-             * Ratings Complete
-             * @description True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.
-             */
             ratings_complete: boolean;
         };
-        /**
-         * CreatorTeamIssueRef
-         * @description One bounded, navigable shared-issue drilldown reference.
-         */
         CreatorTeamIssueRef: {
-            /** Effective Rating */
+            /** Format: double */
             effective_rating?: number | null;
-            /** Issue Id */
+            /** Format: int64 */
             issue_id: number;
-            /**
-             * Issue Number
-             * @description Issue number within the thread.
-             */
             issue_number: string;
-            /**
-             * Status
-             * @description Owned issue status (read/unread).
-             */
             status: string;
-            /**
-             * Thread Id
-             * @description Owning local thread/series id.
-             */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Thread title, for display only.
-             */
             thread_title: string;
         };
-        /**
-         * CreatorTeamMember
-         * @description One canonical creator identity inside a ranked team pair.
-         */
         CreatorTeamMember: {
-            /**
-             * Baseline Average Rating
-             * @description Creator's personal baseline average, or null when unrated.
-             */
+            /** Format: double */
             baseline_average_rating?: number | null;
-            /**
-             * Baseline Rated Count
-             * @description Creator's personal headline-eligible rated sample size.
-             */
+            /** Format: int64 */
             baseline_rated_count: number;
-            /**
-             * Canonical Creator Key
-             * @description Stable ``creator:<id>`` key.
-             */
             canonical_creator_key: string;
-            /**
-             * Difference From Baseline
-             * @description Shared-pair average minus this creator's baseline average. Descriptive context only.
-             */
+            /** Format: double */
             difference_from_baseline?: number | null;
-            /**
-             * Display Name
-             * @description Latest confirmed display name.
-             */
             display_name: string;
-            /**
-             * Roles
-             * @description Interior-storytelling roles on shared issues.
-             */
             roles: string[];
         };
-        /**
-         * CreatorTeamPair
-         * @description One ranked recurring creator pair with explainable shared metrics.
-         */
         CreatorTeamPair: {
-            /**
-             * Creators
-             * @description The two canonical creator identities of this team.
-             */
             creators: components["schemas"]["CreatorTeamMember"][];
-            /**
-             * Max Shared Issue Refs
-             * @description Bounding constant applied to the returned issue sample.
-             * @default 5
-             */
+            /** Format: int64 */
             max_shared_issue_refs: number;
-            /**
-             * Pair Key
-             * @description Stable unordered pair key, ``a|b`` sorted.
-             */
             pair_key: string;
-            /**
-             * Shared Average Rating
-             * @description Average of the shared issues' effective ratings.
-             */
+            /** Format: double */
             shared_average_rating?: number | null;
-            /** Shared Issue Refs */
-            shared_issue_refs?: components["schemas"]["CreatorTeamIssueRef"][];
-            /** Shared Median Rating */
+            shared_issue_refs: components["schemas"]["CreatorTeamIssueRef"][];
+            /** Format: double */
             shared_median_rating?: number | null;
-            /**
-             * Shared Rated Issue Count
-             * @description Shared rated issues carrying eligible interior credits for both members.
-             */
+            /** Format: int64 */
             shared_rated_issue_count: number;
-            /** Shared Rating Distribution */
-            shared_rating_distribution?: {
+            shared_rating_distribution: {
                 [key: string]: number;
             };
-            /** Shared Series */
-            shared_series?: components["schemas"]["CreatorTeamSeriesRef"][];
+            shared_series: components["schemas"]["CreatorTeamSeriesRef"][];
         };
-        /**
-         * CreatorTeamSeriesRef
-         * @description Bounded shared-series context behind one team pair.
-         */
         CreatorTeamSeriesRef: {
-            /**
-             * Shared Issue Count
-             * @description Pair issues from this thread.
-             */
+            /** Format: int64 */
             shared_issue_count: number;
-            /** Thread Id */
+            /** Format: int64 */
             thread_id: number;
-            /**
-             * Thread Title
-             * @description Thread title, for display only.
-             */
             thread_title: string;
         };
         /** @description Response body carrying a double-submit CSRF token. */
@@ -8569,32 +6188,22 @@ export interface components {
         DependencyNoteUpdate: {
             note?: string | null;
         };
-        /**
-         * DependencyOrderConflict
-         * @description Schema for a position/dependency order conflict.
-         */
+        /** @description Python `DependencyOrderConflict`. */
         DependencyOrderConflict: {
-            /** Conflict */
             conflict: string;
-            /** Dependency Requires Before */
             dependency_requires_before: components["schemas"]["DependencyOrderRequirement"][];
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Position */
+            /** Format: int32 */
             position: number;
         };
-        /**
-         * DependencyOrderRequirement
-         * @description Schema for a single dependency order requirement.
-         */
+        /** @description Python `DependencyOrderRequirement`. */
         DependencyOrderRequirement: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Position */
+            /** Format: int32 */
             position: number;
         };
         /**
@@ -8682,19 +6291,6 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
-        };
-        /**
-         * EntryOverride
-         * @description Individual entry override of a series decision.
-         */
-        EntryOverride: {
-            /**
-             * Cbl Position
-             * @description Position to override
-             */
-            cbl_position: number;
-            /** @description Decision for this specific entry */
-            decision: components["schemas"]["SourceBackedDecision"];
         };
         /**
          * EventDetail
@@ -9422,75 +7018,21 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeCBLBreadcrumb: {
-            name: string;
-            path: string;
-        };
-        NativeCBLCatalogBrowseResponse: {
-            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
-            folder: string;
-            folders: components["schemas"]["NativeCBLSourceFolder"][];
-            has_next: boolean;
-            has_previous: boolean;
-            items: components["schemas"]["NativeCBLCatalogListItem"][];
-            /**
-             * Format: int64
-             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
-             */
-            page: number;
-            /** Format: int64 */
-            page_size: number;
-            query?: string | null;
-            scope: string;
-            /** Format: int64 */
-            total: number;
-            /** Format: int64 */
-            total_pages: number;
-        };
-        NativeCBLCatalogListItem: {
-            content_hash: string;
+        /** @description One blocking issue (Python `BlockingDependency`). */
+        NativeBlockingDependency: {
             /** Format: int32 */
-            declared_issue_count?: number | null;
+            issue_id?: number | null;
+            issue_number: string;
+            label: string;
             /** Format: int32 */
-            id: number;
-            name: string;
-            revision_sha: string;
-            source_path: string;
-            source_repository: string;
+            thread_id: number;
+            thread_title: string;
         };
-        /** @description Global dependency-acquisition outage shape. */
-        NativeCBLDatabaseUnavailableDetail: {
-            code: string;
-            message: string;
-            status: string;
-        };
-        NativeCBLDatabaseUnavailableResponse: {
-            error: components["schemas"]["NativeCBLDatabaseUnavailableDetail"];
-        };
-        /** @description Error detail for catalog-originated failures (400/404/503). */
-        NativeCBLErrorDetail: {
-            code: string;
-            message: string;
-        };
-        NativeCBLErrorResponse: {
-            detail: components["schemas"]["NativeCBLErrorDetail"];
-        };
-        NativeCBLFolderListingResponse: {
-            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
-            /** Format: int32 */
-            direct_list_count: number;
-            folder: string;
-            folders: components["schemas"]["NativeCBLSourceFolder"][];
-            /** Format: int32 */
-            total_list_count: number;
-        };
-        NativeCBLSourceFolder: {
-            /** Format: int32 */
-            direct_list_count: number;
-            name: string;
-            path: string;
-            /** Format: int32 */
-            total_list_count: number;
+        /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
+        NativeBlockingExplanation: {
+            blocking_dependencies: components["schemas"]["NativeBlockingDependency"][];
+            blocking_reasons: string[];
+            is_blocked: boolean;
         };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
@@ -9537,459 +7079,6 @@ export interface components {
             source_role: string | null;
             source_story_arc_ids: string[] | null;
             source_target_story_arc_id: string | null;
-        };
-        NativeCreatorComparisonCoverage: {
-            /** Format: int64 */
-            rated_issues_total: number;
-            /** Format: int64 */
-            rated_issues_with_creator_metadata: number;
-            ratings_complete: boolean;
-            read_unrated_complete: boolean;
-            /** Format: int64 */
-            read_unrated_issues_total: number;
-            /** Format: int64 */
-            read_unrated_issues_with_creator_metadata: number;
-            /** Format: int64 */
-            unread_issues_total: number;
-            /** Format: int64 */
-            unread_issues_with_creator_metadata: number;
-            upcoming_complete: boolean;
-        };
-        NativeCreatorComparisonIssueRef: {
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            status: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorComparisonItem: {
-            /** Format: double */
-            average_rating?: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            insufficient_data: boolean;
-            /** Format: int64 */
-            max_issue_refs_per_group: number;
-            /** Format: double */
-            median_rating?: number | null;
-            /** Format: int64 */
-            min_rated_issues_per_series: number;
-            normalized_roles: string[];
-            rating_distribution: {
-                [key: string]: number;
-            };
-            /** Format: int64 */
-            ratings_count: number;
-            /** Format: int64 */
-            read_unrated_count: number;
-            read_unrated_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
-            role_stats: components["schemas"]["NativeCreatorComparisonRoleStat"][];
-            strongest_series: components["schemas"]["NativeCreatorComparisonSeriesAggregate"][];
-            /** Format: double */
-            top_rating_rate?: number | null;
-            unread_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
-            /** Format: int64 */
-            unread_upcoming_count: number;
-        };
-        NativeCreatorComparisonResponse: {
-            comparisons: {
-                [key: string]: components["schemas"]["NativeCreatorComparisonItem"];
-            };
-            coverage: components["schemas"]["NativeCreatorComparisonCoverage"];
-            insufficient_data_keys: string[];
-        };
-        NativeCreatorComparisonRoleStat: {
-            /** Format: double */
-            average_rating?: number | null;
-            /** Format: int64 */
-            issue_count: number;
-            /** Format: int64 */
-            rated_issue_count: number;
-            role: string;
-        };
-        NativeCreatorComparisonSeriesAggregate: {
-            /** Format: double */
-            average_rating: number;
-            /** Format: int64 */
-            issue_count: number;
-            /** Format: int64 */
-            rated_issue_count: number;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorDetailResponse: {
-            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
-            headline_roles: string[];
-            insights?: components["schemas"]["NativeCreatorInsights"] | null;
-            next_cursor?: string | null;
-            rated_issues: components["schemas"]["NativeCreatorIssueRow"][];
-            rated_population_scope: string;
-            rating_distribution?: components["schemas"]["NativeCreatorRatingDistribution"] | null;
-            read_unrated_issues: components["schemas"]["NativeCreatorIssueRow"][];
-            role_stats: components["schemas"]["NativeCreatorRoleStat"][];
-            series_groups: components["schemas"]["NativeCreatorSeriesGroup"][];
-            series_groups_complete: boolean;
-            /** Format: int64 */
-            series_groups_total: number;
-            summary: components["schemas"]["NativeCreatorSummaryItem"];
-            upcoming_issues: components["schemas"]["NativeCreatorIssueRow"][];
-        };
-        NativeCreatorDiscoveryCoverage: {
-            /** Format: int64 */
-            rated_issues_total: number;
-            /** Format: int64 */
-            rated_issues_with_creator_metadata: number;
-            ratings_complete: boolean;
-        };
-        NativeCreatorDiscoveryEntry: {
-            /** Format: double */
-            average_rating?: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            /** Format: double */
-            earlier_average_rating?: number | null;
-            /** Format: double */
-            max_rating?: number | null;
-            /** Format: double */
-            median_rating?: number | null;
-            /** Format: double */
-            min_rating?: number | null;
-            normalized_roles: string[];
-            /** Format: int64 */
-            rated_issue_count: number;
-            /** Format: double */
-            rating_spread?: number | null;
-            /** Format: double */
-            rating_stddev?: number | null;
-            /** Format: int64 */
-            read_unrated_issue_count: number;
-            reasons: components["schemas"]["NativeCreatorDiscoveryReason"][];
-            /** Format: double */
-            recent_average_rating?: number | null;
-            /** Format: int64 */
-            top_rating_count: number;
-            /** Format: double */
-            top_rating_rate?: number | null;
-            /** Format: double */
-            trend_delta?: number | null;
-            trend_direction?: string | null;
-            /** Format: int64 */
-            trend_sample_count: number;
-            /** Format: int64 */
-            unread_issue_count: number;
-        };
-        NativeCreatorDiscoveryReason: {
-            comparison: string;
-            label: string;
-            metric: string;
-            /** Format: double */
-            threshold: number;
-            /** Format: double */
-            value: number;
-        };
-        NativeCreatorDiscoveryResponse: {
-            coverage: components["schemas"]["NativeCreatorDiscoveryCoverage"];
-            /** Format: int64 */
-            max_entries_per_view: number;
-            /** Format: int64 */
-            minimum_reliable_sample: number;
-            views: components["schemas"]["NativeCreatorDiscoveryView"][];
-        };
-        NativeCreatorDiscoveryView: {
-            description: string;
-            entries: components["schemas"]["NativeCreatorDiscoveryEntry"][];
-            /** Format: int64 */
-            max_entries: number;
-            /** Format: int64 */
-            min_sample: number;
-            mode: string;
-            title: string;
-            /** Format: int64 */
-            total: number;
-            truncated: boolean;
-        };
-        NativeCreatorInsights: {
-            /** Format: int64 */
-            excluded_incomplete_series_count: number;
-            highest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
-            /** Format: int64 */
-            individual_issue_limit: number;
-            individual_issues_combined: boolean;
-            lowest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
-            /** Format: int64 */
-            min_series_sample: number;
-            most_rated_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
-            series_message?: string | null;
-            series_sample_met: boolean;
-            strongest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
-            weakest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
-        };
-        NativeCreatorIssueInsight: {
-            /** Format: double */
-            effective_rating: number;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            roles: string[];
-            sort_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorIssueRow: {
-            /** Format: double */
-            effective_rating?: number | null;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            rating_timestamp?: string | null;
-            roles: string[];
-            sort_key: string;
-            status: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorMetricCalculation: {
-            denominator?: string | null;
-            formula: string;
-            numerator: string;
-            percentage?: string | null;
-        };
-        NativeCreatorMetricDrilldown: {
-            /** Format: int64 */
-            bucket_count?: number | null;
-            /** Format: double */
-            bucket_percentage?: number | null;
-            calculation: components["schemas"]["NativeCreatorMetricCalculation"];
-            creator_key: string;
-            excluded_issues: components["schemas"]["NativeCreatorMetricIssue"][];
-            included_issues: components["schemas"]["NativeCreatorMetricIssue"][];
-            metric_type: string;
-            pagination: components["schemas"]["CreatorMetricPagination"];
-            rating_value?: string | null;
-            role?: string | null;
-            /** Format: double */
-            role_average_rating?: number | null;
-            /** Format: int64 */
-            role_issue_count?: number | null;
-            /** Format: int64 */
-            role_rated_issue_count?: number | null;
-            /** Format: double */
-            series_average_rating?: number | null;
-            /** Format: int64 */
-            series_id?: number | null;
-            /** Format: int64 */
-            series_issue_count?: number | null;
-            /** Format: int64 */
-            series_rated_issue_count?: number | null;
-            series_title?: string | null;
-            /** Format: int64 */
-            total_count: number;
-        };
-        NativeCreatorMetricIssue: {
-            creator_roles: string[];
-            /** Format: double */
-            effective_rating?: number | null;
-            effective_rating_source?: string | null;
-            effective_rating_timestamp?: string | null;
-            exclusion_reason?: string | null;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            missing_rating_cause?: string | null;
-            status: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorRatingBucket: {
-            /** Format: int64 */
-            count: number;
-            /** Format: double */
-            rating: number;
-        };
-        NativeCreatorRatingDistribution: {
-            buckets: components["schemas"]["NativeCreatorRatingBucket"][];
-            /** Format: double */
-            max_rating: number;
-            /** Format: double */
-            mean_rating: number;
-            /** Format: double */
-            median_rating: number;
-            /** Format: double */
-            min_rating: number;
-            /** Format: int64 */
-            sample_count: number;
-        };
-        NativeCreatorRoleStat: {
-            /** Format: double */
-            average_rating?: number | null;
-            /** Format: int64 */
-            issue_count: number;
-            /** Format: int64 */
-            rated_issue_count: number;
-            role: string;
-        };
-        NativeCreatorSeriesGroup: {
-            /** Format: double */
-            average_rating?: number | null;
-            /** Format: double */
-            highest_rating?: number | null;
-            /** Format: double */
-            lowest_rating?: number | null;
-            metadata_complete: boolean;
-            population_scope: string;
-            /** Format: int64 */
-            rated_issue_count: number;
-            /** Format: int64 */
-            read_unrated_issue_count: number;
-            roles: string[];
-            series_key: string;
-            sort_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-            /** Format: int64 */
-            unread_issue_count: number;
-        };
-        NativeCreatorSeriesInsight: {
-            /** Format: double */
-            average_rating: number;
-            /** Format: double */
-            highest_rating: number;
-            /** Format: double */
-            lowest_rating: number;
-            metadata_complete: boolean;
-            /** Format: int64 */
-            rated_issue_count: number;
-            roles: string[];
-            series_key: string;
-            sort_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorSeriesIssueListResponse: {
-            /** Format: double */
-            average_rating?: number | null;
-            /** Format: double */
-            highest_rating?: number | null;
-            issues: components["schemas"]["NativeCreatorIssueRow"][];
-            /** Format: int64 */
-            limit: number;
-            /** Format: double */
-            lowest_rating?: number | null;
-            metadata_complete: boolean;
-            next_cursor?: string | null;
-            /** Format: int64 */
-            offset: number;
-            population_scope: string;
-            /** Format: int64 */
-            rated_issue_count: number;
-            roles: string[];
-            series_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-            /** Format: int64 */
-            total: number;
-        };
-        NativeCreatorSummaryCoverage: {
-            /** Format: int64 */
-            rated_issues_total: number;
-            /** Format: int64 */
-            rated_issues_with_creator_metadata: number;
-            ratings_complete: boolean;
-            read_unrated_complete: boolean;
-            /** Format: int64 */
-            read_unrated_issues_total: number;
-            /** Format: int64 */
-            read_unrated_issues_with_creator_metadata: number;
-            /** Format: int64 */
-            unread_issues_total: number;
-            /** Format: int64 */
-            unread_issues_with_creator_metadata: number;
-            upcoming_complete: boolean;
-        };
-        NativeCreatorSummaryItem: {
-            /** Format: double */
-            average_rating?: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            normalized_roles: string[];
-            /** Format: int64 */
-            ratings_count: number;
-            /** Format: int64 */
-            read_unrated_count: number;
-            /** Format: int64 */
-            upcoming_count: number;
-        };
-        NativeCreatorTeamChemistryResponse: {
-            coverage: components["schemas"]["NativeCreatorTeamCoverage"];
-            /** Format: int64 */
-            max_ranked_pairs: number;
-            /** Format: int64 */
-            min_shared_team_sample: number;
-            pairs: components["schemas"]["NativeCreatorTeamPair"][];
-            /** Format: int64 */
-            pairs_total: number;
-        };
-        NativeCreatorTeamCoverage: {
-            /** Format: int64 */
-            rated_issues_total: number;
-            /** Format: int64 */
-            rated_issues_with_creator_metadata: number;
-            ratings_complete: boolean;
-        };
-        NativeCreatorTeamIssueRef: {
-            /** Format: double */
-            effective_rating?: number | null;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            status: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorTeamMember: {
-            /** Format: double */
-            baseline_average_rating?: number | null;
-            /** Format: int64 */
-            baseline_rated_count: number;
-            canonical_creator_key: string;
-            /** Format: double */
-            difference_from_baseline?: number | null;
-            display_name: string;
-            roles: string[];
-        };
-        NativeCreatorTeamPair: {
-            creators: components["schemas"]["NativeCreatorTeamMember"][];
-            /** Format: int64 */
-            max_shared_issue_refs: number;
-            pair_key: string;
-            /** Format: double */
-            shared_average_rating?: number | null;
-            shared_issue_refs: components["schemas"]["NativeCreatorTeamIssueRef"][];
-            /** Format: double */
-            shared_median_rating?: number | null;
-            /** Format: int64 */
-            shared_rated_issue_count: number;
-            shared_rating_distribution: {
-                [key: string]: number;
-            };
-            shared_series: components["schemas"]["NativeCreatorTeamSeriesRef"][];
-        };
-        NativeCreatorTeamSeriesRef: {
-            /** Format: int64 */
-            shared_issue_count: number;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
         };
         NativeCustomCBLApplyRequest: {
             expected_updated_at?: string | null;
@@ -10106,6 +7195,10 @@ export interface components {
              * @description Move after this issue. `null` moves the issue to position 1.
              */
             after_issue_id: number | null;
+        };
+        /** @description Python `IssueOrderValidationResponse`. */
+        NativeIssueOrderValidationResponse: {
+            warnings: string[];
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
         NativeIssueReorderRequest: {
@@ -10315,6 +7408,16 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description Python `ReadingOrderItemResponse`. */
+        NativeReadingOrderItemResponse: {
+            is_read: boolean;
+            issue_number?: string | null;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         NativeReadingOrderProjectionConflict: {
             code: string;
             existing_positions: number[];
@@ -10349,6 +7452,18 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
+        };
+        /** @description Python `ReadingOrderResponse`. */
+        NativeReadingOrderResponse: {
+            /** Format: int64 */
+            completed_items: number;
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            items: components["schemas"]["NativeReadingOrderItemResponse"][];
+            name: string;
+            /** Format: int64 */
+            total_items: number;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -10512,6 +7627,10 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description Python `ThreadReadingOrdersResponse`. */
+        NativeThreadReadingOrdersResponse: {
+            reading_orders: components["schemas"]["NativeReadingOrderResponse"][];
+        };
         /** @description Python `ThreadResponse`. */
         NativeThreadResponse: {
             blocking_reasons: string[];
@@ -10546,6 +7665,10 @@ export interface components {
             name: string;
             normalized_name: string;
             scope: string;
+        };
+        /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
+        OrderedExplanations: {
+            [key: string]: components["schemas"]["NativeBlockingExplanation"];
         };
         /**
          * OverlapDecisionItem
@@ -11895,15 +9018,6 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
-        /** @description Summary of one recent reading session. */
-        RecentSession: {
-            ended_at?: string | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-        };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
             /** Format: int32 */
@@ -12196,19 +9310,6 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
-        };
-        /**
-         * SeriesDecision
-         * @description Series-level decision for CBL adoption.
-         */
-        SeriesDecision: {
-            /** @description Include or exclude this entire series */
-            decision: components["schemas"]["SourceBackedDecision"];
-            /**
-             * Series Name
-             * @description Series name
-             */
-            series_name: string;
         };
         /** @description Wire parity with Python `SeriesImportStatusResponse`. */
         SeriesImportStatusResponse: {
@@ -12932,12 +10033,6 @@ export interface components {
             title: string;
         };
         /**
-         * SourceBackedDecision
-         * @description Decision values for source-backed adoption.
-         * @enum {string}
-         */
-        SourceBackedDecision: "include" | "exclude";
-        /**
          * SourceSyncFailure
          * @description One source that could not be evaluated during a sync run.
          */
@@ -13217,14 +10312,10 @@ export interface components {
         TasteVerdictRequest: {
             verdict: string;
         };
-        /**
-         * ThreadConnectedResponse
-         * @description Schema for thread dependency connectivity info.
-         */
+        /** @description Python `ThreadConnectedResponse`. */
         ThreadConnectedResponse: {
-            /** Connected Threads */
             connected_threads: components["schemas"]["ConnectedThreadInfo"][];
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
         /**
@@ -13263,14 +10354,10 @@ export interface components {
             blocked_by: components["schemas"]["DependencyResponse"][];
             blocking: components["schemas"]["DependencyResponse"][];
         };
-        /**
-         * ThreadDependencyOrderCheckResponse
-         * @description Schema for thread dependency order validation.
-         */
+        /** @description Python `ThreadDependencyOrderCheckResponse`. */
         ThreadDependencyOrderCheckResponse: {
-            /** Conflicts */
             conflicts: components["schemas"]["DependencyOrderConflict"][];
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
         /** @description The legacy single-thread response retained for the v1 and bare aliases. */
@@ -13486,15 +10573,6 @@ export interface components {
             access_token: string;
             refresh_token: string;
             token_type: string;
-        };
-        /** @description Summary of one highly rated thread. */
-        TopRatedThread: {
-            format: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: double */
-            rating: number;
-            title: string;
         };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
@@ -15200,58 +12278,6 @@ export interface operations {
             };
         };
     };
-    compare_creators_endpoint_api_v1_creators_compare_get: {
-        parameters: {
-            query?: {
-                /** @description Comma-separated canonical creator keys (2-4) */
-                keys?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorComparisonResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_discoveries_endpoint_api_v1_creators_discoveries_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorDiscoveryResponse"];
-                };
-            };
-        };
-    };
     get_summaries_documentation: {
         parameters: {
             query?: never;
@@ -15285,249 +12311,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
-                };
-            };
-        };
-    };
-    get_creator_detail_endpoint_api_v1_creators__creator_key__get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number | null;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_rating_distribution_drilldown_endpoint_api_v1_creators__creator_key__metrics_rating_distribution__rating_value__get: {
-        parameters: {
-            query?: {
-                /** @description Page number for paginated results */
-                page?: number;
-                /** @description Number of items per page */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-                rating_value: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorRatingDistributionDrilldown"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_role_drilldown_endpoint_api_v1_creators__creator_key__metrics_role_stats__role__get: {
-        parameters: {
-            query?: {
-                /** @description Page number for paginated results */
-                page?: number;
-                /** @description Number of items per page */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-                role: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorRoleDrilldown"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_series_drilldown_endpoint_api_v1_creators__creator_key__metrics_series_stats__series_key__get: {
-        parameters: {
-            query?: {
-                /** @description Page number for paginated results */
-                page?: number;
-                /** @description Number of issues per page */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-                series_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorSeriesDrilldown"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_metric_drilldown_endpoint_api_v1_creators__creator_key__metrics__metric_type__get: {
-        parameters: {
-            query?: {
-                /** @description Specific role for role-based metrics */
-                role?: string | null;
-                /** @description Specific rating value for distribution metrics */
-                rating_value?: string | null;
-                /** @description Specific series key for series metrics */
-                series_key?: string | null;
-                /** @description Page number for paginated results */
-                page?: number;
-                /** @description Number of items per page */
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-                metric_type: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_creator_series_issues_endpoint_api_v1_creators__creator_key__series__series_key__issues_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number | null;
-            };
-            header?: never;
-            path: {
-                creator_key: string;
-                series_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatorSeriesIssueListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -16502,7 +13285,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLCatalogBrowseResponse"];
+                    "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
                 };
             };
             400: {
@@ -16510,7 +13293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
             404: {
@@ -16518,7 +13301,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
             422: {
@@ -16534,7 +13317,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
         };
@@ -16635,7 +13418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLFolderListingResponse"];
+                    "application/json": components["schemas"]["CBLFolderListingResponse"];
                 };
             };
             400: {
@@ -16643,7 +13426,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
             404: {
@@ -16651,7 +13434,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
             422: {
@@ -16667,7 +13450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
+                    "application/json": components["schemas"]["CBLErrorResponse"];
                 };
             };
         };
@@ -18314,26 +15097,6 @@ export interface operations {
             };
         };
     };
-    get_correction_sheet_examples_api_v1_sessions_correction_examples_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrectionSheetExamplesResponse"];
-                };
-            };
-        };
-    };
     get_session_v1_documentation: {
         parameters: {
             query?: never;
@@ -19241,18 +16004,19 @@ export interface operations {
             };
         };
     };
-    get_thread_connected_threads_api_v1_threads__thread_id__connected_get: {
+    thread_ordering_connected_threads: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Threads connected through dependencies */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19261,14 +16025,33 @@ export interface operations {
                     "application/json": components["schemas"]["ThreadConnectedResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19316,18 +16099,19 @@ export interface operations {
             };
         };
     };
-    check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get: {
+    thread_ordering_dependency_order_check: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Dependency edges that disagree with issue positions */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19336,14 +16120,33 @@ export interface operations {
                     "application/json": components["schemas"]["ThreadDependencyOrderCheckResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19667,65 +16470,98 @@ export interface operations {
             };
         };
     };
-    validate_issue_order_api_v1_threads__thread_id__issues_validateOrder_get: {
+    thread_ordering_validate_order: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Human-readable ordering warnings */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueOrderValidationResponse"];
+                    "application/json": components["schemas"]["NativeIssueOrderValidationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get: {
+    thread_ordering_reading_orders: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Owned reading orders containing the thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                    "application/json": components["schemas"]["NativeThreadReadingOrdersResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19829,34 +16665,54 @@ export interface operations {
             };
         };
     };
-    get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post: {
+    thread_ordering_get_blocking_info: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Blocked status and reasons */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BlockingExplanation"];
+                    "application/json": components["schemas"]["NativeBlockingExplanation"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -20046,7 +16902,7 @@ export interface operations {
             };
         };
     };
-    get_threads_blocking_info_api_v1_threads_getBlockingInfo_post: {
+    thread_ordering_get_threads_blocking_info: {
         parameters: {
             query?: never;
             header?: never;
@@ -20059,7 +16915,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Blocking explanations keyed by thread id */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -20068,14 +16924,33 @@ export interface operations {
                     "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more threads not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -20370,33 +17245,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    metrics_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owner-scoped bounded reading metrics */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
-                };
-            };
-            /** @description Not authenticated, revoked token, or stale credential epoch */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20932,7 +17780,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorComparisonResponse"];
+                    "application/json": components["schemas"]["CreatorComparisonResponse"];
                 };
             };
             /** @description Invalid creator keys */
@@ -20966,7 +17814,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorDiscoveryResponse"];
+                    "application/json": components["schemas"]["CreatorDiscoveryResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -21029,7 +17877,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorTeamChemistryResponse"];
+                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -21062,7 +17910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorDetailResponse"];
+                    "application/json": components["schemas"]["CreatorDetailResponse"];
                 };
             };
             /** @description Invalid key */
@@ -21111,7 +17959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
                 };
             };
             /** @description Invalid value */
@@ -21160,7 +18008,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
                 };
             };
             /** @description Invalid role */
@@ -21209,7 +18057,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
                 };
             };
             /** @description Invalid series */
@@ -21261,7 +18109,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
                 };
             };
             /** @description Invalid metric */
@@ -21310,7 +18158,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorSeriesIssueListResponse"];
+                    "application/json": components["schemas"]["CreatorSeriesIssueListResponse"];
                 };
             };
             /** @description Invalid keys */

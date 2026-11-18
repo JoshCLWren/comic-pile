@@ -15,6 +15,10 @@
     {
       "path": ".github/scripts/factory-review-controller.py",
       "description": "Required-checks and mechanical merge gates; reviewer confidence does not replace their results."
+    },
+    {
+      "path": "docs/manual-qa/README.md",
+      "description": "Manual QA contract inventory and maintenance rule; MQA-* expected behavior is the contract and changes only by owner decision."
     }
   ]
 }

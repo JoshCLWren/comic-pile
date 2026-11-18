@@ -342,6 +342,10 @@ export async function invalidateAfterQueueMovement(
       exact: true,
     }),
     client.invalidateQueries({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    }),
+    client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     }),
     client.invalidateQueries({
@@ -410,6 +414,64 @@ export async function invalidateComicVineImportStatus(
     queryKey: queryKeys.comicVine.importStatus(volumeId),
     exact: true,
   })
+}
+
+/**
+ * Refresh open views after a thread rename or format edit (#5264).
+ *
+ * Queue rows and thread detail/summary are patched in place by the caller, so
+ * this only reconciles surfaces that render thread metadata from other caches:
+ * Roll bootstrap/pool, the current session, reading plan/CBL views, and shared
+ * issue-card batches so plan cards show renamed series titles. Queue order does
+ * not change, so queue pages are not invalidated or reset here.
+ */
+export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
+    invalidateIssueCards(client),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
+  ])
+}
+
+/**
+ * Refresh surfaces that show thread-level ComicVine mapping health after an
+ * issue mapping confirm, replace, sibling mapping, or removal (#5264).
+ *
+ * Queue rows display "mapped N of M" counts from thread list data, and the
+ * Roll manual picker reads mapping health from the bootstrap pool. Order does
+ * not change, so queue pages are invalidated (not reset) to keep cursors
+ * intact. Batched issue-card projections are refreshed so mapped badges and
+ * confirmed covers stay current on every appearance.
+ */
+export async function invalidateAfterIssueMappingChange(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
+    invalidateIssueCards(client),
+  ])
 }
 
 /**
@@ -945,6 +1007,17 @@ export async function invalidateRollBootstrapOnNavigation(
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
     refetchType: 'none',
+  })
+}
+
+/**
+ * Refresh the roll bootstrap so active Roll views refetch authoritative state
+ * (used after direct issue corrections that bypass cache-effect helpers).
+ */
+export async function invalidateRollBootstrap(client: QueryClient): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.roll.bootstrap(),
+    exact: true,
   })
 }
 
