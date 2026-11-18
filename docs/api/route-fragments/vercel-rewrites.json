@@ -358,6 +358,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-preview$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources$",
       "methods": [
         "GET"
@@ -758,7 +765,15 @@
     {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/issues:reorder$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -792,6 +807,27 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
       "methods": [
         "POST"
       ],
@@ -1247,14 +1283,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issues$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/issues/creators$",
       "methods": [
         "GET",
@@ -1263,41 +1291,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issues:reorder$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
       "methods": [
         "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
