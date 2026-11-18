@@ -1479,11 +1479,11 @@ mod tests {
     #[test]
     fn crossover_progress_counts_thread_and_issue_members_once() {
         // Thread membership counts the whole migrated series; issue membership
-        // inside the same series is not double-counted.
+        // whose series is already a thread target is not double-counted.
         let memberships = vec![
-            member(1, Some(100), None), // thread target
-            member(2, Some(200), None), // thread target
-            member(3, None, Some(500)), // issue target in a different series
+            member(1, Some(100), None), // thread target: series 100
+            member(2, Some(200), None), // thread target: series 200
+            member(3, None, Some(500)), // issue target in series 100 -> not counted twice
         ];
         let threads = BTreeMap::from([
             (100, Some(10)), // total 10 issues
@@ -1491,11 +1491,12 @@ mod tests {
         ]);
         let issues = BTreeMap::from([(500, (100, "read".to_string()))]);
         // Thread 100 has 2 unread -> 8 read; thread 200 has 1 unread -> 3 read.
+        // Issue 500 belongs to series 100 (already a thread target): skipped.
         let unread_counts = BTreeMap::from([(100, 2), (200, 1)]);
         let (read, total, progress) = crossover_progress(&memberships, &threads, &issues, &unread_counts);
-        assert_eq!(total, 10 + 4 + 1);
-        assert_eq!(read, 8 + 3 + 1);
-        assert_eq!(progress, "80%"); // 12 / 15
+        assert_eq!(total, 10 + 4);
+        assert_eq!(read, 8 + 3);
+        assert_eq!(progress, "78%"); // 11 / 14
     }
 
     #[test]
