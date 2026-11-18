@@ -252,22 +252,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Series Mapping
-         * @description Preview a series mapping with safe scoping and classification.
-         *
-         *     This endpoint provides a read-only preview of what issues would be mapped
-         *     to a selected ComicVine series, with safe scoping rules and classification
-         *     of each issue mapping status.
-         *
-         *     Args:
-         *         request: Preview request with origin issue, provider, and series ID.
-         *         current_user: Authenticated user for authorization.
-         *         db: Database session.
-         *
-         *     Returns:
-         *         Preview response with scope information, counts, and classified rows.
-         */
         post: operations["preview_series_mapping_api_v1_catalog_series_mappings_preview_post"];
         delete?: never;
         options?: never;
@@ -872,15 +856,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Plan Projection
-         * @description Preview a deterministic projection without mutating any resource.
-         *
-         *     The preview is recomputed from the persisted plan JSON on every call so
-         *     that callers always see the current state, even after concurrent edits.
-         *     Duplicate thread references, missing owned threads, and non-thread
-         *     nodes are reported as conflicts before any mutation is permitted.
-         */
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
         delete?: never;
         options?: never;
@@ -1836,10 +1811,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Cbl Adoption Preview
-         * @description Preview all CBL positions and their default read-only adoption choices.
-         */
         get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
         put?: never;
         post?: never;
@@ -1858,25 +1829,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Preview Cbl Reading Graph
-         * @description Preview the prospective reading graph for a CBL selection (read-only).
-         *
-         *     The graph comes from the same Option E evaluator and cycle validator that
-         *     execute the reader's saved lists. It never writes list membership, issue
-         *     status, or an overlap decision.
-         *
-         *     Args:
-         *         list_id: Shared CBL source list being adopted or updated.
-         *         payload: Included source positions, prior answers, and optional list
-         *             to preview as updated instead of newly added.
-         *         current_user: Authenticated reader whose existing lists are included.
-         *         db: Async database session for the request.
-         *
-         *     Returns:
-         *         Prospective series nodes, overlap questions with both choice effects,
-         *         the issue directory with active blockers, and any cycle rejection.
-         */
         post: operations["preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post"];
         delete?: never;
         options?: never;
@@ -5193,6 +5145,37 @@ export interface components {
             /** User Id */
             user_id: number;
         };
+        CBLAdoptionEntry: {
+            adopted: boolean;
+            adoption_class: string;
+            adoption_decision: string;
+            /** Format: int64 */
+            canonical_issue_id?: number | null;
+            /** Format: int64 */
+            cbl_entry_id: number;
+            /** Format: int64 */
+            cbl_position: number;
+            collection_excluded: boolean;
+            collection_exclusion_ids: number[];
+            collection_exclusion_reason?: string | null;
+            comicvine_issue_id?: string | null;
+            comicvine_series_id?: string | null;
+            is_duplicate_identity: boolean;
+            issue_number: string;
+            /** Format: int64 */
+            publication_year?: number | null;
+            read_at?: string | null;
+            read_status?: string | null;
+            resolution_status: string;
+            /** Format: int64 */
+            resolved_issue_id?: number | null;
+            series_external_id?: string | null;
+            series_group_id: string;
+            series_name: string;
+            series_provider?: string | null;
+            /** Format: int64 */
+            volume_year?: number | null;
+        };
         /**
          * CBLAdoptionEntryResponse
          * @description Typed reconciliation and adoption state for one source position.
@@ -5279,6 +5262,26 @@ export interface components {
             summary: components["schemas"]["CBLAdoptionSummaryResponse"];
             /** Total Positions */
             total_positions: number;
+        };
+        CBLAdoptionSummary: {
+            /** Format: int64 */
+            awaiting_opt_in_count: number;
+            awaiting_opt_in_positions: number[];
+            /** Format: int64 */
+            excluded_count: number;
+            excluded_positions: number[];
+            /** Format: int64 */
+            final_adopted_count: number;
+            final_adopted_order: number[];
+            /** Format: int64 */
+            missing_would_create_count: number;
+            missing_would_create_positions: number[];
+            /** Format: int64 */
+            reused_existing_count: number;
+            reused_existing_positions: number[];
+            /** Format: int64 */
+            unresolved_count: number;
+            unresolved_positions: number[];
         };
         /**
          * CBLAdoptionSummaryResponse
@@ -5857,6 +5860,14 @@ export interface components {
              * @description Volume year recorded in the CBL source
              */
             volume_year?: number | null;
+        };
+        CBLSourceFingerprint: {
+            content_hash: string;
+            revision_sha: string;
+            /** Format: int64 */
+            source_list_id: number;
+            source_path: string;
+            source_repository: string;
         };
         /**
          * CBLSourceFingerprintResponse
@@ -9561,6 +9572,13 @@ export interface components {
             mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
+        NativeCBLAdoptionPreviewResponse: {
+            entries: components["schemas"]["CBLAdoptionEntry"][];
+            source: components["schemas"]["CBLSourceFingerprint"];
+            summary: components["schemas"]["CBLAdoptionSummary"];
+            /** Format: int64 */
+            total_positions: number;
+        };
         NativeCBLBreadcrumb: {
             name: string;
             path: string;
@@ -9848,6 +9866,86 @@ export interface components {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
+        NativeReadingGraphBlocker: {
+            explanation: string;
+            /** Format: int64 */
+            gate_issue_id?: number | null;
+            kind: string;
+            /** Format: int64 */
+            list_id?: number | null;
+            waiting_on_issue_ids: number[];
+        };
+        NativeReadingGraphChoiceEffect: {
+            choice: string;
+            detail: string;
+            label: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphCycleError: {
+            code: string;
+            message: string;
+        };
+        NativeReadingGraphIssueReference: {
+            blockers: components["schemas"]["NativeReadingGraphBlocker"][];
+            comicvine_volume_id?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+        };
+        NativeReadingGraphOverlap: {
+            blocked_issue_ids: number[];
+            choices: components["schemas"]["NativeReadingGraphChoiceEffect"][];
+            continuing_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+            overlap_id: string;
+            question: string;
+            selected_choice?: string | null;
+            waiting_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+        };
+        NativeReadingGraphOverlapChoice: {
+            choice: string;
+            overlap_id: string;
+        };
+        NativeReadingGraphPreview: {
+            content_hash: string;
+            cycle_errors: components["schemas"]["NativeReadingGraphCycleError"][];
+            issues: components["schemas"]["NativeReadingGraphIssueReference"][];
+            overlaps: components["schemas"]["NativeReadingGraphOverlap"][];
+            revision_sha: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            /** Format: int64 */
+            source_list_id: number;
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphPreviewRequest: {
+            included_positions?: number[];
+            overlap_choices?: components["schemas"]["NativeReadingGraphOverlapChoice"][];
+            /** Format: int64 */
+            target_list_id?: number | null;
+        };
+        NativeReadingGraphSeriesNode: {
+            comicvine_volume_id: string;
+            /** Format: int64 */
+            rollable_count: number;
+            series_name: string;
+            state: string;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            waiting_count: number;
+            waits_for_issue_ids: number[];
+            /** Format: int64 */
+            year?: number | null;
+        };
+        NativeReadingGraphSeriesReference: {
+            comicvine_volume_id: string;
+            series_name: string;
+            /** Format: int64 */
+            year?: number | null;
+        };
         NativeReadingListEntryIntent: {
             gate: string;
             skipped?: boolean;
@@ -9914,6 +10012,47 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
+        };
+        NativeSeriesMappingPreviewCounts: {
+            /** Format: int64 */
+            already_confirmed: number;
+            /** Format: int64 */
+            excluded_special: number;
+            /** Format: int64 */
+            needs_review_ambiguous: number;
+            /** Format: int64 */
+            needs_review_conflict: number;
+            /** Format: int64 */
+            safe_exact_match: number;
+            /** Format: int64 */
+            unresolved: number;
+        };
+        /** @description Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`. */
+        NativeSeriesMappingPreviewRequest: {
+            /** Format: int32 */
+            origin_issue_id: number;
+            provider: string;
+            provider_series_external_id: string;
+            scope_mode?: string;
+        };
+        NativeSeriesMappingPreviewResponse: {
+            counts: components["schemas"]["NativeSeriesMappingPreviewCounts"];
+            /** Format: double */
+            expires_at?: number | null;
+            /** Format: double */
+            issued_at: number;
+            preview_token?: string | null;
+            provider_series?: unknown;
+            rows: unknown[];
+            scope: components["schemas"]["NativeSeriesMappingPreviewScope"];
+        };
+        NativeSeriesMappingPreviewScope: {
+            basis?: string | null;
+            /** Format: int32 */
+            origin_issue_id: number;
+            scope_key?: string | null;
+            series_label?: string | null;
+            status: string;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -13733,27 +13872,32 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SeriesMappingPreviewRequest"];
+                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Read-only series mapping preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SeriesMappingPreviewResponse"];
+                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request body */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -14673,33 +14817,53 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Continuity plan id */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Deterministic projection preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
+                    "application/json": components["schemas"]["NativeReadingOrderProjectionPreview"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request body */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -16425,29 +16589,35 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Read-only adoption preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["NativeCBLAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -16456,33 +16626,46 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingGraphPreviewRequest"];
+                "application/json": components["schemas"]["NativeReadingGraphPreviewRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Read-only graph preview */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingGraphPreview"];
+                    "application/json": components["schemas"]["NativeReadingGraphPreview"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or unresolved source position */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
