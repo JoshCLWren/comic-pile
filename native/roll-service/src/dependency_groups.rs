@@ -870,8 +870,8 @@ async fn issues_by_ids(
                 issue_number: row.get(2),
                 position: row.get(3),
                 status: row.get(4),
-                read_at: row.get(5),
-                created_at: row.get(6),
+                read_at: format_optional_python_datetime(row.get(5)),
+                created_at: format_python_datetime(row.get(6)),
             }),
         );
     }
