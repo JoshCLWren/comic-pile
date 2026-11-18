@@ -862,6 +862,72 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/reading\\-order\\-groups/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/issue\\-ranges$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members/[^/]+$",
+      "methods": [
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/order$",
+      "methods": [
+        "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/plans$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/releases/$",
       "methods": [
         "GET",
@@ -1685,81 +1751,6 @@
     },
     {
       "src": "^/api/v1/reading\\-boundaries/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/issue\\-ranges$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members/[^/]+$",
-      "methods": [
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/order$",
-      "methods": [
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/plans$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
       "methods": [
         "GET",
         "OPTIONS"
