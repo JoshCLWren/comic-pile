@@ -20,6 +20,7 @@
     "reading-orders",
     "reading-plan-sync",
     "releases",
+    "roll",
     "sessions",
     "tags",
     "taste-discoveries",
@@ -56,7 +57,35 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/roll/override$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/sessions/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/sessions/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/sessions/[^/]+/details$",
       "methods": [
         "GET"
       ],
@@ -73,6 +102,20 @@
       "src": "^/api/threads/[0-9]+$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/undo/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/undo/[^/]+/undo/[^/]+$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -329,7 +372,42 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/roll/override$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/roll/switch\\-prerequisite$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/sessions/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/sessions/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/sessions/[^/]+/details$",
       "methods": [
         "GET"
       ],
@@ -468,6 +546,20 @@
       "src": "^/api/v1/threads/completed/threads$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/undo/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -882,22 +974,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/sessions/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/[^/]+/details$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
@@ -1107,22 +1183,6 @@
     },
     {
       "src": "^/api/v1/threads:getBlockingInfo$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/undo/[^/]+/snapshots$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
       "methods": [
         "POST",
         "OPTIONS"

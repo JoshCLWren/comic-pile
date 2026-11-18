@@ -28,6 +28,7 @@ async fn native_health() -> Response {
         "build": {
             "revision": env!("COMICPILE_SOURCE_REVISION"),
             "compiler": env!("COMICPILE_COMPILER"),
+            "lock_sha256": env!("COMICPILE_LOCK_SHA256"),
             "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION")
         },
@@ -402,6 +403,17 @@ fn app() -> Router {
         .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v1/roll/override", post(native_dispatch))
+        .route("/api/roll/override", post(native_dispatch))
+        .route(
+            "/api/v1/roll/events/{event_id}/recommendation-explanation",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/roll/events/{event_id}/recommendation-explanation",
+            get(native_dispatch),
+        )
+        .route("/api/v1/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
         .route("/api/v1/users/me/preferences", patch(native_dispatch))
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))
@@ -760,6 +772,8 @@ mod tests {
         );
     }
 
+    static SCHEMA_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
     async fn disposable_schema_url() -> String {
         let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
             .expect("disposable RUST_ROLL_TEST_DATABASE_URL required; tests never silently skip");
@@ -773,7 +787,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let schema = format!("ingress_queue_{}_{}", std::process::id(), nanos);
+        let seq = SCHEMA_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let schema = format!("ingress_queue_{}_{}_{}", std::process::id(), nanos, seq);
         admin
             .batch_execute(&format!(
                 "CREATE SCHEMA {schema};
@@ -1067,6 +1082,11 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("rustc "));
+        assert_eq!(
+            health["build"]["lock_sha256"],
+            env!("COMICPILE_LOCK_SHA256")
+        );
+        assert_eq!(health["build"]["lock_sha256"].as_str().unwrap().len(), 64);
         assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
         let executable = std::env::current_exe().expect("current executable");
         assert_eq!(

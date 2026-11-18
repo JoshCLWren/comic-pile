@@ -58,6 +58,50 @@ describe('UI audit fixture stabilization', () => {
     expect(payload.sessions[0].started_at).toBe('2026-08-30T17:13:19.000Z')
   })
 
+  it('normalizes activity timestamps without mutating the server payload', () => {
+    const entries = [
+      {
+        event_id: 501,
+        type: 'snooze',
+        timestamp: '2026-11-08T15:46:25.515000Z',
+        die_before: 6,
+        die_after: 8,
+      },
+      {
+        event_id: 502,
+        type: 'roll',
+        timestamp: '2026-11-08T15:46:25.467000Z',
+        die_before: 8,
+      },
+    ]
+    const payload = {
+      activities: entries,
+      events: entries,
+      items: entries,
+      next_page_token: null,
+      next_cursor: null,
+    }
+
+    const stabilized = stabilizeAuditApiPayload('/api/v2/activity', payload)
+
+    expect(stabilized).toEqual({
+      ...payload,
+      activities: [
+        { ...entries[0], timestamp: AUDIT_FIXED_NOW },
+        { ...entries[1], timestamp: '2026-08-30T12:01:00.000Z' },
+      ],
+      events: [
+        { ...entries[0], timestamp: AUDIT_FIXED_NOW },
+        { ...entries[1], timestamp: '2026-08-30T12:01:00.000Z' },
+      ],
+      items: [
+        { ...entries[0], timestamp: AUDIT_FIXED_NOW },
+        { ...entries[1], timestamp: '2026-08-30T12:01:00.000Z' },
+      ],
+    })
+    expect(payload.items[0].timestamp).toBe('2026-11-08T15:46:25.515000Z')
+  })
+
   it('leaves unrelated API payloads untouched', () => {
     const payload = { value: 'unchanged' }
 
