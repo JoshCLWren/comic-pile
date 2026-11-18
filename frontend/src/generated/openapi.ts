@@ -3149,7 +3149,7 @@ export interface paths {
          * Documentation-only operation for the mounted discovery listing.
          * @description Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.
          */
-        get: operations["list_documentation"];
+        get: operations["taste_discoveries_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -18440,7 +18440,7 @@ export interface operations {
             };
         };
     };
-    list_documentation: {
+    taste_discoveries_list: {
         parameters: {
             query?: {
                 /** @description Maximum discoveries to return (1-3, default 3). */
