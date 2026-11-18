@@ -87,18 +87,36 @@ export const ALLOWLIST = new Map([
   ]),
 ]);
 
-/** Split a Rust `use a::b::{x, y};` block into imported-name -> root module. */
+/**
+ * Map every handler name imported into lib.rs to its root module.
+ *
+ * Both Rust import forms matter: `use alpha::list;` and
+ * `use alpha::{list as list_alpha};`. The name the router uses is the local
+ * one (the alias, when present), so that is what must be recorded here.
+ */
 function importedNames(source) {
   const names = new Map();
-  const pattern = /use\s+([A-Za-z0-9_]+(?:::[A-Za-z0-9_]+)*)::\{([^}]*)\}\s*;/g;
-  for (const match of source.matchAll(pattern)) {
+  const record = (local, module) => {
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(local) && local !== 'self' && !names.has(local)) {
+      names.set(local, module);
+    }
+  };
+  const brace = /use\s+([A-Za-z0-9_]+(?:::[A-Za-z0-9_]+)*)::\{([^}]*)\}\s*;/g;
+  for (const match of source.matchAll(brace)) {
     const module = match[1].split('::')[0];
     for (const raw of match[2].split(',')) {
-      const name = raw.trim().split(/\s+as\s+/)[0].trim();
-      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !names.has(name)) {
-        names.set(name, module);
-      }
+      const parts = raw.trim().split(/\s+as\s+/).map(part => part.trim());
+      record(parts.length > 1 ? parts[1] : parts[0], module);
     }
+  }
+  const single = /use\s+([A-Za-z0-9_]+(?:::[A-Za-z0-9_]+)*)\s*;/g;
+  for (const match of source.matchAll(single)) {
+    const path = match[1].split('::');
+    record(path.at(-1), path[0]);
+  }
+  const aliased = /use\s+([A-Za-z0-9_]+(?:::[A-Za-z0-9_]+)*)\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
+  for (const match of source.matchAll(aliased)) {
+    record(match[2], match[1].split('::')[0]);
   }
   return names;
 }
@@ -159,8 +177,12 @@ export function routeModulesFromLib(source) {
       if (segments.length > 1 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(segments[0])) {
         module = segments[0];
       } else if (imports.has(handler)) {
-        // Bare handler imported by a `use module::{...}` block (e.g. custom_cbl).
+        // Bare handler imported by `use module::...` (e.g. custom_cbl).
         module = imports.get(handler);
+      } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(handler)) {
+        // A named handler we cannot attribute must never silently escape the
+        // guard. Inline closures start with `|` and are intentionally skipped.
+        throw new Error(`Cannot resolve route handler ${handler} to a module in lib.rs`);
       }
       if (!module || module === 'axum' || module === 'middleware') continue;
       if (!modules.has(module)) modules.set(module, new Set());
@@ -191,6 +213,31 @@ export function matchesRoute(requestUri, routePath) {
   );
 }
 
+/** Flatten the discovered modules into the single route table the router uses. */
+export function buildRouteTable(discovered) {
+  return discovered.flatMap(({module, routes}) => routes.map(route => ({module, route})));
+}
+
+/**
+ * Resolve a request URI against the WHOLE route table, not per module.
+ *
+ * Axum's matchit prefers static segments over parameters. We mirror that by
+ * picking the candidates with the most static segments; a wildcard from one
+ * module must not steal a fixed path owned by another (e.g.
+ * `/api/v1/issue-identity/cbl-sources/folders` belongs to `cbl_catalog`, not
+ * to `issue_identity`'s `/{list_id}`). Ties are possible when two modules
+ * register the same path for different methods; without parsing the test's
+ * HTTP method both modules are credited, which cannot create a false pass for
+ * a module that has no test of its own route at all.
+ */
+export function resolveRouteOwners(requestUri, routeTable) {
+  const candidates = routeTable.filter(entry => matchesRoute(requestUri, entry.route));
+  if (!candidates.length) return [];
+  const staticCount = entry => entry.route.split('/').filter(segment => !segment.includes('{')).length;
+  const best = Math.max(...candidates.map(staticCount));
+  return [...new Set(candidates.filter(entry => staticCount(entry) === best).map(entry => entry.module))];
+}
+
 const DB_HARNESS = [
   'test_support::database_url',
   'test_support::test_state',
@@ -201,18 +248,19 @@ const DB_ENV_ACCESS = /std::env::var\(\s*"RUST_ROLL_TEST_DATABASE_URL"/;
 
 /**
  * Decide whether one test file both uses the real database harness and
- * exercises at least one of a module's registered routes.
+ * exercises a route actually owned by `module` in the full route table.
  *
  * A doc comment that merely mentions `RUST_ROLL_TEST_DATABASE_URL` is not
  * enough: the file must actually call a `test_support` helper that provisions
  * the canonical schema or read that environment variable.
  */
-export function testCoversModule(testSource, routes) {
+export function testCoversModule(testSource, module, routeTable) {
   if (!DB_HARNESS.some(marker => testSource.includes(marker)) && !DB_ENV_ACCESS.test(testSource)) {
     return false;
   }
   return [...testSource.matchAll(/"([^"\n]+)"/g)].some(
-    match => match[1].startsWith('/api/') && routes.some(route => matchesRoute(match[1], route)),
+    match => match[1].startsWith('/api/')
+      && resolveRouteOwners(match[1], routeTable).includes(module),
   );
 }
 
@@ -230,6 +278,7 @@ export function checkNativeRouteDbTests(root, allowlist = ALLOWLIST) {
   const lib = fs.readFileSync(path.join(root, LIB_RS), 'utf8');
   const openapi = fs.readFileSync(path.join(root, OPENAPI_RS), 'utf8');
   const discovered = routeModulesFromLib(lib);
+  const routeTable = buildRouteTable(discovered);
   const routeNames = new Set(discovered.map(entry => entry.module));
   // OpenAPI documentation cannot invent HTTP routes: only modules registered
   // in the router are checked. Doc-only modules are reported for visibility.
@@ -244,7 +293,7 @@ export function checkNativeRouteDbTests(root, allowlist = ALLOWLIST) {
   const covered = [];
   const staleAllowlist = [];
   for (const {module, routes} of discovered) {
-    const evidence = testSources.find(file => testCoversModule(file.source, routes));
+    const evidence = testSources.find(file => testCoversModule(file.source, module, routeTable));
     if (evidence) {
       covered.push({module, test: evidence.name});
       if (allowlist.has(module)) staleAllowlist.push(module);

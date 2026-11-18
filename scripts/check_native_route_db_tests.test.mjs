@@ -7,9 +7,11 @@ import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
 import {
   ALLOWLIST,
+  buildRouteTable,
   checkNativeRouteDbTests,
   matchesRoute,
   modulesFromOpenApi,
+  resolveRouteOwners,
   routeModulesFromLib,
   testCoversModule,
 } from './check_native_route_db_tests.mjs';
@@ -79,6 +81,27 @@ test('parses route modules from lib.rs, ignoring inline closures and test-only r
   assert(!modules.some(entry => entry.module === 'phantom'));
 });
 
+test('single and aliased Rust imports resolve to their module; unknown handlers fail closed', () => {
+  const source = `\
+pub mod delta;
+pub mod epsilon;
+use delta::list;
+use epsilon::{list as list_epsilon};
+pub fn router() {
+    Router::new()
+        .route("/api/v1/deltas", get(list))
+        .route("/api/v1/epsilons", get(list_epsilon))
+}
+#[cfg(test)] mod tests {}
+`;
+  const modules = routeModulesFromLib(source);
+  assert.deepEqual(modules.map(entry => entry.module), ['delta', 'epsilon']);
+  assert.throws(
+    () => routeModulesFromLib(source.replace('get(list_epsilon)', 'get(mystery_handler)')),
+    /Cannot resolve route handler mystery_handler/,
+  );
+});
+
 test('route parameter matching tolerates concrete ids, format placeholders and query strings', () => {
   assert(matchesRoute('/api/v1/alphas/42', '/api/v1/alphas/{id}'));
   assert(matchesRoute('/api/v1/alphas/{}', '/api/v1/alphas/{id}'));
@@ -88,14 +111,33 @@ test('route parameter matching tolerates concrete ids, format placeholders and q
   assert(!matchesRoute('/api/v2/alphas/7', '/api/v1/alphas/{id}'));
 });
 
-test('test coverage requires both the real DB harness and a matching route URI', () => {
-  const routes = ['/api/v1/alphas/{id}'];
-  assert(testCoversModule(DB_ALPHA_TEST, routes));
-  assert(!testCoversModule('let uri = "/api/v1/alphas/42";\n', routes));
-  assert(!testCoversModule('test_support::database_url(); let uri = "/health";', routes));
-  assert(!testCoversModule('// RUST_ROLL_TEST_DATABASE_URL in a doc comment; uri("/api/v1/alphas/7")', routes));
-  assert(testCoversModule('std::env::var("RUST_ROLL_TEST_DATABASE_URL"); uri("/api/v1/alphas/7")', routes));
-  assert(testCoversModule('test_support::reset_for_test(&state).await; uri("/api/v1/alphas/7")', routes));
+test('test coverage requires both the real DB harness and an owned route URI', () => {
+  const table = buildRouteTable(routeModulesFromLib(LIB_RS));
+  assert(testCoversModule(DB_ALPHA_TEST, 'alpha', table));
+  assert(!testCoversModule('let uri = "/api/v1/alphas/42";\n', 'alpha', table));
+  assert(!testCoversModule('test_support::database_url(); let uri = "/health";', 'alpha', table));
+  assert(!testCoversModule('// RUST_ROLL_TEST_DATABASE_URL in a doc comment; uri("/api/v1/alphas/7")', 'alpha', table));
+  assert(testCoversModule('std::env::var("RUST_ROLL_TEST_DATABASE_URL"); uri("/api/v1/alphas/7")', 'alpha', table));
+  assert(testCoversModule('test_support::reset_for_test(&state).await; uri("/api/v1/alphas/7")', 'alpha', table));
+  assert(!testCoversModule(DB_ALPHA_TEST, 'beta', table));
+});
+
+test('a fixed path is credited to its owner, not to another module\'s wildcard', () => {
+  const table = [
+    {module: 'wild', route: '/api/v1/issue-identity/cbl-sources/{list_id}'},
+    {module: 'fixed', route: '/api/v1/issue-identity/cbl-sources/folders'},
+  ];
+  assert.deepEqual(
+    resolveRouteOwners('/api/v1/issue-identity/cbl-sources/folders', table),
+    ['fixed'],
+  );
+  const source = `test_support::database_url(); uri("/api/v1/issue-identity/cbl-sources/folders")`;
+  assert(!testCoversModule(source, 'wild', table));
+  assert(testCoversModule(source, 'fixed', table));
+  assert.deepEqual(
+    resolveRouteOwners('/api/v1/issue-identity/cbl-sources/7', table),
+    ['wild'],
+  );
 });
 
 test('OpenAPI-only module names are reported without becoming HTTP route modules', () => {
