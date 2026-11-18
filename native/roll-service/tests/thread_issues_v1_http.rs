@@ -994,6 +994,178 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
     assert_eq!(still, Some(ids[1]));
 }
 
+/// Scoped Option E activation for one serialized test. The handler reads the
+/// activation switch per request, so the guard restores the environment even
+/// on failure. Every DB-backed test in this binary holds the reset guard, so
+/// no other test in this process observes the temporary value.
+struct OptionEEnv {
+    enabled: Option<std::ffi::OsString>,
+    approval: Option<std::ffi::OsString>,
+}
+
+impl OptionEEnv {
+    fn enable() -> Self {
+        let enabled = std::env::var_os("OPTION_E_ENABLED");
+        let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
+        std::env::set_var("OPTION_E_ENABLED", "true");
+        std::env::set_var("OPTION_E_APPROVED_PREVIEW", "thread-issues-http-test");
+        Self { enabled, approval }
+    }
+}
+
+impl Drop for OptionEEnv {
+    fn drop(&mut self) {
+        match self.enabled.take() {
+            Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
+            None => std::env::remove_var("OPTION_E_ENABLED"),
+        }
+        match self.approval.take() {
+            Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
+            None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
+        }
+    }
+}
+
+async fn pending_pair(conn: &Conn, user_id: i32) -> (Option<i32>, Option<i32>) {
+    let row = conn
+        .query_one(
+            "SELECT pending_thread_id, pending_issue_id FROM sessions \
+             WHERE user_id = $1 AND ended_at IS NULL",
+            &[&user_id],
+        )
+        .await
+        .unwrap();
+    (row.get(0), row.get(1))
+}
+
+#[tokio::test]
+async fn set_current_issue_option_e_exercises_manual_pick_and_rollback() {
+    let _env = OptionEEnv::enable();
+    let (state, token, csrf, user_id, _guard) = setup_user("tiss-opte").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "OptE", 4, 1).await;
+    let mut ids = Vec::new();
+    for (n, number) in ["1", "2", "3", "4"].iter().enumerate() {
+        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
+    }
+    conn.execute(
+        "UPDATE threads SET total_issues = 4, reading_progress = 'not_started' WHERE id = $1",
+        &[&thread],
+    )
+    .await
+    .unwrap();
+    let path = format!("/api/v1/threads/{thread}:setCurrentIssue");
+
+    // Successful correction: the enabled branch accepts the corrected
+    // frontier and records the manual selection event.
+    let (status, body) = send(
+        &state,
+        post(&path, &token, &csrf, Some(json!({"issue_number": "2"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["issue_id"], ids[1]);
+    assert_eq!(body["next_issue_id"], ids[1]);
+    assert_eq!(body["issues_remaining"], 3);
+    let roll = conn
+        .query_one(
+            "SELECT selection_method, issue_id, issue_number FROM events \
+             WHERE type = 'roll' AND selected_thread_id = $1",
+            &[&thread],
+        )
+        .await
+        .unwrap();
+    assert_eq!(roll.get::<_, String>(0), "manual");
+    assert_eq!(roll.get::<_, i32>(1), ids[1]);
+    assert_eq!(roll.get::<_, String>(2), "2");
+    let rows = positions(&conn, thread).await;
+    assert_eq!(rows[0].2, "read");
+    assert_eq!(rows[1].2, "unread");
+    assert_eq!(
+        pending_pair(&conn, user_id).await,
+        (Some(thread), Some(ids[1]))
+    );
+
+    // Rejected selection: the thread is skipped in the active session, so the
+    // enabled branch refuses it and the transaction rolls back every issue
+    // and pending-session change the request had already staged.
+    conn.execute(
+        "UPDATE sessions SET skipped_thread_ids = $1 \
+         WHERE user_id = $2 AND ended_at IS NULL",
+        &[&json!([thread]), &user_id],
+    )
+    .await
+    .unwrap();
+    let (status, body) = send(
+        &state,
+        post(&path, &token, &csrf, Some(json!({"issue_number": "4"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(
+        body["detail"],
+        format!("Thread {thread} is excluded from this reading session")
+    );
+    let rows = positions(&conn, thread).await;
+    assert_eq!(
+        rows.iter().map(|row| row.2.as_str()).collect::<Vec<_>>(),
+        ["read", "unread", "unread", "unread"]
+    );
+    assert_eq!(
+        pending_pair(&conn, user_id).await,
+        (Some(thread), Some(ids[1]))
+    );
+    let event_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events \
+             WHERE thread_id = $1 OR selected_thread_id = $1",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(event_count, 1);
+
+    // Unsnooze tail: a session-snoozed thread is unsnoozed by the accepted pick.
+    conn.execute(
+        "UPDATE sessions SET skipped_thread_ids = NULL, snoozed_thread_ids = $1 \
+         WHERE user_id = $2 AND ended_at IS NULL",
+        &[&json!([thread]), &user_id],
+    )
+    .await
+    .unwrap();
+    let (status, body) = send(
+        &state,
+        post(&path, &token, &csrf, Some(json!({"issue_number": "3"}))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["issue_id"], ids[2]);
+    let unsnoozes: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events WHERE type = 'unsnooze' AND thread_id = $1",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(unsnoozes, 1);
+    let snoozed: Option<String> = conn
+        .query_one(
+            "SELECT snoozed_thread_ids::text FROM sessions \
+             WHERE user_id = $1 AND ended_at IS NULL",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(snoozed.as_deref(), Some("[]"));
+    assert_eq!(
+        pending_pair(&conn, user_id).await,
+        (Some(thread), Some(ids[2]))
+    );
+}
+
 #[tokio::test]
 async fn set_current_issue_rejects_inactive_and_untracked_threads() {
     let (state, token, csrf, user_id, _guard) = setup_user("tiss-current-state").await;

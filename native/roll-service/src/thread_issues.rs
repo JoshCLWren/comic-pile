@@ -49,6 +49,7 @@ use axum::{
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
@@ -74,9 +75,9 @@ pub struct IssueResponse {
     pub created_at: String,
 }
 
-/// Newly created issues (Python `IssueListResponse`).
+/// Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct IssueListResponse {
+pub struct ThreadIssueCreateListResponse {
     pub issues: Vec<IssueResponse>,
     pub total_count: i32,
     pub page_size: i32,
@@ -337,20 +338,31 @@ pub(crate) fn parse_issue_ranges(input: &str) -> Result<Vec<String>, String> {
                 result.push(part.to_string());
                 continue;
             }
-            // At most 100 characters, so both endpoints always fit u128.
-            let start: u128 = left.parse().map_err(|_| "Invalid range".to_string())?;
-            let end: u128 = right.parse().map_err(|_| "Invalid range".to_string())?;
-            if start > end {
+            // Python ints are arbitrary precision and each endpoint may be up
+            // to MAX_LITERAL_LENGTH digits, so the span is measured on the
+            // decimal strings themselves. `end - start + 1` must never wrap:
+            // an overflowing span is always far above MAX_ISSUES and is
+            // rejected before any expansion (release builds included).
+            let start = normalize_decimal(left);
+            let end = normalize_decimal(right);
+            if cmp_decimal(&start, &end) == Ordering::Greater {
                 return Err(format!("Range start ({start}) cannot exceed end ({end})"));
             }
-            let size = end - start + 1;
-            if size > MAX_ISSUES as u128 {
-                return Err(format!("Range too large: {size} issues (max {MAX_ISSUES})"));
-            }
-            if result.len() as u128 + size > MAX_ISSUES as u128 {
+            let size_text = add_one_decimal(&sub_decimal(&end, &start));
+            let size: Option<usize> = size_text.parse().ok();
+            let Some(size) = size.filter(|size| *size <= MAX_ISSUES) else {
+                return Err(format!(
+                    "Range too large: {size_text} issues (max {MAX_ISSUES})"
+                ));
+            };
+            if result.len() + size > MAX_ISSUES {
                 return Err(format!("Total issues would exceed maximum of {MAX_ISSUES}"));
             }
-            result.extend((start..=end).map(|value| value.to_string()));
+            let mut current = start;
+            for _ in 0..size {
+                result.push(current.clone());
+                current = add_one_decimal(&current);
+            }
         } else {
             result.push(part.to_string());
         }
@@ -366,6 +378,61 @@ pub(crate) fn parse_issue_ranges(input: &str) -> Result<Vec<String>, String> {
         ));
     }
     Ok(unique)
+}
+
+/// Python `str(int(text))` for a non-negative all-digit string: leading zeros
+/// are dropped (`"007"` -> `"7"`, `"000"` -> `"0"`).
+fn normalize_decimal(digits: &str) -> String {
+    let trimmed = digits.trim_start_matches('0');
+    if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Compare two normalized non-negative decimal strings.
+fn cmp_decimal(left: &str, right: &str) -> Ordering {
+    left.len().cmp(&right.len()).then_with(|| left.cmp(right))
+}
+
+/// `bigger - smaller` for normalized decimals with `bigger >= smaller`,
+/// returned normalized (schoolbook subtraction; no integer type involved).
+fn sub_decimal(bigger: &str, smaller: &str) -> String {
+    let big: Vec<u8> = bigger.bytes().map(|b| b - b'0').collect();
+    let small: Vec<u8> = smaller.bytes().map(|b| b - b'0').collect();
+    let offset = big.len() - small.len();
+    let mut diff = vec![0u8; big.len()];
+    let mut borrow = 0i16;
+    for i in (0..big.len()).rev() {
+        let subtrahend = if i >= offset { small[i - offset] } else { 0 };
+        let mut digit = i16::from(big[i]) - i16::from(subtrahend) - borrow;
+        if digit < 0 {
+            digit += 10;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        diff[i] = digit as u8;
+    }
+    normalize_decimal(&diff.iter().map(|d| (b'0' + d) as char).collect::<String>())
+}
+
+/// `value + 1` on a normalized non-negative decimal string.
+fn add_one_decimal(value: &str) -> String {
+    let mut digits: Vec<u8> = value.bytes().collect();
+    for i in (0..digits.len()).rev() {
+        if digits[i] == b'9' {
+            digits[i] = b'0';
+        } else {
+            digits[i] += 1;
+            return digits.iter().map(|b| *b as char).collect();
+        }
+    }
+    let mut out = String::with_capacity(digits.len() + 1);
+    out.push('1');
+    out.extend(digits.iter().map(|b| *b as char));
+    out
 }
 
 /// Sort key of an ordinary issue number (`^[1-9][0-9]*$`): digit-string length
@@ -700,27 +767,34 @@ struct CreatedIssue {
     created_at: String,
 }
 
-async fn insert_issue(
+/// Insert every new issue in one set-based statement (no SQL inside loops),
+/// returning the created rows.
+async fn insert_issues(
     tx: &Transaction<'_>,
     thread_id: i32,
-    number: &str,
-    position: i32,
-) -> Result<CreatedIssue, ApiError> {
+    numbers: &[String],
+    positions: &[i32],
+) -> Result<Vec<CreatedIssue>, ApiError> {
     let sql = format!(
         "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
-         VALUES ($1, $2, $3, 'unread', NOW()) RETURNING id, {}",
+         SELECT $1, new.number, new.position, 'unread', NOW() \
+         FROM unnest($2::text[], $3::int[]) AS new(number, position) \
+         RETURNING id, issue_number, position, {}",
         iso("created_at")
     );
-    let row = tx
-        .query_one(&sql, &[&thread_id, &number, &position])
+    let rows = tx
+        .query(&sql, &[&thread_id, &numbers, &positions])
         .await
         .map_err(insert_error)?;
-    Ok(CreatedIssue {
-        id: row.get(0),
-        number: number.to_string(),
-        position,
-        created_at: row.get(1),
-    })
+    Ok(rows
+        .iter()
+        .map(|row| CreatedIssue {
+            id: row.get(0),
+            number: row.get(1),
+            position: row.get(2),
+            created_at: row.get(3),
+        })
+        .collect())
 }
 
 /// `POST /api/v1/threads/{thread_id}/issues`
@@ -729,7 +803,7 @@ pub async fn create_thread_issues(
     user: AuthenticatedUser,
     thread_id: Result<Path<String>, PathRejection>,
     body: Bytes,
-) -> Result<(StatusCode, Json<IssueListResponse>), ApiError> {
+) -> Result<(StatusCode, Json<ThreadIssueCreateListResponse>), ApiError> {
     let thread_id = path_thread_id(thread_id)?;
     let (issue_range, insert_after, explicit_null) = parse_create_body(&body)?;
     let append_to_end = explicit_null;
@@ -822,9 +896,11 @@ pub async fn create_thread_issues(
                 .await
                 .map_err(db::query_error)?;
             }
-            for number in &new_numbers {
-                created.push(insert_issue(&tx, thread_id, number, target[number.as_str()]).await?);
-            }
+            let positions: Vec<i32> = new_numbers
+                .iter()
+                .map(|number| target[number.as_str()])
+                .collect();
+            created = insert_issues(&tx, thread_id, &new_numbers, &positions).await?;
             created.sort_by_key(|issue| issue.position);
             placed = true;
         }
@@ -843,9 +919,9 @@ pub async fn create_thread_issues(
             .await
             .map_err(db::query_error)?;
         }
-        for (next_position, number) in (insert_position + 1..).zip(new_numbers.iter()) {
-            created.push(insert_issue(&tx, thread_id, number, next_position).await?);
-        }
+        let positions: Vec<i32> = (insert_position + 1..=insert_position + count).collect();
+        created = insert_issues(&tx, thread_id, &new_numbers, &positions).await?;
+        created.sort_by_key(|issue| issue.position);
     }
 
     let was_unmigrated = thread.total_issues.is_none();
@@ -923,7 +999,7 @@ pub async fn create_thread_issues(
         .collect();
     Ok((
         StatusCode::CREATED,
-        Json(IssueListResponse {
+        Json(ThreadIssueCreateListResponse {
             page_size: issues.len() as i32,
             total_count: tracking.total,
             issues,
@@ -1552,7 +1628,7 @@ async fn select_manual_pick(
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     request_body = IssueCreateRange,
     responses(
-        (status = 201, description = "Newly created issues", body = IssueListResponse),
+        (status = 201, description = "Newly created issues", body = ThreadIssueCreateListResponse),
         (status = 400, description = "Invalid or fully duplicate range"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread or anchor issue not found"),
@@ -1686,7 +1762,7 @@ pub fn set_current_documentation() {}
     ),
     components(schemas(
         IssueResponse,
-        IssueListResponse,
+        ThreadIssueCreateListResponse,
         CreatorCredit,
         IssueCreatorsEntry,
         ThreadIssueCreatorsResponse,
@@ -1767,6 +1843,49 @@ mod tests {
             parse_issue_ranges("1-9000, 9001-10001").unwrap_err(),
             "Total issues would exceed maximum of 10000"
         );
+    }
+
+    #[test]
+    fn range_parser_rejects_huge_and_overflowing_ranges_like_python() {
+        // u128::MAX endpoint: `end - start + 1` would wrap to 0 in release
+        // builds; Python's arbitrary-precision int rejects the same input.
+        assert_eq!(
+            parse_issue_ranges("0-340282366920938463463374607431768211455").unwrap_err(),
+            "Range too large: 340282366920938463463374607431768211456 issues (max 10000)"
+        );
+        // Endpoints beyond u128 stay exact on the decimal strings.
+        assert_eq!(
+            parse_issue_ranges(&format!("0-{}", "9".repeat(98))).unwrap_err(),
+            format!(
+                "Range too large: {} issues (max 10000)",
+                add_one_decimal(&"9".repeat(98))
+            )
+        );
+        assert_eq!(
+            parse_issue_ranges(&format!("{}-{}", "9".repeat(50), "9".repeat(49))).unwrap_err(),
+            format!(
+                "Range start ({}) cannot exceed end ({})",
+                "9".repeat(50),
+                "9".repeat(49)
+            )
+        );
+        // A huge but tiny-span range still expands exactly like Python.
+        let big = "9".repeat(40);
+        assert_eq!(
+            parse_issue_ranges(&format!("{big}-{big}")).unwrap(),
+            strings(&[&big])
+        );
+        let next = add_one_decimal(&big);
+        assert_eq!(
+            parse_issue_ranges(&format!("{big}-{next}")).unwrap(),
+            strings(&[&big, &next])
+        );
+        // Leading zeros normalize the way Python `str(int(...))` does.
+        assert_eq!(
+            parse_issue_ranges("007-009").unwrap(),
+            strings(&["7", "8", "9"])
+        );
+        assert_eq!(parse_issue_ranges("0-0").unwrap(), strings(&["0"]));
     }
 
     #[test]

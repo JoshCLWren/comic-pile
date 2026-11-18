@@ -44,7 +44,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueListResponse"
+                  "$ref": "#/components/schemas/ThreadIssueCreateListResponse"
                 }
               }
             }
@@ -440,37 +440,6 @@
           }
         }
       },
-      "IssueListResponse": {
-        "type": "object",
-        "description": "Newly created issues (Python `IssueListResponse`).",
-        "required": [
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "properties": {
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueResponse"
-            }
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_count": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "IssueReorderRequest": {
         "type": "object",
         "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
@@ -636,6 +605,37 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadIssueCreateListResponse": {
+        "type": "object",
+        "description": "Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueResponse"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_count": {
+            "type": "integer",
             "format": "int32"
           }
         }
