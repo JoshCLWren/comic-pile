@@ -355,10 +355,19 @@ def test_opencode_v2_fleet_discovery_and_selection(tmp_path, monkeypatch):
     assert picked["runtime_model"] == "opencode/generated-free"
 
 
-def test_worker_never_blocks_provider_for_model_credit_error():
+def test_worker_blocks_only_proven_account_quota_for_one_assignment():
     worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
     clause = worker.split('attempted_pairs+=("$(jq -nc --arg source "$SOURCE"', 1)[1]
     clause = clause.split("record_model_failover_failure", 1)[0]
     assert "failure_scope=model" in clause
-    assert "failure_scope=account" not in clause
-    assert 'blocked_providers+=("$SOURCE")' not in clause
+    assert 'if [[ "$failure_class" == provider_quota ]] && account_wide_failure; then' in clause
+    assert "failure_scope=account" in clause
+    assert 'blocked_providers+=("$SOURCE")' in clause
+    assert 'for provider in "${blocked_providers[@]}"' in worker
+    # The account scope is local to this assignment. Durable Neon backoffs
+    # remain model-specific and do not suppress healthy sibling models.
+    from factory_state_operations import validate_intermediate_model_failures
+    assert validate_intermediate_model_failures([
+        {"source": "nvidia", "model": "generated/exhausted",
+         "outcome": "provider_quota", "scope": "account"},
+    ], "nvidia") == [("nvidia", "generated/exhausted", "provider_quota", "model")]
