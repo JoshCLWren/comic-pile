@@ -17,8 +17,8 @@ vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
-    { id: 1, position: 1, issue_id: 10, thread_id: 1, series_name: 'The Dead Remembered', issue_number: '2', status: 'unread', gate: 'none', skipped: false, is_checkpoint: false, availability: 'available' },
-    { id: 2, position: 2, issue_id: 20, thread_id: 2, series_name: 'King of Fear', issue_number: '1', status: 'unread', gate: 'none', is_checkpoint: false, availability: 'blocked', skipped: true,
+    { id: 1, position: 1, issue_id: 10, thread_id: 1, series_name: 'The Dead Remembered', issue_number: '2', status: 'unread', gate: 'none', skipped: false, is_checkpoint: false, availability: 'available', checkpoint_target_issue_ids: [] },
+    { id: 2, position: 2, issue_id: 20, thread_id: 2, series_name: 'King of Fear', issue_number: '1', status: 'unread', gate: 'none', is_checkpoint: false, availability: 'blocked', skipped: true, checkpoint_target_issue_ids: [],
       explanation: { is_blocked: true, blocking_reasons: [], blocking_dependencies: [
         { issue_id: 10, thread_id: 1, thread_title: 'The Dead Remembered', issue_number: '2', label: 'Strict order in Julix: waiting on The Dead Remembered #2' },
         { issue_id: 30, thread_id: 3, thread_title: 'Starman', issue_number: '55', label: 'Reader prerequisite: waiting on Starman #55' },

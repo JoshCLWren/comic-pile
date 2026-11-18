@@ -12,15 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.external_identity import (
     ExternalIdentity,
-    IssueExternalIdentityMapping,
 )
-from app.models.issue import Issue
-from app.models.thread import Thread
-from tests.conftest import get_or_create_user_async
 
 COMPARE_URL = "/api/v1/issue-identity/cbl-sources/compare"
 LOOKUP_URL = "/api/v1/issue-identity/cbl-sources/by-comicvine-issue"
-READING_LIST_URL = "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates"
 
 
 async def _seed_source(
@@ -106,56 +101,8 @@ async def _seed_entry(
     return entry
 
 
-async def _owned_issue(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    title: str,
-    issue_number: str,
-    queue_position: int,
-) -> Issue:
-    """Create one canonical owned Issue in its Thread."""
-    thread = Thread(
-        title=title,
-        format="comic",
-        issues_remaining=1,
-        queue_position=queue_position,
-        status="active",
-        user_id=user_id,
-        total_issues=1,
-        reading_progress="unstarted",
-        created_at=datetime.now(UTC),
-    )
-    db.add(thread)
-    await db.flush()
-    issue = Issue(
-        thread_id=thread.id,
-        issue_number=issue_number,
-        position=1,
-        status="unread",
-    )
-    db.add(issue)
-    await db.flush()
-    return issue
 
 
-async def _map_identity(
-    db: AsyncSession,
-    *,
-    issue: Issue,
-    identity: ExternalIdentity,
-    status: str = "confirmed",
-) -> IssueExternalIdentityMapping:
-    """Persist one issue-to-Comic-Vine mapping in the requested state."""
-    mapping = IssueExternalIdentityMapping(
-        issue_id=issue.id,
-        external_identity_id=identity.id,
-        status=status,
-        evidence_json={},
-    )
-    db.add(mapping)
-    await db.flush()
-    return mapping
 
 
 async def _seed_three_candidates(
@@ -351,139 +298,5 @@ async def test_same_title_and_number_never_matches_another_volume(
     assert lookup.json()["occurrences_total"] == 0
 
 
-@pytest.mark.asyncio
-async def test_reading_list_reports_identity_gaps_and_candidate_coverage(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Gaps stay explicit; only confirmed IDs compare; source-only IDs still count."""
-    user = await get_or_create_user_async(async_db)
-    first = await _owned_issue(
-        async_db, user_id=user.id, title="Gap A", issue_number="1", queue_position=1
-    )
-    second = await _owned_issue(
-        async_db, user_id=user.id, title="Gap B", issue_number="1", queue_position=2
-    )
-    missing = await _owned_issue(
-        async_db, user_id=user.id, title="Gap Missing", issue_number="1", queue_position=3
-    )
-    conflicted = await _owned_issue(
-        async_db, user_id=user.id, title="Gap Conflict", issue_number="1", queue_position=4
-    )
-    confirmed_a = await _seed_identity(async_db, external_id="4000-list-a")
-    confirmed_b = await _seed_identity(async_db, external_id="4000-list-b")
-    candidate_only = await _seed_identity(async_db, external_id="4000-list-candidate")
-    conflicting_one = await _seed_identity(async_db, external_id="4000-list-conflict-1")
-    conflicting_two = await _seed_identity(async_db, external_id="4000-list-conflict-2")
-    source_only = await _seed_identity(async_db, external_id="4000-list-unowned")
-    await _map_identity(async_db, issue=first, identity=confirmed_a)
-    await _map_identity(async_db, issue=second, identity=confirmed_b)
-    await _map_identity(
-        async_db, issue=missing, identity=candidate_only, status="candidate"
-    )
-    await _map_identity(async_db, issue=conflicted, identity=conflicting_one)
-    await _map_identity(async_db, issue=conflicted, identity=conflicting_two)
-
-    source = await _seed_source(async_db)
-    source_list = await _seed_list(
-        async_db, source=source, name="List Coverage", path="DC/List.cbl"
-    )
-    for position, identity in enumerate(
-        (confirmed_a, confirmed_b, source_only), start=1
-    ):
-        await _seed_entry(
-            async_db, source_list=source_list, position=position, issue_identity=identity
-        )
-    await async_db.commit()
-
-    created = await auth_client.post(
-        "/api/v1/custom-cbls",
-        json={
-            "name": "Gap Reading List",
-            "issue_ids": [first.id, second.id, missing.id, conflicted.id],
-        },
-    )
-    assert created.status_code == 201, created.text
-    list_id = created.json()["id"]
-
-    response = await auth_client.get(READING_LIST_URL.format(list_id=list_id))
-    assert response.status_code == 200, response.text
-    body = response.json()
-
-    assert body["list_id"] == list_id
-    assert body["list_name"] == "Gap Reading List"
-    assert body["input_entry_count"] == 4
-    assert body["input_confirmed_total"] == 2
-    assert body["input_missing_count"] == 1
-    assert body["input_conflict_count"] == 1
-    assert body["input_ids"] == ["4000-list-a", "4000-list-b"]
-
-    entries = body["entries"]
-    assert [entry["identity_status"] for entry in entries] == [
-        "confirmed",
-        "confirmed",
-        "missing",
-        "conflict",
-    ]
-    assert [entry["comicvine_issue_id"] for entry in entries] == [
-        "4000-list-a",
-        "4000-list-b",
-        None,
-        None,
-    ]
-    assert entries[2]["comicvine_issue_ids"] == []
-    assert entries[3]["comicvine_issue_ids"] == [
-        "4000-list-conflict-1",
-        "4000-list-conflict-2",
-    ]
-
-    assert body["candidates_total"] == 1
-    candidate = body["candidates"][0]
-    assert candidate["list_id"] == source_list.id
-    assert candidate["matched_input_count"] == 2
-    assert candidate["distinct_source_issues"] == 3
-    assert candidate["source_only_issue_count"] == 1
-    assert candidate["matched_input_ids"] == ["4000-list-a", "4000-list-b"]
-    assert candidate["missing_input_ids"] == []
 
 
-@pytest.mark.asyncio
-async def test_reading_list_without_confirmed_ids_returns_gaps_not_a_verdict(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """An unconfirmed-only list reports gaps and never claims no CBL exists."""
-    user = await get_or_create_user_async(async_db)
-    unconfirmed = await _owned_issue(
-        async_db,
-        user_id=user.id,
-        title="Unconfirmed Reading",
-        issue_number="1",
-        queue_position=1,
-    )
-    candidate_identity = await _seed_identity(
-        async_db, external_id="4000-unconfirmed-candidate"
-    )
-    await _map_identity(
-        async_db, issue=unconfirmed, identity=candidate_identity, status="candidate"
-    )
-    await async_db.commit()
-
-    created = await auth_client.post(
-        "/api/v1/custom-cbls",
-        json={"name": "Unconfirmed List", "issue_ids": [unconfirmed.id]},
-    )
-    assert created.status_code == 201, created.text
-    list_id = created.json()["id"]
-
-    response = await auth_client.get(READING_LIST_URL.format(list_id=list_id))
-    assert response.status_code == 200, response.text
-    body = response.json()
-
-    assert body["input_entry_count"] == 1
-    assert body["input_confirmed_total"] == 0
-    assert body["input_missing_count"] == 1
-    assert body["input_conflict_count"] == 0
-    assert body["input_ids"] == []
-    assert body["candidates_total"] == 0
-    assert body["entries"][0]["identity_status"] == "missing"

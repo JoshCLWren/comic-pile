@@ -53,7 +53,8 @@
       "path": "/api/v1/sessions/",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/sessions/$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -83,7 +84,8 @@
       "path": "/api/v1/sessions/{session_id}/details",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/sessions/[^/]+/details$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",

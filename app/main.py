@@ -316,8 +316,6 @@ logger.info(
 #: A request for one of these answers must not pay to register anything else
 #: (issue #3479).
 _EAGER_ROUTE_PREFIXES: tuple[str, ...] = (
-    "/api/metrics",
-    "/api/v1/metrics",
     "/api/v1/keepalive",
     "/health",
 )
@@ -352,13 +350,6 @@ def _register_lightweight_routers(app: FastAPI) -> None:
 
     app.include_router(keepalive.router, prefix="/api/v1", tags=["keepalive"])
 
-    # Expose the metrics router in every environment so production performance
-    # tracking (issue #834) and future regression checks can read startup
-    # telemetry. It returns only process startup epoch and duration.
-    from app.api import metrics
-
-    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
-    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
 
 
 def register_all_routers(app: FastAPI, environment: str) -> None:
@@ -366,7 +357,7 @@ def register_all_routers(app: FastAPI, environment: str) -> None:
 
     Router modules are imported lazily inside each mount so that a cold probe
     invocation does not load the full import graph. Registration order is the
-    historical ``include_router`` order: lightweight (metrics, keepalive) then
+    historical ``include_router`` order: lightweight (keepalive) then
     every deferred mount from :mod:`app.router_mounts``.
 
     Args:
@@ -505,7 +496,7 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         return await call_next(request)
 
     # Register routers with deferred, per-resource module imports to reduce
-    # cold-start cost. In deferred mode only the lightweight ping/metrics/
+    # cold-start cost. In deferred mode only the lightweight ping/
     # keepalive routers are registered now. Each real request registers just the
     # mounts its resource segment needs (issue #3479) and splices them in after
     # the lightweight routes so the JSON 404 fallback and SPA routes keep

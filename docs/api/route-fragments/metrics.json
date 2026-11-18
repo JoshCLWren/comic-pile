@@ -25,7 +25,8 @@
         "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
         "max_statements": 0,
         "grows_with_data": false
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -41,7 +42,8 @@
         "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
         "max_statements": 0,
         "grows_with_data": false
-      }
+      },
+      "exclude_from_inventory": true
     }
   ]
 }

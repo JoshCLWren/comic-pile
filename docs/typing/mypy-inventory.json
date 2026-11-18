@@ -19,7 +19,6 @@
     "app/api/continuity_rule.py",
     "app/api/continuity_template.py",
     "app/api/creators.py",
-    "app/api/custom_cbl.py",
     "app/api/debug.py",
     "app/api/delivery.py",
     "app/api/demo.py",
@@ -32,7 +31,6 @@
     "app/api/issue.py",
     "app/api/issue_dependency_batch.py",
     "app/api/issue_identity.py",
-    "app/api/metrics.py",
     "app/api/performance_metric.py",
     "app/api/preferences.py",
     "app/api/prerequisite.py",
@@ -41,18 +39,15 @@
     "app/api/reading_mode.py",
     "app/api/reading_orders.py",
     "app/api/reading_plan_reader.py",
-    "app/api/reading_plan_sync.py",
     "app/api/recommendation_diagnostics.py",
     "app/api/releases.py",
     "app/api/session.py",
     "app/api/snooze.py",
     "app/api/tags.py",
-    "app/api/taste.py",
     "app/api/taste_signal.py",
     "app/api/test_helpers.py",
     "app/api/thread.py",
     "app/api/traffic_metrics.py",
-    "app/api/undo.py",
     "app/auth.py",
     "app/cbl_ingest.py",
     "app/cbl_sync.py",
@@ -151,9 +146,7 @@
     "app/repositories/snooze_repository.py",
     "app/repositories/tag_repository.py",
     "app/repositories/taste_signal.py",
-    "app/repositories/taste_signals.py",
     "app/repositories/thread_repository.py",
-    "app/repositories/undo_snapshot_repository.py",
     "app/repositories/user_repository.py",
     "app/roll_recovery.py",
     "app/safe_logging.py",
@@ -189,12 +182,10 @@
     "app/schemas/prerequisite.py",
     "app/schemas/rate.py",
     "app/schemas/reader_context.py",
-    "app/schemas/reading_list_reader.py",
     "app/schemas/reading_order.py",
     "app/schemas/reading_plan_membership.py",
     "app/schemas/reading_plan_reader.py",
     "app/schemas/reading_plan_release_source.py",
-    "app/schemas/reading_plan_sync.py",
     "app/schemas/recommendation_context.py",
     "app/schemas/recommendation_diagnostics.py",
     "app/schemas/release.py",
@@ -204,8 +195,6 @@
     "app/schemas/shared_types.py",
     "app/schemas/snapshot.py",
     "app/schemas/tags.py",
-    "app/schemas/taste.py",
-    "app/schemas/taste_discovery.py",
     "app/schemas/taste_verdict.py",
     "app/schemas/test_fixtures.py",
     "app/schemas/thread.py",
@@ -282,7 +271,6 @@
     "app/services/performance_metric_service.py",
     "app/services/preferences_service.py",
     "app/services/prerequisite_service.py",
-    "app/services/prompt_eligibility.py",
     "app/services/provider_issue_adoption.py",
     "app/services/queue_display.py",
     "app/services/queue_pagination.py",
@@ -298,7 +286,6 @@
     "app/services/reading_list_conversion_plan.py",
     "app/services/reading_list_cycle_validator.py",
     "app/services/reading_list_evaluator.py",
-    "app/services/reading_list_reader.py",
     "app/services/reading_mode.py",
     "app/services/reading_order_adoption.py",
     "app/services/reading_order_placement.py",
@@ -306,9 +293,7 @@
     "app/services/reading_order_service.py",
     "app/services/reading_plan_normalization.py",
     "app/services/reading_plan_reader.py",
-    "app/services/reading_plan_release_extension.py",
     "app/services/reading_plan_release_source_service.py",
-    "app/services/reading_plan_sync_service.py",
     "app/services/reading_quiz.py",
     "app/services/reading_recovery_service.py",
     "app/services/reading_session_service.py",
@@ -317,13 +302,11 @@
     "app/services/recommendation_explanation.py",
     "app/services/recommendation_metrics.py",
     "app/services/relationship_evidence.py",
-    "app/services/release_exclusion_service.py",
     "app/services/release_ledger.py",
     "app/services/roll_cutover_forecast.py",
     "app/services/roll_service.py",
     "app/services/roll_v2_projection.py",
     "app/services/series_thread_reattach.py",
-    "app/services/session_history_projection.py",
     "app/services/session_response.py",
     "app/services/snapshot_contract.py",
     "app/services/snooze_service.py",
@@ -332,7 +315,6 @@
     "app/services/summary_service.py",
     "app/services/tag_inheritance_service.py",
     "app/services/tag_service.py",
-    "app/services/taste_bank.py",
     "app/services/taste_inference.py",
     "app/services/taste_recompute.py",
     "app/services/test_cbl_source_seed.py",
@@ -343,7 +325,6 @@
     "app/services/thread_service.py",
     "app/services/thread_state_repair.py",
     "app/services/ultimate_universe_production_migration.py",
-    "app/services/undo_snapshot_service.py",
     "app/startup_diagnostics.py",
     "app/traffic_metrics.py",
     "app/utils/__init__.py",
@@ -871,7 +852,7 @@
     "tests/test_verify_clone_export.py",
     "tests/test_worker_id_fixture.py"
   ],
-  "error_count": 5489,
+  "error_count": 5440,
   "triage_note": "Conservative code-based triage, not proof of a runtime defect; inspect evidence before changing interfaces.",
   "modules": [
     {
@@ -1241,27 +1222,6 @@
       ]
     },
     {
-      "path": "app/api/custom_cbl.py",
-      "module": "app.api.custom_cbl",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 9
-        }
-      ]
-    },
-    {
       "path": "app/api/debug.py",
       "module": "app.api.debug",
       "package": "app",
@@ -1550,27 +1510,6 @@
       ]
     },
     {
-      "path": "app/api/metrics.py",
-      "module": "app.api.metrics",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/api/performance_metric.py",
       "module": "app.api.performance_metric",
       "package": "app",
@@ -1805,27 +1744,6 @@
       ]
     },
     {
-      "path": "app/api/reading_plan_sync.py",
-      "module": "app.api.reading_plan_sync",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/api/recommendation_diagnostics.py",
       "module": "app.api.recommendation_diagnostics",
       "package": "app",
@@ -1943,27 +1861,6 @@
       ]
     },
     {
-      "path": "app/api/taste.py",
-      "module": "app.api.taste",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/api/taste_signal.py",
       "module": "app.api.taste_signal",
       "package": "app",
@@ -2050,27 +1947,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/api/undo.py",
-      "module": "app.api.undo",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -3279,21 +3155,6 @@
       ]
     },
     {
-      "path": "app/repositories/taste_signals.py",
-      "module": "app.repositories.taste_signals",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/repositories/thread_repository.py",
       "module": "app.repositories.thread_repository",
       "package": "app",
@@ -3305,21 +3166,6 @@
           "family": "dynamic-boundary",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/repositories/undo_snapshot_repository.py",
-      "module": "app.repositories.undo_snapshot_repository",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 6,
-      "groups": [
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 6
         }
       ]
     },
@@ -4069,27 +3915,6 @@
       ]
     },
     {
-      "path": "app/schemas/reading_list_reader.py",
-      "module": "app.schemas.reading_list_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/schemas/reading_order.py",
       "module": "app.schemas.reading_order",
       "package": "app",
@@ -4170,27 +3995,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/reading_plan_sync.py",
-      "module": "app.schemas.reading_plan_sync",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 10,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 9
         }
       ]
     },
@@ -4397,48 +4201,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 16
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/taste.py",
-      "module": "app.schemas.taste",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/taste_discovery.py",
-      "module": "app.schemas.taste_discovery",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -5512,14 +5274,6 @@
       ]
     },
     {
-      "path": "app/services/prompt_eligibility.py",
-      "module": "app.services.prompt_eligibility",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/provider_issue_adoption.py",
       "module": "app.services.provider_issue_adoption",
       "package": "app",
@@ -5740,14 +5494,6 @@
       ]
     },
     {
-      "path": "app/services/reading_list_reader.py",
-      "module": "app.services.reading_list_reader",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/reading_mode.py",
       "module": "app.services.reading_mode",
       "package": "app",
@@ -5857,14 +5603,6 @@
       ]
     },
     {
-      "path": "app/services/reading_plan_release_extension.py",
-      "module": "app.services.reading_plan_release_extension",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/reading_plan_release_source_service.py",
       "module": "app.services.reading_plan_release_source_service",
       "package": "app",
@@ -5884,14 +5622,6 @@
           "count": 4
         }
       ]
-    },
-    {
-      "path": "app/services/reading_plan_sync_service.py",
-      "module": "app.services.reading_plan_sync_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "app/services/reading_quiz.py",
@@ -5990,14 +5720,6 @@
       "groups": []
     },
     {
-      "path": "app/services/release_exclusion_service.py",
-      "module": "app.services.release_exclusion_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
       "path": "app/services/release_ledger.py",
       "module": "app.services.release_ledger",
       "package": "app",
@@ -6077,14 +5799,6 @@
     {
       "path": "app/services/series_thread_reattach.py",
       "module": "app.services.series_thread_reattach",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
-    },
-    {
-      "path": "app/services/session_history_projection.py",
-      "module": "app.services.session_history_projection",
       "package": "app",
       "explicit_surface": true,
       "error_count": 0,
@@ -6206,14 +5920,6 @@
           "count": 4
         }
       ]
-    },
-    {
-      "path": "app/services/taste_bank.py",
-      "module": "app.services.taste_bank",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 0,
-      "groups": []
     },
     {
       "path": "app/services/taste_inference.py",
@@ -6371,21 +6077,6 @@
           "family": "contract-and-narrowing",
           "triage": "design-interface-review",
           "count": 4
-        }
-      ]
-    },
-    {
-      "path": "app/services/undo_snapshot_service.py",
-      "module": "app.services.undo_snapshot_service",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -17210,76 +16901,6 @@
       "message": "Untyped decorator makes function \"get_creator_series_drilldown_endpoint\" untyped"
     },
     {
-      "file": "app/api/custom_cbl.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 37,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_custom_cbl_lists\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 46,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"search_custom_cbl_issues\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 62,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"create_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 83,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 97,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"update_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 120,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"delete_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 135,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"export_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 154,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"apply_custom_cbl\" untyped"
-    },
-    {
-      "file": "app/api/custom_cbl.py",
-      "line": 176,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"read_custom_cbl\" untyped"
-    },
-    {
       "file": "app/api/debug.py",
       "line": 5,
       "code": "import-not-found",
@@ -18022,20 +17643,6 @@
       "message": "Untyped decorator makes function \"api_cbl_adoption_plan\" untyped"
     },
     {
-      "file": "app/api/metrics.py",
-      "line": 2,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/metrics.py",
-      "line": 11,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"metrics\" untyped"
-    },
-    {
       "file": "app/api/performance_metric.py",
       "line": 11,
       "code": "import-not-found",
@@ -18386,27 +17993,6 @@
       "message": "Untyped decorator makes function \"delete_release_source\" untyped"
     },
     {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 85,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"sync_released_issues_endpoint\" untyped"
-    },
-    {
-      "file": "app/api/reading_plan_sync.py",
-      "line": 113,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_sync_status\" untyped"
-    },
-    {
       "file": "app/api/recommendation_diagnostics.py",
       "line": 5,
       "code": "import-not-found",
@@ -18673,27 +18259,6 @@
       "message": "Untyped decorator makes function \"get_tag_usage\" untyped"
     },
     {
-      "file": "app/api/taste.py",
-      "line": 14,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/taste.py",
-      "line": 30,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_taste_discoveries\" untyped"
-    },
-    {
-      "file": "app/api/taste.py",
-      "line": 56,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"dismiss_taste_discovery\" untyped"
-    },
-    {
       "file": "app/api/taste_signal.py",
       "line": 13,
       "code": "import-not-found",
@@ -18909,27 +18474,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"get_traffic_metrics\" untyped"
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 21,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"undo_to_snapshot\" untyped"
-    },
-    {
-      "file": "app/api/undo.py",
-      "line": 108,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"list_session_snapshots\" untyped"
     },
     {
       "file": "app/auth.py",
@@ -20374,13 +19918,6 @@
       "message": "Returning Any from function declared to return \"TasteSignal | None\""
     },
     {
-      "file": "app/repositories/taste_signals.py",
-      "line": 55,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"TasteSignal | None\""
-    },
-    {
       "file": "app/repositories/thread_repository.py",
       "line": 33,
       "code": "no-any-return",
@@ -20404,48 +19941,6 @@
     {
       "file": "app/repositories/thread_repository.py",
       "line": 205,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Thread | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 70,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 97,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 137,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Snapshot | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 161,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"ReadingSession | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 220,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"Event | None\""
-    },
-    {
-      "file": "app/repositories/undo_snapshot_repository.py",
-      "line": 231,
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"Thread | None\""
@@ -22362,20 +21857,6 @@
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
-      "file": "app/schemas/reading_list_reader.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/reading_list_reader.py",
-      "line": 18,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
       "file": "app/schemas/reading_order.py",
       "line": 3,
       "code": "import-not-found",
@@ -22588,76 +22069,6 @@
     {
       "file": "app/schemas/reading_plan_release_source.py",
       "line": 41,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 8,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 11,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 26,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 36,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 57,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 65,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 77,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 85,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 92,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/reading_plan_sync.py",
-      "line": 122,
       "code": "misc",
       "severity": "error",
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
@@ -23274,62 +22685,6 @@
     {
       "file": "app/schemas/tags.py",
       "line": 277,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 14,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 35,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 75,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 106,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste.py",
-      "line": 122,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 10,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 13,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/taste_discovery.py",
-      "line": 27,
       "code": "misc",
       "severity": "error",
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
@@ -25713,13 +25068,6 @@
       "code": "arg-type",
       "severity": "error",
       "message": "Argument \"spec\" to \"_factual_snapshot\" has incompatible type \"UltimateUniverseDryRunSpec\"; expected \"ReaderOrderMigrationSpec\""
-    },
-    {
-      "file": "app/services/undo_snapshot_service.py",
-      "line": 6,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
     },
     {
       "file": "comic_pile/bandwidth.py",

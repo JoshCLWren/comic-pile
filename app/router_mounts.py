@@ -1,6 +1,6 @@
 """Per-resource router mounts for deferred cold-start registration (#3479).
 
-The Vercel function registers only the lightweight ping/metrics/keepalive routes
+The Vercel function registers only the lightweight ping/keepalive routes
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
 ``/api/v1/undo`` tap pulled in catalog and delivery even though the
@@ -29,9 +29,9 @@ from fastapi import FastAPI
 RegisterMount = Callable[[FastAPI], None]
 
 #: Path segments that are registered eagerly and never need deferred loading:
-#: ping, metrics and keepalive are mounted by ``app.main`` before this registry
+#: ping and keepalive are mounted by ``app.main`` before this registry
 #: is consulted.
-EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics", "keepalive"})
+EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "keepalive"})
 
 
 @dataclass(frozen=True)
@@ -130,13 +130,6 @@ def _register_creators(app: FastAPI) -> None:
     app.include_router(creators.router, tags=["creators"])
 
 
-def _register_taste(app: FastAPI) -> None:
-    """Register taste-discovery routers."""
-    from app.api import taste
-
-    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-
-
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
@@ -151,13 +144,6 @@ def _register_reading_boundary(app: FastAPI) -> None:
     app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
 
 
-def _register_reading_plan_sync(app: FastAPI) -> None:
-    """Register reading-plan sync routers."""
-    from app.api import reading_plan_sync
-
-    app.include_router(reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"])
-
-
 def _register_sessions(app: FastAPI) -> None:
     """Register versioned reading-session routers."""
     from app.api import session
@@ -167,13 +153,6 @@ def _register_sessions(app: FastAPI) -> None:
     # shared router so its literal paths resolve ahead of /{session_id}.
     app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-
-
-def _register_undo(app: FastAPI) -> None:
-    """Register versioned undo routers."""
-    from app.api import undo
-
-    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
 
 
 def _register_traffic_metrics(app: FastAPI) -> None:
@@ -236,16 +215,13 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         _register_comicvine_resolution,
     ),
     RouterMount("creators", frozenset({"creators"}), _register_creators),
-    RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
         _register_reading_orders,
     ),
     RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
-    RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
-    RouterMount("undo", frozenset({"undo"}), _register_undo),
     RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
     RouterMount(
         "bootstrap-telemetry",
@@ -259,7 +235,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
                 "collection-exclusions",
                 "continuity-plans",
                 "continuity-rules",
-                "custom-cbls",
                 "dependencies",
                 "issue-identity",
                 "issues",

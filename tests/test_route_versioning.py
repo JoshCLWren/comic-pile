@@ -140,13 +140,12 @@ def test_pruned_admin_routes_are_absent() -> None:
 
 
 
-def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
-    """Canonical /api/v1/metrics alias reuses the same handler contract."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+def test_python_metrics_routes_are_retired() -> None:
+    """Native Rust serves /api/metrics and /api/v1/metrics; Python must not."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
 
-    assert "/api/v1/metrics" in methods_by_path
-    assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
+    assert "/api/metrics" not in methods_by_path
+    assert "/api/v1/metrics" not in methods_by_path
 
 
 def test_pruned_debug_routes_are_absent() -> None:
@@ -264,8 +263,8 @@ def test_pruned_python_analytics_routes_are_absent() -> None:
     The Python ``/api/analytics/metrics`` and ``/api/v1/analytics/metrics``
     handlers were deleted because no browser caller remains — the frontend
     uses the native Rust ``GET /api/v2/analytics/metrics`` resource (#4348).
-    Eager ``/api/metrics`` and ``/api/v1/metrics`` are a different,
-    retained surface covered by :func:`test_v1_metrics_alias_matches_legacy_route_methods`.
+    ``/api/metrics`` and ``/api/v1/metrics`` are native Rust routes; their Python
+    handlers are retired (:func:`test_python_metrics_routes_are_retired`).
     """
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     for path in ("/api/analytics/metrics", "/api/v1/analytics/metrics"):
