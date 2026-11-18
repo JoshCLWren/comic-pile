@@ -415,15 +415,3 @@ class TestCriterion5DiscoveryNonBlocking:
 class TestCriterion6TasteDoesNotWeightRolls:
     """Roll selection is deliberately free of Taste Bank input in Phase 7."""
 
-    def test_roll_path_never_uses_taste_signals(self) -> None:
-        """The live roll endpoint and momentum weighting ignore taste signals."""
-        import inspect
-
-        from app import momentum
-        import app.api.roll as roll_module
-
-        momentum_source = inspect.getsource(momentum)
-        roll_source = inspect.getsource(roll_module)
-
-        assert "taste" not in roll_source.lower()
-        assert "taste" not in momentum_source.lower()

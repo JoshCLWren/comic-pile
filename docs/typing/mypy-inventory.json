@@ -19,7 +19,6 @@
     "app/api/continuity_rule.py",
     "app/api/continuity_template.py",
     "app/api/creators.py",
-    "app/api/cron.py",
     "app/api/custom_cbl.py",
     "app/api/debug.py",
     "app/api/delivery.py",
@@ -45,8 +44,6 @@
     "app/api/reading_plan_sync.py",
     "app/api/recommendation_diagnostics.py",
     "app/api/releases.py",
-    "app/api/roll.py",
-    "app/api/roll_recovery_switch.py",
     "app/api/session.py",
     "app/api/snooze.py",
     "app/api/tags.py",
@@ -159,7 +156,6 @@
     "app/repositories/undo_snapshot_repository.py",
     "app/repositories/user_repository.py",
     "app/roll_recovery.py",
-    "app/roll_recovery_switch.py",
     "app/safe_logging.py",
     "app/schemas/__init__.py",
     "app/schemas/analytics.py",
@@ -201,10 +197,8 @@
     "app/schemas/reading_plan_sync.py",
     "app/schemas/recommendation_context.py",
     "app/schemas/recommendation_diagnostics.py",
-    "app/schemas/recommendation_explanation.py",
     "app/schemas/release.py",
     "app/schemas/roll.py",
-    "app/schemas/roll_recovery_switch.py",
     "app/schemas/roll_v2.py",
     "app/schemas/session.py",
     "app/schemas/shared_types.py",
@@ -753,7 +747,6 @@
     "tests/test_recommendation_context_v2_weights.py",
     "tests/test_recommendation_diagnostics.py",
     "tests/test_recommendation_explanation.py",
-    "tests/test_recommendation_explanation_api.py",
     "tests/test_recommendation_selection.py",
     "tests/test_recommendation_weighting.py",
     "tests/test_relationship_evidence.py",
@@ -761,7 +754,6 @@
     "tests/test_release_collection_exclusions.py",
     "tests/test_release_ledger.py",
     "tests/test_release_reconcile.py",
-    "tests/test_release_sync_cron.py",
     "tests/test_release_writer.py",
     "tests/test_release_writer_agent_contract.py",
     "tests/test_release_writer_script.py",
@@ -781,11 +773,8 @@
     "tests/test_roll_cutover_migration.py",
     "tests/test_roll_eligibility_contract.py",
     "tests/test_roll_mutation_auth_replay.py",
-    "tests/test_roll_override_double_submit.py",
     "tests/test_roll_rate_flow.py",
-    "tests/test_roll_rating_v1_aliases.py",
     "tests/test_roll_recovery.py",
-    "tests/test_roll_recovery_switch.py",
     "tests/test_roll_skip_api.py",
     "tests/test_roll_v2_contract.py",
     "tests/test_roll_v2_projection.py",
@@ -882,7 +871,7 @@
     "tests/test_verify_clone_export.py",
     "tests/test_worker_id_fixture.py"
   ],
-  "error_count": 5558,
+  "error_count": 5489,
   "triage_note": "Conservative code-based triage, not proof of a runtime defect; inspect evidence before changing interfaces.",
   "modules": [
     {
@@ -1248,27 +1237,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 12
-        }
-      ]
-    },
-    {
-      "path": "app/api/cron.py",
-      "module": "app.api.cron",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -1902,54 +1870,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 5
-        }
-      ]
-    },
-    {
-      "path": "app/api/roll.py",
-      "module": "app.api.roll",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 14,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 11
-        }
-      ]
-    },
-    {
-      "path": "app/api/roll_recovery_switch.py",
-      "module": "app.api.roll_recovery_switch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
         }
       ]
     },
@@ -3434,21 +3354,6 @@
       ]
     },
     {
-      "path": "app/roll_recovery_switch.py",
-      "module": "app.roll_recovery_switch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 1,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        }
-      ]
-    },
-    {
       "path": "app/safe_logging.py",
       "module": "app.safe_logging",
       "package": "app",
@@ -4332,27 +4237,6 @@
       ]
     },
     {
-      "path": "app/schemas/recommendation_explanation.py",
-      "module": "app.schemas.recommendation_explanation",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "app/schemas/release.py",
       "module": "app.schemas.release",
       "package": "app",
@@ -4403,27 +4287,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 1
-        }
-      ]
-    },
-    {
-      "path": "app/schemas/roll_recovery_switch.py",
-      "module": "app.schemas.roll_recovery_switch",
-      "package": "app",
-      "explicit_surface": true,
-      "error_count": 3,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
         }
       ]
     },
@@ -14126,51 +13989,6 @@
       ]
     },
     {
-      "path": "tests/test_recommendation_explanation_api.py",
-      "module": "tests.test_recommendation_explanation_api",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 18,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "misc",
-          "family": "contract-and-narrowing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "no-any-return",
-          "family": "dynamic-boundary",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "no-untyped-def",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 6
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 1
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 7
-        }
-      ]
-    },
-    {
       "path": "tests/test_recommendation_selection.py",
       "module": "tests.test_recommendation_selection",
       "package": "tests",
@@ -14301,27 +14119,6 @@
           "family": "annotation-completeness",
           "triage": "local-typing-cleanup",
           "count": 16
-        }
-      ]
-    },
-    {
-      "path": "tests/test_release_sync_cron.py",
-      "module": "tests.test_release_sync_cron",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 12,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 10
         }
       ]
     },
@@ -14814,33 +14611,6 @@
       ]
     },
     {
-      "path": "tests/test_roll_override_double_submit.py",
-      "module": "tests.test_roll_override_double_submit",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 5,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 1
-        },
-        {
-          "code": "type-arg",
-          "family": "annotation-completeness",
-          "triage": "local-typing-cleanup",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_roll_rate_flow.py",
       "module": "tests.test_roll_rate_flow",
       "package": "tests",
@@ -14862,21 +14632,6 @@
       ]
     },
     {
-      "path": "tests/test_roll_rating_v1_aliases.py",
-      "module": "tests.test_roll_rating_v1_aliases",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 2,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        }
-      ]
-    },
-    {
       "path": "tests/test_roll_recovery.py",
       "module": "tests.test_roll_recovery",
       "package": "tests",
@@ -14894,27 +14649,6 @@
           "family": "dependency-typing",
           "triage": "design-interface-review",
           "count": 7
-        }
-      ]
-    },
-    {
-      "path": "tests/test_roll_recovery_switch.py",
-      "module": "tests.test_roll_recovery_switch",
-      "package": "tests",
-      "explicit_surface": true,
-      "error_count": 7,
-      "groups": [
-        {
-          "code": "import-not-found",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 2
-        },
-        {
-          "code": "untyped-decorator",
-          "family": "dependency-typing",
-          "triage": "design-interface-review",
-          "count": 5
         }
       ]
     },
@@ -17476,20 +17210,6 @@
       "message": "Untyped decorator makes function \"get_creator_series_drilldown_endpoint\" untyped"
     },
     {
-      "file": "app/api/cron.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/cron.py",
-      "line": 98,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"release_sync_cron\" untyped"
-    },
-    {
       "file": "app/api/custom_cbl.py",
       "line": 7,
       "code": "import-not-found",
@@ -18762,118 +18482,6 @@
       "code": "no-any-return",
       "severity": "error",
       "message": "Returning Any from function declared to return \"ReleaseResponse\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 10,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 11,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi.responses\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 94,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"list\""
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 248,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_dice\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 365,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"dismiss_pending_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 381,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"skip_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 487,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"unskip_thread\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 641,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"override_roll\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 665,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"set_manual_die\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 697,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"clear_manual_die\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 721,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"update_session_mode\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 825,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_bootstrap\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 1002,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"roll_v2_bootstrap\" untyped"
-    },
-    {
-      "file": "app/api/roll.py",
-      "line": 1153,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"get_roll_recommendation_explanation\" untyped"
-    },
-    {
-      "file": "app/api/roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/api/roll_recovery_switch.py",
-      "line": 20,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"switch_roll_prerequisite\" untyped"
     },
     {
       "file": "app/api/session.py",
@@ -20873,13 +20481,6 @@
     {
       "file": "app/roll_recovery.py",
       "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "app/roll_recovery_switch.py",
-      "line": 7,
       "code": "import-not-found",
       "severity": "error",
       "message": "Cannot find implementation or library stub for module named \"fastapi\""
@@ -23132,27 +22733,6 @@
       "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 8,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/recommendation_explanation.py",
-      "line": 22,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
       "file": "app/schemas/release.py",
       "line": 9,
       "code": "import-not-found",
@@ -23340,27 +22920,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"bound_summary_lists\" untyped"
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 8,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
-    },
-    {
-      "file": "app/schemas/roll_recovery_switch.py",
-      "line": 17,
-      "code": "misc",
-      "severity": "error",
-      "message": "Class cannot subclass \"BaseModel\" (has type \"Any\")"
     },
     {
       "file": "app/schemas/roll_v2.py",
@@ -47058,132 +46617,6 @@
       "message": "Argument 1 to \"project_recommendation_context\" of \"RecommendationExplanationProjection\" has incompatible type \"str\"; expected \"dict[str, Any] | None\""
     },
     {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 17,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 28,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 43,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 48,
-      "code": "no-any-return",
-      "severity": "error",
-      "message": "Returning Any from function declared to return \"User\""
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 51,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_with_full_context\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 52,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 137,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_absent_context_returns_selection_bypass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 138,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 182,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_unknown_legacy_context_falls_back\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 183,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 236,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_404_for_nonexistent_event\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 245,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_422_for_non_roll_event\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 246,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 280,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explanation_random_selection_mentions_bypass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 281,
-      "code": "no-untyped-def",
-      "severity": "error",
-      "message": "Function is missing a type annotation for one or more parameters"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 323,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_explainable_factor_frozen_dataclass\" untyped"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 333,
-      "code": "misc",
-      "severity": "error",
-      "message": "Property \"code\" defined in \"ExplainableFactor\" is read-only"
-    },
-    {
-      "file": "tests/test_recommendation_explanation_api.py",
-      "line": 338,
-      "code": "misc",
-      "severity": "error",
-      "message": "Property \"label\" defined in \"ExplainableFactor\" is read-only"
-    },
-    {
       "file": "tests/test_recommendation_selection.py",
       "line": 15,
       "code": "import-not-found",
@@ -47679,90 +47112,6 @@
       "code": "no-untyped-def",
       "severity": "error",
       "message": "Function is missing a return type annotation"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 19,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 20,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 192,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_fails_closed_when_secret_is_not_configured\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 211,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_missing_or_incorrect_bearer\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 212,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_missing_or_incorrect_bearer\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 236,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_rejects_non_ascii_authorization_without_crashing\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 255,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_runs_for_every_owner_with_enabled_sources\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 297,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_already_running_is_a_non_error_noop\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 335,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_partial_source_failure_preserves_successful_work\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 369,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_retry_is_idempotent\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 393,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_defers_owners_when_time_budget_is_exhausted\" untyped"
-    },
-    {
-      "file": "tests/test_release_sync_cron.py",
-      "line": 429,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_cron_does_not_log_the_secret_or_provider_key\" untyped"
     },
     {
       "file": "tests/test_release_writer.py",
@@ -49361,41 +48710,6 @@
       "message": "Untyped decorator makes function \"test_snooze_expired_token_has_no_partial_write_and_replay_commits_once\" untyped"
     },
     {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 11,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 29,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_repeat_override_logs_single_event\" untyped"
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 33,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 49,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_distinct_picks_still_log_new_events\" untyped"
-    },
-    {
-      "file": "tests/test_roll_override_double_submit.py",
-      "line": 53,
-      "code": "type-arg",
-      "severity": "error",
-      "message": "Missing type arguments for generic type \"dict\""
-    },
-    {
       "file": "tests/test_roll_rate_flow.py",
       "line": 9,
       "code": "import-not-found",
@@ -49408,20 +48722,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"test_roll_rate_history_consistency\" untyped"
-    },
-    {
-      "file": "tests/test_roll_rating_v1_aliases.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi\""
-    },
-    {
-      "file": "tests/test_roll_rating_v1_aliases.py",
-      "line": 6,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"fastapi.routing\""
     },
     {
       "file": "tests/test_roll_recovery.py",
@@ -49478,55 +48778,6 @@
       "code": "untyped-decorator",
       "severity": "error",
       "message": "Untyped decorator makes function \"test_roll_recovery_preserves_original_and_recommends_readable_leaf\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 5,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"httpx\""
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 7,
-      "code": "import-not-found",
-      "severity": "error",
-      "message": "Cannot find implementation or library stub for module named \"pydantic\""
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 95,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_switches_blocked_roll_to_direct_readable_prerequisite\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 150,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_switches_to_transitive_readable_leaf\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 187,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_duplicate_switch_is_idempotent\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 235,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_rejects_stale_recommendation_after_prerequisite_becomes_read\" untyped"
-    },
-    {
-      "file": "tests/test_roll_recovery_switch.py",
-      "line": 270,
-      "code": "untyped-decorator",
-      "severity": "error",
-      "message": "Untyped decorator makes function \"test_rejects_issue_that_was_not_recommended\" untyped"
     },
     {
       "file": "tests/test_roll_skip_api.py",

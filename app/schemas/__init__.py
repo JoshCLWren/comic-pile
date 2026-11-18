@@ -60,11 +60,8 @@ _EXPORT_MODULES: dict[str, str] = {
     "PerformanceMetricSummary": "app.schemas.performance_metric",
     "PerformanceMetricComparison": "app.schemas.performance_metric",
     "RollResponse": "app.schemas.roll",
-    "OverrideRequest": "app.schemas.roll",
     "SetCurrentIssueRequest": "app.schemas.roll",
     "SetCurrentIssueResponse": "app.schemas.roll",
-    "RecommendationExplanationResponse": "app.schemas.recommendation_explanation",
-    "ExplainableFactorResponse": "app.schemas.recommendation_explanation",
     "RecommendationContextCreate": "app.schemas.recommendation_context",
     "RecommendationContextResponse": "app.schemas.recommendation_context",
     "RollingRecommendationContext": "app.schemas.recommendation_context",
@@ -103,7 +100,6 @@ __all__ = [
     "DependencyResponse",
     "EffortBandOutcome",
     "EventDetail",
-    "ExplainableFactorResponse",
     "IssueBulkMarkReadRequest",
     "IssueBulkMarkUnreadRequest",
     "IssueCreate",
@@ -117,7 +113,6 @@ __all__ = [
     "IssueUpdate",
     "KeepaliveResponse",
     "MigrateToIssuesRequest",
-    "OverrideRequest",
     "PerformanceMetricComparison",
     "PerformanceMetricCreate",
     "PerformanceMetricQuery",
@@ -132,7 +127,6 @@ __all__ = [
     "RecommendationContextCreate",
     "RecommendationContextResponse",
     "RecommendationDiagnosticsResponse",
-    "RecommendationExplanationResponse",
     "RollResponse",
     "RollingRecommendationContext",
     "SessionBandwidthState",
@@ -225,12 +219,7 @@ if TYPE_CHECKING:
         EffortBandOutcome,
         RecommendationDiagnosticsResponse,
     )
-    from app.schemas.recommendation_explanation import (
-        ExplainableFactorResponse,
-        RecommendationExplanationResponse,
-    )
     from app.schemas.roll import (
-        OverrideRequest,
         RollResponse,
         SetCurrentIssueRequest,
         SetCurrentIssueResponse,
