@@ -303,7 +303,10 @@ fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
 }
 
 #[allow(dead_code)]
-fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
+pub(crate) fn natural_issue_order(
+    existing: &[String],
+    new_numbers: &[String],
+) -> Option<Vec<String>> {
     let mut incoming: Vec<(i64, String)> = Vec::new();
     for issue_number in new_numbers {
         let value = parse_ordinary_issue_number(issue_number)?;
