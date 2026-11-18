@@ -12,6 +12,7 @@ export interface RollApi {
   override: (data: OverrideRollPayload) => Promise<RollResponse>
   dismissPending: () => Promise<void>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
+  unsnooze: (threadId: number) => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
   reset: () => Promise<{ die: number; replayed: boolean }>
 }

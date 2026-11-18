@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::IsolationLevel;
+use uuid::Uuid;
 
 /// Leave room for the derived snooze key inside the writer's 128-byte limit.
 const MAX_OFFER_KEY: usize = 100;
@@ -610,7 +611,7 @@ pub async fn unsnooze(
     }
 
     // Record an unsnooze event with the reverted die.
-    let unsnooze_key = format!("{}-unsnooze", uuid::Uuid::new_v4());
+    let unsnooze_key = format!("{}-unsnooze", Uuid::new_v4());
     let context = json!({
         "dice_command_key": unsnooze_key,
         "dice_command": { "kind": "unsnooze", "thread_id": snoozed_thread },

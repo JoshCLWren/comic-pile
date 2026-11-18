@@ -218,6 +218,12 @@ export function createRollApi(client: HttpClient) {
     override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
     reroll: offer,
+    unsnooze: async (threadId: number): Promise<RollResponse> => {
+      const response = await client.post<RollResponse, { thread_id: number }>('/v2/roll/unsnooze', { thread_id: threadId })
+      // Clear the browser snooze cookie since the server has unsnoozed
+      writeRollSnoozes(readRollSnoozes().filter((id) => id !== threadId))
+      return response
+    },
     setDie: async (die: number): Promise<void> => {
       const key = unresolvedManual?.die === die ? unresolvedManual.key : newCommandKey()
       unresolvedManual = { die, key }
