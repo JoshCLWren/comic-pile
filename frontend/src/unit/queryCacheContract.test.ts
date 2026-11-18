@@ -411,7 +411,7 @@ describe('targeted cache effects', () => {
         reading_progress: '12/12',
         next_unread_issue_id: null,
       },
-    } as unknown as Parameters<typeof applyIssueCardMutation>[1]
+    } satisfies Parameters<typeof applyIssueCardMutation>[1]
 
     await applyIssueCardMutation(client, response)
 
