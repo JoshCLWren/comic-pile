@@ -245,16 +245,50 @@ async fn browse_invalid_pagination_returns_fastapi_422_envelope() {
 }
 
 #[tokio::test]
-async fn browse_extreme_page_echoes_requested_page_without_overflow() {
+async fn browse_extreme_page_clamps_without_overflow() {
     let (state, token, _guard) = setup().await;
     let extreme = "9223372036854775808"; // 2^63
     let uri =
         format!("/api/v1/issue-identity/cbl-sources/browse?q=JLI&page={extreme}&page_size=100");
     let (status, body) = get(&state, &token, &uri).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["items"], json!([]));
     assert_eq!(body["total"], 1);
+    assert_eq!(body["total_pages"], 1);
+    assert_eq!(body["page"], 1);
     assert_eq!(body["has_next"], false);
-    assert_eq!(body["has_previous"], true);
-    assert_eq!(body["page"].as_u64(), Some(9223372036854775808u64));
+    assert_eq!(body["has_previous"], false);
+    let names: Vec<_> = body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["JLI"], "{body}");
+}
+
+#[tokio::test]
+async fn browse_out_of_range_page_clamps_to_last_page_with_results() {
+    let (state, token, _guard) = setup().await;
+    // 2 matches, all on one page: requesting page 2 must clamp to page 1 and
+    // return the matching sources (issue #5381).
+    let uri = "/api/v1/issue-identity/cbl-sources/browse?q=Secret%20Wars&page=2&page_size=50";
+    let (status, body) = get(&state, &token, &uri).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["scope"], "search");
+    assert_eq!(body["total"], 2);
+    assert_eq!(body["total_pages"], 1);
+    assert_eq!(body["page"], 1);
+    assert_eq!(body["has_next"], false);
+    assert_eq!(body["has_previous"], false);
+    let names: Vec<_> = body["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["Secret Wars", "Secret Wars Crossovers"],
+        "{body}"
+    );
 }
