@@ -1659,16 +1659,13 @@ async fn set_group_order_tx(
     user_id: i32,
     request: &DependencyGroupOrderUpdateRequest,
 ) -> Result<GroupRecord, ApiError> {
-    if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
-        return Err(unprocessable(format!(
-            "The crossover order must contain between 1 and {MAX_ORDER_ITEMS} items"
-        )));
+    if owned_group(tx, group_id, user_id).await?.is_none() {
+        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
-    let mut seen_issues: BTreeSet<i32> = BTreeSet::new();
-    let mut seen_positions: BTreeSet<i32> = BTreeSet::new();
-    let mut ordered_issue_ids: BTreeSet<i32> = BTreeSet::new();
+    let mut ordered_issue_ids = BTreeSet::new();
+    let mut seen_positions = BTreeSet::new();
     for item in &request.items {
-        if !seen_issues.insert(item.issue_id) {
+        if !ordered_issue_ids.insert(item.issue_id) {
             return Err(unprocessable(
                 "Each crossover issue may appear at most once in the order",
             ));
@@ -1678,10 +1675,6 @@ async fn set_group_order_tx(
                 "Each sequence_order position may appear at most once in the order",
             ));
         }
-        ordered_issue_ids.insert(item.issue_id);
-    }
-    if owned_group(tx, group_id, user_id).await?.is_none() {
-        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
     let member_rows = tx
         .query(ISSUE_MEMBERSHIPS_SQL, &[&group_id])
@@ -1717,15 +1710,11 @@ async fn set_group_order_tx(
         .iter()
         .map(|item| (item.issue_id, item.sequence_order))
         .collect();
-    for (issue_id, membership_id) in &member_by_issue {
-        let sequence_order = ordered_positions.get(issue_id).copied();
-        tx.execute(
-            "UPDATE dependency_group_memberships SET sequence_order = $2 WHERE id = $1",
-            &[membership_id, &sequence_order],
-        )
+    let (membership_ids, sequence_orders) =
+        group_order_update_parameters(&member_by_issue, &ordered_positions);
+    tx.execute(UPDATE_GROUP_ORDER_SQL, &[&membership_ids, &sequence_orders])
         .await
         .map_err(db::query_error)?;
-    }
     issue_service::refresh_blocked_threads(tx, user_id).await?;
     let row = tx
         .query_one(
