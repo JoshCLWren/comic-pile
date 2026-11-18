@@ -38,6 +38,10 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByText('Checking authentication...')).not.toBeVisible()
     await expect(page.getByLabel('Desktop navigation')).toBeVisible() // Navigation indicates authenticated state
 
+    // Isolate non-auth data requests so unrelated 401s cannot trigger refresh.
+    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
+
     // Step 2: Persistent auth/me outage (survives bounded retries)
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
       message: 'Database unavailable',
@@ -123,6 +127,8 @@ test.describe('Auth Outage Recovery', () => {
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
       message: 'Service unavailable',
     })
+    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
 
     // Fill and submit login form
     await page.fill('input[name="username"]', 'testuser')
@@ -154,6 +160,10 @@ test.describe('Auth Outage Recovery', () => {
     await mockApi.setupAuthUser()
     await page.goto('/')
     await expect(page.getByLabel('Desktop navigation')).toBeVisible()
+
+    // Isolate non-auth data requests so unrelated 401s cannot trigger refresh.
+    mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
+    mockApi.get('/api/v1/sessions/current/').as('currentSession').replyAlways(200, {})
 
     // Degrade first, then make auth/me definitively unauthorized
     mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, { message: 'Service unavailable' })

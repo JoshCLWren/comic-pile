@@ -17,7 +17,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle, waitForRollPageReady } from './helpers'
 import type { IssueReadRateResponse } from '../generated/nativeV2Client'
 
 test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => {
@@ -56,7 +56,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
 
     // Click on the thread to open the rating view
-    await page.getByText('Native Patch Verification Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Native Patch Verification Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit a rating
@@ -79,7 +79,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(issue.issue_id).toBeGreaterThan(0)
     expect(issue.thread_id).toBeGreaterThan(0)
     expect(issue.thread_title).toBe('Native Patch Verification Thread')
-    expect(issue.issue_number).toBeDefined()
+    expect(issue.issue_number).toBe('1')
     expect(issue.status).toBe('read')
     expect(issue.rating).toBe(4.5)
     expect(issue.read_at).toBeDefined()
@@ -134,6 +134,9 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
   test('verified 401 for unauthenticated request to PATCH /api/v2/issues/{id}', async ({
     page,
   }) => {
+    // Establish origin before localStorage auth clearing.
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
     // Clear any stored auth
     await page.evaluate(() => {
       localStorage.removeItem('auth_token')
@@ -172,7 +175,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
 
     // Click on the thread - this triggers a roll_offer source rating
-    await page.getByText('Roll Offer Rating Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Roll Offer Rating Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit a 4.5 rating (above threshold, should trigger die stepping)
@@ -197,7 +200,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
   }) => {
     const page = authenticatedPage
 
-    await createThread(page, {
+    const thread = await createThread(page, {
       title: 'Idempotency Retry Thread',
       format: 'Issue',
       issues_remaining: 1,
@@ -210,7 +213,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // Roll and select
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Idempotency Retry Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Idempotency Retry Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit first rating
@@ -225,15 +228,49 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(responseBody1.replayed).toBe(false)
     expect(responseBody1.read_event_created).toBe(true)
     expect(responseBody1.rating_event_created).toBe(true)
+    const issueId = responseBody1.issue.issue_id
 
-    // Submit the same rating again. The client clears its in-flight intent once
-    // the first response confirms, so a second UI submission is a fresh intent
-    // with a fresh idempotency key - not a replay of the first.
-    await ratingInput.fill('5')
+    // Reopen the SAME issue after first successful rating before second fresh intent
+    // (never substitute a different issue). Mark unread, then read+rate again as a
+    // fresh UI submission with a fresh idempotency key - not a replay of the first.
+    await page.goto(`/thread/${thread.id}`, { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: 'Idempotency Retry Thread' })).toBeVisible({
+      timeout: 15000,
+    })
 
-    const { response: response2 } = await waitForNativePatchResponse(page)
+    const issuesToggle = page.getByRole('button', { name: 'Expand' })
+    if (await issuesToggle.isVisible().catch(() => false)) {
+      await issuesToggle.click()
+    }
 
-    expect(await response2.ok()).toBeTruthy()
+    const issueTrigger = page.getByTestId(`issue-card-trigger-${issueId}`)
+    await expect(issueTrigger).toBeVisible({ timeout: 15000 })
+    await issueTrigger.click()
+
+    const card = page.getByTestId('comic-issue-card').filter({ hasText: `#${responseBody1.issue.issue_number}` }).first()
+    await expect(card).toBeVisible({ timeout: 15000 })
+
+    const markUnreadResponse = page.waitForResponse(
+      (resp) => resp.url().includes(`/api/v2/issues/${issueId}`) && resp.request().method() === 'PATCH',
+    )
+    await card.getByRole('button', { name: /^Mark unread$/i }).click()
+    const unreadResp = await markUnreadResponse
+    expect(unreadResp.ok()).toBeTruthy()
+
+    await expect(card.getByRole('button', { name: /Read now/i })).toBeVisible({ timeout: 15000 })
+    await card.getByRole('button', { name: /Read now/i }).click()
+
+    const editor = card.getByTestId('comic-issue-rating-editor')
+    await expect(editor).toBeVisible({ timeout: 15000 })
+    await editor.locator('input[name="rating"]').fill('5')
+
+    const rateResponse2 = page.waitForResponse(
+      (resp) => resp.url().includes(`/api/v2/issues/${issueId}`) && resp.request().method() === 'PATCH',
+    )
+    await editor.getByRole('button', { name: /Mark read & save/i }).click()
+    const response2 = await rateResponse2
+
+    expect(response2.ok()).toBeTruthy()
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
     const responseBody2 = (await response2.json()) as IssueReadRateResponse
     expect(responseBody2.replayed).toBe(false)
@@ -258,7 +295,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Schema Compliance Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Schema Compliance Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const ratingInput = page.locator('#rating-input')
@@ -305,9 +342,10 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
       expect(issue.rating).toBeLessThanOrEqual(5)
     }
 
-    // Validate issue_number type (number or null)
+    // Validate issue_number as canonical wire string (string or null)
     if (issue.issue_number !== null) {
-      expect(issue.issue_number).toBeGreaterThan(0)
+      expect(issue.issue_number).toEqual(expect.any(String))
+      expect(issue.issue_number.length).toBeGreaterThan(0)
     }
 
     // ThreadProgress required fields
