@@ -824,3 +824,93 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
     assert_eq!(rule.get::<_, i32>(0), 910203);
     drop(conn);
 }
+
+#[tokio::test]
+async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
+    let fixture = setup().await;
+
+    let (status, body) = post(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        "/api/v1/custom-cbls",
+        json!({"name": "Overlap List", "mode": "loose", "issue_ids": []}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let list_id = body["id"].as_i64().expect("list id") as i32;
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        "INSERT INTO threads
+           (id, user_id, title, format, issues_remaining, queue_position, status)
+         VALUES (930101, {}, 'Alpha Series', 'Comic', 0, 930101, 'active'),
+                (930102, {}, 'Beta Series', 'Comic', 0, 930102, 'active');
+         INSERT INTO external_identities
+           (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+         VALUES (930201, 'comicvine', 'series', 'alpha-vol', '{{}}'::json, NOW(), NOW()),
+                (930202, 'comicvine', 'series', 'beta.vol', '{{}}'::json, NOW(), NOW());
+         INSERT INTO thread_external_series_mappings
+           (id, thread_id, external_identity_id, status, created_at, updated_at)
+         VALUES (930301, 930101, 930201, 'confirmed', NOW(), NOW()),
+                (930302, 930102, 930202, 'confirmed', NOW(), NOW());",
+        fixture.user_id, fixture.user_id
+    ))
+    .await
+    .expect("seed non-numeric volume candidates");
+    drop(conn);
+
+    let (status, body) = get(
+        &fixture.state,
+        &fixture.token,
+        &format!("/api/v1/custom-cbls/{list_id}/overlap-decisions"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let candidates = body["candidate_volumes"]
+        .as_array()
+        .expect("candidate_volumes array");
+    let volume_ids: Vec<_> = candidates
+        .iter()
+        .filter_map(|candidate| candidate["volume_id"].as_str())
+        .collect();
+    assert!(
+        volume_ids.contains(&"comicvine:alpha-vol"),
+        "non-numeric candidate missing: {body}"
+    );
+    assert!(
+        volume_ids.contains(&"comicvine:beta.vol"),
+        "dotted non-numeric candidate missing: {body}"
+    );
+
+    let expected_updated_at = body["updated_at"].as_str().expect("updated_at").to_owned();
+    let (status, body) = send(
+        &fixture.state,
+        Request::builder()
+            .method("PUT")
+            .uri(format!("/api/v1/custom-cbls/{list_id}/overlap-decisions"))
+            .header(header::AUTHORIZATION, format!("Bearer {}", fixture.token))
+            .header("x-csrf-token", &fixture.csrf)
+            .header(header::COOKIE, format!("csrf_token={}", fixture.csrf))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "continuing_volume_id": "comicvine:alpha-vol",
+                    "waiting_volume_id": "comicvine:beta.vol",
+                    "expected_updated_at": expected_updated_at
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let decisions = body["decisions"].as_array().expect("decisions array");
+    assert!(
+        decisions.iter().any(|decision| {
+            decision["continuing_volume_id"] == json!("comicvine:alpha-vol")
+                && decision["waiting_volume_id"] == json!("comicvine:beta.vol")
+        }),
+        "saved non-numeric overlap decision missing: {body}"
+    );
+}

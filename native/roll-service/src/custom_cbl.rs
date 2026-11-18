@@ -682,21 +682,32 @@ fn export_custom_cbl_xml(name: &str, entries: &[CustomCBLEntryResponse]) -> Stri
 // ========================================================================
 
 fn normalized_volume_key(key: &str) -> Option<String> {
-    if let Some(rest) = key.strip_prefix("comicvine:") {
-        if rest.is_empty() {
-            return None;
-        }
-        if let Some(numeric) = rest.strip_prefix("4050-").or(Some(rest)) {
-            if numeric.chars().all(|c| c.is_ascii_digit()) && !numeric.is_empty() {
-                let trimmed = numeric.trim_start_matches('0');
-                return Some(format!(
-                    "comicvine:{}",
-                    if trimmed.is_empty() { "0" } else { trimmed }
-                ));
-            }
-        }
+    let rest = key.strip_prefix("comicvine:")?;
+    if rest.is_empty() {
+        return None;
     }
-    None
+
+    let numeric = rest.strip_prefix("4050-").unwrap_or(rest);
+    if !numeric.is_empty() && numeric.chars().all(|c| c.is_ascii_digit()) {
+        let trimmed = numeric.trim_start_matches('0');
+        return Some(format!(
+            "comicvine:{}",
+            if trimmed.is_empty() { "0" } else { trimmed }
+        ));
+    }
+
+    let mut chars = rest.chars();
+    let Some(first) = chars.next() else {
+        return None;
+    };
+    if !first.is_ascii_alphanumeric() {
+        return None;
+    }
+    if chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')) {
+        Some(format!("comicvine:{rest}"))
+    } else {
+        None
+    }
 }
 
 fn volume_external_id_variants(key: &str) -> Vec<String> {
@@ -3053,12 +3064,24 @@ mod tests {
             Some("comicvine:12345".to_string())
         );
         assert_eq!(
+            normalized_volume_key("comicvine:4050-12345"),
+            Some("comicvine:12345".to_string())
+        );
+        assert_eq!(
             normalized_volume_key("comicvine:0"),
             Some("comicvine:0".to_string())
         );
-        assert_eq!(normalized_volume_key("comicvine:abc"), None);
+        assert_eq!(
+            normalized_volume_key("comicvine:abc"),
+            Some("comicvine:abc".to_string())
+        );
+        assert_eq!(
+            normalized_volume_key("comicvine:my-vol_1.2"),
+            Some("comicvine:my-vol_1.2".to_string())
+        );
         assert_eq!(normalized_volume_key("marvel:12345"), None);
         assert_eq!(normalized_volume_key("comicvine:"), None);
+        assert_eq!(normalized_volume_key("comicvine: bad"), None);
         assert_eq!(normalized_volume_key(""), None);
     }
 
