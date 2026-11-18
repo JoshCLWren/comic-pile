@@ -1145,7 +1145,7 @@ async fn add_issue_range_tx(
         .map_err(db::query_error)?;
     let mut expected = Vec::new();
     let mut actual: Vec<i32> = Vec::new();
-    for row in rows {
+    for row in &rows {
         expected.push(request.start_position + actual.len() as i32);
         actual.push(row.get(1));
     }
