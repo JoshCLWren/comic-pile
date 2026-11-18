@@ -186,7 +186,9 @@ pub struct DependencyGroupIssueRangeResponse {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DependencyGroupMemberResponse {
     pub id: i32,
+    #[schema(required = true)]
     pub thread_id: Option<i32>,
+    #[schema(required = true)]
     pub issue_id: Option<i32>,
     pub series_title: Option<String>,
     pub issue_number: Option<String>,
