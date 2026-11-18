@@ -640,6 +640,17 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
     from factory_state_operations import enabled as health_enabled, record_runtime
     if health_enabled():
         record_runtime(repo, int(run_id), outcome)
+    # The trusted persistence controller already verified the exact remote
+    # checkpoint and canonical PR. These receipts remain independent when
+    # the source session timed out or validation failed.
+    if outcome.get("checkpoint_saved") is True:
+        inserted += record_checkpoint_evidence(repo, [{
+            "worker": worker, "run_id": run_id,
+            "saved": True, "checkpoint_sha": outcome.get("checkpoint_sha"),
+            "published": outcome.get("checkpoint_published") is True,
+            "validated": outcome.get("checkpoint_validated") is True,
+            "work_pr": outcome.get("work_pr"),
+        }])
     return inserted
 
 
