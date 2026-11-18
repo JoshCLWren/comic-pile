@@ -372,6 +372,53 @@ pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static
     guard
 }
 
+/// Test scaffolding: synthetic provider volume rosters.
+///
+/// The live ComicVine roster is an HTTP dependency, so a handler test that
+/// needs a deterministic roster installs one here instead. `catalog_volume_roster`
+/// returns the installed fixture for a matching external id before touching the
+/// network. Entries are keyed by volume id, never globally toggled, so parallel
+/// tests cannot leak a fixture into each other; tests must use unique volume
+/// ids and clear the fixture when done. Nothing here runs unless a test calls
+/// [`install_test_volume_roster`].
+type TestVolumeRosterFixture = (serde_json::Value, Vec<serde_json::Value>);
+
+static TEST_VOLUME_ROSTERS: std::sync::Mutex<
+    Option<std::collections::HashMap<String, TestVolumeRosterFixture>>,
+> = std::sync::Mutex::new(None);
+
+/// Install a synthetic `(series_info, roster)` returned for `external_id`.
+///
+/// Overwrites any previous fixture for the same volume id.
+pub fn install_test_volume_roster(
+    external_id: &str,
+    series: serde_json::Value,
+    roster: Vec<serde_json::Value>,
+) {
+    let mut guard = TEST_VOLUME_ROSTERS
+        .lock()
+        .expect("test volume roster registry poisoned");
+    guard
+        .get_or_insert_with(std::collections::HashMap::new)
+        .insert(external_id.to_owned(), (series, roster));
+}
+
+/// Remove the fixture for `external_id`, if any.
+pub fn clear_test_volume_roster(external_id: &str) {
+    let mut guard = TEST_VOLUME_ROSTERS
+        .lock()
+        .expect("test volume roster registry poisoned");
+    if let Some(map) = guard.as_mut() {
+        map.remove(external_id);
+    }
+}
+
+/// Look up an installed fixture. `None` outside tests and when unset.
+pub(crate) fn lookup_test_volume_roster(external_id: &str) -> Option<TestVolumeRosterFixture> {
+    let guard = TEST_VOLUME_ROSTERS.lock().ok()?;
+    guard.as_ref().and_then(|map| map.get(external_id).cloned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
