@@ -1,3 +1,4 @@
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
@@ -6,6 +7,7 @@ import { ToastContextSpy } from './toastTestHarness'
 import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const toast = createToastSpy()
 
