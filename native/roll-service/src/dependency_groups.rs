@@ -278,12 +278,17 @@ fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
 }
 
-/// Apply Pydantic's raw-name bounds before the service's strip/non-blank rule.
-fn normalize_group_name(name: &str) -> Result<String, ApiError> {
+fn validate_group_name_schema(name: &str) -> Result<(), ApiError> {
     let raw_length = name.chars().count();
     if raw_length == 0 || raw_length > MAX_GROUP_NAME_CHARS {
         return Err(validation_failed());
     }
+    Ok(())
+}
+
+/// Apply Pydantic's raw-name bounds before the service's strip/non-blank rule.
+fn normalize_group_name(name: &str) -> Result<String, ApiError> {
+    validate_group_name_schema(name)?;
     let normalized = name.trim();
     if normalized.is_empty() {
         return Err(unprocessable("Group name must not be blank"));
@@ -317,13 +322,6 @@ fn validate_issue_range_request(
             "end_position must be greater than or equal to start_position",
         ));
     }
-    let range_size =
-        i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
-    if range_size > i64::from(MAX_RANGE_SIZE) {
-        return Err(unprocessable(format!(
-            "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
-        )));
-    }
     Ok(())
 }
 
@@ -339,20 +337,6 @@ fn validate_group_order_request(
         .any(|item| item.issue_id <= 0 || item.sequence_order <= 0)
     {
         return Err(validation_failed());
-    }
-    let mut seen_issues = BTreeSet::new();
-    let mut seen_positions = BTreeSet::new();
-    for item in &request.items {
-        if !seen_issues.insert(item.issue_id) {
-            return Err(unprocessable(
-                "Each crossover issue may appear at most once in the order",
-            ));
-        }
-        if !seen_positions.insert(item.sequence_order) {
-            return Err(unprocessable(
-                "Each sequence_order position may appear at most once in the order",
-            ));
-        }
     }
     Ok(())
 }
@@ -1205,6 +1189,13 @@ async fn add_issue_range_tx(
         return Err(ApiError::NotFound(format!(
             "Thread {} not found",
             request.thread_id
+        )));
+    }
+    let range_size =
+        i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
+    if range_size > i64::from(MAX_RANGE_SIZE) {
+        return Err(unprocessable(format!(
+            "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
         )));
     }
     let rows = tx
