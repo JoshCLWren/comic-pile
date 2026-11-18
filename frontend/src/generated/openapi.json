@@ -29950,12 +29950,16 @@
         "operationId": "taste_discoveries_list",
         "parameters": [
           {
-            "description": "Maximum discoveries to return (1-3, default 3).",
+            "description": "Maximum discoveries to return.",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "format": "int64",
+              "default": 3,
+              "description": "Maximum discoveries to return.",
+              "maximum": 3,
+              "minimum": 1,
+              "title": "Limit",
               "type": "integer"
             }
           }
