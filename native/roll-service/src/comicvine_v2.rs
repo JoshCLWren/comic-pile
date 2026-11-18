@@ -1394,6 +1394,7 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
 
 /// `GET /api/v2/comicvine/search/series`.
 pub async fn search_series(
+    _user: AuthenticatedUser,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
     let limit = query.limit.clamp(1, 50);
@@ -1453,6 +1454,7 @@ pub async fn search_series(
 
 /// `GET /api/v2/comicvine/series/{comicvine_volume_id}/issues`.
 pub async fn series_issues(
+    _user: AuthenticatedUser,
     Path(comicvine_volume_id): Path<i32>,
     Query(query): Query<SeriesIssuesQuery>,
 ) -> Result<Json<ComicVineSeriesIssuesResponse>, ApiError> {
@@ -1556,6 +1558,7 @@ async fn provider_issue_volume(volume_id: i32, key: &str) -> Option<String> {
 
 /// `GET /api/v2/comicvine/resolve`.
 pub async fn resolve_input(
+    _user: AuthenticatedUser,
     Query(query): Query<ResolveQuery>,
 ) -> Result<Json<ComicVineResolveResponse>, ApiError> {
     if query.input.is_empty() || query.input.len() > 1000 {
