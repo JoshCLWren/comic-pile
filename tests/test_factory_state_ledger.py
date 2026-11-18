@@ -526,3 +526,34 @@ def test_checkpoint_receipts_use_stable_idempotency_keys(monkeypatch):
     assert ledger.record_checkpoint_evidence("owner/repo", [
         {**result, "merged": True, "merge_sha": "b" * 40},
     ]) == 1
+
+
+
+def test_same_run_new_head_and_validation_state_get_separate_receipts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second exact head can be linked without discarding the first link."""
+    rows: list[dict] = []
+    monkeypatch.setattr(ledger, "record_events",
+                        lambda _repo, entries: rows.extend(entries) or len(entries))
+    base = {"worker": "82", "run_id": "43639844249", "saved": True,
+            "checkpoint_sha": "a" * 40, "published": True, "work_pr": 5129}
+    ledger.record_checkpoint_evidence("owner/repo", [base, {
+        **base, "checkpoint_sha": "b" * 40, "validated": True,
+    }])
+    links = [item for item in rows if item["event_type"] == "checkpoint_pr_linked"]
+    assert len(links) == 2
+    assert links[0]["event_id"] != links[1]["event_id"]
+    assert links[1]["validated"] is True
+
+
+def test_receipts_cli_fails_explicitly_without_neon(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Missing DSN is never reported as zero successfully written receipts."""
+    monkeypatch.delenv("FACTORY_STATE_DSN_FILE", raising=False)
+    monkeypatch.setattr(sys, "argv", ["factory_state_ledger.py", "checkpoint-receipts",
+                         "--repo", "owner/repo", "--run-id", "1234",
+                         "--file", str(tmp_path / "receipts.json")])
+    with pytest.raises(RuntimeError, match="ledger not configured"):
+        ledger.main()
