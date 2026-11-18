@@ -5115,15 +5115,15 @@ export interface components {
          *     retirement work removes the route; it is not a new feature surface.
          */
         BootstrapResponseV2: {
-            active_thread?: null | components["schemas"]["BootstrapActiveThread"];
+            active_thread?: components["schemas"]["BootstrapActiveThread"] | null;
             bandwidth: components["schemas"]["BootstrapBandwidth"];
-            last_read?: null | components["schemas"]["BootstrapLastRead"];
+            last_read?: components["schemas"]["BootstrapLastRead"] | null;
             /** Format: int64 */
             last_rolled_result?: number | null;
             /** Format: int32 */
             pending_thread_id?: number | null;
             pool_reason: components["schemas"]["PoolReason"];
-            roll_recovery?: null | components["schemas"]["BootstrapRollRecovery"];
+            roll_recovery?: components["schemas"]["BootstrapRollRecovery"] | null;
             rollable: components["schemas"]["BootstrapRollableItem"][];
             /** Format: int32 */
             session_id: number;
@@ -5280,7 +5280,7 @@ export interface components {
         /** @description Request schema for creating a bug report or feature request. */
         BugReportCreate: {
             description: string;
-            diagnostics?: null | components["schemas"]["BugReportDiagnostics"];
+            diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
             report_type?: components["schemas"]["ReportType"];
             title: string;
         };
@@ -9097,7 +9097,7 @@ export interface components {
         IdentityInboxActionResponse: {
             message: string;
             success: boolean;
-            updated_item?: null | components["schemas"]["IdentityInboxItem"];
+            updated_item?: components["schemas"]["IdentityInboxItem"] | null;
         };
         IdentityInboxCandidate: {
             comicvine_id?: string | null;
@@ -9876,11 +9876,11 @@ export interface components {
         };
         NativeComicVineResolveResponse: {
             input: string;
-            issue?: null | components["schemas"]["NativeComicVineResolvedIssue"];
+            issue?: components["schemas"]["NativeComicVineResolvedIssue"] | null;
             issues: components["schemas"]["NativeComicVineIssueCandidate"][];
             kind: string;
             validation_error?: string | null;
-            volume?: null | components["schemas"]["NativeComicVineSeriesResult"];
+            volume?: components["schemas"]["NativeComicVineSeriesResult"] | null;
         };
         NativeComicVineResolvedIssue: {
             /** Format: int32 */
@@ -10237,14 +10237,14 @@ export interface components {
             thread_ids: number[];
         };
         NativeReadingBoundaryBlocker: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
             kind: components["schemas"]["BlockerKind"];
             origin: components["schemas"]["BlockerOrigin"];
             reason: string;
             waiting_on: components["schemas"]["NativeBoundaryIssue"][];
         };
         NativeReadingBoundaryNext: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
+            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
         NativeReadingListEntryIntent: {
@@ -10263,7 +10263,7 @@ export interface components {
         NativeReadingListReaderEntry: {
             availability: string;
             checkpoint_target_issue_ids: number[];
-            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
+            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
             gate: string;
             /** Format: int32 */
             id: number;
@@ -10313,20 +10313,6 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
-        };
-        NativeReadingOrderProjectionResult: {
-            /** Format: int32 */
-            added_count: number;
-            /** Format: int32 */
-            kept_count: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            reading_order_id: number;
-            /** Format: int32 */
-            total_positions: number;
-            /** Format: int32 */
-            updated_count: number;
         };
         NativeReplaceIdentityRequest: {
             /** Format: int32 */
@@ -11180,7 +11166,7 @@ export interface components {
         };
         ReadingBoundaryExplanationV2: {
             blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            next?: components["schemas"]["NativeReadingBoundaryNext"] | null;
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
@@ -11985,7 +11971,7 @@ export interface components {
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
             exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+            release?: components["schemas"]["MinimalReleaseResponse"] | null;
         };
         ReleaseSourceUpdate: {
             enabled: boolean;
@@ -12058,7 +12044,7 @@ export interface components {
             die: number;
             /** @description The approved dice ladder, smallest to largest. */
             ladder: number[];
-            last_roll?: null | components["schemas"]["RollLastRoll"];
+            last_roll?: components["schemas"]["RollLastRoll"] | null;
         };
         /** @description The ordered eligible issue identifiers for the current die. */
         RollEligibleIssueIdsResponse: {
@@ -12540,8 +12526,8 @@ export interface components {
         };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             correction?: unknown;
             /** Format: int32 */
             current_die: number;
@@ -12549,7 +12535,7 @@ export interface components {
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -12700,7 +12686,7 @@ export interface components {
         };
         /** @description List-item session response (history list endpoint). */
         SessionListItemResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
@@ -13359,7 +13345,7 @@ export interface components {
         /** @description One reader threads collection item. */
         ThreadListItem: {
             blocking_reasons: string[];
-            comicvine_mapping?: null | components["schemas"]["NativeComicVineMappingHealth"];
+            comicvine_mapping?: components["schemas"]["NativeComicVineMappingHealth"] | null;
             created_at: string;
             format: string;
             /** Format: int32 */
@@ -13373,7 +13359,7 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
-            series_metadata?: null | components["schemas"]["NativeQueueSeriesMetadata"];
+            series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
             status: string;
             tags: components["schemas"]["ThreadTag"][];
             title: string;
@@ -13532,15 +13518,15 @@ export interface components {
         };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -13877,7 +13863,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -16998,7 +16984,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
@@ -20480,7 +20466,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -21552,7 +21538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
