@@ -183,32 +183,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/bootstrap-alias-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Bootstrap Alias Metrics
-         * @description Return this instance's bootstrap alias counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/bug-reports/": {
         parameters: {
             query?: never;
@@ -284,11 +258,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Cbl Adoption Commit
-         * @description Adopt a CBL source into a Reading Plan in one decision. Creates the plan from the source when this source has no adopted plan yet, or merges into the existing source-backed plan otherwise.
-         */
-        post: operations["api_cbl_adoption_commit_api_v1_cbl__list_id__adoption_commit_post"];
+        /** Documentation-only operation for committing an adoption plan. */
+        post: operations["cbl_adoption_commit_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -304,56 +275,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Targeted Cbl Adoption Commit
-         * @description Commit reviewed CBL material into the exact existing Reading Plan.
-         */
-        post: operations["api_targeted_cbl_adoption_commit_api_v1_cbl__list_id__reading_plans__plan_id__adoption_commit_post"];
+        /** Documentation-only operation for targeted adoption into an existing plan. */
+        post: operations["cbl_targeted_adoption_commit_documentation"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Exclusions
-         * @description Return exclusions explicitly entered by this reader.
-         */
-        get: operations["list_exclusions_api_v1_collection_exclusions_get"];
-        put?: never;
-        /**
-         * Create Exclusion
-         * @description Idempotently exclude one external volume, Thread or Issue.
-         */
-        post: operations["create_exclusion_api_v1_collection_exclusions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions/{exclusion_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Exclusion
-         * @description Remove one owned exclusion without changing the underlying comic.
-         */
-        delete: operations["delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1637,20 +1561,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Discover Cbl Source Lists
-         * @description Return bounded active CBL lists for the Reading Plan Add-material flow.
-         *
-         *     Args:
-         *         current_user: Authenticated reader.
-         *         db: Async database session.
-         *         q: Optional case-insensitive match against list name or source path.
-         *         limit: Maximum number of lists to return.
-         *
-         *     Returns:
-         *         Bounded summaries of the matching active CBL source lists.
-         */
-        get: operations["discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get"];
+        /** Documentation-only operation for CBL source discovery. */
+        get: operations["discover_cbl_source_lists_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1683,33 +1595,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Find Cbl Sources By Comicvine Issue
-         * @description Return every CBL source position that holds one exact Comic Vine issue.
-         *
-         *     The match is exact on the Comic Vine issue identity, so a shared series
-         *     title, a shared volume, or the same issue number in another volume never
-         *     produces a false positive. Repeated occurrences inside one source list
-         *     stay separate rows, and the same identity in several source lists is
-         *     reported once per list. The answer is shared catalog data: it never
-         *     depends on the calling reader's owned Issues.
-         *
-         *     Args:
-         *         comicvine_issue_id: Exact Comic Vine issue external ID.
-         *         current_user: Authenticated reader. Unused: the shared catalog answer
-         *             must not vary by reader.
-         *         db: Async database session.
-         *         offset: Zero-based index of the first returned source occurrence.
-         *         limit: Maximum number of source occurrences to return.
-         *
-         *     Returns:
-         *         The matching source occurrences with the total occurrence count and
-         *         the number of distinct source lists containing the identity.
-         *
-         *     Raises:
-         *         HTTPException: 422 when the supplied Comic Vine issue ID is blank.
-         */
-        get: operations["find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get"];
+        /** Documentation-only operation for Comic Vine occurrence lookup. */
+        get: operations["find_cbl_sources_by_comicvine_issue_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1727,27 +1614,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Compare Cbl Sources
-         * @description Rank shared CBL sources by exact coverage and relative order.
-         *
-         *     The comparison receives confirmed Comic Vine issue IDs, never reader Issue
-         *     IDs. It reads only the shared catalog, so one reader's owned collection
-         *     cannot change the answer. Coverage counts distinct exact identities while
-         *     repeated source occurrences remain visible, and same-titled volumes never
-         *     match by title or issue number.
-         *
-         *     Args:
-         *         payload: Distinct confirmed Comic Vine issue IDs in intended order.
-         *         current_user: Authenticated reader. Unused: the shared catalog answer
-         *             must not vary by reader.
-         *         db: Async database session.
-         *         limit: Maximum number of ranked source lists to return.
-         *
-         *     Returns:
-         *         Ranked source comparisons with coverage, duplicate, and order evidence.
-         */
-        post: operations["compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post"];
+        /** Documentation-only operation for CBL source comparison. */
+        post: operations["compare_cbl_sources_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1778,29 +1646,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Cbl Source List
-         * @description Return every ordered source occurrence for one CBL list (read-only).
-         *
-         *     Source occurrences keep their original position, including repeated
-         *     positions for duplicated issues. Large lists are returned as a bounded page
-         *     so no list is silently truncated; ``entries_total`` reports the full count
-         *     so callers can page through every occurrence.
-         *
-         *     Args:
-         *         list_id: CBL source list identifier.
-         *         current_user: Authenticated reader.
-         *         db: Async database session.
-         *         offset: Zero-based index of the first returned source occurrence.
-         *         limit: Maximum number of source occurrences to return.
-         *
-         *     Returns:
-         *         One CBL source list with its ordered source occurrences.
-         *
-         *     Raises:
-         *         HTTPException: 404 when the list does not exist or is inactive.
-         */
-        get: operations["get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get"];
+        /** Documentation-only operation for one CBL source list. */
+        get: operations["get_cbl_source_list_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1818,11 +1665,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Cbl Adoption Plan
-         * @description Calculate a dry-run CBL adoption plan with explicit selection overrides.
-         */
-        post: operations["api_cbl_adoption_plan_api_v1_issue_identity_cbl__list_id__adoption_plan_post"];
+        /** Documentation-only operation for the CBL adoption plan. */
+        post: operations["cbl_adoption_plan_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1836,11 +1680,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Cbl Adoption Preview
-         * @description Preview all CBL positions and their default read-only adoption choices.
-         */
-        get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
+        /** Documentation-only operation for the CBL adoption preview. */
+        get: operations["cbl_adoption_preview_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1891,26 +1732,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Find Cbl Candidates For Reading List
-         * @description Find shared CBL sources that cover one owned Reading List.
-         *
-         *     Only distinct confirmed Comic Vine issue IDs from the reader's Issues are
-         *     used to query the shared catalog. Entries without a confirmed ID, and
-         *     entries with conflicting confirmed IDs, are returned as explicit gaps so
-         *     the caller never substitutes a title/issue-number guess or claims that no
-         *     CBL exists.
-         *
-         *     Args:
-         *         list_id: Owned Reading List identifier.
-         *         current_user: Authenticated owner of the Reading List.
-         *         db: Async database session.
-         *         limit: Maximum number of ranked source lists to return.
-         *
-         *     Returns:
-         *         Every list entry's identity state plus ranked source comparisons.
-         */
-        get: operations["find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get"];
+        /** Documentation-only operation for reading-list CBL candidates. */
+        get: operations["find_cbl_candidates_for_reading_list_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1982,26 +1805,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Issue Reader Context
-         * @description Return bounded reading analytics and local neighborhood for an owned issue.
-         *
-         *     The response is decorative context for the Roll experience and must never
-         *     be a prerequisite for rating. It is computed with bounded, user-scoped
-         *     queries that do not traverse the full library or hydrate ComicVine.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue identifier.
-         *         current_user: Authenticated owner of the requested issue.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Bounded reader-context payload for the requested issue.
-         *
-         *     Raises:
-         *         HTTPException: If the issue does not belong to the user.
-         */
-        get: operations["get_issue_reader_context_api_v1_issues__issue_id__reader_context_get"];
+        /** Documentation-only operation for reader context. */
+        get: operations["issue_read_state_reader_context"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2019,19 +1824,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Mark Issue Read
-         * @description Mark an issue as read and update thread's next_unread_issue_id.
-         *
-         *     Args:
-         *         issue_id: The issue ID to mark as read.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Raises:
-         *         HTTPException: If issue not found, thread not found, or issue already read.
-         */
-        post: operations["mark_issue_read_api_v1_issues__issue_id__markRead_post"];
+        /** Documentation-only operation for `:markRead`. */
+        post: operations["issue_read_state_mark_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2047,21 +1841,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Mark Issue Unread
-         * @description Mark an issue as unread and update thread's next_unread_issue_id.
-         *
-         *     Reactivates thread if it was completed.
-         *
-         *     Args:
-         *         issue_id: The issue ID to mark as unread.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Raises:
-         *         HTTPException: If issue not found, thread not found, or issue already unread.
-         */
-        post: operations["mark_issue_unread_api_v1_issues__issue_id__markUnread_post"];
+        /** Documentation-only operation for `:markUnread`. */
+        post: operations["issue_read_state_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2077,23 +1858,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Move Issue
-         * @description Move a single issue within its thread.
-         *
-         *     Args:
-         *         issue_id: The issue ID to move.
-         *         request: Move request containing the issue that should come before it.
-         *         current_user: The authenticated user making the move request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         None. The response is HTTP 204 on success.
-         *
-         *     Raises:
-         *         HTTPException: If the issue or requested target issue is not found.
-         */
-        post: operations["move_issue_api_v1_issues__issue_id__move_post"];
+        /** Documentation-only operation for `:move`. */
+        post: operations["issue_read_state_move"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2109,19 +1875,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Bulk Mark Issue Read
-         * @description Bulk mark issues as read.
-         *
-         *     Args:
-         *         request: Bounded list of issue IDs.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: If any issue is invalid or already read.
-         */
-        post: operations["bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post"];
+        /** Documentation-only operation for `:bulkMarkRead`. */
+        post: operations["issue_read_state_bulk_mark_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2137,19 +1892,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Bulk Mark Issue Unread
-         * @description Bulk mark issues as unread.
-         *
-         *     Args:
-         *         request: Bounded list of issue IDs.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: If any issue is invalid or already unread.
-         */
-        post: operations["bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post"];
+        /** Documentation-only operation for `:bulkMarkUnread`. */
+        post: operations["issue_read_state_bulk_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2165,68 +1909,6 @@ export interface paths {
         };
         /** OpenAPI documentation for the versioned metrics alias. */
         get: operations["get_v1_metrics_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-boundaries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Reading Boundary Batch
-         * @description Explain several owned series in one canonical eligibility snapshot.
-         *
-         *     Args:
-         *         payload: Owned Thread identifiers to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Explanations keyed by Thread identifier.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when a Thread is absent or foreign.
-         */
-        post: operations["get_reading_boundary_batch_api_v1_reading_boundaries_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-boundaries/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Reading Boundary
-         * @description Explain one owned series through the canonical Option E result.
-         *
-         *     Args:
-         *         thread_id: Owned Thread to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Named waiting Issues, live blockers, history, and editor targets.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when the Thread is absent or foreign.
-         */
-        get: operations["get_reading_boundary_api_v1_reading_boundaries__thread_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2626,103 +2308,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Roll Recommendation Explanation
-         * @description Return human-readable explanations for a historical roll event.
-         *
-         *     Derives explanations solely from the recommendation context persisted at
-         *     roll decision time, never recomputing scores from current mutable state.
-         *     Unknown or absent context degrades gracefully to an empty explanation list.
-         *
-         *     Args:
-         *         event_id: Identifier of the roll event to explain.
-         *         current_user: Authenticated owner of the session that generated the event.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RecommendationExplanationResponse carrying the event identifier and
-         *         ordered list of human-readable explanation factors.
-         *
-         *     Raises:
-         *         HTTPException 404: When the event does not exist or does not belong
-         *             to the current user's session.
-         *         HTTPException 422: When the event type is not ``"roll"``.
-         */
-        get: operations["get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Override Roll
-         * @description Manually select a thread.
-         *
-         *     Args:
-         *         request: Override request containing thread_id.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         RollResponse with selected thread.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        post: operations["override_roll_api_v1_roll_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/switch-prerequisite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Switch Roll Prerequisite
-         * @description Replace a blocked pending roll with one still-readable prerequisite.
-         *
-         *     Args:
-         *         request: Selected prerequisite issue from the current recovery guidance.
-         *         current_user: Authenticated owner of the pending Roll.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         The durable active Roll target after accepting the prerequisite.
-         */
-        post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/": {
         parameters: {
             query?: never;
@@ -2773,37 +2358,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/current/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Current Session
-         * @description Get current active session with deadlock retry handling.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse with current session details.
-         *
-         *     Raises:
-         *         RuntimeError: If failed after max retries.
-         */
-        get: operations["get_current_session_api_v1_sessions_current__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -2832,39 +2386,6 @@ export interface paths {
         get: operations["get_session_details_v1_documentation"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore Reading Session Start
-         * @description Restore session to its initial state at session start.
-         *
-         *     Args:
-         *         session_id: The session ID to restore.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *         session_service: Session service for business logic.
-         *
-         *     Returns:
-         *         SessionResponse with restored session details.
-         *
-         *     Raises:
-         *         HTTPException: If session or snapshot not found.
-         *         RuntimeError: If failed after max retries.
-         */
-        post: operations["restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3072,22 +2593,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Taste Discoveries
-         * @description Return ranked prompt-eligible discoveries for the reader.
-         *
-         *     Surfacing counts as prompting: returned signals record ``last_prompted_at``
-         *     so the canonical cooldown suppresses immediate re-prompting. Signals with
-         *     any explicit verdict are never included.
-         *
-         *     Args:
-         *         current_user: The authenticated reader.
-         *         db: Async database session.
-         *         limit: Bounded maximum number of discoveries to return.
-         *
-         *     Returns:
-         *         Ranked eligible discoveries with concise evidence context.
+         * Documentation-only operation for the mounted discovery listing.
+         * @description Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.
          */
-        get: operations["list_taste_discoveries_api_v1_taste_discoveries_get"];
+        get: operations["taste_discoveries_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3452,33 +2961,8 @@ export interface paths {
         /** Same-path native OpenAPI for the browser's issue-list read. */
         get: operations["list_thread_issues_documentation"];
         put?: never;
-        /**
-         * Create Issues
-         * @description Create issues from a range string and place them in thread order.
-         *
-         *     Ordinary numeric issue numbers are inserted at their natural position in the
-         *     series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
-         *     saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
-         *     placement. Send explicit JSON ``null`` to append at the end (the UI
-         *     "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
-         *     existing issues later in the thread are shifted upward so the new issues are
-         *     inserted immediately after that issue. Irregular numbering such as
-         *     ``Annual 1`` or ``0`` falls back to append-only placement.
-         *
-         *     Args:
-         *         thread_id: The thread ID to create issues for.
-         *         request: Request with issue range string.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         IssueListResponse with newly created issues only (not all issues).
-         *
-         *     Raises:
-         *         HTTPException: If thread not found, all issues already exist,
-         *                       position collision detected, or issue range is invalid.
-         */
-        post: operations["create_issues_api_v1_threads__thread_id__issues_post"];
+        /** Documentation-only operation for issue creation. */
+        post: operations["thread_issues_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3492,25 +2976,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Thread Issue Creators
-         * @description Return stored ComicVine creator credits for every mapped issue in a thread.
-         *
-         *     One bulk read serves the whole issue list's creator column, so expanding
-         *     a full page never fans out into one provider-intelligence request per
-         *     row. Issues without a confirmed ComicVine mapping (or without stored
-         *     credits) are omitted; clients fall back to the series' manual creator
-         *     credits for those rows.
-         *
-         *     Args:
-         *         thread_id: ComicPile thread whose issue credits are returned.
-         *         current_user: Authenticated owner of the requested thread.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Per-issue stored ComicVine creator credits for the owned thread.
-         */
-        get: operations["list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get"];
+        /** Documentation-only operation for the bulk creator read. */
+        get: operations["thread_issues_creators"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3528,23 +2995,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Reorder Issues
-         * @description Rewrite all issue positions in a thread from an explicit ordered ID list.
-         *
-         *     Args:
-         *         thread_id: The thread whose issue order should be rewritten.
-         *         request: Ordered issue IDs representing the desired canonical order.
-         *         current_user: The authenticated user making the reorder request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         None. The response is HTTP 204 on success.
-         *
-         *     Raises:
-         *         HTTPException: If the thread is not found or the issue IDs are invalid.
-         */
-        post: operations["reorder_issues_api_v1_threads__thread_id__issues_reorder_post"];
+        /** Documentation-only operation for issue reordering. */
+        post: operations["thread_issues_reorder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3706,17 +3158,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Migrate Thread To Issues
-         * @description Migrate an old-style thread to issue tracking (#1..total_issues).
-         *
-         *     Marks #1 through ``last_issue_read`` as read and updates the thread's
-         *     issue-tracking fields.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread not found, 400 if validation fails.
-         */
-        post: operations["migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post"];
+        /** Documentation-only operation for the explicit migration. */
+        post: operations["thread_issues_migrate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3732,17 +3175,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Migrate Thread To Issues Simple
-         * @description Simplified migration inferred from the issue just rated.
-         *
-         *     Marks earlier issues read, keeps the rated issue unread so the rating
-         *     flow can mark it read, and points ``next_unread_issue_id`` at it.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread not found, 400 if validation fails.
-         */
-        post: operations["migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post"];
+        /** Documentation-only operation for the simplified migration. */
+        post: operations["thread_issues_migrate_simple"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3758,17 +3192,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Set Current Issue
-         * @description Atomically correct the current issue for an active thread.
-         *
-         *     Marks every earlier issue read, ensures the target is unread, updates
-         *     ``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread or issue not found, 400 for validation errors.
-         */
-        post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
+        /** Documentation-only operation for correcting the current issue. */
+        post: operations["thread_issues_set_current"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3789,32 +3214,6 @@ export interface paths {
          * @description Return blocked status and human-readable blocking reasons for multiple threads.
          */
         post: operations["get_threads_blocking_info_api_v1_threads_getBlockingInfo_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/traffic-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Traffic Metrics
-         * @description Return this instance's per-route traffic counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_traffic_metrics_api_v1_traffic_metrics_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4105,6 +3504,182 @@ export interface paths {
         get: operations["preview_documentation"];
         put?: never;
         post: operations["relink_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["creators_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["compare_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discoveries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["summaries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["team_chemistry_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rating_distribution_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/role-stats/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["role_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/{metric_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["metric_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/series/{series_key}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_issues_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4922,43 +4497,6 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /**
-         * BootstrapAliasCounterSchema
-         * @description One aggregated bootstrap alias tally.
-         */
-        BootstrapAliasCounterSchema: {
-            /**
-             * Alias
-             * @description Bootstrap alias: legacy, v1, or v2.
-             */
-            alias: string;
-            /**
-             * Count
-             * @description Number of observed hits.
-             */
-            count: number;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx.
-             */
-            status_class: string;
-            /**
-             * Web Origin
-             * @description True if request looked like a browser client.
-             */
-            web_origin: boolean;
-        };
-        /**
-         * BootstrapAliasSnapshotSchema
-         * @description Process-local bootstrap alias counters.
-         */
-        BootstrapAliasSnapshotSchema: {
-            /**
-             * Counters
-             * @description Aggregated counts per (alias, web_origin, status class).
-             */
-            counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
-        };
         /** @description Compact bandwidth block retained for existing Roll consumers. */
         BootstrapBandwidth: {
             active_bandwidth?: string | null;
@@ -5016,15 +4554,15 @@ export interface components {
          *     retirement work removes the route; it is not a new feature surface.
          */
         BootstrapResponseV2: {
-            active_thread?: null | components["schemas"]["BootstrapActiveThread"];
+            active_thread?: components["schemas"]["BootstrapActiveThread"] | null;
             bandwidth: components["schemas"]["BootstrapBandwidth"];
-            last_read?: null | components["schemas"]["BootstrapLastRead"];
+            last_read?: components["schemas"]["BootstrapLastRead"] | null;
             /** Format: int64 */
             last_rolled_result?: number | null;
             /** Format: int32 */
             pending_thread_id?: number | null;
             pool_reason: components["schemas"]["PoolReason"];
-            roll_recovery?: null | components["schemas"]["BootstrapRollRecovery"];
+            roll_recovery?: components["schemas"]["BootstrapRollRecovery"] | null;
             rollable: components["schemas"]["BootstrapRollableItem"][];
             /** Format: int32 */
             session_id: number;
@@ -5033,6 +4571,15 @@ export interface components {
             skipped_threads: components["schemas"]["BootstrapThreadSummary"][];
             /** Format: int64 */
             snoozed_count: number;
+            /**
+             * @description Every owned thread the session currently has snoozed, uncapped, so
+             *     consumers such as Queue can resolve per-row snooze state.
+             */
+            snoozed_thread_ids: number[];
+            /**
+             * @description Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+             *     for the complete snooze set.
+             */
             snoozed_threads: components["schemas"]["BootstrapThreadSummary"][];
             timezone?: string | null;
             /** Format: int32 */
@@ -5115,65 +4662,35 @@ export interface components {
             tags: components["schemas"]["BootstrapTag"][];
             title: string;
         };
-        /**
-         * BoundaryEditorTarget
-         * @description Where the reader can change the rule that produced a boundary.
-         *
-         *     The target is a descriptor, not a URL: the client owns routing so a
-         *     renamed surface never breaks a stored deep link.
-         */
         BoundaryEditorTarget: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "reading_list" | "prerequisite" | "issue";
-            /** Label */
+            kind: components["schemas"]["EditorKind"];
             label: string;
-            /** List Id */
+            /** Format: int32 */
             list_id?: number | null;
-            /** Prerequisite Id */
+            /** Format: int32 */
             prerequisite_id?: number | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id?: number | null;
         };
-        /**
-         * BoundaryIssue
-         * @description One named Issue, labeled with its Comic Vine volume when known.
-         */
         BoundaryIssue: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Label */
             label: string;
-            /** Reading Lists */
-            reading_lists?: components["schemas"]["BoundaryReadingList"][];
-            /** Thread Id */
+            reading_lists: components["schemas"]["BoundaryReadingList"][];
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
-            /** Volume Label */
             volume_label?: string | null;
         };
         /** @enum {string} */
         BoundaryListMode: "strict" | "loose";
-        /**
-         * BoundaryReadingList
-         * @description One owned Reading List that places an Issue.
-         */
         BoundaryReadingList: {
-            /** List Id */
+            /** Format: int32 */
             list_id: number;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
+            mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
         /** @enum {string} */
@@ -5181,7 +4698,7 @@ export interface components {
         /** @description Request schema for creating a bug report or feature request. */
         BugReportCreate: {
             description: string;
-            diagnostics?: null | components["schemas"]["BugReportDiagnostics"];
+            diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
             report_type?: components["schemas"]["ReportType"];
             title: string;
         };
@@ -6139,6 +5656,265 @@ export interface components {
             /** Provider Value */
             provider_value?: string | null;
         };
+        CblAdoptionCommitRequest: {
+            content_hash: string;
+            entry_decisions?: {
+                [key: string]: string;
+            };
+            revision_sha: string;
+            series_decisions?: components["schemas"]["CommitSeriesDecision"][];
+            series_overrides?: components["schemas"]["CommitEntryOverride"][];
+        };
+        CblAdoptionCommitResponseWire: {
+            created_at: string;
+            created_positions: number[];
+            excluded_positions: number[];
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
+            ordering_mode: string;
+            reused_positions: number[];
+            unresolved_positions: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        CblAdoptionEntryResponse: {
+            adopted: boolean;
+            adoption_class: string;
+            adoption_decision: string;
+            /** Format: int32 */
+            canonical_issue_id?: number | null;
+            /** Format: int32 */
+            cbl_entry_id: number;
+            /** Format: int32 */
+            cbl_position: number;
+            collection_excluded: boolean;
+            collection_exclusion_ids: number[];
+            collection_exclusion_reason?: string | null;
+            comicvine_issue_id?: string | null;
+            comicvine_series_id?: string | null;
+            is_duplicate_identity: boolean;
+            issue_number: string;
+            /** Format: int32 */
+            publication_year?: number | null;
+            read_at?: string | null;
+            read_status?: string | null;
+            resolution_status: string;
+            /** Format: int32 */
+            resolved_issue_id?: number | null;
+            series_external_id?: string | null;
+            series_group_id: string;
+            series_name: string;
+            series_provider?: string | null;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblAdoptionPlanRequest: {
+            entry_decisions?: {
+                [key: string]: boolean;
+            };
+            series_decisions?: {
+                [key: string]: boolean;
+            };
+        };
+        CblAdoptionPreviewResponse: {
+            entries: components["schemas"]["CblAdoptionEntryResponse"][];
+            source: components["schemas"]["CblSourceFingerprintResponse"];
+            summary: components["schemas"]["CblAdoptionSummaryResponse"];
+            /** Format: int32 */
+            total_positions: number;
+        };
+        CblAdoptionSummaryResponse: {
+            /** Format: int32 */
+            awaiting_opt_in_count: number;
+            awaiting_opt_in_positions: number[];
+            /** Format: int32 */
+            excluded_count: number;
+            excluded_positions: number[];
+            /** Format: int32 */
+            final_adopted_count: number;
+            final_adopted_order: number[];
+            /** Format: int32 */
+            missing_would_create_count: number;
+            missing_would_create_positions: number[];
+            /** Format: int32 */
+            reused_existing_count: number;
+            reused_existing_positions: number[];
+            /** Format: int32 */
+            unresolved_count: number;
+            unresolved_positions: number[];
+        };
+        /** @description One Comic Vine occurrence in the shared CBL catalog. */
+        CblComicvineOccurrence: {
+            comicvine_issue_id: string;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            revision_sha: string;
+            series_name: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        /** @description A page of Comic Vine occurrences with shared-catalog totals. */
+        CblComicvineOccurrencePage: {
+            comicvine_issue_id: string;
+            /** Format: int32 */
+            lists_total: number;
+            occurrences: components["schemas"]["CblComicvineOccurrence"][];
+            /** Format: int32 */
+            occurrences_limit: number;
+            /** Format: int32 */
+            occurrences_offset: number;
+            /** Format: int32 */
+            occurrences_total: number;
+        };
+        CblReadingListCandidatesResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            entries: components["schemas"]["CblReadingListInputEntry"][];
+            /** Format: int32 */
+            input_confirmed_total: number;
+            /** Format: int32 */
+            input_conflict_count: number;
+            /** Format: int32 */
+            input_entry_count: number;
+            input_ids: string[];
+            /** Format: int32 */
+            input_missing_count: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+        };
+        CblReadingListInputEntry: {
+            comicvine_issue_id?: string | null;
+            comicvine_issue_ids: string[];
+            identity_status: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+        };
+        CblSourceComparisonMatch: {
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            distinct_source_issues: number;
+            /** Format: int32 */
+            duplicate_match_count: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            input_coverage_percentage: number;
+            /** Format: int32 */
+            input_total: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            matched_input_count: number;
+            matched_input_ids: string[];
+            /** Format: int32 */
+            matched_occurrence_count: number;
+            missing_input_ids: string[];
+            /** Format: int32 */
+            order_disagreement_count: number;
+            /** Format: int32 */
+            order_pair_count: number;
+            order_status: string;
+            revision_sha: string;
+            /** Format: int32 */
+            score: number;
+            /** Format: int32 */
+            source_coverage_percentage: number;
+            /** Format: int32 */
+            source_only_issue_count: number;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        CblSourceComparisonRequest: {
+            comicvine_issue_ids: string[];
+        };
+        CblSourceComparisonResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            comicvine_issue_ids: string[];
+            /** Format: int32 */
+            input_total: number;
+        };
+        /** @description One ordered source occurrence inside a CBL list. */
+        CblSourceEntryDetail: {
+            comicvine_issue_id?: string | null;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            series_name: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblSourceFingerprintResponse: {
+            content_hash: string;
+            revision_sha: string;
+            /** Format: int32 */
+            source_list_id: number;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description One active CBL source list with one bounded page of ordered occurrences. */
+        CblSourceListDetail: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            entries: components["schemas"]["CblSourceEntryDetail"][];
+            /** Format: int32 */
+            entries_limit: number;
+            /** Format: int32 */
+            entries_offset: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        /** @description Reader-safe summary of one active persisted CBL source list. */
+        CblSourceListDiscoveryItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            /**
+             * @description Raw stored path: Python's discovery response deliberately returns the
+             *     unprojected `source_path` (see `list_cbl_source_previews`).
+             */
+            source_path: string;
+            source_repository: string;
+        };
         /**
          * CheckPotentialDuplicatesRequest
          * @description Request to check for possible existing volumes before create or rename.
@@ -6172,43 +5948,6 @@ export interface components {
         CheckPotentialDuplicatesResponse: {
             /** Matches */
             matches?: components["schemas"]["PotentialDuplicateMatch"][];
-        };
-        /**
-         * CollectionExclusionCreate
-         * @description Exactly one target: external volume identity, Thread or Issue.
-         */
-        CollectionExclusionCreate: {
-            /** External Volume Id */
-            external_volume_id?: string | null;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Provider */
-            provider?: string | null;
-            /** Thread Id */
-            thread_id?: number | null;
-        };
-        /**
-         * CollectionExclusionResponse
-         * @description Stored exclusion, with an ID for explicit removal.
-         */
-        CollectionExclusionResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** External Volume Id */
-            external_volume_id: string | null;
-            /** Id */
-            id: number;
-            /** Issue Id */
-            issue_id: number | null;
-            /** Provider */
-            provider: string | null;
-            /** Thread Id */
-            thread_id: number | null;
-            /** User Id */
-            user_id: number;
         };
         /** @description Owner-scoped local representations of a related ComicVine issue. */
         ComicPileMatch: {
@@ -6420,6 +6159,11 @@ export interface components {
             /** Total Available */
             total_available?: number | null;
         };
+        CommitEntryOverride: {
+            /** Format: int32 */
+            cbl_position: number;
+            decision: string;
+        };
         CommitRequest: {
             approved_row_ids?: string[];
             idempotency_key: string;
@@ -6432,6 +6176,10 @@ export interface components {
             idempotency_key: string;
             needs_review_issue_ids: number[];
             series_mapping: components["schemas"]["CommitSeriesMapping"];
+        };
+        CommitSeriesDecision: {
+            decision: string;
+            series_name: string;
         };
         CommitSeriesMapping: {
             evidence_source: string;
@@ -6493,8 +6241,8 @@ export interface components {
             lane_count: number;
             name: string;
             ordering_mode: string;
-            source_names?: unknown;
-            source_paths?: string[];
+            source_names: unknown;
+            source_paths: string[];
             /** Format: int32 */
             step_count: number;
             updated_at: string;
@@ -6553,9 +6301,21 @@ export interface components {
             created_at: string;
             /** Format: int32 */
             id: number;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            lanes: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            nodes: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ContinuityPlanResponseWire: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
             ordering_mode: string;
             updated_at: string;
             /** Format: int32 */
@@ -6967,6 +6727,13 @@ export interface components {
              * @description Title of the series/thread.
              */
             thread_title: string;
+        };
+        /** @description One credited creator (Python `ComicVineCreator`). */
+        CreatorCredit: {
+            /** Format: int64 */
+            creator_id?: number | null;
+            name: string;
+            roles: string[];
         };
         /**
          * CreatorDetailResponse
@@ -7577,6 +7344,16 @@ export interface components {
              * @description Title of the thread owning the issue.
              */
             thread_title: string;
+        };
+        CreatorMetricPagination: {
+            /** Format: int64 */
+            next_page_token?: number | null;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_pages: number;
         };
         /**
          * CreatorRatingBucket
@@ -8961,23 +8738,6 @@ export interface components {
             type: string;
         };
         /**
-         * ExplainableFactorResponse
-         * @description One human-readable explanation element returned by the API.
-         *
-         *     Attributes:
-         *         code: Stable machine-readable code identifying the factor family.
-         *         label: Short user-facing description.
-         *         detail: Optional extended context or sub-note.
-         */
-        ExplainableFactorResponse: {
-            /** Code */
-            code: string;
-            /** Detail */
-            detail?: string | null;
-            /** Label */
-            label: string;
-        };
-        /**
          * ExplicitReaderOrderMigrationContract
          * @description Server-owned proof that a plan replaced classified reader-order edges.
          */
@@ -9015,7 +8775,7 @@ export interface components {
         IdentityInboxActionResponse: {
             message: string;
             success: boolean;
-            updated_item?: null | components["schemas"]["IdentityInboxItem"];
+            updated_item?: components["schemas"]["IdentityInboxItem"] | null;
         };
         IdentityInboxCandidate: {
             comicvine_id?: string | null;
@@ -9261,6 +9021,10 @@ export interface components {
              * Issue Ids
              * @description Broadcast list of issue IDs to mark unread.
              */
+            issue_ids: number[];
+        };
+        /** @description Request body for the bulk read-state operations. */
+        IssueBulkRequest: {
             issue_ids: number[];
         };
         IssueCard: {
@@ -9658,35 +9422,6 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeBoundaryEditorTarget: {
-            /** Format: int32 */
-            issue_id?: number | null;
-            kind: components["schemas"]["EditorKind"];
-            label: string;
-            /** Format: int32 */
-            list_id?: number | null;
-            /** Format: int32 */
-            prerequisite_id?: number | null;
-            /** Format: int32 */
-            thread_id?: number | null;
-        };
-        NativeBoundaryIssue: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            label: string;
-            reading_lists: components["schemas"]["NativeBoundaryReadingList"][];
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-            volume_label?: string | null;
-        };
-        NativeBoundaryReadingList: {
-            /** Format: int32 */
-            list_id: number;
-            mode: components["schemas"]["BoundaryListMode"];
-            name: string;
-        };
         NativeCBLBreadcrumb: {
             name: string;
             path: string;
@@ -9783,25 +9518,385 @@ export interface components {
             /** Format: int32 */
             checkpoint_target_ref_id?: number | null;
             checkpoint_target_ref_ids?: number[];
-            convergence_gate?: unknown[];
+            convergence_gate: unknown[];
             id: string;
             is_checkpoint?: boolean;
-            label?: string | null;
+            label: string | null;
             lane_id: string;
             node_type: string;
             /** Format: int32 */
             position: number;
-            reader_optional?: boolean | null;
-            reader_role?: string | null;
+            reader_optional: boolean | null;
+            reader_role: string | null;
             /** Format: int32 */
             ref_id: number;
-            source_cbl_placements?: unknown[] | null;
-            source_confidence?: string | null;
-            source_explanation?: string | null;
-            source_paths?: string[] | null;
-            source_role?: string | null;
-            source_story_arc_ids?: string[] | null;
-            source_target_story_arc_id?: string | null;
+            source_cbl_placements: unknown[] | null;
+            source_confidence: string | null;
+            source_explanation: string | null;
+            source_paths: string[] | null;
+            source_role: string | null;
+            source_story_arc_ids: string[] | null;
+            source_target_story_arc_id: string | null;
+        };
+        NativeCreatorComparisonCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        NativeCreatorComparisonIssueRef: {
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorComparisonItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            insufficient_data: boolean;
+            /** Format: int64 */
+            max_issue_refs_per_group: number;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: int64 */
+            min_rated_issues_per_series: number;
+            normalized_roles: string[];
+            rating_distribution: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            read_unrated_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            role_stats: components["schemas"]["NativeCreatorComparisonRoleStat"][];
+            strongest_series: components["schemas"]["NativeCreatorComparisonSeriesAggregate"][];
+            /** Format: double */
+            top_rating_rate?: number | null;
+            unread_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            /** Format: int64 */
+            unread_upcoming_count: number;
+        };
+        NativeCreatorComparisonResponse: {
+            comparisons: {
+                [key: string]: components["schemas"]["NativeCreatorComparisonItem"];
+            };
+            coverage: components["schemas"]["NativeCreatorComparisonCoverage"];
+            insufficient_data_keys: string[];
+        };
+        NativeCreatorComparisonRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorComparisonSeriesAggregate: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorDetailResponse: {
+            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            headline_roles: string[];
+            insights?: components["schemas"]["NativeCreatorInsights"] | null;
+            next_cursor?: string | null;
+            rated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            rated_population_scope: string;
+            rating_distribution?: components["schemas"]["NativeCreatorRatingDistribution"] | null;
+            read_unrated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            role_stats: components["schemas"]["NativeCreatorRoleStat"][];
+            series_groups: components["schemas"]["NativeCreatorSeriesGroup"][];
+            series_groups_complete: boolean;
+            /** Format: int64 */
+            series_groups_total: number;
+            summary: components["schemas"]["NativeCreatorSummaryItem"];
+            upcoming_issues: components["schemas"]["NativeCreatorIssueRow"][];
+        };
+        NativeCreatorDiscoveryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorDiscoveryEntry: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            /** Format: double */
+            earlier_average_rating?: number | null;
+            /** Format: double */
+            max_rating?: number | null;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: double */
+            min_rating?: number | null;
+            normalized_roles: string[];
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: double */
+            rating_spread?: number | null;
+            /** Format: double */
+            rating_stddev?: number | null;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            reasons: components["schemas"]["NativeCreatorDiscoveryReason"][];
+            /** Format: double */
+            recent_average_rating?: number | null;
+            /** Format: int64 */
+            top_rating_count: number;
+            /** Format: double */
+            top_rating_rate?: number | null;
+            /** Format: double */
+            trend_delta?: number | null;
+            trend_direction?: string | null;
+            /** Format: int64 */
+            trend_sample_count: number;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorDiscoveryReason: {
+            comparison: string;
+            label: string;
+            metric: string;
+            /** Format: double */
+            threshold: number;
+            /** Format: double */
+            value: number;
+        };
+        NativeCreatorDiscoveryResponse: {
+            coverage: components["schemas"]["NativeCreatorDiscoveryCoverage"];
+            /** Format: int64 */
+            max_entries_per_view: number;
+            /** Format: int64 */
+            minimum_reliable_sample: number;
+            views: components["schemas"]["NativeCreatorDiscoveryView"][];
+        };
+        NativeCreatorDiscoveryView: {
+            description: string;
+            entries: components["schemas"]["NativeCreatorDiscoveryEntry"][];
+            /** Format: int64 */
+            max_entries: number;
+            /** Format: int64 */
+            min_sample: number;
+            mode: string;
+            title: string;
+            /** Format: int64 */
+            total: number;
+            truncated: boolean;
+        };
+        NativeCreatorInsights: {
+            /** Format: int64 */
+            excluded_incomplete_series_count: number;
+            highest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            individual_issue_limit: number;
+            individual_issues_combined: boolean;
+            lowest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            min_series_sample: number;
+            most_rated_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            series_message?: string | null;
+            series_sample_met: boolean;
+            strongest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            weakest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+        };
+        NativeCreatorIssueInsight: {
+            /** Format: double */
+            effective_rating: number;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            roles: string[];
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorIssueRow: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            rating_timestamp?: string | null;
+            roles: string[];
+            sort_key: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorMetricCalculation: {
+            denominator?: string | null;
+            formula: string;
+            numerator: string;
+            percentage?: string | null;
+        };
+        NativeCreatorMetricDrilldown: {
+            /** Format: int64 */
+            bucket_count?: number | null;
+            /** Format: double */
+            bucket_percentage?: number | null;
+            calculation: components["schemas"]["NativeCreatorMetricCalculation"];
+            creator_key: string;
+            excluded_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            included_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            metric_type: string;
+            pagination: components["schemas"]["CreatorMetricPagination"];
+            rating_value?: string | null;
+            role?: string | null;
+            /** Format: double */
+            role_average_rating?: number | null;
+            /** Format: int64 */
+            role_issue_count?: number | null;
+            /** Format: int64 */
+            role_rated_issue_count?: number | null;
+            /** Format: double */
+            series_average_rating?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            /** Format: int64 */
+            series_issue_count?: number | null;
+            /** Format: int64 */
+            series_rated_issue_count?: number | null;
+            series_title?: string | null;
+            /** Format: int64 */
+            total_count: number;
+        };
+        NativeCreatorMetricIssue: {
+            creator_roles: string[];
+            /** Format: double */
+            effective_rating?: number | null;
+            effective_rating_source?: string | null;
+            effective_rating_timestamp?: string | null;
+            exclusion_reason?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            missing_rating_cause?: string | null;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorRatingBucket: {
+            /** Format: int64 */
+            count: number;
+            /** Format: double */
+            rating: number;
+        };
+        NativeCreatorRatingDistribution: {
+            buckets: components["schemas"]["NativeCreatorRatingBucket"][];
+            /** Format: double */
+            max_rating: number;
+            /** Format: double */
+            mean_rating: number;
+            /** Format: double */
+            median_rating: number;
+            /** Format: double */
+            min_rating: number;
+            /** Format: int64 */
+            sample_count: number;
+        };
+        NativeCreatorRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorSeriesGroup: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorSeriesInsight: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: double */
+            highest_rating: number;
+            /** Format: double */
+            lowest_rating: number;
+            metadata_complete: boolean;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorSeriesIssueListResponse: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            issues: components["schemas"]["NativeCreatorIssueRow"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            next_cursor?: string | null;
+            /** Format: int64 */
+            offset: number;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            total: number;
         };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
@@ -9832,6 +9927,69 @@ export interface components {
             read_unrated_count: number;
             /** Format: int64 */
             upcoming_count: number;
+        };
+        NativeCreatorTeamChemistryResponse: {
+            coverage: components["schemas"]["NativeCreatorTeamCoverage"];
+            /** Format: int64 */
+            max_ranked_pairs: number;
+            /** Format: int64 */
+            min_shared_team_sample: number;
+            pairs: components["schemas"]["NativeCreatorTeamPair"][];
+            /** Format: int64 */
+            pairs_total: number;
+        };
+        NativeCreatorTeamCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorTeamIssueRef: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorTeamMember: {
+            /** Format: double */
+            baseline_average_rating?: number | null;
+            /** Format: int64 */
+            baseline_rated_count: number;
+            canonical_creator_key: string;
+            /** Format: double */
+            difference_from_baseline?: number | null;
+            display_name: string;
+            roles: string[];
+        };
+        NativeCreatorTeamPair: {
+            creators: components["schemas"]["NativeCreatorTeamMember"][];
+            /** Format: int64 */
+            max_shared_issue_refs: number;
+            pair_key: string;
+            /** Format: double */
+            shared_average_rating?: number | null;
+            shared_issue_refs: components["schemas"]["NativeCreatorTeamIssueRef"][];
+            /** Format: double */
+            shared_median_rating?: number | null;
+            /** Format: int64 */
+            shared_rated_issue_count: number;
+            shared_rating_distribution: {
+                [key: string]: number;
+            };
+            shared_series: components["schemas"]["NativeCreatorTeamSeriesRef"][];
+        };
+        NativeCreatorTeamSeriesRef: {
+            /** Format: int64 */
+            shared_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
         };
         NativeCustomCBLApplyRequest: {
             expected_updated_at?: string | null;
@@ -9917,6 +10075,22 @@ export interface components {
             mode?: string | null;
             name: string;
         };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
+        NativeIssueCreateRange: {
+            /**
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
+            issue_range: string;
+        };
+        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
+        NativeIssueCreatorsEntry: {
+            creators: components["schemas"]["CreatorCredit"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
@@ -9924,6 +10098,42 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+        };
+        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
+        NativeIssueMoveRequest: {
+            /**
+             * Format: int32
+             * @description Move after this issue. `null` moves the issue to position 1.
+             */
+            after_issue_id: number | null;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
+        NativeIssueReorderRequest: {
+            issue_ids: number[];
+        };
+        /** @description One issue row (Python `IssueResponse`). */
+        NativeIssueResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            read_at?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
+        NativeMigrateToIssuesRequest: {
+            /** Format: int32 */
+            last_issue_read: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
+        NativeMigrateToIssuesSimpleRequest: {
+            issue_number: string;
         };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
@@ -9960,19 +10170,118 @@ export interface components {
             /** Format: int32 */
             year?: number | null;
         };
-        NativeReadingBoundaryBatchRequest: {
-            thread_ids: number[];
+        /** @description Python `ReaderContextCrossover`. */
+        NativeReaderContextCrossover: {
+            applies_to_current_issue: boolean;
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `issue` or `thread`. */
+            membership_kind: string;
+            name: string;
+            next_member?: components["schemas"]["NativeReaderContextCrossoverNextMember"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_count: number;
         };
-        NativeReadingBoundaryBlocker: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
-            kind: components["schemas"]["BlockerKind"];
-            origin: components["schemas"]["BlockerOrigin"];
-            reason: string;
-            waiting_on: components["schemas"]["NativeBoundaryIssue"][];
+        /** @description Python `ReaderContextCrossoverMembership`. */
+        NativeReaderContextCrossoverMembership: {
+            /** Format: int32 */
+            id: number;
+            name: string;
         };
-        NativeReadingBoundaryNext: {
-            editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
-            issue: components["schemas"]["NativeBoundaryIssue"];
+        /** @description Python `ReaderContextCrossoverNextMember`. */
+        NativeReaderContextCrossoverNextMember: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+        };
+        /** @description Python `ReaderContextEdge`. */
+        NativeReaderContextEdge: {
+            explanation?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `dependency` or `continuity`. */
+            kind: string;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number?: string | null;
+            source_label?: string | null;
+            source_status?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            source_thread_title?: string | null;
+            /** Format: int32 */
+            target_issue_id: number;
+            target_issue_number?: string | null;
+            target_label?: string | null;
+            target_status?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            target_thread_title?: string | null;
+        };
+        /** @description Python `ReaderContextLocalChain`. */
+        NativeReaderContextLocalChain: {
+            edges: components["schemas"]["NativeReaderContextEdge"][];
+            issues: components["schemas"]["NativeReaderContextLocalIssue"][];
+        };
+        /** @description Python `ReaderContextLocalIssue`. */
+        NativeReaderContextLocalIssue: {
+            crossover_memberships: components["schemas"]["NativeReaderContextCrossoverMembership"][];
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: double */
+            rating?: number | null;
+            /** @description `previous`, `current`, `next` or `future`. */
+            relation: string;
+            status: string;
+        };
+        /** @description Python `ReaderContextPreviousIssue`. */
+        NativeReaderContextPreviousIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating?: number | null;
+        };
+        /** @description Python `ReaderContextRecentRating`. */
+        NativeReaderContextRecentRating: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating: number;
+        };
+        /** @description Python `ReaderContextResponse`. */
+        NativeReaderContextResponse: {
+            crossovers: components["schemas"]["NativeReaderContextCrossover"][];
+            /** Format: int32 */
+            issue_id: number;
+            local_chain: components["schemas"]["NativeReaderContextLocalChain"];
+            series: components["schemas"]["NativeReaderContextSeries"];
+        };
+        /** @description Python `ReaderContextSeries`. */
+        NativeReaderContextSeries: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_series_id?: string | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** @description `comicvine` or `unavailable`. */
+            identity_source: string;
+            /** Format: double */
+            lowest_rating?: number | null;
+            previous_issue?: components["schemas"]["NativeReaderContextPreviousIssue"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
+            series_name?: string | null;
         };
         NativeReadingListEntryIntent: {
             gate: string;
@@ -9990,7 +10299,7 @@ export interface components {
         NativeReadingListReaderEntry: {
             availability: string;
             checkpoint_target_issue_ids: number[];
-            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
+            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
             gate: string;
             /** Format: int32 */
             id: number;
@@ -10041,20 +10350,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        NativeReadingOrderProjectionResult: {
-            /** Format: int32 */
-            added_count: number;
-            /** Format: int32 */
-            kept_count: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            reading_order_id: number;
-            /** Format: int32 */
-            total_positions: number;
-            /** Format: int32 */
-            updated_count: number;
-        };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;
@@ -10094,6 +10389,30 @@ export interface components {
             mode_version?: string | null;
             predicted_intent?: string | null;
             source?: string | null;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
+        NativeSetCurrentIssueRequest: {
+            issue_number: string;
+        };
+        /** @description Python `SetCurrentIssueResponse`. */
+        NativeSetCurrentIssueResponse: {
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         NativeSourceSyncFailure: {
             error: string;
@@ -10168,6 +10487,57 @@ export interface components {
             reading_plan_id: number;
             /** Format: int32 */
             thread_id: number;
+        };
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
+        NativeTasteDiscovery: {
+            display_name: string;
+            /** Format: int32 */
+            distinct_thread_count: number;
+            /** Format: int32 */
+            evidence_count: number;
+            external_key: string;
+            /** Format: int32 */
+            id: number;
+            prompt: string;
+            signal_type: string;
+        };
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
+        NativeTasteDiscoveryListResponse: {
+            discoveries: components["schemas"]["NativeTasteDiscovery"][];
+            generated_at: string;
+        };
+        /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
+        NativeThreadIssueCreatorsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Python `ThreadResponse`. */
+        NativeThreadResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: Record<string, never>[];
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         NearMatch: {
             color: string;
@@ -10252,14 +10622,6 @@ export interface components {
             thread_title: string;
             /** Volume Id */
             volume_id: string;
-        };
-        /**
-         * OverrideRequest
-         * @description Schema for manual thread override.
-         */
-        OverrideRequest: {
-            /** Thread Id */
-            thread_id: number;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         PasswordResetResponse: {
@@ -10826,101 +11188,29 @@ export interface components {
             /** Series Name */
             series_name?: string | null;
         };
-        /**
-         * ReadingBoundaryBatchRequest
-         * @description Owned series IDs to explain in one request.
-         */
         ReadingBoundaryBatchRequest: {
-            /** Thread Ids */
             thread_ids: number[];
-        };
-        /**
-         * ReadingBoundaryBatchResponse
-         * @description Canonical explanations keyed by Thread ID.
-         */
-        ReadingBoundaryBatchResponse: {
-            /** Threads */
-            threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanation"];
-            };
         };
         ReadingBoundaryBatchResponseV2: {
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
         };
-        /**
-         * ReadingBoundaryBlocker
-         * @description One live Option E requirement that currently blocks the next Issue.
-         */
         ReadingBoundaryBlocker: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "reading_list" | "reader_prerequisite";
-            /** Reason */
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
             reason: string;
-            /** Waiting On */
-            waiting_on?: components["schemas"]["BoundaryIssue"][];
-        };
-        /**
-         * ReadingBoundaryExplanation
-         * @description Canonical explanation of one series' reading boundaries.
-         */
-        ReadingBoundaryExplanation: {
-            /** Blockers */
-            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
-            /** Historical */
-            historical?: components["schemas"]["ReadingBoundaryHistorical"][];
-            next?: components["schemas"]["ReadingBoundaryNext"] | null;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "blocked" | "available" | "complete" | "unavailable";
-            /** Summary */
-            summary: string;
-            /** Thread Id */
-            thread_id: number;
+            waiting_on: components["schemas"]["BoundaryIssue"][];
         };
         ReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            blockers: components["schemas"]["ReadingBoundaryBlocker"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReadingBoundaryHistorical
-         * @description A reader-owned association that is not a live blocker.
-         *
-         *     Historical rows never gate execution. They are listed so the reader can
-         *     see an old association without it being presented as a live boundary.
-         */
-        ReadingBoundaryHistorical: {
-            /** Detail */
-            detail: string;
-            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "converted_prerequisite" | "legacy_dependency" | "skipped_entry";
-            /** Label */
-            label: string;
-        };
-        /**
-         * ReadingBoundaryNext
-         * @description The Issue the reader may read now.
-         */
         ReadingBoundaryNext: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
             issue: components["schemas"]["BoundaryIssue"];
@@ -11470,28 +11760,24 @@ export interface components {
         };
         /**
          * ReadingOrderProjectionRequest
-         * @description Request contract for both preview and confirm endpoints.
+         * @description Request contract for the Python preview; confirmation is served by Rust.
          */
         ReadingOrderProjectionRequest: {
             /** Reading Order Id */
             reading_order_id: number;
         };
-        /**
-         * ReadingOrderProjectionResult
-         * @description Response contract for the confirm endpoint.
-         */
         ReadingOrderProjectionResult: {
-            /** Added Count */
+            /** Format: int32 */
             added_count: number;
-            /** Kept Count */
+            /** Format: int32 */
             kept_count: number;
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id: number;
-            /** Total Positions */
+            /** Format: int32 */
             total_positions: number;
-            /** Updated Count */
+            /** Format: int32 */
             updated_count: number;
         };
         /**
@@ -11618,22 +11904,6 @@ export interface components {
             start_die: number;
             started_at: string;
         };
-        /**
-         * RecommendationExplanationResponse
-         * @description Aggregate recommendation explanation for a single roll event.
-         *
-         *     Attributes:
-         *         event_id: The roll event whose recommendation context was explained.
-         *         factors: Ordered list of human-readable explanation elements derived
-         *             from the persisted decision-time context. Up to ``MAX_EXPLANATIONS``
-         *             factors are returned, ordered deterministically by factor family.
-         */
-        RecommendationExplanationResponse: {
-            /** Event Id */
-            event_id: number;
-            /** Factors */
-            factors: components["schemas"]["ExplainableFactorResponse"][];
-        };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
             /** Format: int32 */
@@ -11717,7 +11987,7 @@ export interface components {
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
             exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+            release?: components["schemas"]["MinimalReleaseResponse"] | null;
         };
         ReleaseSourceUpdate: {
             enabled: boolean;
@@ -11790,7 +12060,7 @@ export interface components {
             die: number;
             /** @description The approved dice ladder, smallest to largest. */
             ladder: number[];
-            last_roll?: null | components["schemas"]["RollLastRoll"];
+            last_roll?: components["schemas"]["RollLastRoll"] | null;
         };
         /** @description The ordered eligible issue identifiers for the current die. */
         RollEligibleIssueIdsResponse: {
@@ -11890,37 +12160,6 @@ export interface components {
             total_issues?: number | null;
         };
         /**
-         * RollPrerequisiteSwitchRequest
-         * @description One recovery recommendation selected from the current Roll guidance.
-         */
-        RollPrerequisiteSwitchRequest: {
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @constant
-             */
-            node_type: "issue";
-        };
-        /**
-         * RollPrerequisiteSwitchResponse
-         * @description Durable active-target state after accepting a recovery recommendation.
-         */
-        RollPrerequisiteSwitchResponse: {
-            /** Changed */
-            changed: boolean;
-            /** Original Thread Id */
-            original_thread_id: number;
-            /** Target Issue Id */
-            target_issue_id: number;
-            /** Target Issue Number */
-            target_issue_number: string;
-            /** Target Thread Id */
-            target_thread_id: number;
-            /** Target Thread Title */
-            target_thread_title: string;
-        };
-        /**
          * RollResponse
          * @description Schema for roll response.
          */
@@ -11957,32 +12196,6 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
-        };
-        /**
-         * RouteTrafficCounter
-         * @description One aggregated (method, route template, status class) tally.
-         */
-        RouteTrafficCounter: {
-            /**
-             * Count
-             * @description Requests observed since process start.
-             */
-            count: number;
-            /**
-             * Method
-             * @description HTTP method, e.g. GET.
-             */
-            method: string;
-            /**
-             * Route
-             * @description Routed path template, e.g. /api/v1/threads/{thread_id}.
-             */
-            route: string;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx or 4xx.
-             */
-            status_class: string;
         };
         /**
          * SeriesDecision
@@ -12304,8 +12517,8 @@ export interface components {
         };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             correction?: unknown;
             /** Format: int32 */
             current_die: number;
@@ -12313,7 +12526,7 @@ export interface components {
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -12464,7 +12677,7 @@ export interface components {
         };
         /** @description List-item session response (history list endpoint). */
         SessionListItemResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
@@ -13087,6 +13300,15 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
+        /** @description Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide. */
+        ThreadIssueCreateListResponse: {
+            issues: components["schemas"]["NativeIssueResponse"][];
+            next_page_token?: string | null;
+            /** Format: int32 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
+        };
         /**
          * ThreadIssueCreatorsResponse
          * @description Bulk per-issue ComicVine creator credits for one thread.
@@ -13123,7 +13345,7 @@ export interface components {
         /** @description One reader threads collection item. */
         ThreadListItem: {
             blocking_reasons: string[];
-            comicvine_mapping?: null | components["schemas"]["NativeComicVineMappingHealth"];
+            comicvine_mapping?: components["schemas"]["NativeComicVineMappingHealth"] | null;
             created_at: string;
             format: string;
             /** Format: int32 */
@@ -13137,7 +13359,7 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
-            series_metadata?: null | components["schemas"]["NativeQueueSeriesMetadata"];
+            series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
             status: string;
             tags: components["schemas"]["ThreadTag"][];
             title: string;
@@ -13274,37 +13496,17 @@ export interface components {
             rating: number;
             title: string;
         };
-        /**
-         * TrafficMetricsSnapshot
-         * @description Process-local traffic counters for one serverless instance.
-         *
-         *     Counters are monotonic within a process lifetime, so a collector can
-         *     reconstruct fleet-wide totals by keeping the maximum count per key across
-         *     polls of the same ``instance_id``.
-         */
-        TrafficMetricsSnapshot: {
-            /**
-             * Counters
-             * @description Aggregated request tallies sorted deterministically.
-             */
-            counters?: components["schemas"]["RouteTrafficCounter"][];
-            /**
-             * Instance Id
-             * @description Stable identifier for this process instance.
-             */
-            instance_id: string;
-        };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
+            intent?: components["schemas"]["NativeSessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -13641,7 +13843,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -13778,26 +13980,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BootstrapAliasSnapshotSchema"];
-                };
             };
         };
     };
@@ -13938,156 +14120,101 @@ export interface operations {
             };
         };
     };
-    api_cbl_adoption_commit_api_v1_cbl__list_id__adoption_commit_post: {
+    cbl_adoption_commit_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionCommitRequest"];
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan created with adopted CBL issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionCommitResponse"];
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Stale source fingerprint */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    api_targeted_cbl_adoption_commit_api_v1_cbl__list_id__reading_plans__plan_id__adoption_commit_post: {
+    cbl_targeted_adoption_commit_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
+                /** @description Owned continuity plan identifier */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionCommitRequest"];
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan updated with adopted CBL issues */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionCommitResponse"];
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_exclusions_api_v1_collection_exclusions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"][];
-                };
-            };
-        };
-    };
-    create_exclusion_api_v1_collection_exclusions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CollectionExclusionCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                exclusion_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
+            /** @description Stale source fingerprint */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Request failed validation or plan not found */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -14844,7 +14971,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
                 };
             };
         };
@@ -16322,10 +16449,12 @@ export interface operations {
             };
         };
     };
-    discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get: {
+    discover_cbl_source_lists_documentation: {
         parameters: {
             query?: {
-                q?: string | null;
+                /** @description Case-insensitive list-name filter, max 200 characters */
+                q?: string;
+                /** @description Maximum results, 1-100 (default 25) */
                 limit?: number;
             };
             header?: never;
@@ -16334,22 +16463,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Active CBL source lists */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceListDiscoveryItem"][];
+                    "application/json": components["schemas"]["CblSourceListDiscoveryItem"][];
                 };
             };
-            /** @description Validation Error */
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16410,43 +16539,54 @@ export interface operations {
             };
         };
     };
-    find_cbl_sources_by_comicvine_issue_api_v1_issue_identity_cbl_sources_by_comicvine_issue__comicvine_issue_id__get: {
+    find_cbl_sources_by_comicvine_issue_documentation: {
         parameters: {
             query?: {
+                /** @description Occurrence offset, 0-based (default 0) */
                 offset?: number;
+                /** @description Occurrence limit, 1-200 (default 50) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description Comic Vine issue identifier, max 100 characters */
                 comicvine_issue_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Shared-catalog occurrences for the Comic Vine issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLComicvineOccurrencePage"];
+                    "application/json": components["schemas"]["CblComicvineOccurrencePage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Identifier or query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    compare_cbl_sources_api_v1_issue_identity_cbl_sources_compare_post: {
+    compare_cbl_sources_documentation: {
         parameters: {
             query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
                 limit?: number;
             };
             header?: never;
@@ -16455,26 +16595,26 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLSourceComparisonRequest"];
+                "application/json": components["schemas"]["CblSourceComparisonRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Ranked coverage comparison */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceComparisonResponse"];
+                    "application/json": components["schemas"]["CblSourceComparisonResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Request or query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16532,103 +16672,136 @@ export interface operations {
             };
         };
     };
-    get_cbl_source_list_api_v1_issue_identity_cbl_sources__list_id__get: {
+    get_cbl_source_list_documentation: {
         parameters: {
             query?: {
+                /** @description Entry offset, 0-based (default 0) */
                 offset?: number;
+                /** @description Entry limit, 1-2000 (default 1000) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description CBL source list with a bounded page of entries */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLSourceListDetail"];
+                    "application/json": components["schemas"]["CblSourceListDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description CBL source list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    api_cbl_adoption_plan_api_v1_issue_identity_cbl__list_id__adoption_plan_post: {
+    cbl_adoption_plan_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CBLAdoptionPlanRequest"];
+                "application/json": components["schemas"]["CblAdoptionPlanRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Adoption preview for the active CBL list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Inactive list or invalid request */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
     };
-    api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get: {
+    cbl_adoption_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Adoption preview for the active CBL list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Path failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -16667,35 +16840,44 @@ export interface operations {
             };
         };
     };
-    find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get: {
+    find_cbl_candidates_for_reading_list_documentation: {
         parameters: {
             query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description Owned custom CBL list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Reading-list gaps and ranked CBL candidates */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLReadingListCandidatesResponse"];
+                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Custom CBL not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
         };
@@ -16762,7 +16944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
@@ -16825,129 +17007,223 @@ export interface operations {
             };
         };
     };
-    get_issue_reader_context_api_v1_issues__issue_id__reader_context_get: {
+    issue_read_state_reader_context: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Bounded reader context */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReaderContextResponse"];
+                    "application/json": components["schemas"]["NativeReaderContextResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    mark_issue_read_api_v1_issues__issue_id__markRead_post: {
+    issue_read_state_mark_read: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Issue marked read and the thread counters refreshed */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    mark_issue_unread_api_v1_issues__issue_id__markUnread_post: {
+    issue_read_state_mark_unread: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Issue marked unread; a completed thread is reactivated */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    move_issue_api_v1_issues__issue_id__move_post: {
+    issue_read_state_move: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueMoveRequest"];
+                "application/json": components["schemas"]["NativeIssueMoveRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Issue moved within its thread */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post: {
+    issue_read_state_bulk_mark_read: {
         parameters: {
             query?: never;
             header?: never;
@@ -16956,29 +17232,55 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueBulkMarkReadRequest"];
+                "application/json": components["schemas"]["IssueBulkRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Every issue marked read atomically */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description An issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post: {
+    issue_read_state_bulk_mark_unread: {
         parameters: {
             query?: never;
             header?: never;
@@ -16987,25 +17289,51 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueBulkMarkUnreadRequest"];
+                "application/json": components["schemas"]["IssueBulkRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Every issue marked unread atomically */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description An issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -17025,70 +17353,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartupMetricsResponse"];
-                };
-            };
-        };
-    };
-    get_reading_boundary_batch_api_v1_reading_boundaries_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryBatchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_reading_boundary_api_v1_reading_boundaries__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryExplanation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -18013,103 +18277,6 @@ export interface operations {
             };
         };
     };
-    get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                event_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationExplanationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    override_roll_api_v1_roll_override_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OverrideRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_sessions_v1_documentation: {
         parameters: {
             query?: {
@@ -18163,26 +18330,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CorrectionSheetExamplesResponse"];
-                };
-            };
-        };
-    };
-    get_current_session_api_v1_sessions_current__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
         };
@@ -18272,37 +18419,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -18683,7 +18799,7 @@ export interface operations {
             };
         };
     };
-    list_taste_discoveries_api_v1_taste_discoveries_get: {
+    taste_discoveries_list: {
         parameters: {
             query?: {
                 /** @description Maximum discoveries to return. */
@@ -18695,23 +18811,35 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Ranked discoveries */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
+                    "application/json": components["schemas"]["NativeTasteDiscoveryListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description limit is outside the allowed range */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19359,102 +19487,183 @@ export interface operations {
             };
         };
     };
-    create_issues_api_v1_threads__thread_id__issues_post: {
+    thread_issues_create: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueCreateRange"];
+                "application/json": components["schemas"]["NativeIssueCreateRange"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Newly created issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueListResponse"];
+                    "application/json": components["schemas"]["ThreadIssueCreateListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid or fully duplicate range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue number already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get: {
+    thread_issues_creators: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Stored creator credits per mapped issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadIssueCreatorsResponse"];
+                    "application/json": components["schemas"]["NativeThreadIssueCreatorsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    reorder_issues_api_v1_threads__thread_id__issues_reorder_post: {
+    thread_issues_reorder: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueReorderRequest"];
+                "application/json": components["schemas"]["NativeIssueReorderRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Order rewritten */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description issue_ids must name every issue exactly once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19651,108 +19860,189 @@ export interface operations {
             };
         };
     };
-    migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post: {
+    thread_issues_migrate: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MigrateToIssuesRequest"];
+                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Migrated thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Already migrated or inconsistent range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post: {
+    thread_issues_migrate_simple: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
+                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Migrated thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Already migrated or issue cannot be created */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post: {
+    thread_issues_set_current: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetCurrentIssueRequest"];
+                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Corrected current issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
+                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Thread inactive, untracked or issue unavailable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19785,26 +20075,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_traffic_metrics_api_v1_traffic_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrafficMetricsSnapshot"];
                 };
             };
         };
@@ -20329,7 +20599,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -20605,6 +20875,467 @@ export interface operations {
             };
         };
     };
+    creators_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                sort?: string;
+                limit?: number;
+                offset?: number;
+                min_ratings?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorComparisonResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discoveries_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDiscoveryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summaries_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    team_chemistry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator team chemistry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorTeamChemistryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDetailResponse"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Creator not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rating_distribution_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Rating value */
+                rating_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating distribution drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    role_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Creator role */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid role */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid series */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    metric_documentation: {
+        parameters: {
+            query?: {
+                role?: string;
+                rating_value?: string;
+                series_key?: string;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Metric type */
+                metric_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator metric drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid metric */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Metric not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_issues_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator series issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorSeriesIssueListResponse"];
+                };
+            };
+            /** @description Invalid keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     read_demo_roll_documentation: {
         parameters: {
             query?: never;
@@ -20872,7 +21603,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
                 };
             };
             /** @description Invalid or revoked access token */
@@ -21032,7 +21763,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingBoundaryBatchRequest"];
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
             };
         };
         responses: {
