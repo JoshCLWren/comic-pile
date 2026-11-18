@@ -1032,7 +1032,11 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
             let mut values: Vec<f64> = entries.iter().map(|e| e.rating).collect();
             values.sort_by(|a, b| a.total_cmp(b));
             values.dedup_by(|a, b| a.total_cmp(b) == std::cmp::Ordering::Equal);
-            if values.len() == 1 { values.first().copied() } else { None }
+            if values.len() == 1 {
+                values.first().copied()
+            } else {
+                None
+            }
         }
 
         for issue_id in &read_without_rating {
@@ -1043,17 +1047,13 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
             let historical = thread_historical.get(&thread_id);
             let duplicates = duplicate_issue_ids.get(issue_id);
             let statuses = mapping_statuses.get(issue_id);
-            let unrated_read_in_thread = thread_unrated_counts
-                .get(&thread_id)
-                .copied()
-                .unwrap_or(1);
+            let unrated_read_in_thread =
+                thread_unrated_counts.get(&thread_id).copied().unwrap_or(1);
 
             let cause = if duplicates.is_some_and(|v| !v.is_empty()) {
                 "edition_conflict".to_string()
             } else if let Some(entries) = historical.filter(|e| !e.is_empty()) {
-                if agreed_historical_rating(entries).is_none() {
-                    "ambiguous_thread_rating".to_string()
-                } else if unrated_read_in_thread != 1 {
+                if agreed_historical_rating(entries).is_none() || unrated_read_in_thread != 1 {
                     "ambiguous_thread_rating".to_string()
                 } else {
                     "missing_rate_event".to_string()
