@@ -3838,7 +3838,7 @@ pub async fn get_series_drilldown(
         (status = 422, description = "Invalid filters"),
         (status = 401, description = "Not authenticated")),
     security(("HTTPBearer" = [])))]
-pub fn list_documentation() {}
+pub fn list_creators_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/summaries", tag = "creators",
     params(CreatorKeysQuery),

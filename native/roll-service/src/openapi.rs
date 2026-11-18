@@ -95,7 +95,7 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
-        crate::creators_v2::list_documentation,
+        crate::creators_v2::list_creators_documentation,
         crate::creators_v2::summaries_documentation,
         crate::creators_v2::compare_documentation,
         crate::creators_v2::discoveries_documentation,
