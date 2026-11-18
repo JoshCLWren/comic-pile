@@ -173,4 +173,64 @@ mod tests {
             Some("reading_plan_sync_status")
         );
     }
+
+    /// Both browser-called taste-discovery operations (#4853) must keep their
+    /// wire contract in the native same-path document. Without the GET listing
+    /// here, retiring the shadowed Python handler would drop it from the
+    /// generated TypeScript client contract.
+    #[test]
+    fn same_path_contract_documents_both_taste_discovery_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+
+        let listing = &paths["/api/v1/taste/discoveries"]["get"];
+        assert_eq!(listing["operationId"], "list_documentation");
+        assert!(listing["responses"]["200"].is_object());
+        assert_eq!(
+            listing["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TasteDiscoveryListResponse"
+        );
+        let params = listing["parameters"].as_array().expect("limit param");
+        assert!(
+            params
+                .iter()
+                .any(|param| param["name"] == "limit" && param["in"] == "query"),
+            "GET listing must document its bounded limit query parameter"
+        );
+
+        let dismiss = &paths["/api/v1/taste/discoveries/{signal_id}/dismiss"]["post"];
+        assert_eq!(dismiss["operationId"], "dismiss_documentation");
+        assert!(dismiss["responses"]["200"].is_object());
+        assert!(dismiss["responses"]["404"].is_object());
+        assert_eq!(
+            dismiss["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TasteDismissResponse"
+        );
+
+        let schemas = document["components"]["schemas"]
+            .as_object()
+            .expect("schemas");
+        let list_response = &schemas["TasteDiscoveryListResponse"];
+        assert_eq!(
+            list_response["required"],
+            serde_json::json!(["discoveries", "generated_at"])
+        );
+        let discovery = &schemas["TasteDiscovery"];
+        for field in [
+            "id",
+            "signal_type",
+            "external_key",
+            "display_name",
+            "prompt",
+            "evidence_count",
+            "distinct_thread_count",
+        ] {
+            assert!(
+                discovery["required"]
+                    .as_array()
+                    .is_some_and(|required| required.iter().any(|name| name == field)),
+                "TasteDiscovery must keep required wire field {field}"
+            );
+        }
+    }
 }
