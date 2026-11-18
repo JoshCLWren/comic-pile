@@ -1498,7 +1498,7 @@ pub async fn list_crossover_plans(
     Path(group_id): Path<i32>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let _ = group;
