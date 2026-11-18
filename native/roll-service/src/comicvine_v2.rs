@@ -1050,7 +1050,7 @@ pub async fn import_issue(
         .query_one(
             "INSERT INTO threads \
                 (title, format, issues_remaining, total_issues, queue_position, status, \
-                 user_id, created_at, updated_at, is_test, is_blocked) \
+                 user_id, created_at, is_test, is_blocked) \
              VALUES ($1, 'Comic', 1, 1, $2, 'active', $3, now(), now(), false, false) \
              RETURNING id",
             &[&title, &next_position, &user.id()],
@@ -1187,7 +1187,7 @@ pub async fn import_series(
             tx.query_one(
                 "INSERT INTO threads \
                     (title, format, issues_remaining, total_issues, queue_position, status, \
-                     user_id, created_at, updated_at, is_test, is_blocked) \
+                     user_id, created_at, is_test, is_blocked) \
                  VALUES ($1, 'Comic', 0, 0, $2, 'active', $3, now(), now(), false, false) \
                  RETURNING id",
                 &[&series_name.trim(), &next_position, &user.id()],
