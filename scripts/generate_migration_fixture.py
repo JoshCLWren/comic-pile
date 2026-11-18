@@ -12,12 +12,15 @@ exercises the migration-relevant data shapes named in issue #3554:
 
 The fixture contains no real user records, credentials, comic titles or
 personal data; every value is synthetic or derived from synthetic identities.
-It is applied to a disposable database by :func:`apply_fixture` before the
-migration rehearsal runs ``alembic upgrade head``.
+It is applied to a disposable database by :func:`apply_fixture` at the base
+revision before the migration rehearsal runs ``alembic upgrade head``. The
+applier reflects that historical schema instead of assuming current ORM columns
+already exist, so pending column additions cannot make fixture loading fail.
 
-Every inserted row satisfies the live PostgreSQL CHECK / NOT NULL constraints
-so the rehearsal fixture itself cannot fail for fixture-shape reasons before
-exercising the migrations under test.
+Rows satisfy the base schema's CHECK / NOT NULL constraints. Adversarial history
+includes the reviewed dangling rules that broke #3359, duplicate natural keys
+across owners/threads, NULL-heavy legacy rows and a non-trivial dependency
+volume; pending migrations must repair or explicitly tolerate that history.
 """
 
 from __future__ import annotations
