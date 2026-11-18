@@ -9906,7 +9906,7 @@ export interface components {
              * Format: int32
              * @description Move after this issue. `null` moves the issue to position 1.
              */
-            after_issue_id?: number | null;
+            after_issue_id: number | null;
         };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;

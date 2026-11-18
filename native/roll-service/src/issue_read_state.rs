@@ -50,7 +50,6 @@ use axum::{
     http::StatusCode,
 };
 use serde_json::Value;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 
@@ -155,6 +154,7 @@ fn parse_bulk_body(body: &[u8]) -> Result<Vec<i64>, ApiError> {
         .collect()
 }
 
+#[derive(Clone)]
 struct OwnedIssue {
     id: i32,
     thread_id: i32,
@@ -505,13 +505,49 @@ async fn bulk_mark(
     };
     let mut conn = db::checkout(state).await?;
     let tx = begin(&mut conn).await?;
+    // Queue lock first, then row locks — one global order with every queue writer.
     issue_mutation::lock_reader(&tx, user.id()).await?;
 
-    // Verify every requested id, in request order, before changing anything.
-    let mut issues: Vec<OwnedIssue> = Vec::with_capacity(requested.len());
+    // Parse and verify every requested id, in request order, before changing anything.
+    let mut requested_ids: Vec<i32> = Vec::with_capacity(requested.len());
     for raw_id in requested {
-        let issue_id = i32::try_from(*raw_id).map_err(|_| issue_not_found(raw_id))?;
-        let issue = owned_issue(&tx, user.id(), issue_id).await?;
+        requested_ids.push(i32::try_from(*raw_id).map_err(|_| issue_not_found(raw_id))?);
+    }
+
+    let distinct_ids: Vec<i32> = requested_ids
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let rows = tx
+        .query(
+            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position
+             FROM issues i JOIN threads t ON t.id = i.thread_id
+             WHERE t.user_id = $1 AND i.id = ANY($2::int[])",
+            &[&user.id(), &distinct_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut by_id = std::collections::HashMap::<i32, OwnedIssue>::with_capacity(rows.len());
+    for row in rows {
+        let issue = OwnedIssue {
+            id: row.get(0),
+            thread_id: row.get(1),
+            issue_number: row.get(2),
+            status: row.get(3),
+            position: row.get(4),
+        };
+        by_id.insert(issue.id, issue);
+    }
+
+    // Validate in request order (including duplicates) against the pre-update state.
+    let mut issues: Vec<OwnedIssue> = Vec::with_capacity(requested_ids.len());
+    for issue_id in &requested_ids {
+        let issue = by_id
+            .get(issue_id)
+            .cloned()
+            .ok_or_else(|| issue_not_found(*issue_id))?;
         if issue.status == refused_status {
             return Err(ApiError::BadRequest(format!(
                 "Issue {issue_id} is already marked as {refused_status}"
@@ -520,60 +556,154 @@ async fn bulk_mark(
         issues.push(issue);
     }
 
-    let distinct_ids: Vec<i32> = issues
-        .iter()
-        .map(|issue| issue.id)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
     tx.execute(
         "UPDATE issues SET status = $2::text,
                 read_at = CASE WHEN $2::text = 'read' THEN NOW() ELSE NULL END
-         WHERE id = ANY($1)",
+         WHERE id = ANY($1::int[])",
         &[&distinct_ids, &target_status],
     )
     .await
     .map_err(db::query_error)?;
 
-    let thread_ids: BTreeSet<i32> = issues.iter().map(|issue| issue.thread_id).collect();
+    let thread_ids: Vec<i32> = issues
+        .iter()
+        .map(|issue| issue.thread_id)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
     let mut queue_changed = false;
-    for thread_id in thread_ids {
-        lock_owned_thread(&tx, user.id(), thread_id).await?;
-        match apply_tracking_state(&tx, thread_id).await? {
-            None => {
-                if apply_derived_status(&tx, thread_id, "completed").await? {
-                    queue_changed = true;
-                }
-            }
-            Some(_) => {
-                let completed: bool = tx
-                    .query_one(
-                        "SELECT status = 'completed' FROM threads WHERE id = $1",
-                        &[&thread_id],
-                    )
-                    .await
-                    .map_err(db::query_error)?
-                    .get(0);
-                if completed && apply_derived_status(&tx, thread_id, "active").await? {
-                    seat_at_queue_end(&tx, user.id(), thread_id).await?;
-                    queue_changed = true;
-                }
+    if !thread_ids.is_empty() {
+        // Lock every affected thread row before mutating counters/queue state.
+        tx.query(
+            "SELECT id FROM threads WHERE id = ANY($1::int[]) AND user_id = $2 ORDER BY id FOR UPDATE",
+            &[&thread_ids, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        // Re-derive tracking counters for every affected thread in one statement.
+        let tracked = tx
+            .query(
+                "UPDATE threads t SET
+                     total_issues = s.total,
+                     issues_remaining = s.unread,
+                     next_unread_issue_id = s.next_id,
+                     reading_progress = CASE WHEN s.unread = 0 THEN 'completed'
+                                             WHEN s.unread = s.total THEN 'not_started'
+                                             ELSE 'in_progress' END,
+                     is_blocked = CASE WHEN s.unread = 0 THEN FALSE ELSE t.is_blocked END
+                 FROM (
+                     SELECT i.thread_id,
+                            count(*)::int AS total,
+                            (count(*) FILTER (WHERE i.status = 'unread'))::int AS unread,
+                            (
+                                SELECT i2.id FROM issues i2
+                                WHERE i2.thread_id = i.thread_id AND i2.status = 'unread'
+                                ORDER BY i2.position, i2.id LIMIT 1
+                            ) AS next_id
+                     FROM issues i
+                     WHERE i.thread_id = ANY($1::int[])
+                     GROUP BY i.thread_id
+                 ) s
+                 WHERE t.id = s.thread_id
+                 RETURNING t.id,
+                           t.status,
+                           t.next_unread_issue_id IS NULL AS no_unread,
+                           t.status = 'completed' AS was_completed",
+                &[&thread_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+
+        let mut complete_ids: Vec<i32> = Vec::new();
+        let mut reactivate_ids: Vec<i32> = Vec::new();
+        for row in &tracked {
+            let id: i32 = row.get(0);
+            let status: String = row.get(1);
+            let no_unread: bool = row.get(2);
+            let was_completed: bool = row.get(3);
+            if no_unread {
+                complete_ids.push(id);
+            } else if was_completed || status == "completed" {
+                reactivate_ids.push(id);
             }
         }
+
+        if !complete_ids.is_empty() {
+            let written = tx
+                .execute(
+                    "UPDATE threads SET status = 'completed', queue_position_is_manual = FALSE
+                     WHERE id = ANY($1::int[]) AND status <> 'excluded'",
+                    &[&complete_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            if written > 0 {
+                queue_changed = true;
+            }
+        }
+        if !reactivate_ids.is_empty() {
+            let written = tx
+                .execute(
+                    "UPDATE threads SET status = 'active'
+                     WHERE id = ANY($1::int[]) AND status <> 'excluded'",
+                    &[&reactivate_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            if written > 0 {
+                // Reactivated series with no queue seat move to the end.
+                tx.execute(
+                    "UPDATE threads t SET queue_position = base.max_pos + ranked.seq
+                     FROM (
+                         SELECT id, row_number() OVER (ORDER BY id)::int AS seq
+                         FROM threads
+                         WHERE id = ANY($1::int[]) AND status = 'active' AND queue_position < 1
+                     ) ranked,
+                     (
+                         SELECT COALESCE(MAX(queue_position), 0) AS max_pos
+                         FROM threads
+                         WHERE user_id = $2 AND status = 'active' AND queue_position >= 1
+                           AND NOT (id = ANY($1::int[]))
+                     ) base
+                     WHERE t.id = ranked.id",
+                    &[&reactivate_ids, &user.id()],
+                )
+                .await
+                .map_err(db::query_error)?;
+                queue_changed = true;
+            }
+        }
+        if queue_changed {
+            renormalize_queue_positions(&tx, user.id()).await?;
+        }
     }
-    if queue_changed {
-        renormalize_queue_positions(&tx, user.id()).await?;
-    }
-    for issue in &issues {
-        insert_history_event(
-            &tx,
-            event_type,
-            user.id(),
-            issue.thread_id,
-            issue.id,
-            &issue.issue_number,
+
+    // Preserve duplicate history entries in request order.
+    if !issues.is_empty() {
+        let event_types: Vec<&str> = vec![event_type; issues.len()];
+        let user_ids: Vec<i32> = vec![user.id(); issues.len()];
+        let thread_ids: Vec<i32> = issues.iter().map(|issue| issue.thread_id).collect();
+        let issue_ids: Vec<i32> = issues.iter().map(|issue| issue.id).collect();
+        let issue_numbers: Vec<String> = issues
+            .iter()
+            .map(|issue| issue.issue_number.clone())
+            .collect();
+        tx.execute(
+            "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, issue_number)
+             SELECT t.event_type, NOW(), t.user_id, t.thread_id, t.issue_id, t.issue_number
+             FROM unnest($1::text[], $2::int[], $3::int[], $4::int[], $5::text[])
+                  AS t(event_type, user_id, thread_id, issue_id, issue_number)",
+            &[
+                &event_types,
+                &user_ids,
+                &thread_ids,
+                &issue_ids,
+                &issue_numbers,
+            ],
         )
-        .await?;
+        .await
+        .map_err(db::query_error)?;
     }
     issue_service::refresh_blocked_threads(&tx, user.id()).await?;
     tx.commit().await.map_err(db::query_error)?;
@@ -702,7 +832,7 @@ pub async fn bulk_mark_issues_unread(
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct IssueMoveRequest {
     /// Move after this issue. `null` moves the issue to position 1.
-    #[schema(minimum = 1, nullable = true)]
+    #[schema(required = true, minimum = 1, value_type = Option<i32>, nullable)]
     pub after_issue_id: Option<i32>,
 }
 

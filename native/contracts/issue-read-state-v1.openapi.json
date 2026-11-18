@@ -316,6 +316,9 @@
       "IssueMoveRequest": {
         "type": "object",
         "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "required": [
+          "after_issue_id"
+        ],
         "properties": {
           "after_issue_id": {
             "type": [

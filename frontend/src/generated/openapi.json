@@ -12822,6 +12822,9 @@
             ]
           }
         },
+        "required": [
+          "after_issue_id"
+        ],
         "type": "object"
       },
       "NativeOverlapDecisionItem": {

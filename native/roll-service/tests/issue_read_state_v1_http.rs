@@ -1215,3 +1215,123 @@ async fn reader_context_reports_series_crossovers_local_chain_and_edges() {
     assert_eq!(body["crossovers"][0]["next_member"], Value::Null);
     assert_eq!(body["local_chain"]["issues"].as_array().unwrap().len(), 3);
 }
+
+/// Concurrent mark-unread and PATCH roll_offer on the same thread must not
+/// deadlock: both writers take the queue advisory lock before any row lock.
+#[tokio::test]
+async fn mark_unread_and_roll_offer_patch_on_same_thread_do_not_deadlock() {
+    for _ in 0..5 {
+        let (state, token, csrf, user_id, _guard) = setup_user("isdld").await;
+        let conn = state.pool.get().await.unwrap();
+
+        // A read issue in an active tracked thread so :markUnread is valid, and a
+        // conflicting stored receipt so the roll_offer PATCH reaches persist (and
+        // acquires locks) then returns 409 instead of needing full roll context.
+        let (thread_id, issue_ids) = series(
+            &conn,
+            user_id,
+            "Deadlock race",
+            1,
+            "active",
+            &[("1", "read"), ("2", "unread")],
+        )
+        .await;
+        let issue_id = issue_ids[0];
+        conn.execute(
+            "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, context)
+             VALUES ('rate', NOW(), $1, $2, $3, $4::jsonb::text)",
+            &[
+                &user_id,
+                &thread_id,
+                &issue_id,
+                &serde_json::json!({
+                    "issue_command_key": "race-key-deadlock-01",
+                    "issue_command_payload": {
+                        "issue_id": issue_id,
+                        "status": "read",
+                        "rating": 1.0,
+                        "source": "roll_offer"
+                    }
+                })
+                .to_string(),
+            ],
+        )
+        .await
+        .unwrap();
+
+        let unread = {
+            let state = state.clone();
+            let token = token.clone();
+            let csrf = csrf.clone();
+            tokio::spawn(async move {
+                send(
+                    &state,
+                    authed(
+                        "POST",
+                        &format!("/api/v1/issues/{issue_id}:markUnread"),
+                        &token,
+                        &csrf,
+                        None,
+                    ),
+                )
+                .await
+            })
+        };
+        let patch = {
+            let state = state.clone();
+            let token = token.clone();
+            let csrf = csrf.clone();
+            tokio::spawn(async move {
+                send(
+                    &state,
+                    authed(
+                        "PATCH",
+                        &format!("/api/v2/issues/{issue_id}"),
+                        &token,
+                        &csrf,
+                        Some(json!({
+                            "status": "read",
+                            "rating": 4.0,
+                            "idempotency_key": "race-key-deadlock-01",
+                            "source": "roll_offer"
+                        })),
+                    ),
+                )
+                .await
+            })
+        };
+
+        let (u, p) = tokio::join!(unread, patch);
+        let (u_status, u_body) = u.expect("markUnread task");
+        let (p_status, p_body) = p.expect("roll_offer patch task");
+        assert_ne!(
+            u_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "markUnread deadlocked or errored: {u_status} {u_body:?}"
+        );
+        assert_ne!(
+            p_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "roll_offer patch deadlocked or errored: {p_status} {p_body:?}"
+        );
+        assert!(
+            matches!(
+                u_status,
+                StatusCode::NO_CONTENT | StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND
+            ),
+            "unexpected markUnread status: {u_status} {u_body:?}"
+        );
+        assert!(
+            matches!(
+                p_status,
+                StatusCode::OK
+                    | StatusCode::CONFLICT
+                    | StatusCode::NO_CONTENT
+                    | StatusCode::BAD_REQUEST
+                    | StatusCode::NOT_FOUND
+                    | StatusCode::UNPROCESSABLE_ENTITY
+            ),
+            "unexpected roll_offer patch status: {p_status} {p_body:?}"
+        );
+    }
+}
