@@ -1205,25 +1205,42 @@ pub async fn import_series(
         }
     }
     let Some(key) = provider_key() else {
-        return Err(ApiError::ServiceUnavailable(
-            "provider_unavailable".to_owned(),
+        return Err(series_import_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "provider_unavailable",
+            "ComicVine is not configured on this server",
         ));
     };
     let volume_id = request.comicvine_volume_id;
     let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &key)
         .await
-        .map_err(map_provider_failure)?;
-    let series_name = volume_name(&volume)
-        .ok_or_else(|| ApiError::ServiceUnavailable("provider_invalid_payload".to_owned()))?;
-    let rows = provider_roster(volume_id, &key).await?;
+        .map_err(|error| {
+            series_provider_failure(format!(
+                "Failed to fetch ComicVine series: {error:?}"
+            ))
+        })?;
+    let series_name = volume_name(&volume).ok_or_else(|| {
+        series_provider_failure("ComicVine series response did not contain valid data")
+    })?;
+    let rows = provider_roster(volume_id, &key).await.map_err(|error| {
+        series_provider_failure(format!("Failed to fetch series issues: {error:?}"))
+    })?;
     if rows.is_empty() {
-        return Err(bad_request("ComicVine series has no issues"));
+        return Err(series_import_error(
+            StatusCode::BAD_REQUEST,
+            "no_issues",
+            "ComicVine series has no issues",
+        ));
     }
     if request.already_read_count as usize > rows.len() {
-        return Err(bad_request(format!(
-            "already_read_count cannot exceed the series issue count ({})",
-            rows.len()
-        )));
+        return Err(series_import_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_already_read_count",
+            format!(
+                "already_read_count cannot exceed the series issue count ({})",
+                rows.len()
+            ),
+        ));
     }
 
     let mut connection = db::checkout(&state).await?;
