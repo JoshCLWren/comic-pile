@@ -36,9 +36,11 @@ Tags can be private or global. They can be assigned to supported threads, issues
 
 **Test:** Inspect effective tags and inheritance sources; remove one contributing source.
 
-**Expected:** The issue inherits the union of visible thread/plan/direct tags. Duplicate effective chips display once with all contributing sources. Removing one source does not erase a still-inherited tag. Private tags never leak between users.
+**Expected:** The issue inherits the union of visible thread/plan/direct tags. Duplicate effective chips display once with all contributing sources. Removing one source does not erase a still-inherited tag. Private tags never leak between users. This includes a plan's sole unread issue ([#5265](https://github.com/JoshCLWren/comic-pile/issues/5265), fixed by #5463).
 
 ## MQA-TAG-006: Dedicated tag management page
+
+**Status:** Contract unchanged. No `/tags` route exists on main as of 2026-11-18 and the owner has not decided to drop it: [#5437](https://github.com/JoshCLWren/comic-pile/issues/5437) says "Add a Tags page ... or record why the dialogs are enough". Until the owner records that decision this ID stays active (not retired).
 
 **Test:** Once built, visit `/tags`, search the library's tags, create/edit/delete a permitted tag, then use an inline tag editor.
 

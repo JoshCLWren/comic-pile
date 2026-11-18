@@ -83,3 +83,23 @@
 **Authority:** [Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md), with the owner-approved series/issue selection design. The checkbox selection controls list membership; the separate overlap exception changes strict eligibility only for an explicitly approved pair.
 
 Some currently deployed routes may still implement older Reading Plans behavior. This inventory states intended acceptance criteria for the guarded transition, not a claim that it has already been deployed.
+
+## MQA-LIST-011: An empty Reading Plan can be opened and edited
+
+**Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload.
+
+**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Its "open the Plan authoring UI" link opens that saved plan, not a blank new one. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462) (open; fix PR #5467).
+
+## MQA-LIST-012: Orphaned plans recover only through explicit preview and relink
+
+**Setup:** QA plan whose Reading List identity was deleted.
+
+**Test:** Open the plan, review the recovery diff, then explicitly relink.
+
+**Expected:** The reader sees a preview of surviving issue references and chooses the relink; nothing is relinked automatically, and other owners' lists are never targets. Source: #4684 (Nov 5 recovery work).
+
+## MQA-LIST-013: Dependency cycles are contained, not outages
+
+**Test:** Attempt a list edit or CBL adoption that would create a prerequisite cycle.
+
+**Expected:** The write fails closed with a clear message before any change is committed; Roll and Queue remain usable. Source: P0 #4759.
