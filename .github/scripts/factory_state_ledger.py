@@ -691,6 +691,8 @@ def checkpoint_evidence_events(repo: str, result: dict[str, Any]) -> list[dict[s
                 **common, "event_type": "checkpoint_pr_merged",
                 "event_id": f"checkpoint:{run_id}:merged:{pr}:head:{head}",
                 "work_pr": pr, "merge_sha": merge_sha,
+                "merge_basis": result.get("merge_basis") or "verified_pr",
+                "exact_bytes_included": result.get("exact_bytes_included"),
             })
     return records
 
