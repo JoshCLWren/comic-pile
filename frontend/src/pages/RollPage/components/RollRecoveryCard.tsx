@@ -17,8 +17,14 @@ const diagnosticMessages = {
   node_limit_exceeded: 'This dependency graph is larger than ComicPile can safely traverse at once.',
 } as const
 
+/** Split series/number identity hint parsed out of a prerequisite label. */
+interface PrerequisiteLabelParts {
+  title: string
+  number: string
+}
+
 /** Labels arrive as "Series #number"; split for a truthful identity hint. */
-function splitPrerequisiteLabel(label: string): { title: string; number: string } {
+function splitPrerequisiteLabel(label: string): PrerequisiteLabelParts {
   const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(label)
   return {
     title: match?.groups?.title ?? label,
