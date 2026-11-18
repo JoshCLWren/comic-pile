@@ -76,10 +76,9 @@ def test_targeted_issue_snapshot_retains_rust_freeze(controller, monkeypatch):
     epic = controller.eligibility.RUST_CUTOVER_EPIC
     issue_number = epic + 1
     monkeypatch.setenv('FACTORY_DISCOVERY_TARGET', f'issue:{issue_number}')
-    issue_labels: list[dict[str, str]] = [{'name': 'factory:unowned'}]
     rows = {
         issue_number: {'number': issue_number, 'state': 'open',
-                       'body': 'Product fix', 'labels': issue_labels},
+                       'body': 'Product fix', 'labels': [{'name': 'factory:unowned'}]},
         epic: {'number': epic, 'state': 'open', 'body': 'Tracking epic',
                'labels': [{'name': 'epic'}]},
     }
@@ -88,7 +87,9 @@ def test_targeted_issue_snapshot_retains_rust_freeze(controller, monkeypatch):
     selected = controller.list_issues()
     assert [row['number'] for row in selected] == [issue_number, epic]
     assert controller.build_candidates(selected, []) == []
-    issue_labels.append({'name': 'rust'})
+    labels = rows[issue_number]['labels']
+    assert isinstance(labels, list)
+    labels.append({'name': 'rust'})
     rust_candidates = controller.build_candidates(controller.list_issues(), [])
     assert [(candidate.kind, candidate.number) for candidate in rust_candidates] == [('issue', issue_number)]
 

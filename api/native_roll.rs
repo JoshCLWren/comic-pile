@@ -273,6 +273,7 @@ fn app() -> Router {
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
+        .route("/api/v1/cron/release-sync", get(native_dispatch))
         .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
         .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
@@ -359,6 +360,54 @@ fn app() -> Router {
         .route(
             "/api/v1/continuity-rules/{rule_id}",
             delete(native_dispatch),
+        )
+        .route("/api/v1/continuity-plans/", get(native_dispatch))
+        .route("/api/v1/continuity-plans/", post(native_dispatch))
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/continuity-plans/{plan_id}", get(native_dispatch))
+        .route("/api/v1/continuity-plans/{plan_id}", put(native_dispatch))
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(native_dispatch),
         )
         .route("/api/v1/releases/", get(native_dispatch))
         .route("/api/v1/releases/", put(native_dispatch))

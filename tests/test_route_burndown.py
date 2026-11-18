@@ -397,6 +397,25 @@ def test_rendered_outputs_match_checked_in_files() -> None:
     assert _render_agents_text(agents_original, block) == agents_original
 
 
+def test_custom_cbl_fragment_routes_every_v1_operation_to_native() -> None:
+    """Issue #4844 cuts every migrated custom-cbl v1 operation over by source fragment.
+
+    Generated ``vercel.json`` and the inventory are bot-owned and regenerated
+    post-merge, so the source fragment is the reviewable proof that these
+    same-path operations serve the native ingress rather than Python.
+    """
+    fragment = load_json(FRAGMENT_DIR / "custom-cbl.json")
+    operations = fragment["operations"]
+    assert isinstance(operations, list)
+    v1_operations = [op for op in operations if op["bucket"] == "v1_operations"]
+    assert len(v1_operations) == 11
+    for operation in v1_operations:
+        assert operation["dest"] == "/api/native_roll.rs", operation
+        assert operation["runtime"] == "native-rust", operation
+        assert operation["status"] == "target", operation
+        assert operation["owning_issue"] == 4844, operation
+
+
 def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
@@ -406,6 +425,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "catalog",
         "comicvine",
         "completed-threads",
+        "continuity-plans",
         "continuity-rules",
         "creators",
         "custom-cbl",
@@ -419,6 +439,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "reading-orders",
         "reading-plan-sync",
         "releases",
+        "roll",
         "sessions",
         "tags",
         "taste-discoveries",
@@ -731,10 +752,22 @@ def test_vercel_is_fully_derived_from_fragments() -> None:
             assert dest == operation["dest"]
 
 
-def test_hidden_cron_exception_is_preserved() -> None:
-    """The hidden cron release-sync route stays on Python after derivation."""
-    routes = _load_routes(VERCEL_PATH)
-    assert _resolve_destination("GET", "/api/v1/cron/release-sync", routes) == "/api/index.py"
+def test_hidden_cron_fragment_declares_native_rust() -> None:
+    """The hidden cron release-sync family declares native ingress (#5276).
+
+    The checked-in ingress is bot-owned and regenerated after the fragment
+    lands, so this pins the source fragment's declaration and the cron
+    schedule rather than a pre-regeneration destination.
+    """
+    fragment = _fragment_named("reading-plan-sync")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    cron = operations[("GET", "/api/v1/cron/release-sync")]
+    assert cron["dest"] == "/api/native_roll.rs"
+    assert cron["exclude_from_inventory"] is True
+    assert cron["owning_issue"] == 5276
     document = load_json(VERCEL_PATH)
     crons = document.get("crons")
     assert isinstance(crons, list)

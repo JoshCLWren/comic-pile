@@ -149,19 +149,18 @@ def mount_subrouters() -> None:
     from app.api import cbl_comicvine_lookup
     from app.api import cbl_catalog
     from app.api import cbl_sources
-    from app.api import continuity_plan
     from app.api import custom_cbl
     from app.api import dependency_group
     from app.api import dependency_group_batch
     from app.api import reading_order_projection
-    from app.api import reading_plan_release_source
     from app.api import roll_recovery_switch
 
     router.include_router(dependency_group.router)
     router.include_router(dependency_group_batch.router)
-    router.include_router(continuity_plan.router)
+    # project-preview is intentionally left on Python (out of scope for #4838).
+    # The confirm/project operation is served by native Rust; the duplicate
+    # Python confirm route here is shadowed by the deployed route fragment.
     router.include_router(reading_order_projection.router)
-    router.include_router(reading_plan_release_source.router)
     router.include_router(collection_exclusions.router)
     router.include_router(cbl_catalog.router)
     router.include_router(cbl_comicvine_lookup.router)

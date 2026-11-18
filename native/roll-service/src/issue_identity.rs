@@ -4309,7 +4309,7 @@ async fn materialize_missing_issue_tx(
         } else {
             tx.query_one("INSERT INTO external_identities (provider,entity_type,external_id,metadata_json,created_at,updated_at) VALUES ('comicvine','issue',$1,'{}'::jsonb,NOW(),NOW()) RETURNING id", &[&cvid]).await.map_err(|e| e.to_string())?.get(0)
         };
-        let _ = tx.execute("INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING", &[&issue_id,&ei_id]).await;
+        tx.execute("INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING", &[&issue_id,&ei_id]).await.map_err(|e| e.to_string())?;
     }
     Ok((issue_id, true))
 }

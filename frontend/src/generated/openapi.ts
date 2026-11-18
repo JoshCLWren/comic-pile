@@ -742,20 +742,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Continuity Plans
-         * @description List every continuity plan owned by the authenticated user.
-         *
-         *     Plans are returned in descending ``updated_at`` order so the most
-         *     recently modified plan appears first.
-         */
-        get: operations["list_continuity_plans_api_v1_continuity_plans__get"];
+        get: operations["continuity_plans_list"];
         put?: never;
-        /**
-         * Create Continuity Plan
-         * @description Create a plan and compile rules only when strict intent is explicit.
-         */
-        post: operations["create_continuity_plan_api_v1_continuity_plans__post"];
+        post: operations["continuity_plans_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -771,11 +760,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Adopt Reading Order
-         * @description Adopt a legacy reading order into the canonical continuity plan. The source reading order is not mutated; the new plan is the canonical owner of the ordering intent. See docs/READING_PLAN_CANONICAL_MODEL.md.
-         */
-        post: operations["adopt_reading_order_api_v1_continuity_plans_from_reading_order_post"];
+        post: operations["continuity_plans_adopt_reading_order"];
         delete?: never;
         options?: never;
         head?: never;
@@ -791,11 +776,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Create Release Source
-         * @description Subscribe a plan+thread to a confirmed ComicVine volume.
-         */
-        post: operations["create_release_source_api_v1_continuity_plans_release_sources__post"];
+        post: operations["release_sources_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -812,18 +793,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete Release Source
-         * @description Remove a release source subscription.
-         */
-        delete: operations["delete_release_source_api_v1_continuity_plans_release_sources__source_id__delete"];
+        delete: operations["release_sources_delete"];
         options?: never;
         head?: never;
-        /**
-         * Update Release Source
-         * @description Enable or disable a release source (non-destructive).
-         */
-        patch: operations["update_release_source_api_v1_continuity_plans_release_sources__source_id__patch"];
+        patch: operations["release_sources_update"];
         trace?: never;
     };
     "/api/v1/continuity-plans/{plan_id}": {
@@ -833,22 +806,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Continuity Plan
-         * @description Return one owned continuity plan from normalized membership.
-         */
-        get: operations["get_continuity_plan_api_v1_continuity_plans__plan_id__get"];
-        /**
-         * Update Continuity Plan
-         * @description Replace a plan atomically, including rules explicitly owned by that plan.
-         */
-        put: operations["update_continuity_plan_api_v1_continuity_plans__plan_id__put"];
+        get: operations["continuity_plans_get"];
+        put: operations["continuity_plans_update"];
         post?: never;
-        /**
-         * Delete Continuity Plan
-         * @description Delete one plan and only the hard rules compiled by that plan.
-         */
-        delete: operations["delete_continuity_plan_api_v1_continuity_plans__plan_id__delete"];
+        delete: operations["continuity_plans_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -863,22 +824,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Link Plan Dependency Edge
-         * @description Reference one canonical Dependency edge from one owned plan.
-         *
-         *     Linking records provenance only; it never creates, modifies, or deletes
-         *     the canonical edge and never changes Roll eligibility.
-         */
-        post: operations["link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post"];
-        /**
-         * Unlink Plan Dependency Edge
-         * @description Remove one plan's reference to a Dependency edge.
-         *
-         *     Only this plan's link is removed; the canonical edge and every other
-         *     plan's references are untouched.
-         */
-        delete: operations["unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete"];
+        post: operations["continuity_plans_link_dependency"];
+        delete: operations["continuity_plans_unlink_dependency"];
         options?: never;
         head?: never;
         patch?: never;
@@ -891,15 +838,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Continuity Plan Membership
-         * @description Return the normalized membership view for one owned plan.
-         *
-         *     Membership, Dependency provenance, source snapshots, placements, and
-         *     progress derived from global Issue read state are read through the
-         *     normalized relational representation.
-         */
-        get: operations["get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get"];
+        get: operations["continuity_plans_membership"];
         put?: never;
         post?: never;
         delete?: never;
@@ -917,16 +856,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Confirm Plan Projection
-         * @description Apply a projection atomically after a successful preview.
-         *
-         *     The confirm endpoint re-computes the projection and rejects the request
-         *     if any conflict is detected. A failed or cancelled projection leaves
-         *     both the plan and the reading order unchanged because all mutations are
-         *     performed in a single transaction that rolls back on any error.
-         */
-        post: operations["confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post"];
+        post: operations["continuity_plans_project_to_reading_order"];
         delete?: never;
         options?: never;
         head?: never;
@@ -965,11 +895,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Release Sources
-         * @description List release sources for one plan.
-         */
-        get: operations["list_release_sources_api_v1_continuity_plans__plan_id__release_sources__get"];
+        get: operations["release_sources_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -985,14 +911,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Release Sources For Reader
-         * @description List reader-facing release source status for one plan.
-         *
-         *     Returns enabled and disabled sources so the reader can re-enable a
-         *     previously disabled volume without leaving the plan reader view.
-         */
-        get: operations["list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get"];
+        get: operations["release_sources_list_reader"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1419,17 +1338,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Custom Cbl Lists
-         * @description List the authenticated user's editable custom CBLs.
-         */
-        get: operations["list_custom_cbl_lists_api_v1_custom_cbls_get"];
+        /** Documentation-only operation for the custom CBL list. */
+        get: operations["list_custom_cbls_documentation"];
         put?: never;
-        /**
-         * Create Custom Cbl
-         * @description Create an editable CBL from real issues without creating synthetic threads.
-         */
-        post: operations["create_custom_cbl_api_v1_custom_cbls_post"];
+        /** Documentation-only operation for custom CBL creation. */
+        post: operations["create_custom_cbl_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1443,11 +1356,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Search Custom Cbl Issues
-         * @description Search only the user's canonical issue library for custom-list membership.
-         */
-        get: operations["search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get"];
+        /** Documentation-only operation for custom CBL issue search. */
+        get: operations["search_custom_cbl_issues_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1463,16 +1373,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Custom Cbl
-         * @description Return one owned custom CBL.
-         */
-        get: operations["get_custom_cbl_api_v1_custom_cbls__list_id__get"];
-        /**
-         * Update Custom Cbl
-         * @description Replace custom CBL metadata and exact ordered membership atomically.
-         */
-        put: operations["update_custom_cbl_api_v1_custom_cbls__list_id__put"];
+        /** Documentation-only operation for one custom CBL. */
+        get: operations["get_custom_cbl_documentation"];
+        /** Documentation-only operation for custom CBL replacement. */
+        put: operations["update_custom_cbl_documentation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1487,11 +1391,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Export Custom Cbl
-         * @description Export one custom list as a portable .cbl XML document.
-         */
-        get: operations["export_custom_cbl_api_v1_custom_cbls__list_id__export_get"];
+        /** Documentation-only operation for custom CBL export. */
+        get: operations["export_custom_cbl_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1507,41 +1408,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read Custom Cbl Overlap Decisions
-         * @description Return one owned Reading List's overlap decisions and version token.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to read.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         The list's saved overlap decisions, the current version token, and
-         *         the reader's selectable volume candidates for new decisions.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when the reader does not own the list.
-         */
-        get: operations["read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get"];
-        /**
-         * Save Custom Cbl Overlap Decision
-         * @description Save one reader-approved overlap choice inside an owned Reading List.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to update.
-         *         payload: The overlap choice to save, naming two exact Comic Vine volumes.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         The list's updated decision set and version token.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 for a foreign list, 409 for a stale
-         *             version token, and 422 for an unusable or cyclic choice.
-         */
-        put: operations["save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put"];
+        /** Documentation-only operation for overlap decisions read. */
+        get: operations["get_overlap_decisions_documentation"];
+        /** Documentation-only operation for overlap decision save. */
+        put: operations["save_overlap_decision_documentation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1559,27 +1429,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete Custom Cbl Overlap Decision
-         * @description Remove one reader-approved overlap choice from an owned Reading List.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to update.
-         *         decision_id: Identifier of the overlap decision to remove.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *         expected_updated_at: Decision version token the client last read. None
-         *             skips the concurrency check.
-         *
-         *     Returns:
-         *         The list's updated decision set and version token.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 for a foreign list or unknown decision,
-         *             409 for a stale version token, and 422 when removing the choice
-         *             would make the reader's constraint graph cyclic.
-         */
-        delete: operations["delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete"];
+        /** Documentation-only operation for overlap decision removal. */
+        delete: operations["delete_overlap_decision_documentation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1592,11 +1443,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read Custom Cbl
-         * @description Explain the complete current list using the same authority as Roll.
-         */
-        get: operations["read_custom_cbl_api_v1_custom_cbls__list_id__reader_get"];
+        /** Documentation-only operation for the custom CBL reader. */
+        get: operations["read_custom_cbl_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1614,11 +1462,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Apply Custom Cbl
-         * @description Explicitly merge one custom CBL into an existing canonical Reading Plan.
-         */
-        post: operations["apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post"];
+        /** Documentation-only operation for Reading Plan application. */
+        post: operations["apply_custom_cbl_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6641,34 +6486,17 @@ export interface components {
             /** Order */
             order: number;
         };
-        /**
-         * ContinuityPlanListItem
-         * @description Compact summary returned by the plans list endpoint.
-         */
         ContinuityPlanListItem: {
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Lane Count */
+            /** Format: int32 */
             lane_count: number;
-            /** Name */
             name: string;
-            /**
-             * Ordering Mode
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /** Source Names */
-            source_names?: {
-                [key: string]: string;
-            };
-            /** Source Paths */
+            ordering_mode: string;
+            source_names?: unknown;
             source_paths?: string[];
-            /** Step Count */
+            /** Format: int32 */
             step_count: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
             updated_at: string;
         };
         /**
@@ -6721,65 +6549,41 @@ export interface components {
             /** Source Target Story Arc Id */
             source_target_story_arc_id?: string | null;
         };
-        /**
-         * ContinuityPlanResponse
-         * @description Persisted continuity plan response.
-         *
-         *     Read-only: never runs ``validate_structure`` write invariants. Legacy
-         *     plans whose ``nodes_json`` predates the #3037 unique constraint and
-         *     contains the same issue twice therefore load without a 500 (issue #3347);
-         *     writes remain gated by ``ContinuityPlanWrite.validate_structure``.
-         */
         ContinuityPlanResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Lanes */
-            lanes: components["schemas"]["ContinuityPlanLane"][];
-            /** Name */
+            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
-            /** Nodes */
-            nodes?: components["schemas"]["ContinuityPlanNode"][];
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /**
-             * Updated At
-             * Format: date-time
-             */
+            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
             updated_at: string;
-            /** User Id */
+            /** Format: int32 */
             user_id: number;
         };
-        /**
-         * ContinuityPlanWrite
-         * @description Create/replace payload for a persisted continuity plan.
-         */
         ContinuityPlanWrite: {
-            /**
-             * Expected Updated At
-             * @description Optimistic-concurrency token from GET ``updated_at``. When present on PUT, a mismatch returns 409 ``plan_version_conflict``.
-             */
             expected_updated_at?: string | null;
-            /** Lanes */
-            lanes: components["schemas"]["ContinuityPlanLane"][];
-            /** Name */
+            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
-            /** Nodes */
-            nodes?: components["schemas"]["ContinuityPlanNode"][];
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
+            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            ordering_mode: string;
+        };
+        ContinuityReleaseSourceResponse: {
+            created_at: string;
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            plan_id: number;
+            provider: string;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            thread_id: number;
+            updated_at: string;
         };
         ContinuityRuleRequest: {
             /** Format: int32 */
@@ -8602,6 +8406,10 @@ export interface components {
             /** User Id */
             user_id: number;
         };
+        CustomCBLEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
         /**
          * CustomCBLEntryResponse
          * @description One resolved custom CBL entry.
@@ -8680,6 +8488,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        CustomCBLPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
         };
         /**
          * CustomCBLResponse
@@ -9954,6 +9771,38 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
+        NativeContinuityPlanLane: {
+            id: string;
+            inferred_gate_kind?: string | null;
+            migration_contract?: unknown;
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        NativeContinuityPlanNode: {
+            /** Format: int32 */
+            checkpoint_target_ref_id?: number | null;
+            checkpoint_target_ref_ids?: number[];
+            convergence_gate?: unknown[];
+            id: string;
+            is_checkpoint?: boolean;
+            label?: string | null;
+            lane_id: string;
+            node_type: string;
+            /** Format: int32 */
+            position: number;
+            reader_optional?: boolean | null;
+            reader_role?: string | null;
+            /** Format: int32 */
+            ref_id: number;
+            source_cbl_placements?: unknown[] | null;
+            source_confidence?: string | null;
+            source_explanation?: string | null;
+            source_paths?: string[] | null;
+            source_role?: string | null;
+            source_story_arc_ids?: string[] | null;
+            source_target_story_arc_id?: string | null;
+        };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
             rated_issues_total: number;
@@ -9984,6 +9833,90 @@ export interface components {
             /** Format: int64 */
             upcoming_count: number;
         };
+        NativeCustomCBLApplyRequest: {
+            expected_updated_at?: string | null;
+            lane_id?: string | null;
+        };
+        NativeCustomCBLApplyResponse: {
+            added_issue_ids: number[];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: unknown[];
+            name: string;
+            nodes: unknown[];
+            ordering_mode: string;
+            skipped_existing_issue_ids: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        NativeCustomCBLEntryResponse: {
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeCustomCBLIssueSearchResult: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeCustomCBLListItem: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+        };
+        NativeCustomCBLResponse: {
+            created_at: string;
+            description?: string | null;
+            entries: components["schemas"]["NativeCustomCBLEntryResponse"][];
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            predecessor_changes?: components["schemas"]["CustomCBLPredecessorChange"][];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+            warnings?: string[];
+        };
+        NativeCustomCBLWrite: {
+            checkpoint_issue_ids?: number[] | null;
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            confirmed_predecessor_changes?: unknown;
+            description?: string | null;
+            entry_intents?: {
+                [key: string]: components["schemas"]["CustomCBLEntryIntent"];
+            } | null;
+            issue_ids?: number[];
+            mode?: string | null;
+            name: string;
+        };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
@@ -9991,6 +9924,34 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+        };
+        NativeOverlapDecisionItem: {
+            continuing_volume_id: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+            waiting_volume_id: string;
+        };
+        NativeOverlapDecisionSetResponse: {
+            candidate_volumes?: components["schemas"]["NativeOverlapVolumeCandidate"][];
+            decisions?: components["schemas"]["NativeOverlapDecisionItem"][];
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+        };
+        NativeOverlapDecisionWrite: {
+            continuing_volume_id: string;
+            expected_updated_at?: string | null;
+            waiting_volume_id: string;
+        };
+        NativeOverlapVolumeCandidate: {
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_id: string;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -10045,10 +10006,54 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Result of reconciling a GitHub source identity with the ledger. */
-        NativeReleaseSourceResponse: {
-            exists: boolean;
-            release?: null | components["schemas"]["MinimalReleaseResponse"];
+        NativeReadingOrderProjectionConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        NativeReadingOrderProjectionEntry: {
+            /** Format: int32 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        NativeReadingOrderProjectionPreview: {
+            conflicts: components["schemas"]["NativeReadingOrderProjectionConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["NativeReadingOrderProjectionEntry"][];
+            /** Format: int32 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            /** Format: int32 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int32 */
+            total_positions: number;
+        };
+        NativeReadingOrderProjectionRequest: {
+            /** Format: int32 */
+            reading_order_id: number;
+        };
+        NativeReadingOrderProjectionResult: {
+            /** Format: int32 */
+            added_count: number;
+            /** Format: int32 */
+            kept_count: number;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            reading_order_id: number;
+            /** Format: int32 */
+            total_positions: number;
+            /** Format: int32 */
+            updated_count: number;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -11371,24 +11376,11 @@ export interface components {
             intent?: string | null;
             source: string;
         };
-        /**
-         * ReadingOrderAdoptRequest
-         * @description Request to adopt a legacy reading order into the canonical plan.
-         */
         ReadingOrderAdoptRequest: {
-            /**
-             * Lane Id
-             * @default adopted
-             */
-            lane_id: string;
-            /**
-             * Lane Name
-             * @default Adopted
-             */
-            lane_name: string;
-            /** Plan Name */
+            lane_id?: string | null;
+            lane_name?: string | null;
             plan_name?: string | null;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id: number;
         };
         /**
@@ -11532,149 +11524,83 @@ export interface components {
             /** Format: int64 */
             total_items: number;
         };
-        /**
-         * ReadingPlanDependencyLink
-         * @description One plan provenance reference to a canonical Dependency edge.
-         */
         ReadingPlanDependencyLink: {
-            /** Dependency Id */
+            /** Format: int32 */
             dependency_id: number;
-            /** Explanation */
             explanation?: string | null;
-            /** Source Issue Id */
+            /** Format: int32 */
             source_issue_id: number;
-            /** Target Issue Id */
+            /** Format: int32 */
             target_issue_id: number;
         };
-        /**
-         * ReadingPlanDependencyLinkRequest
-         * @description Request to reference one canonical Dependency edge from a plan.
-         */
         ReadingPlanDependencyLinkRequest: {
-            /** Explanation */
             explanation?: string | null;
         };
-        /**
-         * ReadingPlanMemberIssue
-         * @description One normalized Issue occurrence inside a Reading Plan.
-         */
         ReadingPlanMemberIssue: {
-            /** Display Position */
+            /** Format: int32 */
             display_position: number;
-            /**
-             * Is Checkpoint
-             * @default false
-             */
             is_checkpoint: boolean;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Label */
             label?: string | null;
-            /** Lane Id */
             lane_id: string;
-            /** Occurrence Id */
             occurrence_id: string;
-            /** Reader Optional */
             reader_optional?: boolean | null;
-            /** Reader Role */
             reader_role?: string | null;
-            /** Source Metadata */
-            source_metadata?: {
-                [key: string]: unknown;
-            } | null;
+            source_metadata?: unknown;
         };
-        /**
-         * ReadingPlanMembershipResponse
-         * @description Normalized membership, provenance, and progress for one Reading Plan.
-         */
+        /** @description Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`. */
         ReadingPlanMembershipResponse: {
-            /** Dependencies */
             dependencies: components["schemas"]["ReadingPlanDependencyLink"][];
-            /** Issues */
             issues: components["schemas"]["ReadingPlanMemberIssue"][];
-            /** Placements */
             placements: components["schemas"]["ReadingPlanSourcePlacementView"][];
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
             progress: components["schemas"]["ReadingPlanProgress"];
-            /** Sources */
             sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
         };
-        /**
-         * ReadingPlanProgress
-         * @description Plan progress derived from global Issue read state.
-         */
         ReadingPlanProgress: {
-            /** Read Issues */
+            /** Format: int32 */
             read_issues: number;
-            /** Total Issues */
+            /** Format: int32 */
             total_issues: number;
         };
-        /**
-         * ReadingPlanReleaseSourceStatus
-         * @description One followed ComicVine volume and its sync state on a Reading Plan.
-         */
         ReadingPlanReleaseSourceStatus: {
-            /** Enabled */
             enabled: boolean;
-            /** External Identity Id */
+            /** Format: int32 */
             external_identity_id: number;
-            /** Last Synced At */
             last_synced_at?: string | null;
-            /** Provider Issue Count */
+            /** Format: int32 */
             provider_issue_count?: number | null;
-            /** Provider Publisher */
             provider_publisher?: string | null;
-            /** Provider Start Year */
+            /** Format: int32 */
             provider_start_year?: number | null;
-            /** Provider Title */
             provider_title?: string | null;
-            /** Provider Volume Id */
             provider_volume_id: string;
-            /** Source Id */
+            /** Format: int32 */
             source_id: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReadingPlanSourcePlacementView
-         * @description One preserved source-position observation for a plan occurrence.
-         */
         ReadingPlanSourcePlacementView: {
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Occurrence Id */
             occurrence_id: string;
-            /** Plan Source Id */
+            /** Format: int32 */
             plan_source_id: number;
-            /** Source Position */
+            /** Format: int32 */
             source_position?: number | null;
         };
-        /**
-         * ReadingPlanSourceSnapshot
-         * @description One preserved import snapshot referenced by a Reading Plan.
-         */
         ReadingPlanSourceSnapshot: {
-            /** Adopted At */
             adopted_at?: string | null;
-            /** Content Hash */
             content_hash?: string | null;
-            /** Display Name */
             display_name?: string | null;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Raw Source Path */
             raw_source_path: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
             recorded_at: string;
-            /** Repository */
             repository?: string | null;
-            /** Revision Sha */
             revision_sha?: string | null;
-            /** Source Path */
             source_path?: string | null;
         };
         /** @description Result of the explicit v2 reading-session initialization write. */
@@ -11780,58 +11706,20 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        /**
-         * ReleaseSourceCreate
-         * @description Create a release source subscription.
-         */
         ReleaseSourceCreate: {
-            /** External Identity Id */
+            /** Format: int32 */
             external_identity_id: number;
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReleaseSourceResponse
-         * @description A release source with provider display metadata.
-         */
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Enabled */
-            enabled: boolean;
-            /** External Identity Id */
-            external_identity_id: number;
-            /** Id */
-            id: number;
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Plan Id */
-            plan_id: number;
-            /** Provider */
-            provider: string;
-            /** Provider Title */
-            provider_title: string | null;
-            /** Provider Volume Id */
-            provider_volume_id: string;
-            /** Thread Id */
-            thread_id: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
+            exists: boolean;
+            release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
-        /**
-         * ReleaseSourceUpdate
-         * @description Update a release source (enable/disable).
-         */
         ReleaseSourceUpdate: {
-            /** Enabled */
             enabled: boolean;
         };
         /** @description Idempotent release publication payload from trusted automation. */
@@ -14672,7 +14560,7 @@ export interface operations {
             };
         };
     };
-    list_continuity_plans_api_v1_continuity_plans__get: {
+    continuity_plans_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -14681,7 +14569,6 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14692,7 +14579,7 @@ export interface operations {
             };
         };
     };
-    create_continuity_plan_api_v1_continuity_plans__post: {
+    continuity_plans_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -14705,7 +14592,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14714,18 +14600,9 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    adopt_reading_order_api_v1_continuity_plans_from_reading_order_post: {
+    continuity_plans_adopt_reading_order: {
         parameters: {
             query?: never;
             header?: never;
@@ -14738,7 +14615,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14747,18 +14623,9 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    create_release_source_api_v1_continuity_plans_release_sources__post: {
+    release_sources_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -14771,27 +14638,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseSourceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
                 };
             };
         };
     };
-    delete_release_source_api_v1_continuity_plans_release_sources__source_id__delete: {
+    release_sources_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -14802,25 +14659,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    update_release_source_api_v1_continuity_plans_release_sources__source_id__patch: {
+    release_sources_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -14835,27 +14682,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseSourceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
                 };
             };
         };
     };
-    get_continuity_plan_api_v1_continuity_plans__plan_id__get: {
+    continuity_plans_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14866,7 +14703,6 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14875,18 +14711,9 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    update_continuity_plan_api_v1_continuity_plans__plan_id__put: {
+    continuity_plans_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -14901,7 +14728,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14910,18 +14736,9 @@ export interface operations {
                     "application/json": components["schemas"]["ContinuityPlanResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    delete_continuity_plan_api_v1_continuity_plans__plan_id__delete: {
+    continuity_plans_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -14932,25 +14749,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post: {
+    continuity_plans_link_dependency: {
         parameters: {
             query?: never;
             header?: never;
@@ -14966,7 +14773,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -14975,18 +14781,9 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingPlanDependencyLink"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete: {
+    continuity_plans_unlink_dependency: {
         parameters: {
             query?: never;
             header?: never;
@@ -14998,25 +14795,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get: {
+    continuity_plans_membership: {
         parameters: {
             query?: never;
             header?: never;
@@ -15027,7 +14814,6 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15036,18 +14822,9 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
-    confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post: {
+    continuity_plans_project_to_reading_order: {
         parameters: {
             query?: never;
             header?: never;
@@ -15058,26 +14835,16 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
                 };
             };
         };
@@ -15117,7 +14884,7 @@ export interface operations {
             };
         };
     };
-    list_release_sources_api_v1_continuity_plans__plan_id__release_sources__get: {
+    release_sources_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -15128,27 +14895,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseSourceResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
                 };
             };
         };
     };
-    list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get: {
+    release_sources_list_reader: {
         parameters: {
             query?: never;
             header?: never;
@@ -15159,22 +14916,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -15657,7 +15404,7 @@ export interface operations {
             };
         };
     };
-    list_custom_cbl_lists_api_v1_custom_cbls_get: {
+    list_custom_cbls_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15666,18 +15413,32 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Editable custom CBL lists owned by the reader */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLListItem"][];
+                    "application/json": components["schemas"]["NativeCustomCBLListItem"][];
                 };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    create_custom_cbl_api_v1_custom_cbls_post: {
+    create_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15686,34 +15447,48 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLWrite"];
+                "application/json": components["schemas"]["NativeCustomCBLWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Custom CBL created from real issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get: {
+    search_custom_cbl_issues_documentation: {
         parameters: {
             query?: {
+                /** @description Case-insensitive title or issue-number filter, max 200 characters */
                 q?: string;
+                /** @description Maximum results, 1-100 (default 30) */
                 limit?: number;
             };
             header?: never;
@@ -15722,287 +15497,457 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Matching owned issues */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLIssueSearchResult"][];
+                    "application/json": components["schemas"]["NativeCustomCBLIssueSearchResult"][];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    get_custom_cbl_api_v1_custom_cbls__list_id__get: {
+    get_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description The owned custom CBL */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    update_custom_cbl_api_v1_custom_cbls__list_id__put: {
+    update_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLWrite"];
+                "application/json": components["schemas"]["NativeCustomCBLWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description The updated custom CBL */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    export_custom_cbl_api_v1_custom_cbls__list_id__export_get: {
+    export_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Portable .cbl XML document */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/xml": string;
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get: {
+    get_overlap_decisions_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Saved overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put: {
+    save_overlap_decision_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OverlapDecisionWrite"];
+                "application/json": components["schemas"]["NativeOverlapDecisionWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Updated overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unusable or cyclic choice */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete: {
+    delete_overlap_decision_documentation: {
         parameters: {
             query?: {
-                expected_updated_at?: string | null;
+                /** @description Decision version token the client last read */
+                expected_updated_at?: string;
             };
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
+                /** @description Overlap decision identifier */
                 decision_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Updated overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cycle conflict */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    read_custom_cbl_api_v1_custom_cbls__list_id__reader_get: {
+    read_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Reader with canonical availability */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingListReaderResponse"];
+                    "application/json": components["schemas"]["ReadingListReader"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post: {
+    apply_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
+                /** @description Continuity plan identifier */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLApplyRequest"];
+                "application/json": components["schemas"]["NativeCustomCBLApplyRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan updated with the custom CBL merged into one lane */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLApplyResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLApplyResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale plan version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty list, unknown lane, or cycle conflict */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -17944,7 +17889,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
                 };
             };
             /** @description Invalid release writer credential */
