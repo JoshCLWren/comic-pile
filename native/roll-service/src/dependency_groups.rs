@@ -884,10 +884,8 @@ pub async fn get_group_detail(
     // Resolve each issue's parent thread so issue members display their series
     // title and group into the right thread's crossover set.
     let issues = issues_by_ids(&connection, &issue_ids).await?;
-    for issue in issues.values() {
-        if let Some(resolved) = issue {
-            thread_ids.insert(resolved.thread_id);
-        }
+    for resolved in issues.values().filter_map(|option| option.as_ref()) {
+        thread_ids.insert(resolved.thread_id);
     }
     let threads = threads_by_ids(&connection, &thread_ids).await?;
     let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
