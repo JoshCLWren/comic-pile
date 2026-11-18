@@ -721,6 +721,8 @@ def main() -> int:
     if args.command == "checkpoint-receipts":
         if not args.file:
             parser.error("checkpoint-receipts requires --file")
+        if not enabled():
+            raise RuntimeError("Neon checkpoint receipts unavailable: restricted ledger not configured")
         with open(args.file, encoding="utf-8") as stream:
             payload = json.load(stream)
         count = record_checkpoint_evidence(args.repo, payload)
