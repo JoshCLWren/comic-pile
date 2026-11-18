@@ -322,6 +322,15 @@ async fn apply_full_snapshot(
             .await
             .map_err(db::query_error)?;
 
+        // Keep the in-memory projection in step with that write. Session-start
+        // snapshots omit the pending fields, so `apply_session_state` cannot
+        // clear them; without this the restored session is persisted with the
+        // id of a thread this restore just deleted, and the FK rolls the whole
+        // restore back (a pending thread added after the snapshot).
+        session.pending_thread_id = None;
+        session.pending_issue_id = None;
+        session.pending_thread_updated_at = None;
+
         // Clear event references
         tx.execute(
             "UPDATE events SET thread_id = NULL WHERE session_id = $1 AND thread_id = ANY($2)",
@@ -759,13 +768,18 @@ async fn restore_thread_from_state(
                 let read_at = ch.get("read_at").and_then(|v| v.as_str());
                 let position = ch.get("position").and_then(|v| v.as_i64()).unwrap_or(1);
                 let catalog_issue_id = ch.get("catalog_issue_id").and_then(|v| v.as_i64());
+                // Python only rewrites the catalog link when the snapshot
+                // recorded the key (issue #3226). A missing key must preserve
+                // the existing link; an explicit JSON null must clear it.
+                let has_catalog_issue_id = ch.get("catalog_issue_id").is_some();
 
                 tx
                     .execute(
                         "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
                          VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7)
                          ON CONFLICT (id) DO UPDATE SET issue_number = $3, status = $4,
-                             read_at = $5::text::timestamptz, position = $6, catalog_issue_id = $7",
+                             read_at = $5::text::timestamptz, position = $6,
+                             catalog_issue_id = CASE WHEN $8::boolean THEN $7 ELSE issues.catalog_issue_id END",
                         &[
                             &issue_id,
                             &thread_id,
@@ -774,6 +788,7 @@ async fn restore_thread_from_state(
                             &read_at,
                             &(position as i32),
                             &catalog_issue_id,
+                            &has_catalog_issue_id,
                         ],
                     )
                     .await
@@ -885,13 +900,18 @@ async fn restore_thread_from_state(
                 .and_then(|v| v.as_i64())
                 .unwrap_or((pos + 1) as i64);
             let catalog_issue_id = issue_state.get("catalog_issue_id").and_then(|v| v.as_i64());
+            // Session-start snapshots never captured `catalog_issue_id`, so an
+            // absent key must not clear a live link (Python issue #3226). Only
+            // an explicit null in the snapshot clears the link.
+            let has_catalog_issue_id = issue_state.get("catalog_issue_id").is_some();
 
             tx
                 .execute(
                     "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
                      VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7)
                      ON CONFLICT (id) DO UPDATE SET issue_number = $3, status = $4,
-                         read_at = $5::text::timestamptz, position = $6, catalog_issue_id = $7",
+                         read_at = $5::text::timestamptz, position = $6,
+                         catalog_issue_id = CASE WHEN $8::boolean THEN $7 ELSE issues.catalog_issue_id END",
                     &[
                         &issue_id,
                         &thread_id,
@@ -900,6 +920,7 @@ async fn restore_thread_from_state(
                         &read_at,
                         &(position as i32),
                         &catalog_issue_id,
+                        &has_catalog_issue_id,
                     ],
                 )
                 .await
@@ -1135,6 +1156,19 @@ pub async fn undo_to_snapshot(
             .start()
             .await
             .map_err(db::tx_error)?;
+
+        // Undo persists the whole restored session row (pending offer, snoozes,
+        // die fallbacks). Serialize against offer/reset/rating writes with the
+        // same per-reader advisory lock they take -- before reading the session
+        // or snapshot and held through commit -- so a concurrent tab cannot save
+        // a newer offer that this whole-session write then overwrites. It is the
+        // first statement in the transaction, so no row lock precedes it.
+        tx.query_one(
+            "SELECT pg_advisory_xact_lock($1::bigint)",
+            &[&(user.id() as i64)],
+        )
+        .await
+        .map_err(db::query_error)?;
 
         let result = async {
             // Get session with ownership check
@@ -2016,5 +2050,226 @@ mod tests {
             .expect("issue row")
             .get(0);
         assert_eq!(issue_status, "unread", "the rating's read state reverts");
+    }
+
+    /// Greptile #4617381402: a full (session-start) restore must not erase a
+    /// live catalog link when the snapshot omits `catalog_issue_id`, while an
+    /// explicit null in the snapshot must still clear it (Python
+    /// `update_issue_from_state`, issue #3226).
+    #[tokio::test]
+    async fn full_restore_preserves_catalog_links_when_snapshot_omits_the_key() {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (9101, 'undo-catalog-test');
+                 INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (9711, 'comicvine', 'issue', 'ext-1', '{}'::json, NOW(), NOW()),
+                        (9722, 'comicvine', 'issue', 'ext-2', '{}'::json, NOW(), NOW());
+                 INSERT INTO catalog_issues (id, canonical_external_identity_id, created_at, updated_at)
+                 VALUES (9611, 9711, NOW(), NOW()), (9622, 9722, NOW(), NOW());
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Linked Comic', 'Comic', 2, 2, 1, 'active', false);
+                 INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
+                 VALUES (9501, 9201, '1', 'read', NOW(), NOW(), 1, 9611),
+                        (9502, 9201, '2', 'unread', NULL, NOW(), 2, 9622);
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, reading_mode_suggested, snoozed_thread_ids)
+                 VALUES (9301, 9101, NOW(), NULL, 12, NULL, false, '[]'::json);
+                 INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)
+                 VALUES (9401, 9301,
+                   '{\"9201\": {\"uses_issue_tracking\": true, \"issue_states\": [{\"id\": 9501, \"number\": \"1\", \"status\": \"read\", \"position\": 1}, {\"id\": 9502, \"number\": \"2\", \"status\": \"unread\", \"position\": 2, \"catalog_issue_id\": null}]}}'::json,
+                   '{\"start_die\": 12, \"manual_die\": null}'::json,
+                   NOW(), 'Session start');"
+            )
+            .await
+            .expect("seed catalog-link restore fixture");
+        drop(connection);
+
+        let Json(_) = undo_to_snapshot(
+            Path((9301, 9401)),
+            AuthenticatedUser::for_test(9101),
+            State(state.clone()),
+        )
+        .await
+        .expect("full snapshot applies");
+
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let kept: Option<i64> = connection
+            .query_one("SELECT catalog_issue_id FROM issues WHERE id = 9501", &[])
+            .await
+            .expect("issue 9501 row")
+            .get(0);
+        assert_eq!(
+            kept,
+            Some(9611),
+            "an absent snapshot key must preserve the live catalog link"
+        );
+        let cleared: Option<i64> = connection
+            .query_one("SELECT catalog_issue_id FROM issues WHERE id = 9502", &[])
+            .await
+            .expect("issue 9502 row")
+            .get(0);
+        assert_eq!(
+            cleared, None,
+            "an explicit snapshot null must clear the catalog link"
+        );
+    }
+
+    /// Greptile #4617381412: a session-start restore whose pending thread was
+    /// added after the snapshot deletes that thread but must also clear the
+    /// in-memory pending fields, otherwise whole-session persistence writes the
+    /// deleted id back and the FK rolls the restore back.
+    #[tokio::test]
+    async fn full_restore_clears_pending_refs_for_thread_added_after_snapshot() {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (9101, 'undo-pending-test');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'In Snapshot', 'Comic', 3, 3, 1, 'active', false),
+                        (9299, 9101, 'Added Later', 'Comic', 1, 1, 2, 'active', false);
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
+                 VALUES (9301, 9101, NOW(), NULL, 12, NULL, 9299, false, '[]'::json);
+                 INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)
+                 VALUES (9401, 9301,
+                   '{\"9201\": {\"uses_issue_tracking\": false, \"issues_remaining\": 3}}'::json,
+                   '{\"start_die\": 12, \"manual_die\": null}'::json,
+                   NOW(), 'Session start');"
+            )
+            .await
+            .expect("seed pending-thread restore fixture");
+        drop(connection);
+
+        let Json(_) = undo_to_snapshot(
+            Path((9301, 9401)),
+            AuthenticatedUser::for_test(9101),
+            State(state.clone()),
+        )
+        .await
+        .expect("full restore succeeds despite the pending thread being deleted");
+
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let late_thread: i64 = connection
+            .query_one("SELECT count(*) FROM threads WHERE id = 9299", &[])
+            .await
+            .expect("thread count")
+            .get(0);
+        assert_eq!(late_thread, 0, "the post-snapshot thread is deleted");
+        let pending_thread: Option<i32> = connection
+            .query_one(
+                "SELECT pending_thread_id FROM sessions WHERE id = 9301",
+                &[],
+            )
+            .await
+            .expect("session row")
+            .get(0);
+        assert_eq!(
+            pending_thread, None,
+            "the deleted thread id must not be persisted as pending"
+        );
+    }
+
+    /// Greptile #4617381428: undo persists the whole session row, so it must
+    /// take the per-reader advisory lock before reading the session and hold it
+    /// through commit. A roll in another tab must not save a newer pending
+    /// offer that undo then overwrites from a stale read.
+    #[tokio::test]
+    async fn undo_holds_the_per_reader_lock_and_preserves_a_newer_offer() {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (9101, 'undo-lock-test');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Offer Target', 'Comic', 3, 3, 1, 'active', false);
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
+                 VALUES (9301, 9101, NOW(), NULL, 12, NULL, NULL, false, '[]'::json);
+                 INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)
+                 VALUES (9401, 9301,
+                   '{\"9201\": {\"uses_issue_tracking\": false, \"issues_remaining\": 3}}'::json,
+                   '{\"start_die\": 12, \"manual_die\": null}'::json,
+                   NOW(), 'Session start');"
+            )
+            .await
+            .expect("seed lock undo fixture");
+        drop(connection);
+
+        // A concurrent roll holds the per-reader dice lock and writes a newer
+        // offer, but has not committed yet.
+        let holder_state = test_support::test_state(1)
+            .await
+            .expect("holder state requires RUST_ROLL_TEST_DATABASE_URL");
+        let holder = db::checkout(&holder_state)
+            .await
+            .expect("holder connection");
+        holder.batch_execute("BEGIN").await.expect("holder begin");
+        holder
+            .execute("SELECT pg_advisory_xact_lock($1::bigint)", &[&(9101_i64)])
+            .await
+            .expect("holder takes the per-reader lock");
+        holder
+            .execute(
+                "UPDATE sessions SET pending_thread_id = 9201 WHERE id = 9301",
+                &[],
+            )
+            .await
+            .expect("holder writes a newer offer");
+
+        let undo_state = state.clone();
+        let mut undo = tokio::spawn(async move {
+            undo_to_snapshot(
+                Path((9301, 9401)),
+                AuthenticatedUser::for_test(9101),
+                State(undo_state),
+            )
+            .await
+        });
+
+        // Undo cannot finish while the lock is held: with the lock it blocks
+        // before its first read; without it the stale whole-session write would
+        // complete here and clobber the in-flight offer.
+        let still_blocked = tokio::time::timeout(std::time::Duration::from_millis(400), &mut undo)
+            .await
+            .is_err();
+
+        // The roll commits (releasing the lock), then undo proceeds.
+        holder
+            .batch_execute("COMMIT")
+            .await
+            .expect("holder commit releases the lock");
+        let Json(_) = undo
+            .await
+            .expect("undo task joined")
+            .expect("undo completes after lock release");
+
+        assert!(
+            still_blocked,
+            "undo must take the per-reader advisory lock before reading the session"
+        );
+
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let pending_thread: Option<i32> = connection
+            .query_one(
+                "SELECT pending_thread_id FROM sessions WHERE id = 9301",
+                &[],
+            )
+            .await
+            .expect("session row")
+            .get(0);
+        assert_eq!(
+            pending_thread,
+            Some(9201),
+            "undo must not overwrite a newer pending offer written before it acquired the lock"
+        );
     }
 }
