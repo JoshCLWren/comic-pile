@@ -1200,7 +1200,7 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 98,
+      "v1_total": 103,
       "v1_shadowed_by_rust": 4,
       "v1_live_python": 46,
       "v1_orphaned": 0,
@@ -1208,7 +1208,7 @@
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 99,
+      "total_python_surface": 104,
       "total_shadowed_by_rust": 4,
       "total_live_python": 46,
       "total_orphaned": 0
@@ -1438,6 +1438,71 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4848,
+        "consumers": [
+          "frontend/src/generated/nativeV2Client.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/continuity-rules/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4848,
+        "consumers": [
+          "frontend/src/generated/nativeV2Client.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/continuity-rules/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4848,
+        "consumers": [
+          "frontend/src/generated/nativeV2Client.ts"
+        ],
+        "method": "DELETE",
+        "path": "/api/v1/continuity-rules/{rule_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4848,
+        "consumers": [
+          "frontend/src/generated/nativeV2Client.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/continuity-rules/{rule_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4848,
+        "consumers": [
+          "frontend/src/generated/nativeV2Client.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/continuity-rules/{rule_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
