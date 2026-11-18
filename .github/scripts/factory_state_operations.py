@@ -261,7 +261,13 @@ def historical_failure_streak(
             if not model_only:
                 break
             continue
-        if row["event_type"] == "worker_completed":
+        if row["event_type"] == "worker_completed" or (
+            not model_only and row["event_type"] == "worker_failed"
+            and detail.get("delivery_outcome") == "persisted"
+            and detail.get("persisted_work") is True
+        ):
+            # Delivered code resets a worker retry streak but never rewrites
+            # the underlying failed execution or its model-specific history.
             break
         if row["event_type"] != "worker_failed" or detail.get("configured") is False:
             continue
