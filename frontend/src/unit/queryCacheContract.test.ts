@@ -215,7 +215,7 @@ describe('targeted cache effects', () => {
   })
 
   it('uses an authoritative rating response and reconciles open views after progress changes', async () => {
-    const { client, setQueryData, invalidateQueries } = createSpiedClient()
+    const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
     await applyRatedThreadCache(client, thread)
 
@@ -249,6 +249,13 @@ describe('targeted cache effects', () => {
       last_rating: thread.last_rating,
     })
 
+    // Exact-count guard: every invalidation below is intentional; an
+    // accidental extra key (or a dropped one) must fail this test.
+    expect(invalidateQueries).toHaveBeenCalledTimes(16)
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
     // A rating writes a new "After rating" snapshot (#3468), so both the Roll
     // undo list (`undo.all`) and the session view's snapshot list
     // (`session.snapshotsAll`) must stop serving the pre-rating list.
@@ -262,7 +269,12 @@ describe('targeted cache effects', () => {
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
     // Regression (#5264): open views must reconcile without a hard reload.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
+    // The paginated Queue is reset, never merely invalidated, so its loaded
+    // pages cannot be refetched through stale cursors after a reorder (#933).
+    expect(resetQueries).toHaveBeenCalledTimes(1)
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
+    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
+    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
@@ -369,6 +381,9 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterIssueEdit(client, thread.id)
 
+    // Exact-count guard: issue pages/creators/detail/summary plus the shared
+    // reader-progress pass; dropped keys or extra invalidations fail here.
+    expect(invalidateQueries).toHaveBeenCalledTimes(16)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
@@ -387,7 +402,9 @@ describe('targeted cache effects', () => {
     })
     // Regression (#5264): read/progress edits must reconcile Queue, Roll,
     // History/activity, and plan/list reader state across open views.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
+    // The paginated Queue is reset (not invalidated) to avoid #933 cursors.
+    expect(resetQueries).toHaveBeenCalledOnce()
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.issueCardsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.dieState(), exact: true })
@@ -398,9 +415,10 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
-    // The last issue may have completed the series; finished/excluded shelves reset.
-    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
-    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
+    // The finished/excluded shelves are not reset unconditionally: only the
+    // paginated Queue reset above is shared by every read/progress edit.
+    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
+    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
   })
 
   it('limits snooze reconciliation to the exact current session key', async () => {
@@ -491,6 +509,10 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterUndo(client)
 
+    // Exact-count guards restored: two queue-movement resets and the full
+    // invalidation set below. No extra key may creep into either pass.
+    expect(resetQueries).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).toHaveBeenCalledTimes(14)
     // The queue half is composed from the queue-movement effect, not re-implemented.
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
@@ -542,6 +564,9 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterResumeRecovery(client)
 
+    // Exact-count guards restored: scoped recovery set plus the reconciled
+    // reader-progress surfaces; no unscoped invalidateQueries blast.
+    expect(invalidateQueries).toHaveBeenCalledTimes(14)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -572,6 +597,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.thread.all })
     expect(setQueryData).not.toHaveBeenCalled()
+    expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
   })

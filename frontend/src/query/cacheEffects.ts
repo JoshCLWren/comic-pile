@@ -144,10 +144,9 @@ export async function applyRatedThreadCache(
   }
 
   await Promise.all([
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
+    // `session.current` is intentionally not invalidated here: the shared
+    // reader-progress pass below invalidates `session.all`, which covers it.
+    // A second exact invalidation re-ran the in-flight session fetch (#5264).
     // A rating writes a new "After rating" snapshot (#3468). Both snapshot
     // lists read the same rows, and the History card counts them through the
     // paginated session list, so all three must stop serving the pre-rating
@@ -991,11 +990,11 @@ async function invalidateReadingEligibility(
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
     // Legacy read/unread and direct v2 writes change the shared card status too.
     client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
-    client.invalidateQueries({ queryKey: queryKeys.queue.all }),
-    // Queue membership/progress changes also move series across the finished
-    // boundary and can leave the excluded library view stale across open tabs.
-    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
-    client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    // Reset (not invalidate) the paginated Queue loader: re-fetching already
+    // loaded pages through pre-mutation cursors can duplicate or skip rows
+    // after a reorder (#933). Resetting drops every loaded page so each active
+    // list re-requests exactly one bounded first page.
+    client.resetQueries({ queryKey: queryKeys.queue.all }),
     // Keep other Roll surfaces actively refreshed; bootstrap may be owned by an
     // explicit authoritative fetch in some rating flows.
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
