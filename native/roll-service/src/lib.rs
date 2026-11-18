@@ -12,8 +12,10 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
+pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
+pub mod cron_auth;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -240,6 +242,19 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
+    /// Explicit status with a structured JSON `detail` object.
+    ///
+    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
+    /// conflicts and validation errors. The scalar variants above cannot
+    /// represent that shape (their detail is a JSON string), so cutover
+    /// handlers that must preserve a structured wire contract use this
+    /// variant. The payload is serialized JSON text and parsed on response.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Serialized JSON object used as the `detail` value.
+        detail: String,
+    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -281,6 +296,7 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             ApiError::Detail { status, .. } => *status,
         }
@@ -302,6 +318,7 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
+            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
         }
@@ -359,6 +376,18 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
+        if let ApiError::StructuredDetail { detail, .. } = &self {
+            let value: serde_json::Value = serde_json::from_str(detail)
+                .unwrap_or_else(|_| serde_json::Value::String(detail.clone()));
+            let mut response = (status, Json(serde_json::json!({"detail": value}))).into_response();
+            if status == StatusCode::UNAUTHORIZED {
+                response.headers_mut().insert(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    axum::http::HeaderValue::from_static("Bearer"),
+                );
+            }
+            return response;
+        }
         let detail_owned = self.detail().to_string();
         let mut response = (
             status,
@@ -377,6 +406,21 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Per-route request deadlines used by `bound_request`. Cron drains run longer
+/// than ordinary requests. The release-sync deadline is derived from the
+/// handler's own wall-clock budget (`CRON_MAX_DURATION`) with a margin so the
+/// budget-exhaustion branch can actually return its truncated 200 report
+/// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
+fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
+    match path {
+        "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        "/api/v1/cron/release-sync" => {
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        }
+        _ => default_timeout,
+    }
+}
+
 async fn bound_request(
     State(state): State<Arc<AppState>>,
     request: Request,
@@ -385,11 +429,7 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
-        Duration::from_secs(50)
-    } else {
-        state.request_timeout
-    };
+    let timeout = request_timeout_for(request.uri().path(), state.request_timeout);
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|e| {
@@ -615,6 +655,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_orders::insert_reading_order_item),
         )
         .route(
+            "/api/v1/cron/release-sync",
+            get(reading_plan_sync::scheduled_release_sync_cron),
+        )
+        .route(
             "/api/v1/reading-plan-sync/status",
             get(reading_plan_sync::get_sync_status),
         )
@@ -822,6 +866,67 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
         )
+        // Continuity plans v1 routes (cutover from Python)
+        .route(
+            "/api/v1/continuity-plans/",
+            get(continuity_plans::list_continuity_plans),
+        )
+        .route(
+            "/api/v1/continuity-plans/",
+            post(continuity_plans::create_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            get(continuity_plans::get_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            put(continuity_plans::update_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(continuity_plans::delete_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(continuity_plans::get_continuity_plan_membership),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(continuity_plans::link_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(continuity_plans::list_release_sources),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(continuity_plans::list_release_sources_for_reader),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(continuity_plans::create_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(continuity_plans::update_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(continuity_plans::delete_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(continuity_plans::adopt_reading_order),
+        )
         .route(
             "/api/v1/taste/discoveries",
             get(taste_discoveries::list_taste_discoveries),
@@ -903,6 +1008,28 @@ mod tests {
     use super::*;
     use axum::body::{to_bytes, Body};
     use tower::ServiceExt;
+
+    #[test]
+    fn release_sync_ingress_deadline_exceeds_handler_budget() {
+        let default = Duration::from_secs(3);
+        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        assert!(
+            bound > reading_plan_sync::CRON_MAX_DURATION,
+            "the release-sync ingress deadline must be reachable after the handler budget"
+        );
+        assert_eq!(
+            bound,
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
+            Duration::from_secs(50)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v1/roll/bootstrap", default),
+            default
+        );
+    }
 
     #[tokio::test]
     async fn timeout_cancels_work_and_returns_json() {
