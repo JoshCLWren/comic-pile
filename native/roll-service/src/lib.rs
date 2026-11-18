@@ -15,6 +15,7 @@ pub mod config;
 pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
+pub mod creators_v2;
 pub mod cron_auth;
 pub mod custom_cbl;
 pub mod db;
@@ -29,6 +30,7 @@ pub mod issue_handler;
 pub mod issue_identity;
 pub mod issue_mutation;
 pub mod issue_read;
+pub mod issue_read_state;
 pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
@@ -37,6 +39,7 @@ pub mod option_inputs;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
+pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
@@ -69,8 +72,11 @@ pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod thread_issues;
+pub mod thread_lifecycle;
 pub mod thread_ordering;
+pub mod thread_validation;
 pub mod threads;
+pub mod threads_v1_openapi;
 pub mod undo_apply;
 pub mod undo_snapshots;
 
@@ -719,6 +725,23 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
         )
+        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
+        .route(
+            "/api/v1/issues/{issue_id}",
+            post(issue_read_state::post_issue_action),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkRead",
+            post(issue_read_state::bulk_mark_issues_read),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkUnread",
+            post(issue_read_state::bulk_mark_issues_unread),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(reader_context::get_issue_reader_context),
+        )
         .route(
             "/api/v1/threads:getBlockingInfo",
             post(thread_ordering::get_threads_blocking_info),
@@ -754,6 +777,47 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
+        )
+        .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
+        .route(
+            "/api/v1/threads/check-duplicates",
+            post(thread_lifecycle::check_potential_duplicates),
+        )
+        .route(
+            "/api/v1/threads/excluded/threads",
+            get(thread_lifecycle::list_excluded_threads),
+        )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(thread_lifecycle::list_thread_groups_batch),
+        )
+        .route(
+            "/api/v1/threads/reactivate",
+            post(thread_lifecycle::reactivate_thread),
+        )
+        .route(
+            "/api/v1/threads/stale",
+            get(thread_lifecycle::list_stale_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(thread_lifecycle::update_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            delete(thread_lifecycle::delete_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/exclude",
+            post(thread_lifecycle::exclude_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/restore",
+            post(thread_lifecycle::restore_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/set-pending",
+            post(thread_lifecycle::set_pending_thread),
         )
         .route(
             "/api/v2/reading-lists",
@@ -988,6 +1052,45 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators", get(creators::list_creators))
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        .route("/api/v2/creators", get(creators_v2::list_creators))
+        .route("/api/v2/creators/", get(creators_v2::list_creators))
+        .route(
+            "/api/v2/creators/summaries",
+            get(creators_v2::get_summaries),
+        )
+        .route("/api/v2/creators/compare", get(creators_v2::get_comparison))
+        .route(
+            "/api/v2/creators/discoveries",
+            get(creators_v2::get_discoveries),
+        )
+        .route(
+            "/api/v2/creators/team-chemistry",
+            get(creators_v2::get_team_chemistry),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}",
+            get(creators_v2::get_detail),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+            get(creators_v2::get_series_issues),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            get(creators_v2::get_metric_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(creators_v2::get_rating_distribution_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+            get(creators_v2::get_role_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(creators_v2::get_series_drilldown),
+        )
         .route(
             "/api/v1/continuity-rules/",
             get(continuity_rules::list).post(continuity_rules::create),

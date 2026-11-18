@@ -996,8 +996,9 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
 
 /// Scoped Option E activation for one serialized test. The handler reads the
 /// activation switch per request, so the guard restores the environment even
-/// on failure. Every DB-backed test in this binary holds the reset guard, so
-/// no other test in this process observes the temporary value.
+/// on failure. The caller must enable this only while holding the DB reset
+/// guard and declare it after that guard, so the variables drop in the safe
+/// order and no other test in this process observes the temporary value.
 struct OptionEEnv {
     enabled: Option<std::ffi::OsString>,
     approval: Option<std::ffi::OsString>,
@@ -1040,8 +1041,10 @@ async fn pending_pair(conn: &Conn, user_id: i32) -> (Option<i32>, Option<i32>) {
 
 #[tokio::test]
 async fn set_current_issue_option_e_exercises_manual_pick_and_rollback() {
-    let _env = OptionEEnv::enable();
     let (state, token, csrf, user_id, _guard) = setup_user("tiss-opte").await;
+    // Enable only while the DB reset guard is held (dropped before it), so no
+    // other test in this process can observe the process-global switch.
+    let _env = OptionEEnv::enable();
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "OptE", 4, 1).await;
     let mut ids = Vec::new();
