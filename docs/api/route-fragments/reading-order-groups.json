@@ -1,0 +1,181 @@
+{
+  "family": "reading-order-groups",
+  "owned_path_patterns": [
+    "^/api/v1/reading\\-order\\-groups(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 4841
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PATCH",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}/detail",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/issue\\-ranges$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/{group_id}/members",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/reading-order-groups/{group_id}/order",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/order$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}/plans",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/plans$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "exclude_from_inventory": true
+    }
+  ]
+}
