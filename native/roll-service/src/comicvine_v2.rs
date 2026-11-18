@@ -436,7 +436,7 @@ fn map_provider_failure(error: ProviderFailure) -> ApiError {
 }
 
 /// Match the structured `SeriesImportError` envelope returned by FastAPI.
-fn series_import_error(
+pub(crate) fn series_import_error(
     status: StatusCode,
     code: &'static str,
     message: impl Into<String>,
@@ -444,7 +444,7 @@ fn series_import_error(
     ApiError::structured(status, json!({"code": code, "message": message.into()}))
 }
 
-fn provider_failure(error: ProviderFailure, resource: &str) -> ApiError {
+pub(crate) fn provider_failure(error: ProviderFailure, resource: &str) -> ApiError {
     let error_type = match error {
         ProviderFailure::Timeout => "TimeoutError",
         ProviderFailure::RateLimited(_)
