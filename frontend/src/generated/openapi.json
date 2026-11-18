@@ -11529,7 +11529,7 @@
         "type": "object"
       },
       "NativeSessionBandwidthState": {
-        "description": "Canonical bandwidth state; invalid stored values normalize to `null`.",
+        "description": "Canonical bandwidth state.",
         "properties": {
           "active_bandwidth": {
             "type": [
@@ -11565,8 +11565,92 @@
         },
         "type": "object"
       },
+      "NativeSessionDetailsResponse": {
+        "description": "Full session details response with events and narrative summary.",
+        "properties": {
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SessionEventDetail"
+            },
+            "type": "array"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "narrative_summary": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "session_id",
+          "started_at",
+          "start_die",
+          "ladder_path",
+          "narrative_summary",
+          "current_die",
+          "events"
+        ],
+        "type": "object"
+      },
+      "NativeSessionHistoryListResponse": {
+        "description": "Paginated session history list response.",
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionListItemResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "type": "object"
+      },
       "NativeSessionIntentState": {
-        "description": "Canonical intent state; invalid stored values normalize to `null`.",
+        "description": "Canonical intent state.",
         "properties": {
           "active_intent": {
             "type": [
@@ -17479,7 +17563,7 @@
         "type": "object"
       },
       "SessionActiveThread": {
-        "description": "Active (pending or freshly rolled) thread projection for one session.",
+        "description": "Active thread projection.",
         "properties": {
           "format": {
             "type": "string"
@@ -17907,6 +17991,96 @@
         "title": "SessionDetailsResponse",
         "type": "object"
       },
+      "SessionEventDetail": {
+        "description": "Event detail for session details response.",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "die_after": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "queue_move": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "selection_method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_deleted": {
+            "type": "boolean"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "timestamp",
+          "thread_deleted"
+        ],
+        "type": "object"
+      },
       "SessionHistoryListResponse": {
         "description": "Schema for paginated session history list response.",
         "properties": {
@@ -18165,6 +18339,125 @@
           "snapshot_count"
         ],
         "title": "SessionListItem",
+        "type": "object"
+      },
+      "SessionListItemResponse": {
+        "description": "List-item session response (history list endpoint).",
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "manual_die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "snapshot_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "reading_mode_suggested"
+        ],
+        "type": "object"
+      },
+      "SessionListParams": {
+        "description": "Query parameters for session history pagination.",
+        "properties": {
+          "page_size": {
+            "default": 50,
+            "format": "int32",
+            "maximum": 200,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "SessionResponse": {
@@ -18449,7 +18742,7 @@
         "type": "object"
       },
       "SessionTag": {
-        "description": "One direct visible tag on the active thread.",
+        "description": "Direct visible tag.",
         "properties": {
           "color": {
             "type": "string"
@@ -18493,7 +18786,7 @@
         "type": "object"
       },
       "SessionThreadSummary": {
-        "description": "Compact thread summary used for the (empty on this endpoint) snoozed and\nskipped lists, kept typed so the contract stays explicit.",
+        "description": "Compact thread summary.",
         "properties": {
           "id": {
             "format": "int32",
@@ -20400,6 +20693,221 @@
           "instance_id"
         ],
         "title": "TrafficMetricsSnapshot",
+        "type": "object"
+      },
+      "UndoApplyResponse": {
+        "description": "Full session response matching Python SessionResponse.",
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeSessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "manual_die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pending_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "skipped_threads": {
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            },
+            "type": "array"
+          },
+          "snapshot_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snoozed_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "snoozed_threads": {
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            },
+            "type": "array"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "type": "object"
+      },
+      "UndoSnapshotItem": {
+        "description": "Snapshot item in the list response.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "UndoSnapshotsResponse": {
+        "description": "Undo snapshots list response.",
+        "properties": {
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/UndoSnapshotItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "snapshots"
+        ],
         "type": "object"
       },
       "UpdateTagRequest": {
@@ -27537,39 +28045,23 @@
     },
     "/api/v1/sessions/": {
       "get": {
-        "description": "List sessions with cursor-based pagination.\n\nArgs:\n    current_user: The authenticated user making the request.\n    page_size: Number of sessions to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (started_at timestamp, session_id).\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionHistoryListResponse with paginated sessions and next_page_token if more exist.",
-        "operationId": "list_sessions_api_v1_sessions__get",
+        "operationId": "list_sessions_v1_documentation",
         "parameters": [
           {
-            "description": "Number of sessions to return per page (default 50, max 200)",
             "in": "query",
             "name": "page_size",
             "required": false,
             "schema": {
-              "default": 50,
-              "description": "Number of sessions to return per page (default 50, max 200)",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
-            "description": "Token for pagination continuation (started_at,session_id)",
             "in": "query",
             "name": "page_token",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Token for pagination continuation (started_at,session_id)",
-              "title": "Page Token"
+              "type": "string"
             }
           }
         ],
@@ -27578,21 +28070,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                  "$ref": "#/components/schemas/NativeSessionHistoryListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Paginated session history"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27600,9 +28088,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Sessions",
+        "summary": "Documentation-only operation for the versioned list.",
         "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -27712,15 +28199,15 @@
     },
     "/api/v1/sessions/{session_id}/details": {
       "get": {
-        "description": "Get session details with all events for expanded view.\n\nArgs:\n    session_id: The session ID to retrieve details for.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionDetailsResponse with events and narrative summary.\n\nRaises:\n    HTTPException: If session not found.",
-        "operationId": "get_session_details_api_v1_sessions__session_id__details_get",
+        "operationId": "get_session_details_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -27730,21 +28217,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionDetailsResponse"
+                  "$ref": "#/components/schemas/NativeSessionDetailsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Session details with events"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27752,9 +28238,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Session Details",
+        "summary": "Documentation-only operation for the versioned details.",
         "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -30134,15 +30619,15 @@
     },
     "/api/v1/undo/{session_id}/snapshots": {
       "get": {
-        "description": "List all snapshots for a session.\n\nArgs:\n    session_id: Session whose snapshots should be listed.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Typed snapshot list in reverse chronological order.\n\nRaises:\n    HTTPException: If the session is not owned by the current user.",
-        "operationId": "list_session_snapshots_api_v1_undo__session_id__snapshots_get",
+        "operationId": "list_undo_snapshots_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30152,21 +30637,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SnapshotsListResponse"
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Session restore snapshots"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30174,33 +30658,33 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Session Snapshots",
+        "summary": "Documentation-only operation for the versioned undo snapshots.",
         "tags": [
-          "undo",
           "undo"
         ]
       }
     },
     "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
       "post": {
-        "description": "Undo session state to a snapshot.\n\nArgs:\n    session_id: Session to restore.\n    snapshot_id: Snapshot to restore.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Restored session response.\n\nRaises:\n    HTTPException: If the session or snapshot is not found.\n    RuntimeError: If all deadlock retries fail.",
-        "operationId": "undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post",
+        "operationId": "undo_to_snapshot_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Snapshot to restore",
             "in": "path",
             "name": "snapshot_id",
             "required": true,
             "schema": {
-              "title": "Snapshot Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30210,21 +30694,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/UndoApplyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Restored session"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30232,9 +30718,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Undo To Snapshot",
+        "summary": "Documentation-only operation for the versioned undo apply.",
         "tags": [
-          "undo",
           "undo"
         ]
       }
