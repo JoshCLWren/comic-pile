@@ -1808,26 +1808,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Issue Reader Context
-         * @description Return bounded reading analytics and local neighborhood for an owned issue.
-         *
-         *     The response is decorative context for the Roll experience and must never
-         *     be a prerequisite for rating. It is computed with bounded, user-scoped
-         *     queries that do not traverse the full library or hydrate ComicVine.
-         *
-         *     Args:
-         *         issue_id: ComicPile issue identifier.
-         *         current_user: Authenticated owner of the requested issue.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Bounded reader-context payload for the requested issue.
-         *
-         *     Raises:
-         *         HTTPException: If the issue does not belong to the user.
-         */
-        get: operations["get_issue_reader_context_api_v1_issues__issue_id__reader_context_get"];
+        /** Documentation-only operation for reader context. */
+        get: operations["issue_read_state_reader_context"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1845,19 +1827,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Mark Issue Read
-         * @description Mark an issue as read and update thread's next_unread_issue_id.
-         *
-         *     Args:
-         *         issue_id: The issue ID to mark as read.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Raises:
-         *         HTTPException: If issue not found, thread not found, or issue already read.
-         */
-        post: operations["mark_issue_read_api_v1_issues__issue_id__markRead_post"];
+        /** Documentation-only operation for `:markRead`. */
+        post: operations["issue_read_state_mark_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1873,21 +1844,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Mark Issue Unread
-         * @description Mark an issue as unread and update thread's next_unread_issue_id.
-         *
-         *     Reactivates thread if it was completed.
-         *
-         *     Args:
-         *         issue_id: The issue ID to mark as unread.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Raises:
-         *         HTTPException: If issue not found, thread not found, or issue already unread.
-         */
-        post: operations["mark_issue_unread_api_v1_issues__issue_id__markUnread_post"];
+        /** Documentation-only operation for `:markUnread`. */
+        post: operations["issue_read_state_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1903,23 +1861,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Move Issue
-         * @description Move a single issue within its thread.
-         *
-         *     Args:
-         *         issue_id: The issue ID to move.
-         *         request: Move request containing the issue that should come before it.
-         *         current_user: The authenticated user making the move request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         None. The response is HTTP 204 on success.
-         *
-         *     Raises:
-         *         HTTPException: If the issue or requested target issue is not found.
-         */
-        post: operations["move_issue_api_v1_issues__issue_id__move_post"];
+        /** Documentation-only operation for `:move`. */
+        post: operations["issue_read_state_move"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1935,19 +1878,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Bulk Mark Issue Read
-         * @description Bulk mark issues as read.
-         *
-         *     Args:
-         *         request: Bounded list of issue IDs.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: If any issue is invalid or already read.
-         */
-        post: operations["bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post"];
+        /** Documentation-only operation for `:bulkMarkRead`. */
+        post: operations["issue_read_state_bulk_mark_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1963,19 +1895,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Bulk Mark Issue Unread
-         * @description Bulk mark issues as unread.
-         *
-         *     Args:
-         *         request: Bounded list of issue IDs.
-         *         current_user: Authenticated user.
-         *         db: Database session.
-         *
-         *     Raises:
-         *         HTTPException: If any issue is invalid or already unread.
-         */
-        post: operations["bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post"];
+        /** Documentation-only operation for `:bulkMarkUnread`. */
+        post: operations["issue_read_state_bulk_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9182,6 +9103,10 @@ export interface components {
              */
             issue_ids: number[];
         };
+        /** @description Request body for the bulk read-state operations. */
+        IssueBulkRequest: {
+            issue_ids: number[];
+        };
         IssueCard: {
             /** @description Confirmed provider issue identifier, never a provisional candidate. */
             comicvine_issue_id?: string | null;
@@ -10238,6 +10163,14 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
+        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
+        NativeIssueMoveRequest: {
+            /**
+             * Format: int32
+             * @description Move after this issue. `null` moves the issue to position 1.
+             */
+            after_issue_id: number | null;
+        };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
             created_at: string;
@@ -10272,6 +10205,119 @@ export interface components {
             volume?: string | null;
             /** Format: int32 */
             year?: number | null;
+        };
+        /** @description Python `ReaderContextCrossover`. */
+        NativeReaderContextCrossover: {
+            applies_to_current_issue: boolean;
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `issue` or `thread`. */
+            membership_kind: string;
+            name: string;
+            next_member?: components["schemas"]["NativeReaderContextCrossoverNextMember"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_count: number;
+        };
+        /** @description Python `ReaderContextCrossoverMembership`. */
+        NativeReaderContextCrossoverMembership: {
+            /** Format: int32 */
+            id: number;
+            name: string;
+        };
+        /** @description Python `ReaderContextCrossoverNextMember`. */
+        NativeReaderContextCrossoverNextMember: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+        };
+        /** @description Python `ReaderContextEdge`. */
+        NativeReaderContextEdge: {
+            explanation?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `dependency` or `continuity`. */
+            kind: string;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number?: string | null;
+            source_label?: string | null;
+            source_status?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            source_thread_title?: string | null;
+            /** Format: int32 */
+            target_issue_id: number;
+            target_issue_number?: string | null;
+            target_label?: string | null;
+            target_status?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            target_thread_title?: string | null;
+        };
+        /** @description Python `ReaderContextLocalChain`. */
+        NativeReaderContextLocalChain: {
+            edges: components["schemas"]["NativeReaderContextEdge"][];
+            issues: components["schemas"]["NativeReaderContextLocalIssue"][];
+        };
+        /** @description Python `ReaderContextLocalIssue`. */
+        NativeReaderContextLocalIssue: {
+            crossover_memberships: components["schemas"]["NativeReaderContextCrossoverMembership"][];
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: double */
+            rating?: number | null;
+            /** @description `previous`, `current`, `next` or `future`. */
+            relation: string;
+            status: string;
+        };
+        /** @description Python `ReaderContextPreviousIssue`. */
+        NativeReaderContextPreviousIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating?: number | null;
+        };
+        /** @description Python `ReaderContextRecentRating`. */
+        NativeReaderContextRecentRating: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating: number;
+        };
+        /** @description Python `ReaderContextResponse`. */
+        NativeReaderContextResponse: {
+            crossovers: components["schemas"]["NativeReaderContextCrossover"][];
+            /** Format: int32 */
+            issue_id: number;
+            local_chain: components["schemas"]["NativeReaderContextLocalChain"];
+            series: components["schemas"]["NativeReaderContextSeries"];
+        };
+        /** @description Python `ReaderContextSeries`. */
+        NativeReaderContextSeries: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_series_id?: string | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** @description `comicvine` or `unavailable`. */
+            identity_source: string;
+            /** Format: double */
+            lowest_rating?: number | null;
+            previous_issue?: components["schemas"]["NativeReaderContextPreviousIssue"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
+            series_name?: string | null;
         };
         NativeReadingListEntryIntent: {
             gate: string;
@@ -16916,129 +16962,223 @@ export interface operations {
             };
         };
     };
-    get_issue_reader_context_api_v1_issues__issue_id__reader_context_get: {
+    issue_read_state_reader_context: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Bounded reader context */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReaderContextResponse"];
+                    "application/json": components["schemas"]["NativeReaderContextResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    mark_issue_read_api_v1_issues__issue_id__markRead_post: {
+    issue_read_state_mark_read: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Issue marked read and the thread counters refreshed */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    mark_issue_unread_api_v1_issues__issue_id__markUnread_post: {
+    issue_read_state_mark_unread: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Issue marked unread; a completed thread is reactivated */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    move_issue_api_v1_issues__issue_id__move_post: {
+    issue_read_state_move: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueMoveRequest"];
+                "application/json": components["schemas"]["NativeIssueMoveRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Issue moved within its thread */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post: {
+    issue_read_state_bulk_mark_read: {
         parameters: {
             query?: never;
             header?: never;
@@ -17047,29 +17187,55 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueBulkMarkReadRequest"];
+                "application/json": components["schemas"]["IssueBulkRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Every issue marked read atomically */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description An issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post: {
+    issue_read_state_bulk_mark_unread: {
         parameters: {
             query?: never;
             header?: never;
@@ -17078,25 +17244,51 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueBulkMarkUnreadRequest"];
+                "application/json": components["schemas"]["IssueBulkRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Every issue marked unread atomically */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description An issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
