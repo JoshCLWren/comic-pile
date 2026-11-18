@@ -1004,7 +1004,7 @@
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 107,
       "v1_shadowed_by_rust": 4,
-      "v1_live_python": 61,
+      "v1_live_python": 65,
       "v1_orphaned": 7,
       "unversioned_total": 1,
       "unversioned_shadowed_by_rust": 0,
@@ -1012,7 +1012,7 @@
       "unversioned_orphaned": 0,
       "total_python_surface": 108,
       "total_shadowed_by_rust": 4,
-      "total_live_python": 61,
+      "total_live_python": 65,
       "total_orphaned": 7
     },
     "catch_all": {
@@ -1032,16 +1032,16 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4842,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-series-mapping.ts"
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/preview",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1273,19 +1273,17 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4842,
-        "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
-        ],
         "method": "POST",
         "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1692,35 +1690,31 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4842,
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4842,
+        "method": "POST",
+        "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
-          "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "POST",
-        "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
