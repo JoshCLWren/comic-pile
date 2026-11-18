@@ -903,29 +903,23 @@ async fn move_reorders_and_refreshes_the_thread_counters() {
 }
 
 #[tokio::test]
-async fn validation_errors_use_the_fastapi_list_shape_after_authentication() {
+async fn validation_errors_use_the_production_detail_after_authentication() {
     let (state, token, csrf, user_id, _guard) = setup_user("irs-422").await;
     let conn = state.pool.get().await.unwrap();
     let (_alpha, a) = series(&conn, user_id, "Alpha", 1, "active", &[("1", "unread")]).await;
 
+    let expected = json!({"detail": "Validation failed"});
+
     let (status, body) = send(&state, mark("/api/v1/issues/abc:markRead", &token, &csrf)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(
-        body,
-        json!({"detail": [{
-            "type": "int_parsing",
-            "loc": ["path", "issue_id"],
-            "msg": "Input should be a valid integer, unable to parse string as an integer",
-            "input": "abc"
-        }]})
-    );
+    assert_eq!(body, expected);
     let (status, body) = send(
         &state,
         get("/api/v1/issues/abc/reader-context", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body["detail"][0]["loc"], json!(["path", "issue_id"]));
+    assert_eq!(body, expected);
 
     let (status, body) = send(
         &state,
@@ -938,15 +932,7 @@ async fn validation_errors_use_the_fastapi_list_shape_after_authentication() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(
-        body,
-        json!({"detail": [{
-            "type": "missing",
-            "loc": ["body", "after_issue_id"],
-            "msg": "Field required",
-            "input": {}
-        }]})
-    );
+    assert_eq!(body, expected);
     let (status, body) = send(
         &state,
         post(
@@ -958,31 +944,24 @@ async fn validation_errors_use_the_fastapi_list_shape_after_authentication() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body["detail"].as_array().unwrap().len(), 2);
-    assert_eq!(body["detail"][0]["loc"], json!(["path", "issue_id"]));
-    assert_eq!(body["detail"][1]["type"], "greater_than_equal");
+    assert_eq!(body, expected);
 
-    for (path, payload, kind) in [
-        (
-            "/api/v1/issues:bulkMarkRead",
-            json!({"issue_ids": []}),
-            "too_short",
-        ),
+    for (path, payload) in [
+        ("/api/v1/issues:bulkMarkRead", json!({"issue_ids": []})),
         (
             "/api/v1/issues:bulkMarkUnread",
             json!({"issue_ids": (1..=101).collect::<Vec<i32>>()}),
-            "too_long",
         ),
-        ("/api/v1/issues:bulkMarkRead", json!({}), "missing"),
+        ("/api/v1/issues:bulkMarkRead", json!({})),
+        ("/api/v1/issues:bulkMarkRead", json!({"issue_ids": "1"})),
         (
             "/api/v1/issues:bulkMarkRead",
-            json!({"issue_ids": "1"}),
-            "list_type",
+            json!({"issue_ids": [1, "x", null]}),
         ),
     ] {
         let (status, body) = send(&state, post(path, &token, &csrf, Some(payload))).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}");
-        assert_eq!(body["detail"][0]["type"], kind, "{path}: {body:?}");
+        assert_eq!(body, expected, "{path}");
     }
     // Wrong method / unknown action on the issue segment is a 405, like Starlette.
     for path in [

@@ -184,10 +184,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   },
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   }
                 ]
               }
@@ -908,10 +908,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   },
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   }
                 ]
               }
@@ -1123,6 +1123,130 @@
         ]
       }
     },
+    "/api/v1/cbl/{list_id}/adoption-commit": {
+      "post": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for committing an adoption plan.",
+        "operationId": "cbl_adoption_commit_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Reading Plan created with adopted CBL issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
+          "422": {
+            "description": "Request failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit": {
+      "post": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for targeted adoption into an existing plan.",
+        "operationId": "cbl_targeted_adoption_commit_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Owned continuity plan identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reading Plan updated with adopted CBL issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
+          "422": {
+            "description": "Request failed validation or plan not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
       "get": {
         "tags": [
@@ -1175,7 +1299,6 @@
         "operationId": "continuity_plans_list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1211,7 +1334,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1246,7 +1368,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1281,7 +1402,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1316,9 +1436,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -1354,7 +1472,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1390,7 +1507,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1434,7 +1550,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1467,9 +1582,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -1516,7 +1629,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1558,9 +1670,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -1588,7 +1698,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1634,7 +1743,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1670,7 +1778,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1709,7 +1816,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1737,7 +1843,6 @@
         "operationId": "continuity_rules_list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1773,7 +1878,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1809,7 +1913,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1853,7 +1956,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1886,9 +1988,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -3103,6 +3203,66 @@
         ]
       }
     },
+    "/api/v1/issue-identity/cbl-sources": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for CBL source discovery.",
+        "operationId": "discover_cbl_source_lists_documentation",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive list-name filter, max 200 characters",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results, 1-100 (default 25)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active CBL source lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CblSourceListDiscoveryItem"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/issue-identity/cbl-sources/browse": {
       "get": {
         "tags": [
@@ -3158,7 +3318,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3168,7 +3327,6 @@
             }
           },
           "400": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3178,7 +3336,6 @@
             }
           },
           "404": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3188,7 +3345,6 @@
             }
           },
           "422": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3198,7 +3354,6 @@
             }
           },
           "503": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3208,6 +3363,134 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for Comic Vine occurrence lookup.",
+        "operationId": "find_cbl_sources_by_comicvine_issue_documentation",
+        "parameters": [
+          {
+            "name": "comicvine_issue_id",
+            "in": "path",
+            "description": "Comic Vine issue identifier, max 100 characters",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Occurrence offset, 0-based (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Occurrence limit, 1-200 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared-catalog occurrences for the Comic Vine issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblComicvineOccurrencePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Identifier or query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/compare": {
+      "post": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for CBL source comparison.",
+        "operationId": "compare_cbl_sources_documentation",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblSourceComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked coverage comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request or query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/issue-identity/cbl-sources/folders": {
@@ -3232,7 +3515,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3242,7 +3524,6 @@
             }
           },
           "400": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3252,7 +3533,6 @@
             }
           },
           "404": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3262,7 +3542,6 @@
             }
           },
           "422": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3272,7 +3551,6 @@
             }
           },
           "503": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3282,6 +3560,199 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/issue-identity/cbl-sources/{list_id}": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for one CBL source list.",
+        "operationId": "get_cbl_source_list_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Entry offset, 0-based (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Entry limit, 1-2000 (default 1000)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CBL source list with a bounded page of entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblSourceListDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CBL source list not found"
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl/{list_id}/adoption-plan": {
+      "post": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "operationId": "cbl_adoption_plan_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Adoption preview for the active CBL list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Inactive list or invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for reading-list CBL candidates.",
+        "operationId": "find_cbl_candidates_for_reading_list_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Owned custom CBL list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reading-list gaps and ranked CBL candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Custom CBL not found"
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/issues/{issue_id}": {
@@ -3358,10 +3829,10 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/IssueIntelligence"
                     },
                     {
-                      "$ref": "#/components/schemas/IssueIntelligence"
+                      "type": "null"
                     }
                   ]
                 }
@@ -3418,6 +3889,289 @@
           },
           "404": {
             "description": "Issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}/reader-context": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for reader context.",
+        "operationId": "issue_read_state_reader_context",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded reader context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderContextResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:markRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markRead`.",
+        "operationId": "issue_read_state_mark_read",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:markUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markUnread`.",
+        "operationId": "issue_read_state_mark_unread",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:move": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:move`.",
+        "operationId": "issue_read_state_move",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
+        "operationId": "issue_read_state_bulk_mark_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
+        "operationId": "issue_read_state_bulk_mark_unread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -3783,7 +4537,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3826,7 +4579,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3895,7 +4647,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3939,7 +4690,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3983,7 +4733,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -5946,10 +6695,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapActiveThread"
               },
               {
-                "$ref": "#/components/schemas/BootstrapActiveThread"
+                "type": "null"
               }
             ]
           },
@@ -5959,10 +6708,10 @@
           "last_read": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapLastRead"
               },
               {
-                "$ref": "#/components/schemas/BootstrapLastRead"
+                "type": "null"
               }
             ]
           },
@@ -5986,10 +6735,10 @@
           "roll_recovery": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapRollRecovery"
               },
               {
-                "$ref": "#/components/schemas/BootstrapRollRecovery"
+                "type": "null"
               }
             ]
           },
@@ -6418,10 +7167,10 @@
           "diagnostics": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BugReportDiagnostics"
               },
               {
-                "$ref": "#/components/schemas/BugReportDiagnostics"
+                "type": "null"
               }
             ]
           },
@@ -6798,6 +7547,939 @@
           }
         }
       },
+      "CblAdoptionCommitRequest": {
+        "type": "object",
+        "required": [
+          "content_hash",
+          "revision_sha"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "entry_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "series_decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitSeriesDecision"
+            }
+          },
+          "series_overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitEntryOverride"
+            }
+          }
+        }
+      },
+      "CblAdoptionCommitResponseWire": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
+          "created_at",
+          "updated_at",
+          "reused_positions",
+          "created_positions",
+          "excluded_positions",
+          "unresolved_positions"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excluded_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "object"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "reused_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "unresolved_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CblAdoptionEntryResponse": {
+        "type": "object",
+        "required": [
+          "collection_excluded",
+          "collection_exclusion_ids",
+          "cbl_position",
+          "cbl_entry_id",
+          "series_name",
+          "issue_number",
+          "series_group_id",
+          "adoption_class",
+          "adoption_decision",
+          "adopted",
+          "resolution_status",
+          "is_duplicate_identity"
+        ],
+        "properties": {
+          "adopted": {
+            "type": "boolean"
+          },
+          "adoption_class": {
+            "type": "string"
+          },
+          "adoption_decision": {
+            "type": "string"
+          },
+          "canonical_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "cbl_entry_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cbl_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "collection_excluded": {
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "collection_exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_duplicate_identity": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "publication_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "type": "string"
+          },
+          "resolved_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_group_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "series_provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CblAdoptionPlanRequest": {
+        "type": "object",
+        "properties": {
+          "entry_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "series_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CblAdoptionPreviewResponse": {
+        "type": "object",
+        "required": [
+          "source",
+          "total_positions",
+          "entries",
+          "summary"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblAdoptionEntryResponse"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/CblSourceFingerprintResponse"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CblAdoptionSummaryResponse"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CblAdoptionSummaryResponse": {
+        "type": "object",
+        "required": [
+          "reused_existing_count",
+          "missing_would_create_count",
+          "excluded_count",
+          "unresolved_count",
+          "awaiting_opt_in_count",
+          "final_adopted_count",
+          "final_adopted_order",
+          "reused_existing_positions",
+          "missing_would_create_positions",
+          "excluded_positions",
+          "unresolved_positions",
+          "awaiting_opt_in_positions"
+        ],
+        "properties": {
+          "awaiting_opt_in_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "awaiting_opt_in_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excluded_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "excluded_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "final_adopted_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "final_adopted_order": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "missing_would_create_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "missing_would_create_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "reused_existing_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reused_existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "unresolved_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unresolved_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "CblComicvineOccurrence": {
+        "type": "object",
+        "description": "One Comic Vine occurrence in the shared CBL catalog.",
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "position",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_id"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publication_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          },
+          "volume_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CblComicvineOccurrencePage": {
+        "type": "object",
+        "description": "A page of Comic Vine occurrences with shared-catalog totals.",
+        "required": [
+          "comicvine_issue_id",
+          "occurrences_total",
+          "lists_total",
+          "occurrences_offset",
+          "occurrences_limit",
+          "occurrences"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "lists_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "occurrences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblComicvineOccurrence"
+            }
+          },
+          "occurrences_limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "occurrences_offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "occurrences_total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CblReadingListCandidatesResponse": {
+        "type": "object",
+        "required": [
+          "list_id",
+          "list_name",
+          "input_entry_count",
+          "input_confirmed_total",
+          "input_missing_count",
+          "input_conflict_count",
+          "input_ids",
+          "entries",
+          "candidates_total",
+          "candidates"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblSourceComparisonMatch"
+            }
+          },
+          "candidates_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblReadingListInputEntry"
+            }
+          },
+          "input_confirmed_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_conflict_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_entry_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input_missing_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_name": {
+            "type": "string"
+          }
+        }
+      },
+      "CblReadingListInputEntry": {
+        "type": "object",
+        "required": [
+          "position",
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_ids",
+          "identity_status"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "identity_status": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        }
+      },
+      "CblSourceComparisonMatch": {
+        "type": "object",
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "entries_total",
+          "distinct_source_issues",
+          "matched_input_count",
+          "input_total",
+          "matched_occurrence_count",
+          "duplicate_match_count",
+          "source_only_issue_count",
+          "input_coverage_percentage",
+          "source_coverage_percentage",
+          "order_status",
+          "order_pair_count",
+          "order_disagreement_count",
+          "matched_input_ids",
+          "missing_input_ids",
+          "score"
+        ],
+        "properties": {
+          "declared_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "distinct_source_issues": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "duplicate_match_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_coverage_percentage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "matched_input_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "matched_input_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "matched_occurrence_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "missing_input_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "order_disagreement_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "order_pair_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "order_status": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_coverage_percentage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_only_issue_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
+      "CblSourceComparisonRequest": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_ids"
+        ],
+        "properties": {
+          "comicvine_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CblSourceComparisonResponse": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_ids",
+          "input_total",
+          "candidates_total",
+          "candidates"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblSourceComparisonMatch"
+            }
+          },
+          "candidates_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comicvine_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input_total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CblSourceEntryDetail": {
+        "type": "object",
+        "description": "One ordered source occurrence inside a CBL list.",
+        "required": [
+          "position",
+          "series_name",
+          "issue_number"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publication_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "volume_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CblSourceFingerprintResponse": {
+        "type": "object",
+        "required": [
+          "source_list_id",
+          "source_repository",
+          "source_path",
+          "content_hash",
+          "revision_sha"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
+      "CblSourceListDetail": {
+        "type": "object",
+        "description": "One active CBL source list with one bounded page of ordered occurrences.",
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "content_hash",
+          "revision_sha",
+          "entries_total",
+          "entries_offset",
+          "entries_limit",
+          "entries"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblSourceEntryDetail"
+            }
+          },
+          "entries_limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries_offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entries_total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
+      "CblSourceListDiscoveryItem": {
+        "type": "object",
+        "description": "Reader-safe summary of one active persisted CBL source list.",
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "content_hash",
+          "revision_sha"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string",
+            "description": "Raw stored path: Python's discovery response deliberately returns the\nunprojected `source_path` (see `list_cbl_source_previews`)."
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
       "ComicPileMatch": {
         "type": "object",
         "description": "Owner-scoped local representations of a related ComicVine issue.",
@@ -6862,6 +8544,22 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "CommitEntryOverride": {
+        "type": "object",
+        "required": [
+          "cbl_position",
+          "decision"
+        ],
+        "properties": {
+          "cbl_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "decision": {
+            "type": "string"
           }
         }
       },
@@ -6930,6 +8628,21 @@
           },
           "series_mapping": {
             "$ref": "#/components/schemas/CommitSeriesMapping"
+          }
+        }
+      },
+      "CommitSeriesDecision": {
+        "type": "object",
+        "required": [
+          "series_name",
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
           }
         }
       },
@@ -7175,6 +8888,47 @@
             "items": {
               "$ref": "#/components/schemas/ContinuityPlanNode"
             }
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ContinuityPlanResponseWire": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "object"
           },
           "ordering_mode": {
             "type": "string"
@@ -8540,10 +10294,10 @@
           "updated_item": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/IdentityInboxItem"
               },
               {
-                "$ref": "#/components/schemas/IdentityInboxItem"
+                "type": "null"
               }
             ]
           }
@@ -8887,6 +10641,24 @@
           }
         }
       },
+      "IssueBulkRequest": {
+        "type": "object",
+        "description": "Request body for the bulk read-state operations.",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          }
+        }
+      },
       "IssueCard": {
         "type": "object",
         "required": [
@@ -9210,6 +10982,21 @@
           "total_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "IssueMoveRequest": {
+        "type": "object",
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "properties": {
+          "after_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Move after this issue. `null` moves the issue to position 1.",
+            "minimum": 1
           }
         }
       },
@@ -10251,6 +12038,404 @@
           }
         }
       },
+      "ReaderContextCrossover": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossover`.",
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "membership_kind",
+          "ratings_count",
+          "read_count"
+        ],
+        "properties": {
+          "applies_to_current_issue": {
+            "type": "boolean"
+          },
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "membership_kind": {
+            "type": "string",
+            "description": "`issue` or `thread`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_member": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextCrossoverNextMember"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReaderContextCrossoverMembership": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossoverMembership`.",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextCrossoverNextMember": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossoverNextMember`.",
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextEdge": {
+        "type": "object",
+        "description": "Python `ReaderContextEdge`.",
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`dependency` or `continuity`."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "source_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "target_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReaderContextLocalChain": {
+        "type": "object",
+        "description": "Python `ReaderContextLocalChain`.",
+        "required": [
+          "issues",
+          "edges"
+        ],
+        "properties": {
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextEdge"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextLocalIssue"
+            }
+          }
+        }
+      },
+      "ReaderContextLocalIssue": {
+        "type": "object",
+        "description": "Python `ReaderContextLocalIssue`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation",
+          "crossover_memberships"
+        ],
+        "properties": {
+          "crossover_memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossoverMembership"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "relation": {
+            "type": "string",
+            "description": "`previous`, `current`, `next` or `future`."
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextPreviousIssue": {
+        "type": "object",
+        "description": "Python `ReaderContextPreviousIssue`.",
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "ReaderContextRecentRating": {
+        "type": "object",
+        "description": "Python `ReaderContextRecentRating`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ReaderContextResponse": {
+        "type": "object",
+        "description": "Python `ReaderContextResponse`.",
+        "required": [
+          "issue_id",
+          "series",
+          "crossovers",
+          "local_chain"
+        ],
+        "properties": {
+          "crossovers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossover"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/ReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/ReaderContextSeries"
+          }
+        }
+      },
+      "ReaderContextSeries": {
+        "type": "object",
+        "description": "Python `ReaderContextSeries`.",
+        "required": [
+          "identity_source",
+          "ratings_count",
+          "recent_ratings"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "identity_source": {
+            "type": "string",
+            "description": "`comicvine` or `unavailable`."
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "previous_issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "recent_ratings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextRecentRating"
+            }
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ReadingBoundaryBatchRequest": {
         "type": "object",
         "required": [
@@ -10296,10 +12481,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -10338,10 +12523,10 @@
           "next": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
               },
               {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
+                "type": "null"
               }
             ]
           },
@@ -10366,10 +12551,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -10951,10 +13136,10 @@
           "explanation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
               },
               {
-                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+                "type": "null"
               }
             ]
           },
@@ -12052,10 +14237,10 @@
           "release": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
               },
               {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
+                "type": "null"
               }
             ]
           }
@@ -12218,11 +14403,11 @@
           "last_roll": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/RollLastRoll",
                 "description": "The most recent recorded roll, when the reader has rolled."
+              },
+              {
+                "type": "null"
               }
             ]
           }
@@ -12657,20 +14842,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               },
               {
-                "$ref": "#/components/schemas/SessionBandwidthState"
+                "type": "null"
               }
             ]
           },
@@ -12695,10 +14880,10 @@
           "intent": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionIntentState"
               },
               {
-                "$ref": "#/components/schemas/SessionIntentState"
+                "type": "null"
               }
             ]
           },
@@ -13025,10 +15210,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
@@ -14060,10 +16245,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
               },
               {
-                "$ref": "#/components/schemas/ComicVineMappingHealth"
+                "type": "null"
               }
             ]
           },
@@ -14110,10 +16295,10 @@
           "series_metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
               },
               {
-                "$ref": "#/components/schemas/QueueSeriesMetadata"
+                "type": "null"
               }
             ]
           },
@@ -14317,20 +16502,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               },
               {
-                "$ref": "#/components/schemas/SessionBandwidthState"
+                "type": "null"
               }
             ]
           },
@@ -14354,10 +16539,10 @@
           "intent": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionIntentState"
               },
               {
-                "$ref": "#/components/schemas/SessionIntentState"
+                "type": "null"
               }
             ]
           },

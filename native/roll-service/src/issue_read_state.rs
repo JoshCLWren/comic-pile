@@ -26,10 +26,11 @@
 //!   `404 {"detail": "Issue {id} not found"}`. Re-marking an issue is
 //!   `400 "Issue {id} is already marked as read|unread"`. A bulk request
 //!   fails on the first invalid id in request order, with nothing changed.
-//! * Validation failures use FastAPI's list-shaped 422 body
-//!   (`type`/`loc`/`msg`/`input`/`ctx`) for the integer path parameter and
-//!   the `after_issue_id` / `issue_ids` request fields. Authentication runs
-//!   before validation, as in FastAPI.
+//! * Validation failures use the production FastAPI 422 body
+//!   (`{"detail": "Validation failed"}` from `app/exception_handlers.py`),
+//!   matching every other native v1 cutover (`thread_ordering.rs`). FastAPI's
+//!   list-shaped development body is not reproduced. Authentication runs before
+//!   validation, as in FastAPI.
 //! * A bulk list that repeats an id records one history event per list entry,
 //!   exactly like the Python loop.
 //! * axum cannot express a parameter followed by `:action`, so the whole
@@ -48,15 +49,16 @@ use axum::{
     extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 
 const MAX_BULK_ISSUES: usize = 100;
 
-fn validation(items: Vec<Value>) -> ApiError {
-    ApiError::structured(StatusCode::UNPROCESSABLE_ENTITY, Value::Array(items))
+/// Production `RequestValidationError` body: `{"detail": "Validation failed"}`.
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
 }
 
 fn issue_not_found(issue_id: impl std::fmt::Display) -> ApiError {
@@ -74,13 +76,8 @@ fn parse_int_text(raw: &str) -> Option<i64> {
     trimmed.parse().ok()
 }
 
-fn path_int_error(raw: &str) -> ApiError {
-    validation(vec![json!({
-        "type": "int_parsing",
-        "loc": ["path", "issue_id"],
-        "msg": "Input should be a valid integer, unable to parse string as an integer",
-        "input": raw,
-    })])
+fn path_int_error(_raw: &str) -> ApiError {
+    validation_failed()
 }
 
 /// Resolve an `issue_id` path value. Integers outside PostgreSQL's `integer`
@@ -98,62 +95,30 @@ pub(crate) fn parse_path_issue_id(
     resolve_issue_id(&raw)
 }
 
-/// One pydantic lax integer element. `Err` carries the pydantic error
-/// `(type, msg)` pair for the offending value.
-fn lax_int(value: &Value) -> Result<i64, (&'static str, &'static str)> {
+/// One pydantic lax integer element.
+fn lax_int(value: &Value) -> Option<i64> {
     match value {
-        Value::Number(number) => {
-            if let Some(int) = number.as_i64() {
-                return Ok(int);
-            }
-            match number.as_f64() {
-                Some(float) if float.fract() == 0.0 && float.abs() < 9.0e15 => Ok(float as i64),
-                Some(float) if float.is_finite() && float.fract() != 0.0 => Err((
-                    "int_from_float",
-                    "Input should be a valid integer, got a number with a fractional part",
-                )),
-                _ => Err((
-                    "int_parsing",
-                    "Input should be a valid integer, unable to parse string as an integer",
-                )),
-            }
-        }
-        Value::String(text) => parse_int_text(text).ok_or((
-            "int_parsing",
-            "Input should be a valid integer, unable to parse string as an integer",
-        )),
-        Value::Bool(flag) => Ok(i64::from(*flag)),
-        _ => Err(("int_type", "Input should be a valid integer")),
+        Value::Number(number) => number.as_i64().or_else(|| {
+            number
+                .as_f64()
+                .filter(|float| float.is_finite() && float.fract() == 0.0 && float.abs() < 9.0e15)
+                .map(|float| float as i64)
+        }),
+        Value::String(text) => parse_int_text(text),
+        Value::Bool(flag) => Some(i64::from(*flag)),
+        _ => None,
     }
 }
 
 /// Parse the JSON request body into a top-level object, FastAPI style.
 fn body_object(body: &[u8]) -> Result<serde_json::Map<String, Value>, ApiError> {
     if body.iter().all(u8::is_ascii_whitespace) {
-        return Err(validation(vec![json!({
-            "type": "missing",
-            "loc": ["body"],
-            "msg": "Field required",
-            "input": Value::Null,
-        })]));
+        return Err(validation_failed());
     }
-    let value: Value = serde_json::from_slice(body).map_err(|error| {
-        validation(vec![json!({
-            "type": "json_invalid",
-            "loc": ["body", error.column().saturating_sub(1)],
-            "msg": "JSON decode error",
-            "input": {},
-            "ctx": {"error": "Expecting value"},
-        })])
-    })?;
+    let value: Value = serde_json::from_slice(body).map_err(|_| validation_failed())?;
     match value {
         Value::Object(map) => Ok(map),
-        other => Err(validation(vec![json!({
-            "type": "model_attributes_type",
-            "loc": ["body"],
-            "msg": "Input should be a valid dictionary or object to extract fields from",
-            "input": other,
-        })])),
+        _ => Err(validation_failed()),
     }
 }
 
@@ -161,31 +126,14 @@ fn body_object(body: &[u8]) -> Result<serde_json::Map<String, Value>, ApiError> 
 fn parse_move_body(body: &[u8]) -> Result<Option<i64>, ApiError> {
     let object = body_object(body)?;
     let Some(value) = object.get("after_issue_id") else {
-        return Err(validation(vec![json!({
-            "type": "missing",
-            "loc": ["body", "after_issue_id"],
-            "msg": "Field required",
-            "input": Value::Object(object),
-        })]));
+        return Err(validation_failed());
     };
     if value.is_null() {
         return Ok(None);
     }
     match lax_int(value) {
-        Ok(int) if int >= 1 => Ok(Some(int)),
-        Ok(_) => Err(validation(vec![json!({
-            "type": "greater_than_equal",
-            "loc": ["body", "after_issue_id"],
-            "msg": "Input should be greater than or equal to 1",
-            "input": value,
-            "ctx": {"ge": 1},
-        })])),
-        Err((kind, msg)) => Err(validation(vec![json!({
-            "type": kind,
-            "loc": ["body", "after_issue_id"],
-            "msg": msg,
-            "input": value,
-        })])),
+        Some(int) if int >= 1 => Ok(Some(int)),
+        _ => Err(validation_failed()),
     }
 }
 
@@ -193,59 +141,18 @@ fn parse_move_body(body: &[u8]) -> Result<Option<i64>, ApiError> {
 fn parse_bulk_body(body: &[u8]) -> Result<Vec<i64>, ApiError> {
     let object = body_object(body)?;
     let Some(value) = object.get("issue_ids") else {
-        return Err(validation(vec![json!({
-            "type": "missing",
-            "loc": ["body", "issue_ids"],
-            "msg": "Field required",
-            "input": Value::Object(object),
-        })]));
+        return Err(validation_failed());
     };
     let Value::Array(items) = value else {
-        return Err(validation(vec![json!({
-            "type": "list_type",
-            "loc": ["body", "issue_ids"],
-            "msg": "Input should be a valid list",
-            "input": value,
-        })]));
+        return Err(validation_failed());
     };
-    let mut ids = Vec::with_capacity(items.len());
-    let mut errors = vec![];
-    for (index, item) in items.iter().enumerate() {
-        match lax_int(item) {
-            Ok(int) => ids.push(int),
-            Err((kind, msg)) => errors.push(json!({
-                "type": kind,
-                "loc": ["body", "issue_ids", index],
-                "msg": msg,
-                "input": item,
-            })),
-        }
+    if items.is_empty() || items.len() > MAX_BULK_ISSUES {
+        return Err(validation_failed());
     }
-    if !errors.is_empty() {
-        return Err(validation(errors));
-    }
-    if ids.is_empty() {
-        return Err(validation(vec![json!({
-            "type": "too_short",
-            "loc": ["body", "issue_ids"],
-            "msg": "List should have at least 1 item after validation, not 0",
-            "input": value,
-            "ctx": {"field_type": "List", "min_length": 1, "actual_length": 0},
-        })]));
-    }
-    if ids.len() > MAX_BULK_ISSUES {
-        return Err(validation(vec![json!({
-            "type": "too_long",
-            "loc": ["body", "issue_ids"],
-            "msg": format!(
-                "List should have at most {MAX_BULK_ISSUES} items after validation, not {}",
-                ids.len()
-            ),
-            "input": value,
-            "ctx": {"field_type": "List", "max_length": MAX_BULK_ISSUES, "actual_length": ids.len()},
-        })]));
-    }
-    Ok(ids)
+    items
+        .iter()
+        .map(|item| lax_int(item).ok_or_else(validation_failed))
+        .collect()
 }
 
 struct OwnedIssue {
@@ -763,34 +670,12 @@ pub async fn post_issue_action(
     }
     if let Some(raw_id) = segment.strip_suffix(":move") {
         // FastAPI reports path errors before body errors.
-        let path_id = parse_int_text(raw_id).ok_or_else(|| path_int_error(raw_id));
-        let after = parse_move_body(&body);
-        let (path_id, after) = match (path_id, after) {
-            (Err(path_error), Err(body_error)) => {
-                return Err(merge_validation(path_error, body_error))
-            }
-            (Err(path_error), Ok(_)) => return Err(path_error),
-            (Ok(_), Err(body_error)) => return Err(body_error),
-            (Ok(path_id), Ok(after)) => (path_id, after),
-        };
+        let path_id = parse_int_text(raw_id).ok_or_else(|| path_int_error(raw_id))?;
+        let after = parse_move_body(&body)?;
         let issue_id = i32::try_from(path_id).map_err(|_| issue_not_found(path_id))?;
         return move_issue(&state, user, issue_id, after).await;
     }
     Err(ApiError::MethodNotAllowed("Method Not Allowed".to_string()))
-}
-
-/// Combine two FastAPI validation errors into one ordered list (path first).
-fn merge_validation(first: ApiError, second: ApiError) -> ApiError {
-    let items = |error: ApiError| match error {
-        ApiError::StructuredDetail {
-            detail: Value::Array(items),
-            ..
-        } => items,
-        _ => vec![],
-    };
-    let mut merged = items(first);
-    merged.extend(items(second));
-    validation(merged)
 }
 
 /// `POST /api/v1/issues:bulkMarkRead`
@@ -1007,11 +892,11 @@ pub fn issue_read_state_openapi() -> utoipa::openapi::OpenApi {
 mod tests {
     use super::*;
 
-    fn detail(error: ApiError) -> Value {
-        match error {
-            ApiError::StructuredDetail { detail, .. } => detail,
-            other => panic!("expected structured validation error, got {other:?}"),
-        }
+    fn assert_validation_failed(error: ApiError) {
+        assert!(
+            matches!(error, ApiError::Unprocessable(ref detail) if detail == "Validation failed"),
+            "expected production 422 detail, got {error:?}"
+        );
     }
 
     #[test]
@@ -1026,14 +911,11 @@ mod tests {
             resolve_issue_id("99999999999"),
             Err(ApiError::NotFound(_))
         ));
-        let error = detail(resolve_issue_id("abc").unwrap_err());
-        assert_eq!(error[0]["type"], "int_parsing");
-        assert_eq!(error[0]["loc"], json!(["path", "issue_id"]));
-        assert_eq!(error[0]["input"], "abc");
+        assert_validation_failed(resolve_issue_id("abc").unwrap_err());
     }
 
     #[test]
-    fn move_body_matches_pydantic_validation() {
+    fn move_body_uses_the_production_validation_detail() {
         assert_eq!(
             parse_move_body(br#"{"after_issue_id": null}"#).unwrap(),
             None
@@ -1050,38 +932,24 @@ mod tests {
             parse_move_body(br#"{"after_issue_id": 7.0}"#).unwrap(),
             Some(7)
         );
-        let missing = detail(parse_move_body(b"{}").unwrap_err());
-        assert_eq!(missing[0]["type"], "missing");
-        assert_eq!(missing[0]["loc"], json!(["body", "after_issue_id"]));
-        let low = detail(parse_move_body(br#"{"after_issue_id": 0}"#).unwrap_err());
-        assert_eq!(low[0]["type"], "greater_than_equal");
-        assert_eq!(low[0]["ctx"], json!({"ge": 1}));
-        let fractional = detail(parse_move_body(br#"{"after_issue_id": 1.5}"#).unwrap_err());
-        assert_eq!(fractional[0]["type"], "int_from_float");
-        let text = detail(parse_move_body(br#"{"after_issue_id": "x"}"#).unwrap_err());
-        assert_eq!(text[0]["type"], "int_parsing");
-        let list = detail(parse_move_body(br#"[1]"#).unwrap_err());
-        assert_eq!(list[0]["type"], "model_attributes_type");
-        let empty = detail(parse_move_body(b"").unwrap_err());
-        assert_eq!(empty[0]["type"], "missing");
-        assert_eq!(empty[0]["loc"], json!(["body"]));
-        let broken = detail(parse_move_body(b"{not json").unwrap_err());
-        assert_eq!(broken[0]["type"], "json_invalid");
+        for body in [
+            b"{}".as_slice(),
+            br#"{"after_issue_id": 0}"#,
+            br#"{"after_issue_id": 1.5}"#,
+            br#"{"after_issue_id": "x"}"#,
+            br#"[1]"#,
+            b"",
+            b"{not json",
+        ] {
+            assert_validation_failed(parse_move_body(body).unwrap_err());
+        }
     }
 
     #[test]
-    fn bulk_body_matches_pydantic_validation() {
+    fn bulk_body_uses_the_production_validation_detail() {
         assert_eq!(
             parse_bulk_body(br#"{"issue_ids": [3, "4", 3]}"#).unwrap(),
             vec![3, 4, 3]
-        );
-        let missing = detail(parse_bulk_body(b"{}").unwrap_err());
-        assert_eq!(missing[0]["type"], "missing");
-        let short = detail(parse_bulk_body(br#"{"issue_ids": []}"#).unwrap_err());
-        assert_eq!(short[0]["type"], "too_short");
-        assert_eq!(
-            short[0]["msg"],
-            "List should have at least 1 item after validation, not 0"
         );
         let too_many = format!(
             "{{\"issue_ids\":[{}]}}",
@@ -1090,15 +958,15 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(",")
         );
-        let long = detail(parse_bulk_body(too_many.as_bytes()).unwrap_err());
-        assert_eq!(long[0]["type"], "too_long");
-        assert_eq!(long[0]["ctx"]["actual_length"], 101);
-        let bad = detail(parse_bulk_body(br#"{"issue_ids": [1, "x", null]}"#).unwrap_err());
-        assert_eq!(bad.as_array().unwrap().len(), 2);
-        assert_eq!(bad[0]["loc"], json!(["body", "issue_ids", 1]));
-        assert_eq!(bad[1]["type"], "int_type");
-        let not_list = detail(parse_bulk_body(br#"{"issue_ids": 5}"#).unwrap_err());
-        assert_eq!(not_list[0]["type"], "list_type");
+        for body in [
+            b"{}".as_slice(),
+            br#"{"issue_ids": []}"#,
+            too_many.as_bytes(),
+            br#"{"issue_ids": [1, "x", null]}"#,
+            br#"{"issue_ids": 5}"#,
+        ] {
+            assert_validation_failed(parse_bulk_body(body).unwrap_err());
+        }
     }
 
     #[test]
