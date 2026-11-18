@@ -21,7 +21,9 @@
 //!   (`context.issue_command_key = K`) and its dice step
 //!   (`context.dice_command_key = "roll-rating-<thread_id>-K"`) are one user
 //!   action. The issue row is the primary and carries the dice step's die
-//!   change; both raw rows stay in the database untouched.
+//!   change; its displayed rating falls back to the dice step when an
+//!   idempotent no-op receipt recorded none. Both raw rows stay in the
+//!   database untouched.
 //!
 //! Records without these keys (legacy and pre-cutover rows) have no durable
 //! linkage, so the deterministic fallback is the raw `(timestamp, id)` order with
@@ -178,14 +180,14 @@ SELECT p.id, p.type,
        to_char(p.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
        (extract(epoch FROM p.timestamp) * 1000000)::bigint,
        p.die, p.die_after, p.rating, p.issue_id, p.issue_number, p.thread_id, pt.title,
-       d.die, d.die_after,
+       d.die, d.die_after, d.rating,
        r.id, r.type,
        to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
        r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
   LEFT JOIN LATERAL (
-        SELECT d.die, d.die_after
+        SELECT d.die, d.die_after, d.rating
           FROM events d
          WHERE p.type IN ('rate', 'issue_command', 'issue_unread')
            AND p.issue_id IS NOT NULL
@@ -222,7 +224,10 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
     let micros: i64 = row.get(3);
     let linked_die: Option<i32> = row.get(11);
     let linked_die_after: Option<i32> = row.get(12);
-    let rating_pair = linked_die.is_some() || linked_die_after.is_some();
+    // An idempotent no-op rating receipt records no rating of its own; the
+    // linked dice step is the durable source of the reader-visible value.
+    let linked_rating: Option<f64> = row.get(13);
+    let rating_pair = linked_die.is_some() || linked_die_after.is_some() || linked_rating.is_some();
     let primary_type: String = row.get(1);
     let primary_die: Option<i32> = row.get(4);
     let primary_die_after: Option<i32> = row.get(5);
@@ -242,7 +247,11 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
         } else {
             primary_die_after
         },
-        rating: row.get(6),
+        rating: if rating_pair {
+            linked_rating.or(row.get(6))
+        } else {
+            row.get(6)
+        },
         issue_id: row.get(7),
         issue_number: row.get(8),
         thread_id: row.get(9),
@@ -256,7 +265,7 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
         },
         primary,
     )];
-    if let Some(roll_id) = row.get::<_, Option<i32>>(13) {
+    if let Some(roll_id) = row.get::<_, Option<i32>>(14) {
         items.push((
             StreamKey {
                 micros,
@@ -265,15 +274,15 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
             },
             ActivityItem {
                 event_id: roll_id,
-                event_type: row.get(14),
-                timestamp: row.get(15),
-                die_before: row.get(16),
-                die_after: row.get(17),
-                rating: row.get(18),
-                issue_id: row.get(19),
-                issue_number: row.get(20),
-                thread_id: row.get(21),
-                thread_title: row.get(22),
+                event_type: row.get(15),
+                timestamp: row.get(16),
+                die_before: row.get(17),
+                die_after: row.get(18),
+                rating: row.get(19),
+                issue_id: row.get(20),
+                issue_number: row.get(21),
+                thread_id: row.get(22),
+                thread_title: row.get(23),
             },
         ));
     }
@@ -687,6 +696,49 @@ mod tests {
                 "limit={limit}"
             );
         }
+    }
+
+    /// An idempotent no-op rating receipt is stored as `issue_command` with a
+    /// NULL rating while the linked dice step carries the real value. The
+    /// coalesced logical action must show that rating, not `null`, and must
+    /// remain one action at every page size (the Python History timeline shows
+    /// the same rated value with its die transition).
+    #[tokio::test]
+    async fn no_op_rating_receipt_uses_the_linked_dice_steps_rating() {
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader-1');
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, status,
+                 queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+            INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+            VALUES (100, 10, '1', 'read', now(), 1);
+            -- issue_service records an unchanged rating as issue_command with
+            -- rating NULL; the idempotency key still links both durable rows.
+            INSERT INTO events (id, type, timestamp, user_id, thread_id, issue_id, issue_number,
+                                rating, context)
+            VALUES (1, 'issue_command', '2026-11-08 16:02:00.000+00', 1, 10, 100, '1', NULL,
+                    '{"issue_command_key":"no-op-key","source":"roll"}');
+            -- dice_mutation persists the real rating and the die step.
+            INSERT INTO events (id, type, timestamp, user_id, die, die_after, thread_id, issue_id,
+                                rating, context)
+            VALUES (2, 'rate', '2026-11-08 16:02:00.050+00', 1, 10, 8, 10, 100, 4.5,
+                    '{"dice_command_key":"roll-rating-10-no-op-key"}');
+            "#,
+        )
+        .await;
+        for limit in [1, 2, 10] {
+            let items = all_pages(&state, 1, limit).await;
+            assert_eq!(
+                summary(&items),
+                vec![(1, "rate", Some(10), Some(8), Some(4.5))],
+                "limit={limit}"
+            );
+        }
+        let items = all_pages(&state, 1, 10).await;
+        assert_eq!(items[0].issue_id, Some(100));
+        assert_eq!(items[0].thread_title.as_deref(), Some("Saga"));
     }
 
     #[tokio::test]
