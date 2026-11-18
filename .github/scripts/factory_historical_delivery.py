@@ -174,9 +174,19 @@ def receipt_for_pr(repo: str, number: int) -> dict[str, Any] | None:
         "work_pr": number, "validated": False,
     }
     merge_sha = str(pr.get("merge_commit_sha") or "")
-    if (pr.get("merged") is True and SHA.fullmatch(merge_sha)
-            and incorporated(repo, verified, merge_sha)):
-        result.update({"merged": True, "merge_sha": merge_sha})
+    # The source commit is verified as an ancestor of the actual PR head.
+    # A later repair can change every original file without erasing that
+    # source-run contribution to the PR's history. Report merge ancestry
+    # separately from exact original-byte survival.
+    if pr.get("merged") is True and SHA.fullmatch(merge_sha):
+        try:
+            exact = incorporated(repo, verified, merge_sha)
+        except RuntimeError:
+            exact = None
+        result.update({
+            "merged": True, "merge_sha": merge_sha,
+            "merge_basis": "pr_ancestry", "exact_bytes_included": exact,
+        })
     return result
 
 
