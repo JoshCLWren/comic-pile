@@ -519,81 +519,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/continuity\\-plans/$",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+$",
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
-      "methods": [
-        "POST",
-        "DELETE"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/membership$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/reader$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/from\\-reading\\-order$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/release\\-sources/$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
-      "methods": [
-        "PATCH",
-        "DELETE"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/continuity\\-rules/$",
       "methods": [
         "GET",
@@ -1175,9 +1100,10 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "methods": [
         "POST",
+        "DELETE",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1621,6 +1547,90 @@
     {
       "src": "^/api/v1/collection\\-exclusions/[^/]+$",
       "methods": [
+        "DELETE",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/$",
+      "methods": [
+        "GET",
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+$",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/membership$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/release\\-sources/reader$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/from\\-reading\\-order$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
+      "methods": [
+        "PATCH",
         "DELETE",
         "OPTIONS"
       ],
