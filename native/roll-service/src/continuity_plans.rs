@@ -46,6 +46,7 @@ use axum::{
 };
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -3247,6 +3248,308 @@ pub async fn confirm_plan_projection(
         updated_count: updated,
         kept_count: kept,
         total_positions: entries.len() as i32,
+    }))
+}
+
+// ============================================================================
+// POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview
+// ============================================================================
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+    tag = "reading-orders",
+    operation_id = "continuity_plans_project_preview",
+    params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
+    request_body = ReadingOrderProjectionRequest,
+    responses(
+        (status = 200, description = "Projection preview", body = ReadingOrderProjectionPreview),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plan or reading order not found"),
+        (status = 409, description = "Malformed plan"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn preview_plan_projection(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(plan_id): Path<i32>,
+    Json(payload): Json<ReadingOrderProjectionRequest>,
+) -> Result<Json<ReadingOrderProjectionPreview>, ApiError> {
+    let conn = db::checkout(&state).await?;
+
+    // Load the owned plan.
+    let plan_row = conn
+        .query_opt(
+            "SELECT id, name, ordering_mode, lanes_json, nodes_json
+             FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
+    let plan_name: String = plan_row.get(1);
+    let ordering_mode: String = plan_row.get(2);
+    let lanes_json: Value = plan_row.get(3);
+    let nodes_json: Value = plan_row.get(4);
+
+    // Load the owned reading order.
+    conn.query_opt(
+        "SELECT id, name FROM reading_orders WHERE id = $1 AND user_id = $2",
+        &[&payload.reading_order_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| {
+        not_found(format!(
+            "Reading order {} not found",
+            payload.reading_order_id
+        ))
+    })?;
+    let reading_order_name: String = conn
+        .query_opt(
+            "SELECT name FROM reading_orders WHERE id = $1 AND user_id = $2",
+            &[&payload.reading_order_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .map(|row| row.get::<_, String>(0))
+        .unwrap_or_default();
+
+    #[derive(Clone)]
+    struct ProjectNode {
+        id: String,
+        node_type: String,
+        ref_id: i32,
+        lane_id: String,
+        position: i32,
+    }
+
+    let nodes: Vec<ProjectNode> = nodes_json
+        .as_array()
+        .map(|values| {
+            values
+                .iter()
+                .map(|value| ProjectNode {
+                    id: value
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    node_type: value
+                        .get("node_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    ref_id: value.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                    lane_id: value
+                        .get("lane_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    position: value.get("position").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Flatten deterministically.
+    let lane_orders: HashMap<String, i32> = lanes_json
+        .as_array()
+        .map(|lanes| {
+            lanes
+                .iter()
+                .filter_map(|lane| {
+                    let id = lane.get("id")?.as_str()?.to_string();
+                    let order = lane.get("order")?.as_i64()? as i32;
+                    Some((id, order))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let lane_ids: HashSet<&str> = lanes_json
+        .as_array()
+        .map(|lanes| {
+            lanes
+                .iter()
+                .filter_map(|lane| lane.get("id")?.as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let dropped_node_ids: Vec<String> = nodes
+        .iter()
+        .filter(|node| !lane_ids.contains(node.lane_id.as_str()))
+        .map(|node| node.id.clone())
+        .collect();
+
+    let mut ordered = nodes.clone();
+    if ordering_mode == "strict_sequential" {
+        if lane_orders.len() != 1 {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential plans must use exactly one lane",
+            })));
+        }
+        let lane_id = lane_orders.keys().next().cloned().unwrap_or_default();
+        if nodes.iter().any(|node| node.lane_id != lane_id) {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential plans must have all nodes in single lane",
+            })));
+        }
+        let mut positions: Vec<i32> = ordered.iter().map(|node| node.position).collect();
+        positions.sort_unstable();
+        if positions != (0..positions.len() as i32).collect::<Vec<i32>>() {
+            return Err(domain_conflict(serde_json::json!({
+                "code": "malformed_plan",
+                "plan_id": plan_id,
+                "reason": "strict sequential positions must be contiguous starting at zero",
+            })));
+        }
+        ordered.sort_by(|a, b| a.position.cmp(&b.position).then(a.id.cmp(&b.id)));
+    } else {
+        ordered.sort_by(|a, b| {
+            lane_orders
+                .get(&a.lane_id)
+                .copied()
+                .unwrap_or(0)
+                .cmp(&lane_orders.get(&b.lane_id).copied().unwrap_or(0))
+                .then(a.position.cmp(&b.position))
+                .then(a.id.cmp(&b.id))
+        });
+    }
+
+    let thread_ids: Vec<i32> = ordered
+        .iter()
+        .filter(|node| node.node_type == "thread")
+        .map(|node| node.ref_id)
+        .collect();
+    let thread_titles: HashMap<i32, String> = if thread_ids.is_empty() {
+        HashMap::new()
+    } else {
+        conn.query(
+            "SELECT id, title FROM threads WHERE user_id = $1 AND id = ANY($2::int[])",
+            &[&user.id(), &thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)))
+        .collect()
+    };
+
+    let existing_rows = conn
+        .query(
+            "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1",
+            &[&payload.reading_order_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut existing_positions: HashMap<i32, i32> = HashMap::new();
+    for row in &existing_rows {
+        existing_positions.insert(row.get(0), row.get(1));
+    }
+
+    let mut conflicts: Vec<ReadingOrderProjectionConflict> = Vec::new();
+    let mut seen_threads: HashSet<i32> = HashSet::new();
+    let mut thread_positions: HashMap<i32, Vec<i32>> = HashMap::new();
+    for node in &ordered {
+        if node.node_type != "thread" {
+            conflicts.push(ReadingOrderProjectionConflict {
+                code: "non_thread_node".to_string(),
+                message: format!(
+                    "Reading order projection only supports thread nodes; {} node {} cannot be projected.",
+                    node.node_type, node.id
+                ),
+                node_id: node.id.clone(),
+                thread_id: Some(node.ref_id),
+                existing_positions: vec![],
+            });
+            continue;
+        }
+        if !thread_titles.contains_key(&node.ref_id) {
+            conflicts.push(ReadingOrderProjectionConflict {
+                code: "missing_thread".to_string(),
+                message: format!(
+                    "Thread {} from node {} is not owned by the user.",
+                    node.ref_id, node.id
+                ),
+                node_id: node.id.clone(),
+                thread_id: Some(node.ref_id),
+                existing_positions: vec![],
+            });
+            continue;
+        }
+        thread_positions
+            .entry(node.ref_id)
+            .or_default()
+            .push(node.position);
+        if seen_threads.contains(&node.ref_id) {
+            let mut positions = thread_positions
+                .get(&node.ref_id)
+                .cloned()
+                .unwrap_or_default();
+            positions.sort_unstable();
+            conflicts.push(ReadingOrderProjectionConflict {
+                code: "duplicate_thread".to_string(),
+                message: format!(
+                    "Thread {} appears multiple times in the plan; deduplicate node positions before projection.",
+                    node.ref_id
+                ),
+                node_id: node.id.clone(),
+                thread_id: Some(node.ref_id),
+                existing_positions: positions,
+            });
+            continue;
+        }
+        seen_threads.insert(node.ref_id);
+    }
+
+    let mut preview_entries: Vec<ReadingOrderProjectionEntry> = Vec::new();
+    if conflicts.is_empty() {
+        let mut position = 1;
+        for node in &ordered {
+            if node.node_type != "thread" || !thread_titles.contains_key(&node.ref_id) {
+                continue;
+            }
+            let source = match existing_positions.get(&node.ref_id) {
+                None => "added".to_string(),
+                Some(old) if *old != position => "updated".to_string(),
+                Some(_) => "existing".to_string(),
+            };
+            preview_entries.push(ReadingOrderProjectionEntry {
+                thread_id: node.ref_id,
+                thread_title: thread_titles.get(&node.ref_id).cloned(),
+                position,
+                source: source.clone(),
+                source_node_id: Some(node.id.clone()),
+            });
+            position += 1;
+        }
+    }
+
+    let total_positions = if conflicts.is_empty() {
+        std::cmp::max(preview_entries.len(), existing_positions.len()) as i32
+    } else {
+        existing_positions.len() as i32
+    };
+
+    Ok(Json(ReadingOrderProjectionPreview {
+        plan_id,
+        plan_name,
+        plan_ordering_mode: ordering_mode,
+        reading_order_id: payload.reading_order_id,
+        reading_order_name,
+        entries: preview_entries,
+        conflicts,
+        total_positions,
+        dropped_node_ids,
     }))
 }
 
