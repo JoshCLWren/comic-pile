@@ -7507,6 +7507,20 @@
         "title": "CustomCBLApplyResponse",
         "type": "object"
       },
+      "CustomCBLEntryIntent": {
+        "properties": {
+          "gate": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gate"
+        ],
+        "type": "object"
+      },
       "CustomCBLEntryResponse": {
         "description": "One resolved custom CBL entry.",
         "properties": {
@@ -7661,6 +7675,52 @@
           "updated_at"
         ],
         "title": "CustomCBLListItem",
+        "type": "object"
+      },
+      "CustomCBLPredecessorChange": {
+        "properties": {
+          "after_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "after_issue_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "before_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "before_issue_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_name",
+          "before_issue_ids",
+          "before_issue_names",
+          "after_issue_ids",
+          "after_issue_names"
+        ],
         "type": "object"
       },
       "CustomCBLResponse": {
@@ -11392,6 +11452,340 @@
         ],
         "type": "object"
       },
+      "NativeCustomCBLApplyRequest": {
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NativeCustomCBLApplyResponse": {
+        "properties": {
+          "added_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lanes": {
+            "items": {},
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "items": {},
+            "type": "array"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "skipped_existing_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
+          "created_at",
+          "updated_at",
+          "added_issue_ids",
+          "skipped_existing_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeCustomCBLEntryResponse": {
+        "properties": {
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeCustomCBLIssueSearchResult": {
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCustomCBLListItem": {
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode",
+          "issue_count",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NativeCustomCBLResponse": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCustomCBLEntryResponse"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "predecessor_changes": {
+            "items": {
+              "$ref": "#/components/schemas/CustomCBLPredecessorChange"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "mode",
+          "issue_count",
+          "created_at",
+          "updated_at",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "NativeCustomCBLWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "checkpoint_targets": {
+            "additionalProperties": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "confirmed_predecessor_changes": {},
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entry_intents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CustomCBLEntryIntent"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "NativeIssueListResponse": {
         "properties": {
           "issues": {
@@ -11419,6 +11813,108 @@
           "issues",
           "total_count",
           "page_size"
+        ],
+        "type": "object"
+      },
+      "NativeOverlapDecisionItem": {
+        "properties": {
+          "continuing_volume_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "waiting_volume_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "list_id",
+          "continuing_volume_id",
+          "waiting_volume_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NativeOverlapDecisionSetResponse": {
+        "properties": {
+          "candidate_volumes": {
+            "items": {
+              "$ref": "#/components/schemas/NativeOverlapVolumeCandidate"
+            },
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/NativeOverlapDecisionItem"
+            },
+            "type": "array"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NativeOverlapDecisionWrite": {
+        "properties": {
+          "continuing_volume_id": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_volume_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "continuing_volume_id",
+          "waiting_volume_id"
+        ],
+        "type": "object"
+      },
+      "NativeOverlapVolumeCandidate": {
+        "properties": {
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "volume_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "volume_id"
         ],
         "type": "object"
       },
@@ -24295,22 +24791,26 @@
     },
     "/api/v1/custom-cbls": {
       "get": {
-        "description": "List the authenticated user's editable custom CBLs.",
-        "operationId": "list_custom_cbl_lists_api_v1_custom_cbls_get",
+        "operationId": "list_custom_cbls_documentation",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/CustomCBLListItem"
+                    "$ref": "#/components/schemas/NativeCustomCBLListItem"
                   },
-                  "title": "Response List Custom Cbl Lists Api V1 Custom Cbls Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Editable custom CBL lists owned by the reader"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24318,21 +24818,18 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Custom Cbl Lists",
+        "summary": "Documentation-only operation for the custom CBL list.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       },
       "post": {
-        "description": "Create an editable CBL from real issues without creating synthetic threads.",
-        "operationId": "create_custom_cbl_api_v1_custom_cbls_post",
+        "operationId": "create_custom_cbl_documentation",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CustomCBLWrite"
+                "$ref": "#/components/schemas/NativeCustomCBLWrite"
               }
             }
           },
@@ -24343,21 +24840,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
+                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Custom CBL created from real issues"
+          },
+          "401": {
+            "description": "Not authenticated"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request body failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24365,39 +24861,32 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Custom Cbl",
+        "summary": "Documentation-only operation for custom CBL creation.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/issue-search": {
       "get": {
-        "description": "Search only the user's canonical issue library for custom-list membership.",
-        "operationId": "search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get",
+        "operationId": "search_custom_cbl_issues_documentation",
         "parameters": [
           {
+            "description": "Case-insensitive title or issue-number filter, max 200 characters",
             "in": "query",
             "name": "q",
             "required": false,
             "schema": {
-              "default": "",
-              "maxLength": 200,
-              "title": "Q",
               "type": "string"
             }
           },
           {
+            "description": "Maximum results, 1-100 (default 30)",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 30,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24408,24 +24897,29 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/CustomCBLIssueSearchResult"
+                    "$ref": "#/components/schemas/NativeCustomCBLIssueSearchResult"
                   },
-                  "title": "Response Search Custom Cbl Issues Api V1 Custom Cbls Issue Search Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Matching owned issues"
+          },
+          "401": {
+            "description": "Not authenticated"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Query failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24433,25 +24927,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Search Custom Cbl Issues",
+        "summary": "Documentation-only operation for custom CBL issue search.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}": {
       "get": {
-        "description": "Return one owned custom CBL.",
-        "operationId": "get_custom_cbl_api_v1_custom_cbls__list_id__get",
+        "operationId": "get_custom_cbl_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24461,21 +24953,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
+                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "The owned custom CBL"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24483,23 +24974,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Custom Cbl",
+        "summary": "Documentation-only operation for one custom CBL.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       },
       "put": {
-        "description": "Replace custom CBL metadata and exact ordered membership atomically.",
-        "operationId": "update_custom_cbl_api_v1_custom_cbls__list_id__put",
+        "operationId": "update_custom_cbl_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24508,7 +24997,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CustomCBLWrite"
+                "$ref": "#/components/schemas/NativeCustomCBLWrite"
               }
             }
           },
@@ -24519,21 +25008,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
+                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "The updated custom CBL"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request body failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24541,25 +25032,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Custom Cbl",
+        "summary": "Documentation-only operation for custom CBL replacement.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}/export": {
       "get": {
-        "description": "Export one custom list as a portable .cbl XML document.",
-        "operationId": "export_custom_cbl_api_v1_custom_cbls__list_id__export_get",
+        "operationId": "export_custom_cbl_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24567,21 +25056,22 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
+              "application/xml": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "type": "string"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Portable .cbl XML document"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24589,25 +25079,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Export Custom Cbl",
+        "summary": "Documentation-only operation for custom CBL export.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}/overlap-decisions": {
       "get": {
-        "description": "Return one owned Reading List's overlap decisions and version token.\n\nArgs:\n    list_id: Identifier of the Reading List to read.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    The list's saved overlap decisions, the current version token, and\n    the reader's selectable volume candidates for new decisions.\n\nRaises:\n    HTTPException: With status 404 when the reader does not own the list.",
-        "operationId": "read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get",
+        "operationId": "get_overlap_decisions_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24617,21 +25105,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Saved overlap decisions and version token"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24639,23 +25126,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Read Custom Cbl Overlap Decisions",
+        "summary": "Documentation-only operation for overlap decisions read.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       },
       "put": {
-        "description": "Save one reader-approved overlap choice inside an owned Reading List.\n\nArgs:\n    list_id: Identifier of the Reading List to update.\n    payload: The overlap choice to save, naming two exact Comic Vine volumes.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    The list's updated decision set and version token.\n\nRaises:\n    HTTPException: With status 404 for a foreign list, 409 for a stale\n        version token, and 422 for an unusable or cyclic choice.",
-        "operationId": "save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put",
+        "operationId": "save_overlap_decision_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24664,7 +25149,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OverlapDecisionWrite"
+                "$ref": "#/components/schemas/NativeOverlapDecisionWrite"
               }
             }
           },
@@ -24675,21 +25160,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Updated overlap decisions and version token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale version token"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Unusable or cyclic choice"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24697,52 +25187,43 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Save Custom Cbl Overlap Decision",
+        "summary": "Documentation-only operation for overlap decision save.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}": {
       "delete": {
-        "description": "Remove one reader-approved overlap choice from an owned Reading List.\n\nArgs:\n    list_id: Identifier of the Reading List to update.\n    decision_id: Identifier of the overlap decision to remove.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n    expected_updated_at: Decision version token the client last read. None\n        skips the concurrency check.\n\nReturns:\n    The list's updated decision set and version token.\n\nRaises:\n    HTTPException: With status 404 for a foreign list or unknown decision,\n        409 for a stale version token, and 422 when removing the choice\n        would make the reader's constraint graph cyclic.",
-        "operationId": "delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete",
+        "operationId": "delete_overlap_decision_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Overlap decision identifier",
             "in": "path",
             "name": "decision_id",
             "required": true,
             "schema": {
-              "title": "Decision Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Decision version token the client last read",
             "in": "query",
             "name": "expected_updated_at",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Expected Updated At"
+              "type": "string"
             }
           }
         ],
@@ -24751,21 +25232,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Updated overlap decisions and version token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale version token"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Cycle conflict"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24773,25 +25259,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Custom Cbl Overlap Decision",
+        "summary": "Documentation-only operation for overlap decision removal.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}/reader": {
       "get": {
-        "description": "Explain the complete current list using the same authority as Roll.",
-        "operationId": "read_custom_cbl_api_v1_custom_cbls__list_id__reader_get",
+        "operationId": "read_custom_cbl_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24801,21 +25285,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingListReaderResponse"
+                  "$ref": "#/components/schemas/ReadingListReader"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Reader with canonical availability"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24823,34 +25306,33 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Read Custom Cbl",
+        "summary": "Documentation-only operation for the custom CBL reader.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }
     },
     "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply": {
       "post": {
-        "description": "Explicitly merge one custom CBL into an existing canonical Reading Plan.",
-        "operationId": "apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post",
+        "operationId": "apply_custom_cbl_documentation",
         "parameters": [
           {
+            "description": "Owned custom CBL identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Continuity plan identifier",
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24859,7 +25341,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CustomCBLApplyRequest"
+                "$ref": "#/components/schemas/NativeCustomCBLApplyRequest"
               }
             }
           },
@@ -24870,21 +25352,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CustomCBLApplyResponse"
+                  "$ref": "#/components/schemas/NativeCustomCBLApplyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Reading Plan updated with the custom CBL merged into one lane"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale plan version token"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Empty list, unknown lane, or cycle conflict"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -24892,10 +25379,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Apply Custom Cbl",
+        "summary": "Documentation-only operation for Reading Plan application.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "custom-cbls"
         ]
       }

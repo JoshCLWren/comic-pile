@@ -397,6 +397,25 @@ def test_rendered_outputs_match_checked_in_files() -> None:
     assert _render_agents_text(agents_original, block) == agents_original
 
 
+def test_custom_cbl_fragment_routes_every_v1_operation_to_native() -> None:
+    """Issue #4844 cuts every migrated custom-cbl v1 operation over by source fragment.
+
+    Generated ``vercel.json`` and the inventory are bot-owned and regenerated
+    post-merge, so the source fragment is the reviewable proof that these
+    same-path operations serve the native ingress rather than Python.
+    """
+    fragment = load_json(FRAGMENT_DIR / "custom-cbl.json")
+    operations = fragment["operations"]
+    assert isinstance(operations, list)
+    v1_operations = [op for op in operations if op["bucket"] == "v1_operations"]
+    assert len(v1_operations) == 11
+    for operation in v1_operations:
+        assert operation["dest"] == "/api/native_roll.rs", operation
+        assert operation["runtime"] == "native-rust", operation
+        assert operation["status"] == "target", operation
+        assert operation["owning_issue"] == 4844, operation
+
+
 def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
