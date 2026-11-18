@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 42 (42 native-rust + 0 python-fastapi).
+- Live v2 operations: 53 (53 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 129 operations (v1 126 + unversioned 3); v1 active 108 live Python / 5 migrated (shadowed by Rust); unversioned active 1 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 129 operations (v1 126 + unversioned 3); v1 active 99 live Python / 14 migrated (shadowed by Rust); unversioned active 1 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -76,6 +76,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4623 (1): `GET /api/v2/issues/{issue_id}/comicvine -> native-rust`
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
 - #4822 (1): `GET /api/v2/activity -> native-rust`
+- #4836 (11): `GET /api/v2/creators -> native-rust`; `GET /api/v2/creators/compare -> native-rust`; `GET /api/v2/creators/discoveries -> native-rust`; `GET /api/v2/creators/summaries -> native-rust`; `GET /api/v2/creators/team-chemistry -> native-rust`; `GET /api/v2/creators/{creator_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/role-stats/{role} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/series-stats/{series_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/{metric_type} -> native-rust`; `GET /api/v2/creators/{creator_key}/series/{series_key}/issues -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 <!-- route-burndown:end -->
 
