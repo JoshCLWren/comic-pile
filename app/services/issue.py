@@ -37,59 +37,6 @@ from comic_pile.comicvine_provider import ComicVineClient
 logger = logging.getLogger(__name__)
 
 
-async def list_issues(
-    db: AsyncSession,
-    thread_id: int,
-    current_user_id: int,
-    status_filter: str | None,
-    page_size: int,
-    page_token: str | None,
-) -> tuple[list[Issue], int, str | None]:
-    """List issues for a thread with pagination and filtering.
-
-    Args:
-        db: Database session.
-        thread_id: The thread ID to list issues for.
-        current_user_id: The authenticated user making the request.
-        status_filter: Optional filter by issue status.
-        page_size: Number of issues to return per page.
-        page_token: Token for pagination.
-
-    Returns:
-        A tuple of (issues, total_count, next_page_token).
-    """
-    await get_owned_thread_or_404(db, current_user_id, thread_id)
-
-    cursor = None
-    if page_token:
-        try:
-            parts = page_token.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            cursor = (int(parts[0]), int(parts[1]))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid page_token format",
-            ) from None
-
-    issues = await issue_repository.list_page(
-        db, thread_id, status_filter=status_filter, cursor=cursor, limit=page_size + 1
-    )
-
-    has_more = len(issues) > page_size
-    issues_to_return = issues[:page_size]
-
-    total_count = await issue_repository.count_for_thread(db, thread_id, status_filter)
-
-    next_token = None
-    if has_more and issues_to_return:
-        last = issues_to_return[-1]
-        next_token = f"{last.position},{last.id}"
-
-    return issues_to_return, total_count, next_token
-
-
 async def create_issues(
     db: AsyncSession,
     thread_id: int,

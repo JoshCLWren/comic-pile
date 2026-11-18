@@ -298,6 +298,24 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", post(native_dispatch))
+        .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/dependency-order-check",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:validateOrder",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/reading-orders",
+            get(native_dispatch),
+        )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
