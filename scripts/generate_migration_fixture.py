@@ -178,12 +178,38 @@ def _thread_rows() -> list[dict[str, Any]]:
             "catalog_series_id": None,
         },
     ]
+    for offset in range(FIXTURE_FILLER_THREADS):
+        rows.append(
+            {
+                "id": 910004 + offset,
+                "title": f"Synthetic volume thread {offset + 1:03d}",
+                "format": "Comic",
+                "issues_remaining": FIXTURE_ISSUES_PER_FILLER_THREAD,
+                "total_issues": FIXTURE_ISSUES_PER_FILLER_THREAD,
+                "next_unread_issue_id": None,
+                "reading_progress": "not_started",
+                "queue_position": 100 + offset,
+                "queue_order_key": None,
+                "status": "active",
+                "last_rating": None,
+                "last_activity_at": None if offset % 3 == 0 else now,
+                "notes": None,
+                "manual_creator_credits": None,
+                "is_test": False,
+                "is_blocked": False,
+                "queue_position_is_manual": False,
+                "created_at": now,
+                "user_id": 900001 if offset % 2 == 0 else 900002,
+                "catalog_series_id": None,
+            }
+        )
+    return rows
 
 
 def _issue_rows() -> list[dict[str, Any]]:
-    """Issue rows with unread/NULL-heavy legacy shapes."""
+    """Issue rows with unread/NULL-heavy legacy shapes and bounded volume."""
     now = _utc_now()
-    return [
+    rows = [
         {
             "id": 920001,
             "thread_id": 910001,
