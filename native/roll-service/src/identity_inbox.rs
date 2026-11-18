@@ -3,15 +3,23 @@
 //! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
+use bytes::Bytes;
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -137,7 +145,30 @@ fn source_entry_summary(thread_title: &str, issue_number: &str, metadata: &Value
     parts.join(" ")
 }
 
-fn why_stopped(status: &str, evidence: &Value) -> String {
+fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String {
+    // The collapsed inbox header renders this string. The list endpoint now
+    // batch-loads real candidates, so an evidence/status-only reason can
+    // contradict the candidate cards shown on expand (#5382). Reflect the real
+    // candidate state first. When candidates exist, keep any non-empty
+    // decision_reason so the header still explains why review is needed; only
+    // the empty-evidence "No candidates found" fallback is replaced by the
+    // count. The reasons below apply only when there are genuinely no
+    // candidates for the issue.
+    if candidate_count > 0 {
+        let count_text = if candidate_count == 1 {
+            "1 candidate found".to_string()
+        } else {
+            format!("{candidate_count} candidates found")
+        };
+        if let Some(obj) = evidence.as_object() {
+            if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
+                if !reason.is_empty() {
+                    return format!("{count_text}: {reason}");
+                }
+            }
+        }
+        return count_text;
+    }
     let is_empty_evidence = evidence.is_null()
         || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
@@ -289,7 +320,7 @@ async fn fetch_item(
         status: status.clone(),
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-        why_stopped: why_stopped(&status, &evidence),
+        why_stopped: why_stopped(&status, &evidence, candidates.len()),
         candidates,
         created_at,
         updated_at,
@@ -431,7 +462,7 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-            why_stopped: why_stopped(&status, &evidence),
+            why_stopped: why_stopped(&status, &evidence, candidates.len()),
             candidates,
             created_at,
             updated_at,
@@ -468,7 +499,7 @@ pub async fn search_issues(
     user: AuthenticatedUser,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<IdentityInboxSearchResponse>, ApiError> {
-    let _ = (state, user);
+    let _ = user;
     if q.q.trim().is_empty() || q.q.len() > 200 || q.q.is_empty() {
         return Err(unprocessable("q invalid"));
     }
@@ -493,10 +524,7 @@ pub async fn search_issues(
     }
 
     let url = build_search_url(&api_key, &q.q, clamped);
-    let payload = tokio::task::spawn_blocking(move || fetch_comicvine(url))
-        .await
-        .ok()
-        .flatten();
+    let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
     let mut total_available = Some(0i64);
@@ -630,26 +658,49 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
     )
 }
 
-fn fetch_comicvine(url: String) -> Option<Value> {
-    use native_tls::TlsConnector;
-    use std::io::{Read, Write};
+/// Search-result payload cap. ComicVine search responses are small; the cap
+/// keeps a hostile provider from driving unbounded allocation.
+const MAX_SEARCH_BODY: usize = 5_000_000;
+const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Fetch one ComicVine search page through the app's outbound seam (#5339):
+/// the real HTTPS client in production, a recording fake in test contexts
+/// that never opens a socket. Any failure yields `None`, as before.
+async fn fetch_comicvine(outbound: &Arc<dyn OutboundHttp>, url: String) -> Option<Value> {
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
-    let path = format!("/{rest}");
-    let addr = format!("{host}:443");
-    let stream = std::net::TcpStream::connect(&addr).ok()?;
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
-    let connector = TlsConnector::new().ok()?;
-    let mut tls = connector.connect(host, stream).ok()?;
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
-    );
-    tls.write_all(request.as_bytes()).ok()?;
-    let mut buf = Vec::new();
-    tls.read_to_end(&mut buf).ok()?;
-    let text = String::from_utf8_lossy(&buf);
-    let body = text.split("\r\n\r\n").nth(1)?;
-    serde_json::from_str(body).ok()
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!("/{rest}"),
+        headers: vec![
+            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
+            ("accept".to_string(), "application/json".to_string()),
+            ("connection".to_string(), "close".to_string()),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(host, request).await.ok()?;
+        if !response.status.is_success() {
+            return None;
+        }
+        let mut data = Vec::new();
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
+            let frame = frame.ok()?;
+            if let Ok(bytes) = frame.into_data() {
+                data.extend_from_slice(&bytes);
+                if data.len() > MAX_SEARCH_BODY {
+                    return None;
+                }
+            }
+        }
+        serde_json::from_slice(&data).ok()
+    };
+    tokio::time::timeout(SEARCH_TIMEOUT, exchange)
+        .await
+        .ok()
+        .flatten()
 }
 
 pub async fn confirm(
@@ -1110,6 +1161,152 @@ mod tests {
     use crate::auth::AuthenticatedUser;
     use crate::test_support;
 
+    /// ComICVine search must go through the outbound seam: the fake records
+    /// the host and query and supplies the payload, never a socket (#5339).
+    #[tokio::test]
+    async fn fetch_comicvine_records_host_and_query_and_parses_the_payload() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":40001,"name":"Batman"}]}"#,
+            ),
+        );
+        let url = build_search_url("KEY123", "bat man", 10);
+        let payload = fetch_comicvine(&fake, url)
+            .await
+            .expect("canned provider payload must parse");
+        assert_eq!(payload["number_of_total_results"], 1);
+        assert_eq!(payload["results"][0]["id"], 40001);
+
+        let calls = recorder.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+        assert_eq!(calls[0].method, "GET");
+        assert!(
+            calls[0].path.starts_with("/api/search/?api_key=KEY123"),
+            "unexpected search path {}",
+            calls[0].path
+        );
+        assert!(calls[0].path.contains("query=bat%20man"));
+        assert!(calls[0].path.contains("resources=issue"));
+    }
+
+    #[tokio::test]
+    async fn fetch_comicvine_returns_none_on_error_status_failure_and_oversize() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        // Non-success status.
+        recorder.push_ok(
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            http::HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1}"#),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Transport failure (the default fake behavior).
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Oversized body is dropped instead of allocated unbounded.
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from(vec![b'x'; MAX_SEARCH_BODY + 1]),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        assert_eq!(recorder.calls().len(), 3);
+    }
+
+    /// End-to-end through the handler: a test-configured app answers search
+    /// from the recording fake, so the route never touches the network.
+    #[tokio::test]
+    async fn search_issues_serves_results_from_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"Detective Comics","issue_number":"1","volume":{"id":40509},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "detective".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("search must succeed against the fake");
+        assert_eq!(response.total_available, Some(1));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "exactly one outbound call, no socket");
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+    }
+
+    /// Save/restore `COMICVINE_API_KEY` around one test (same pattern as the
+    /// bug-reports GitHub env guard).
+    struct ComicvineKeyEnv {
+        previous: Option<String>,
+    }
+
+    impl ComicvineKeyEnv {
+        fn install() -> Self {
+            let previous = std::env::var("COMICVINE_API_KEY").ok();
+            std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+            Self { previous }
+        }
+    }
+
+    impl Drop for ComicvineKeyEnv {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+                None => std::env::remove_var("COMICVINE_API_KEY"),
+            }
+        }
+    }
+
+    #[test]
+    fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
+        let empty = serde_json::json!({});
+        // Real candidate state wins over the empty-evidence fallback, but a
+        // non-empty decision_reason is preserved so the header still explains
+        // why review is needed.
+        assert_eq!(why_stopped("unresolved", &empty, 1), "1 candidate found");
+        assert_eq!(why_stopped("unresolved", &empty, 3), "3 candidates found");
+        let with_reason = serde_json::json!({"decision_reason": "ambiguous title"});
+        assert_eq!(
+            why_stopped("unresolved", &with_reason, 1),
+            "1 candidate found: ambiguous title"
+        );
+        assert_eq!(
+            why_stopped("candidate", &with_reason, 2),
+            "2 candidates found: ambiguous title"
+        );
+        // With no candidates the original evidence/status reasons still apply.
+        assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
+        assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
+    }
+
     #[tokio::test]
     async fn list_empty_returns_ok() {
         let Some(state) = test_support::test_state(2).await else {
@@ -1228,6 +1425,87 @@ mod tests {
             .items
             .iter()
             .any(|item| { item.candidates.iter().any(|c| c.external_identity_id == 6) }));
+    }
+
+    /// Regression test for #5382: the list endpoint now batch-loads real
+    /// candidates, but `why_stopped` was ported from a Python implementation
+    /// whose list response always had `candidates=[]`. An unresolved mapping
+    /// with empty `evidence_json` therefore produced "No candidates found"
+    /// while the very same response carried one candidate. The collapsed
+    /// inbox header rendered that contradiction to the user. When candidates
+    /// exist, a non-empty decision_reason is preserved alongside the count.
+    #[tokio::test]
+    async fn list_inbox_why_stopped_reflects_real_candidates() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()), \
+                 (2,1,'Mutant Y','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#1','unread',0,NOW()), \
+                 (2,2,'#1','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()), \
+                 (2,'comicvine','issue','cv-2','{}'::json,NOW(),NOW()), \
+                 (3,'comicvine','issue','cv-3','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (2,2,2,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (3,2,3,'confirmed','user_confirmed',0.9,NOW(),NOW(),'{}'::json);",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.items.len(), 2);
+
+        let one = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 1)
+            .expect("issue 1 item");
+        assert_eq!(one.candidates.len(), 1, "issue 1 has one candidate mapping");
+        assert!(
+            !one.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when a candidate exists; got {:?}",
+            one.why_stopped,
+        );
+        assert_eq!(one.why_stopped, "1 candidate found: ambiguous title");
+
+        let two = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 2)
+            .expect("issue 2 item");
+        assert_eq!(
+            two.candidates.len(),
+            2,
+            "issue 2 has N>1 candidate mappings"
+        );
+        assert!(
+            !two.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when candidates exist; got {:?}",
+            two.why_stopped,
+        );
+        assert_eq!(two.why_stopped, "2 candidates found: ambiguous title");
     }
 
     #[tokio::test]

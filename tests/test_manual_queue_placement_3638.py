@@ -7,7 +7,6 @@ reactivation end the claim.
 """
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +14,6 @@ from app.models import Event, ReadingSession, Snapshot, Thread, User
 from app.services import thread_service
 from comic_pile.queue import move_to_front, move_to_safe_position, shuffle_queue
 from comic_pile.reading_session import create_session_start_snapshot
-from tests.conftest import get_or_create_user_async
 
 
 async def _add_active_threads(
@@ -176,35 +174,3 @@ async def test_session_start_snapshot_records_manual_placement(
     snapshot_states = await _session_start_thread_states(async_db, session.id)
     assert snapshot_states[str(target.id)]["queue_position_is_manual"] is True
 
-
-@pytest.mark.asyncio
-async def test_restore_session_start_restores_manual_placement(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Restoring a session start brings the manual placement claim back."""
-    user = await get_or_create_user_async(async_db)
-    threads = await _add_active_threads(async_db, user, count=3)
-    target = threads[2]
-
-    await move_to_front(target.id, user.id, async_db, manual=True)
-    await async_db.refresh(target)
-    assert target.queue_position_is_manual is True
-
-    session = ReadingSession(start_die=6, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    await create_session_start_snapshot(async_db, session)
-
-    # A series that completed during the session no longer holds the claim.
-    target.queue_position_is_manual = False
-    await async_db.commit()
-
-    restore_response = await auth_client.post(
-        f"/api/v1/sessions/{session.id}/restore-session-start"
-    )
-    assert restore_response.status_code == 200
-
-    await async_db.refresh(target)
-    assert target.queue_position_is_manual is True

@@ -13,6 +13,8 @@ from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+from app.services.collection_exclusion_service import delete_collection_exclusion
+from app.services.errors import InvalidRequestError
 from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.thread_service import list_queue_threads
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -378,7 +380,6 @@ async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
 
 async def test_exclusion_delete_rolls_back_when_stored_graph_is_invalid(
     option_e: None,
-    auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
     """Exclusions cannot be used to hide stored cycles from write validation."""
@@ -396,9 +397,10 @@ async def test_exclusion_delete_rolls_back_when_stored_graph_is_invalid(
     )
     exclusion_id = exclusion.id
     await async_db.commit()
-    response = await auth_client.delete(f"/api/v1/collection-exclusions/{exclusion_id}")
-    assert response.status_code == 422
-    assert "cycle" in response.json()["detail"].casefold()
+    with pytest.raises(InvalidRequestError, match="cycle"):
+        await delete_collection_exclusion(
+            async_db, user_id=user.id, exclusion_id=exclusion_id
+        )
     assert await async_db.get(CollectionExclusion, exclusion_id) is not None
 
 

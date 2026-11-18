@@ -485,37 +485,7 @@ until the visitor explicitly signs up and separately chooses a save action.
 
 Session tracking and history.
 
-### GET /sessions/current/
-
-Get the currently active session.
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 1,
-  "started_at": "2025-12-30T10:00:00",
-  "ended_at": null,
-  "start_die": 6,
-  "user_id": 1,
-  "ladder_path": "6 → 8 → 10",
-  "active_thread": {
-    "id": 3,
-    "title": "The Walking Dead Vol. 1",
-    "format": "TPB",
-    "issues_remaining": 5,
-    "position": 10
-  }
-}
-```
-
-**Response**: `404 Not Found`
-
-```json
-{
-  "detail": "No active session found"
-}
-```
+> `GET /sessions/current/` and `POST /sessions/{id}/restore-session-start` are retired (#4343); Roll state is event-derived.
 
 ### GET /sessions/
 

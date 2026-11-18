@@ -89,7 +89,10 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
-        .merge_from(crate::custom_cbl::CustomCblApi::openapi());
+        .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.
@@ -139,6 +142,20 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
                 .insert(alias.to_string(), alias_item(item, alias));
         }
     }
+    // utoipa's `schema_with` supplies the full `limit` schema but suppresses the
+    // parameter-level description. Restore the Python `Query(description=...)`
+    // text so the generated client contract matches the retired FastAPI route.
+    if let Some(item) = document.paths.paths.get_mut("/api/v1/taste/discoveries") {
+        if let Some(operation) = item.get.as_mut() {
+            for parameter in operation.parameters.iter_mut().flatten() {
+                if let utoipa::openapi::RefOr::T(parameter) = parameter {
+                    if parameter.name == "limit" {
+                        parameter.description = Some("Maximum discoveries to return.".to_string());
+                    }
+                }
+            }
+        }
+    }
     document
         .paths
         .paths
@@ -158,6 +175,132 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    /// Every issue-identity / CBL-adoption operation routed to native Rust
+    /// must keep its wire contract in the same-path document so the generated
+    /// TypeScript client does not lose those methods when the Python handlers
+    /// retire (#4843).
+    #[test]
+    fn same_path_contract_documents_all_issue_identity_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method) in [
+            ("/api/v1/issue-identity/cbl-sources", "get"),
+            ("/api/v1/issue-identity/cbl-sources/{list_id}", "get"),
+            (
+                "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+                "get",
+            ),
+            ("/api/v1/issue-identity/cbl-sources/compare", "post"),
+            (
+                "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+                "get",
+            ),
+            (
+                "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+                "get",
+            ),
+            ("/api/v1/issue-identity/cbl/{list_id}/adoption-plan", "post"),
+            ("/api/v1/cbl/{list_id}/adoption-commit", "post"),
+            (
+                "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+                "post",
+            ),
+        ] {
+            let operation = &paths[path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in same-path contract"
+            );
+            assert!(
+                operation["responses"]["200"].is_object()
+                    || operation["responses"]["201"].is_object(),
+                "{method} {path} has no success response"
+            );
+        }
+    }
+
+    /// The six same-path thread issue-management operations (#4832 part D)
+    /// must keep their wire contract in the same-path document so the
+    /// generated TypeScript client keeps those methods when the retained
+    /// Python declarations retire.
+    #[test]
+    fn same_path_contract_documents_all_thread_issue_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method, success) in [
+            ("/api/v1/threads/{thread_id}/issues", "post", "201"),
+            ("/api/v1/threads/{thread_id}/issues/creators", "get", "200"),
+            ("/api/v1/threads/{thread_id}/issues:reorder", "post", "204"),
+            ("/api/v1/threads/{thread_id}:migrateToIssues", "post", "200"),
+            (
+                "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+                "post",
+                "200",
+            ),
+            ("/api/v1/threads/{thread_id}:setCurrentIssue", "post", "200"),
+        ] {
+            let operation = &paths[path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in same-path contract"
+            );
+            assert!(
+                operation["responses"][success].is_object(),
+                "{method} {path} has no {success} response"
+            );
+        }
+    }
+
+    /// The issue read-state and reader-context cutover (#4832 part C) keeps its
+    /// original v1 URLs, so every operation must stay in the same-path document
+    /// to survive retirement of the shadowed Python handlers.
+    #[test]
+    fn same_path_contract_documents_issue_read_state_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method, operation_id) in [
+            (
+                "/api/v1/issues/{issue_id}:markRead",
+                "post",
+                "issue_read_state_mark_read",
+            ),
+            (
+                "/api/v1/issues/{issue_id}:markUnread",
+                "post",
+                "issue_read_state_mark_unread",
+            ),
+            (
+                "/api/v1/issues/{issue_id}:move",
+                "post",
+                "issue_read_state_move",
+            ),
+            (
+                "/api/v1/issues:bulkMarkRead",
+                "post",
+                "issue_read_state_bulk_mark_read",
+            ),
+            (
+                "/api/v1/issues:bulkMarkUnread",
+                "post",
+                "issue_read_state_bulk_mark_unread",
+            ),
+            (
+                "/api/v1/issues/{issue_id}/reader-context",
+                "get",
+                "issue_read_state_reader_context",
+            ),
+        ] {
+            let operation = &paths[path][method];
+            assert!(operation.is_object(), "missing {method} {path} in contract");
+            assert_eq!(operation["operationId"], operation_id);
+            assert!(
+                operation["responses"]["204"].is_object()
+                    || operation["responses"]["200"].is_object(),
+                "{method} {path} has no success response"
+            );
+        }
     }
 
     #[test]
@@ -192,12 +335,16 @@ mod tests {
             "#/components/schemas/TasteDiscoveryListResponse"
         );
         let params = listing["parameters"].as_array().expect("limit param");
-        assert!(
-            params
-                .iter()
-                .any(|param| param["name"] == "limit" && param["in"] == "query"),
-            "GET listing must document its bounded limit query parameter"
-        );
+        let limit = params
+            .iter()
+            .find(|param| param["name"] == "limit" && param["in"] == "query")
+            .expect("GET listing must document its bounded limit query parameter");
+        assert_eq!(limit["description"], "Maximum discoveries to return.");
+        assert_eq!(limit["schema"]["type"], "integer");
+        assert_eq!(limit["schema"]["title"], "Limit");
+        assert_eq!(limit["schema"]["minimum"], 1);
+        assert_eq!(limit["schema"]["maximum"], 3);
+        assert_eq!(limit["schema"]["default"], 3);
 
         let dismiss = &paths["/api/v1/taste/discoveries/{signal_id}/dismiss"]["post"];
         assert_eq!(dismiss["operationId"], "dismiss_documentation");

@@ -1,6 +1,6 @@
 """Per-resource router mounts for deferred cold-start registration (#3479).
 
-The Vercel function registers only the lightweight ping/keepalive routes
+The Vercel function registers only the lightweight ping route
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
 ``/api/v1/undo`` tap pulled in catalog and delivery even though the
@@ -29,9 +29,10 @@ from fastapi import FastAPI
 RegisterMount = Callable[[FastAPI], None]
 
 #: Path segments that are registered eagerly and never need deferred loading:
-#: ping and keepalive are mounted by ``app.main`` before this registry
-#: is consulted.
-EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "keepalive"})
+#: ping is mounted by ``app.main`` before this registry is consulted. The
+#: former metrics and keepalive eager routers were retired with their Python
+#: handlers (served by native Rust v2).
+EAGER_SEGMENTS: frozenset[str] = frozenset({"ping"})
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,7 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
 
 
 def _register_health(app: FastAPI) -> None:
-    """Register bounded health probes."""
+    """Register the bounded warm-up probe."""
     from app.api import health
 
     app.include_router(health.router, prefix="/api", tags=["health"])
@@ -137,13 +138,6 @@ def _register_reading_orders(app: FastAPI) -> None:
     app.include_router(reading_orders.router, tags=["reading-orders"])
 
 
-def _register_reading_boundary(app: FastAPI) -> None:
-    """Register versioned Reading Boundaries explanation routers."""
-    from app.api import reading_boundary
-
-    app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
-
-
 def _register_sessions(app: FastAPI) -> None:
     """Register versioned reading-session routers."""
     from app.api import session
@@ -153,20 +147,6 @@ def _register_sessions(app: FastAPI) -> None:
     # shared router so its literal paths resolve ahead of /{session_id}.
     app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-
-
-def _register_traffic_metrics(app: FastAPI) -> None:
-    """Register traffic-metrics routers."""
-    from app.api import traffic_metrics
-
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-
-
-def _register_bootstrap_telemetry(app: FastAPI) -> None:
-    """Register bootstrap-alias telemetry routers."""
-    from app.api import bootstrap_telemetry
-
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
 
 
 def _register_dependencies(app: FastAPI) -> None:
@@ -220,21 +200,12 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         frozenset({"reading-orders", "threads"}),
         _register_reading_orders,
     ),
-    RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
-    RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
-    RouterMount(
-        "bootstrap-telemetry",
-        frozenset({"bootstrap-alias-metrics"}),
-        _register_bootstrap_telemetry,
-    ),
     RouterMount(
         "dependencies",
         frozenset(
             {
-                "collection-exclusions",
                 "continuity-plans",
-                "continuity-rules",
                 "dependencies",
                 "issue-identity",
                 "issues",

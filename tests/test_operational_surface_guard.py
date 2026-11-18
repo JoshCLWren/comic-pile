@@ -1,16 +1,10 @@
 """Operational-surface stability guards for the deliberately unversioned allowlist.
 
 The v1 cutover contract (issue #1742) allowlists surfaces that must remain
-reachable outside ``/api/v1``: health probes, docs, and static assets. These
-are consumed by uptime monitors, browsers, and the SPA bundle rather than
-versioned API clients, so relocating them is a production incident even when
-every API consumer has migrated.
-
-Regression provenance: an earlier cutover attempt moved the operational health
-mount (at the time registered alongside analytics) from ``/api`` to ``/api/v1``,
-which orphaned ``/api/health`` and shifted the canonical bounded probes to
-``/api/v1/v1/health/*``. The guards below pin Python-served surfaces so the
-final bare-mount deletion step cannot silently relocate them.
+reachable outside ``/api/v1``: FastAPI docs and static assets. These are
+consumed by browsers and the SPA bundle rather than versioned API clients, so
+relocating them is a production incident even when every API consumer has
+migrated. The retired Python health probes are no longer part of this surface.
 
 These tests inspect routing tables only; they never open database connections.
 """
@@ -23,26 +17,6 @@ import pytest
 from app.main import create_app
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-
-#: Bare paths that operational consumers depend on and that must never move
-#: behind a version prefix. ``/api/health`` is the legacy dependency-free uptime
-#: liveness URL served by the Python app.
-_BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
-    {
-        "GET /api/health",
-    }
-)
-
-#: Canonical bounded health probes served under the versioned prefix via the
-#: health mount. Uptime tooling calls these instead of the legacy URL.
-#: ``/api/v1/health/*`` remains the operational surface.
-_CANONICAL_HEALTH_ROUTES: frozenset[str] = frozenset(
-    {
-        "GET /api/v1/health/live",
-        "GET /api/v1/health/dependencies",
-        "GET /api/v1/health/warmup",
-    }
-)
 
 #: FastAPI's default documentation surface, part of the unversioned allowlist.
 _DOCS_ROUTES: frozenset[str] = frozenset(
@@ -113,16 +87,6 @@ def _assert_routes_present(routes: set[str], expected: frozenset[str]) -> None:
         "Operational routes disappeared from the unversioned surface; uptime "
         f"probes, warmup crons, or the SPA heartbeat will break: {missing}"
     )
-
-
-def test_bare_ping_and_liveness_remain_unversioned(api_routes: set[str]) -> None:
-    """The bare ping and legacy liveness URLs must stay mounted verbatim."""
-    _assert_routes_present(api_routes, _BARE_OPERATIONAL_ROUTES)
-
-
-def test_canonical_health_probes_stay_on_v1_prefix(api_routes: set[str]) -> None:
-    """Bounded dependency probes must remain at /api/v1/health/*."""
-    _assert_routes_present(api_routes, _CANONICAL_HEALTH_ROUTES)
 
 
 def test_temporary_cache_latency_probe_is_gone(api_routes: set[str]) -> None:

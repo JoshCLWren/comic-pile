@@ -3,12 +3,10 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import create_access_token
 from app.constants import Bandwidth, BandwidthSource
 from app.models import ReadingSession
 from app.models import Thread
@@ -470,46 +468,6 @@ def test_restore_rejects_invalid_source_and_confidence() -> None:
 
     with pytest.raises(ValueError, match="between 0 and 1"):
         restore_ephemeral_bandwidth(_StubSession(), {"bandwidth_confidence": -0.2})
-
-
-@pytest.mark.asyncio
-async def test_current_session_endpoint_exposes_bandwidth_state(
-    client: AsyncClient, async_db: AsyncSession, default_user
-) -> None:
-    """Active-session reads expose stored predicted/active bandwidth independently."""
-    from app.models import User as UserModel
-
-    result = await async_db.execute(select(UserModel).where(UserModel.id == default_user.id))
-    user = result.scalar_one()
-
-    session = ReadingSession(
-        start_die=6,
-        user_id=user.id,
-        started_at=datetime.now(UTC),
-        predicted_bandwidth="balanced",
-        active_bandwidth="light",
-        bandwidth_source="manual",
-        bandwidth_confidence=0.75,
-        bandwidth_version="1",
-        bandwidth_updated_at=datetime.now(UTC),
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    token = create_access_token(data={"sub": user.username, "jti": "test"})
-    response = await client.get(
-        "/api/v1/sessions/current/", headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == session.id
-    # Bandwidth state is nested under the "bandwidth" field
-    assert data["bandwidth"] is not None
-    assert data["bandwidth"]["predicted_bandwidth"] == "balanced"
-    assert data["bandwidth"]["active_bandwidth"] == "light"
-    assert data["bandwidth"]["confidence"] == 0.75
-    assert data["bandwidth"]["source"] == "manual"
-    assert data["bandwidth"]["mode_version"] == "1"
 
 
 def test_bandwidth_state_never_lands_on_thread_or_list_view() -> None:

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import RollPage from '../pages/RollPage'
-import { useSession } from '../hooks/useSession'
 import { useStaleThreads } from '../hooks/useThread'
 import {
  useDismissPending,
@@ -38,7 +37,6 @@ vi.mock('../components/GlossaryLink', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
@@ -62,8 +60,6 @@ vi.mock('../hooks', async (importOriginal) => {
     useRate: vi.fn(),
   }
 })
-// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
-const mockedUseSession = vi.mocked(useSession) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
@@ -115,19 +111,6 @@ beforeEach(() => {
     isPending: false,
     isError: false,
     error: null,
-  })
-  mockedUseSession.mockReturnValue({
-    data: {
-      current_die: 6,
-      last_rolled_result: null,
-      manual_die: null,
-      has_restore_point: false,
-      snoozed_threads: [
-        { id: 1, title: 'Saga', format: 'Comics' },
-        { id: 2, title: 'X-Men', format: 'Comics' },
-      ],
-    },
-    refetch: vi.fn(),
   })
   mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
