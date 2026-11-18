@@ -76,7 +76,7 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      t.queue_position, t.status, t.last_rating, t.last_activity_at, \
      t.notes, t.is_test, t.is_blocked, t.created_at, \
      t.total_issues, t.reading_progress, t.next_unread_issue_id, \
-     t.next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
+     t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
      i.read_at, i.created_at FROM issues i WHERE i.id = ANY($1::int[])";
@@ -807,7 +807,7 @@ async fn threads_by_ids(
         .map_err(db::query_error)?;
     for row in rows {
         let manual_creator_credits = row
-            .get::<_, Option<String>>(16)
+            .get::<_, Option<String>>(15)
             .and_then(|value| serde_json::from_str(&value).ok())
             .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
         result.insert(
@@ -829,7 +829,7 @@ async fn threads_by_ids(
                 total_issues: row.get(12),
                 reading_progress: row.get(13),
                 next_unread_issue_id: row.get(14),
-                next_unread_issue_number: row.get(15),
+                next_unread_issue_number: None,
                 manual_creator_credits,
             }),
         );
