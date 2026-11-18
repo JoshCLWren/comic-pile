@@ -101,7 +101,7 @@ export function ReadingPlanRecovery({
       </details>
       <p>
         Choose an existing Reading List as the new authority, or{' '}
-        <Link className="underline" to="/continuity-plans/new">open the Plan authoring UI</Link>{' '}
+        <Link className="underline" to={`/continuity-plans/${planId}/edit`}>open the Plan authoring UI</Link>{' '}
         with the issues and order you want. This does not recover deleted issues automatically.
       </p>
       <label className="block space-y-2">

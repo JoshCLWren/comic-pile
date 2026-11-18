@@ -527,3 +527,49 @@ async fn plan_updated_at_is_iso_and_version_check_is_timezone_aware() {
         "non-ISO conflict token: {conflict}"
     );
 }
+
+/// Issue #5462: an empty authored plan (0 lanes, 0 nodes) saves but must open
+/// and be editable. The v2 reader must not return 409 recovery for a plan with
+/// no authoritative Reading List, no retained membership, and no source
+/// provenance.
+#[tokio::test]
+async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-empty-reader").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA empty plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["plan_id"], plan_id, "{reader}");
+    assert_eq!(reader["name"], "QA empty plan", "{reader}");
+    assert_eq!(reader["execution_mode"], "legacy", "{reader}");
+    assert_eq!(reader["ordering_mode"], "informational", "{reader}");
+    assert_eq!(reader["progress"]["total_issues"], 0, "{reader}");
+    assert_eq!(reader["progress"]["read_issues"], 0, "{reader}");
+    assert_eq!(reader["available_now"], json!([]), "{reader}");
+    assert_eq!(reader["blocked_next"], json!([]), "{reader}");
+    assert_eq!(reader["lanes"], json!([]), "{reader}");
+    assert_eq!(reader["sources"], json!([]), "{reader}");
+}

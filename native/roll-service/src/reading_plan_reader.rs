@@ -1,8 +1,11 @@
-//! Canonical Option E continuity-plan reader.
+//! Canonical continuity-plan reader.
 //!
-//! A linked custom Reading List is the sole authority for effective order.
+//! A linked custom Reading List is the sole authority for effective Option E order.
 //! Historic plan membership and provenance are never projected as authority.
 //! Reads share the exact Rust Reading List evaluation used by Roll and Queue.
+//!
+//! Empty plans with no authoritative Reading List and no retained membership or
+//! source provenance open as editable legacy plans instead of recovery errors.
 
 use crate::{auth::AuthenticatedUser, db, reading_list, ApiError, AppState};
 use axum::{
@@ -150,13 +153,15 @@ pub async fn read(
     let conn = db::checkout(&state).await?;
     let plan = conn
         .query_opt(
-            "SELECT p.name FROM continuity_plans p WHERE p.id=$1 AND p.user_id=$2",
+            "SELECT p.name, p.ordering_mode
+             FROM continuity_plans p WHERE p.id=$1 AND p.user_id=$2",
             &[&plan_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Reading Plan not found".to_string()))?;
     let plan_name: String = plan.get(0);
+    let plan_ordering_mode: String = plan.get(1);
 
     let source_rows = conn
         .query(
@@ -192,13 +197,41 @@ pub async fn read(
     }
     let mut source_ids = source_list_ids.iter().copied();
     let (Some(list_id), None) = (source_ids.next(), source_ids.next()) else {
-        return Err(ApiError::Conflict(
-            if source_list_ids.is_empty() {
-                "Reading Plan has no linked authoritative Reading List. Open recovery to relink."
-            } else {
-                "Ambiguous Reading List association. No Plan membership was changed."
+        if source_list_ids.is_empty() {
+            let retained_issue_count: i64 = conn
+                .query_one(
+                    "SELECT count(*) FROM reading_plan_issues WHERE plan_id=$1",
+                    &[&plan_id],
+                )
+                .await
+                .map_err(db::query_error)?
+                .get(0);
+            if retained_issue_count == 0 && sources.is_empty() {
+                drop(conn);
+                return Ok(Json(PlanReaderResponse {
+                    execution_mode: "legacy".to_string(),
+                    plan_id,
+                    name: plan_name,
+                    ordering_mode: plan_ordering_mode,
+                    progress: PlanReaderProgress {
+                        total_issues: 0,
+                        read_issues: 0,
+                    },
+                    available_now: Vec::new(),
+                    blocked_next: Vec::new(),
+                    lanes: Vec::new(),
+                    sources: Vec::new(),
+                    release_sources: Vec::new(),
+                    release_candidates: Vec::new(),
+                }));
             }
-            .to_string(),
+            return Err(ApiError::Conflict(
+                "Reading Plan has no linked authoritative Reading List. Open recovery to relink."
+                    .to_string(),
+            ));
+        }
+        return Err(ApiError::Conflict(
+            "Ambiguous Reading List association. No Plan membership was changed.".to_string(),
         ));
     };
     drop(conn);
