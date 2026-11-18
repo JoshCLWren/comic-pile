@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from sqlalchemy.engine import Engine
 
 from scripts import migration_rehearsal as rehearsal_module
 from scripts.migration_rehearsal import (
@@ -46,7 +47,7 @@ class _FakeScriptDirectory:
         return self.head
 
 
-class _FakeEngine:
+class _FakeEngine(Engine):
     """Minimal engine double that records fixture use without opening a pool."""
 
     def __init__(self) -> None:
@@ -54,7 +55,7 @@ class _FakeEngine:
         self.fixture_applied: list[_FakeEngine] = []
         self.disposed = False
 
-    def dispose(self) -> None:
+    def dispose(self, **kwargs: object) -> None:
         """Record disposal instead of releasing a pool."""
         self.disposed = True
 
@@ -148,7 +149,7 @@ def test_run_migration_rehearsal_applies_fixture_between_upgrade_and_downgrade(
         engines.append(engine)
         return engine
 
-    def _fake_apply(engine: object) -> None:
+    def _fake_apply(engine: Engine) -> None:
         assert isinstance(engine, _FakeEngine)
         engine.fixture_applied.append(engine)
 
