@@ -1334,7 +1334,8 @@ async fn remove_member_tx(
         .await
         .map_err(db::query_error)?;
     let member = member.ok_or_else(|| ApiError::NotFound(format!("Member {member_id} not found")))?;
-    if member.get(1) != group_id {
+    let member_group_id: i32 = member.get(1);
+    if member_group_id != group_id {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
     }
     let deleted = tx
@@ -1454,7 +1455,7 @@ async fn set_group_order_tx(
     for (issue_id, membership_id) in &member_by_issue {
         tx.execute(
             "UPDATE dependency_group_memberships SET sequence_order = $1 WHERE id = $2",
-            &[ordered_positions.get(issue_id), membership_id],
+            &[ordered_positions.get(issue_id).copied(), Some(*membership_id)],
         )
         .await
         .map_err(db::query_error)?;
