@@ -1,0 +1,90 @@
+{
+  "family": "dependency-groups",
+  "owned_path_patterns": [
+    "^/api/v1/reading-order-groups(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "dest": "/api/native_roll.rs",
+    "status": "transitional",
+    "owning_issue": 4841,
+    "consumers": [
+      "frontend/src/services/api-dependency-groups.ts"
+    ],
+    "verified_against": "vercel.json"
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/",
+      "src": "^/api/v1/reading-order-groups/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/",
+      "src": "^/api/v1/reading-order-groups/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+      "src": "^/api/v1/reading-order-groups/threads/[^/]+/groups$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "src": "^/api/v1/reading-order-groups/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "src": "^/api/v1/reading-order-groups/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PATCH",
+      "path": "/api/v1/reading-order-groups/{group_id}",
+      "src": "^/api/v1/reading-order-groups/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}/detail",
+      "src": "^/api/v1/reading-order-groups/[^/]+/detail$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+      "src": "^/api/v1/reading-order-groups/[^/]+/issue-ranges$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-order-groups/{group_id}/members",
+      "src": "^/api/v1/reading-order-groups/[^/]+/members$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+      "src": "^/api/v1/reading-order-groups/[^/]+/members/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/reading-order-groups/{group_id}/order",
+      "src": "^/api/v1/reading-order-groups/[^/]+/order$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/{group_id}/plans",
+      "src": "^/api/v1/reading-order-groups/[^/]+/plans$"
+    }
+  ]
+}
