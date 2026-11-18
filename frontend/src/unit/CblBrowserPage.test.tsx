@@ -493,7 +493,15 @@ describe('CblBrowserPage catalog', () => {
       response: { status: 503, data: { detail: { code: 'cbl_catalog_unavailable', message: 'x' } } },
     })
     mockBrowse.mockRejectedValueOnce(unavailable)
-    mockBrowse.mockResolvedValue(browsePage({ items: [source], total: 1, total_pages: 1 }))
+    mockBrowse.mockResolvedValue(
+      browsePage({
+        page: 2,
+        items: [source],
+        total: 60,
+        total_pages: 2,
+        has_previous: true,
+      }),
+    )
     renderPage('/cbl-sources?page=2')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
