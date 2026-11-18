@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 53,
-    "native_rust": 53,
+    "total_live_operations": 52,
+    "native_rust": 52,
     "python_fastapi": 0,
-    "native_rust_status": 53,
+    "native_rust_status": 52,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -27,31 +27,6 @@
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/analytics/metrics",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4348,
-      "consumers": [
-        "frontend/src/services/api-tasks.ts"
-      ],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "auth folded into one owner-scoped metrics statement; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "native/roll-service/src/analytics.rs",
-        "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_analytics_metrics_n1.py",
-        "runtime_overhead_statements": 1
-      }
     },
     {
       "method": "GET",
@@ -1200,17 +1175,17 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 93,
+      "v1_total": 84,
       "v1_shadowed_by_rust": 4,
-      "v1_live_python": 39,
+      "v1_live_python": 30,
       "v1_orphaned": 0,
       "unversioned_total": 1,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 94,
+      "total_python_surface": 85,
       "total_shadowed_by_rust": 4,
-      "total_live_python": 39,
+      "total_live_python": 30,
       "total_orphaned": 0
     },
     "catch_all": {
@@ -1436,168 +1411,6 @@
           "frontend/src/services/api-continuity-plans.ts",
           "frontend/src/services/api-reading-orders.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/compare",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/discoveries",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/team-chemistry",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-creators.ts",
-          "frontend/src/services/creatorComparisonApi.ts",
-          "frontend/src/services/creatorDiscoveryApi.ts",
-          "frontend/src/services/creatorMetricDrilldownApi.ts",
-          "frontend/src/services/creatorTeamChemistryApi.ts",
-          "frontend/src/services/creatorsApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
