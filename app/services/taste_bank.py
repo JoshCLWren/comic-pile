@@ -19,7 +19,7 @@ Discovery never blocks rolling or rating: callers treat every failure here as
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,10 +34,6 @@ from app.services.prompt_eligibility import evaluate_prompt_eligibility
 
 # Upper bound on discoveries returned at once; Roll shows one at a time.
 MAX_ACTIVE_DISCOVERIES = 3
-
-# A dismissal suppresses re-prompting for this long. It is not a verdict.
-DISMISSAL_SUPPRESSION_DAYS = 14
-DISMISSAL_SUPPRESSION = timedelta(days=DISMISSAL_SUPPRESSION_DAYS)
 
 
 def _is_creator_role(signal: TasteSignal) -> bool:
@@ -172,38 +168,8 @@ async def list_discoveries(
     return TasteDiscoveryListResponse(discoveries=discovered, generated_at=now)
 
 
-async def dismiss_discovery(
-    db: AsyncSession, *, signal_id: int, user_id: int
-) -> TasteSignal | None:
-    """Dismiss one discovery without recording any verdict.
-
-    Dismissal writes only ``prompt_suppressed_until``; it can therefore never
-    count as confirmation.
-
-    Args:
-        db: Async database session.
-        signal_id: Target signal id.
-        user_id: Authenticated owner id.
-
-    Returns:
-        The updated signal, or ``None`` when missing or foreign.
-    """
-    signal = await taste_signals_repository.get_owned(
-        db, signal_id=signal_id, user_id=user_id
-    )
-    if signal is None:
-        return None
-
-    signal.prompt_suppressed_until = datetime.now(UTC) + DISMISSAL_SUPPRESSION
-    await taste_signals_repository.commit(db)
-    return signal
-
-
 __all__ = [
-    "DISMISSAL_SUPPRESSION",
-    "DISMISSAL_SUPPRESSION_DAYS",
     "MAX_ACTIVE_DISCOVERIES",
     "build_discovery_prompt",
-    "dismiss_discovery",
     "list_discoveries",
 ]
