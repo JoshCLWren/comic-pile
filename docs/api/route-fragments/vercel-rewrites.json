@@ -1268,6 +1268,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/v1/sessions/correction\\-examples$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/taste/discoveries$",
       "methods": [
         "OPTIONS"
