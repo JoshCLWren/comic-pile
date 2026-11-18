@@ -117,42 +117,58 @@ const UPDATE_GROUP_ORDER_SQL: &str = "UPDATE dependency_group_memberships AS mem
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupCreate)]
 pub struct DependencyGroupCreateRequest {
+    #[schema(min_length = 1, max_length = 120)]
     pub name: String,
 }
 
 /// Wire request mirroring the Python `DependencyGroupUpdate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupUpdate)]
 pub struct DependencyGroupUpdateRequest {
+    #[schema(min_length = 1, max_length = 120)]
     pub name: String,
 }
 
 /// Wire request mirroring the Python `DependencyGroupMemberCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupMemberCreate)]
 pub struct DependencyGroupMemberCreateRequest {
+    #[schema(exclusive_minimum = 0)]
     pub thread_id: Option<i32>,
+    #[schema(exclusive_minimum = 0)]
     pub issue_id: Option<i32>,
+    #[schema(minimum = 1)]
     pub sequence_order: Option<i32>,
 }
 
 /// Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupIssueRangeCreate)]
 pub struct DependencyGroupIssueRangeCreateRequest {
+    #[schema(exclusive_minimum = 0)]
     pub thread_id: i32,
+    #[schema(exclusive_minimum = 0)]
     pub start_position: i32,
+    #[schema(exclusive_minimum = 0)]
     pub end_position: i32,
 }
 
 /// Wire request mirroring the Python `DependencyGroupOrderUpdate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupOrderUpdate)]
 pub struct DependencyGroupOrderUpdateRequest {
+    #[schema(min_items = 1, max_items = 1000)]
     pub items: Vec<DependencyGroupOrderItem>,
 }
 
 /// Wire request item mirroring the Python `DependencyGroupOrderItem` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DependencyGroupOrderItem {
+    #[schema(exclusive_minimum = 0)]
     pub issue_id: i32,
+    #[schema(exclusive_minimum = 0)]
     pub sequence_order: i32,
 }
 
@@ -254,22 +270,91 @@ fn unprocessable(detail: impl Into<String>) -> ApiError {
     ApiError::Unprocessable(detail.into())
 }
 
+fn validation_failed() -> ApiError {
+    unprocessable("Validation failed")
+}
+
 fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
 }
 
-/// Strip and validate a group name (Python `app/services/dependency_group_service.py::_normalize_name`).
+/// Apply Pydantic's raw-name bounds before the service's strip/non-blank rule.
 fn normalize_group_name(name: &str) -> Result<String, ApiError> {
+    let raw_length = name.chars().count();
+    if raw_length == 0 || raw_length > MAX_GROUP_NAME_CHARS {
+        return Err(validation_failed());
+    }
     let normalized = name.trim();
-    if normalized.chars().count() == 0 {
+    if normalized.is_empty() {
         return Err(unprocessable("Group name must not be blank"));
     }
-    if normalized.chars().count() > MAX_GROUP_NAME_CHARS {
+    Ok(normalized.to_string())
+}
+
+fn validate_member_request(request: &DependencyGroupMemberCreateRequest) -> Result<(), ApiError> {
+    if request.thread_id.is_some_and(|id| id <= 0)
+        || request.issue_id.is_some_and(|id| id <= 0)
+        || request.sequence_order.is_some_and(|position| position < 1)
+    {
+        return Err(validation_failed());
+    }
+    if request.thread_id.is_none() == request.issue_id.is_none() {
+        return Err(unprocessable(
+            "Exactly one of thread_id or issue_id is required",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_issue_range_request(
+    request: &DependencyGroupIssueRangeCreateRequest,
+) -> Result<(), ApiError> {
+    if request.thread_id <= 0 || request.start_position <= 0 || request.end_position <= 0 {
+        return Err(validation_failed());
+    }
+    if request.end_position < request.start_position {
+        return Err(unprocessable(
+            "end_position must be greater than or equal to start_position",
+        ));
+    }
+    let range_size =
+        i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
+    if range_size > i64::from(MAX_RANGE_SIZE) {
         return Err(unprocessable(format!(
-            "Group name must be at most {MAX_GROUP_NAME_CHARS} characters"
+            "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
         )));
     }
-    Ok(normalized.to_string())
+    Ok(())
+}
+
+fn validate_group_order_request(
+    request: &DependencyGroupOrderUpdateRequest,
+) -> Result<(), ApiError> {
+    if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
+        return Err(validation_failed());
+    }
+    if request
+        .items
+        .iter()
+        .any(|item| item.issue_id <= 0 || item.sequence_order <= 0)
+    {
+        return Err(validation_failed());
+    }
+    let mut seen_issues = BTreeSet::new();
+    let mut seen_positions = BTreeSet::new();
+    for item in &request.items {
+        if !seen_issues.insert(item.issue_id) {
+            return Err(unprocessable(
+                "Each crossover issue may appear at most once in the order",
+            ));
+        }
+        if !seen_positions.insert(item.sequence_order) {
+            return Err(unprocessable(
+                "Each sequence_order position may appear at most once in the order",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn member_response(
