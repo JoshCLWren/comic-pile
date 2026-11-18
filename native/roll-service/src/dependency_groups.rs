@@ -110,6 +110,10 @@ const INSERT_ISSUE_MEMBERSHIPS_SQL: &str = "INSERT INTO dependency_group_members
      SELECT $1, issue_id FROM unnest($2::int[]) AS issue_ids(issue_id) ON CONFLICT DO NOTHING RETURNING issue_id";
 const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name) \
      VALUES ($1, $2) RETURNING id, name, created_at";
+const UPDATE_GROUP_ORDER_SQL: &str = "UPDATE dependency_group_memberships AS membership \
+     SET sequence_order = requested.sequence_order \
+     FROM unnest($1::int[], $2::int[]) AS requested(membership_id, sequence_order) \
+     WHERE membership.id = requested.membership_id";
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
