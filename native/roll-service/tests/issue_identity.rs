@@ -667,3 +667,205 @@ async fn adoption_commit_materializes_missing_importable_issue() {
     assert_eq!(body["unresolved_positions"], json!([]), "{body}");
     assert_eq!(body["excluded_positions"], json!([]), "{body}");
 }
+
+#[tokio::test]
+async fn targeted_adoption_commit_route_returns_200() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    let plan_id = body["id"].as_i64().expect("plan id");
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        &format!("/api/v1/cbl/1/reading-plans/{plan_id}/adoption-commit"),
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], plan_id, "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_invalid_decision_returns_422_enum() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {"0": "bogus"},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"][0]["type"], "enum", "{body}");
+    assert_eq!(
+        body["detail"][0]["loc"],
+        json!(["body", "entry_decisions", "0"]),
+        "{body}"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/reading-plans/1/adoption-commit",
+        json!({
+            "series_decisions": [{"series_name": "S", "decision": "nope"}],
+            "entry_decisions": {},
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    // plan 1 may not exist for this user; validation happens before lookup, so still 422 enum
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"][0]["type"], "enum", "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_unauthenticated_returns_401() {
+    let (state, _token, _csrf, _guard) = setup().await;
+    let (status, _body) = send(
+        &state,
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/cbl/1/adoption-commit")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                json!({
+                    "entry_decisions": {},
+                    "series_decisions": [],
+                    "series_overrides": [],
+                    "content_hash": "h-mm",
+                    "revision_sha": "rev-1"
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{_body}");
+}
+
+#[tokio::test]
+async fn targeted_adoption_commit_other_users_plan_returns_422() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    let plan_id = body["id"].as_i64().expect("plan id");
+
+    // register a second user
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let username = format!("issue-identity-other-{suffix}");
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let csrf2 = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .find_map(|cookie| {
+            let cookie = cookie.to_str().ok()?;
+            cookie
+                .strip_prefix("csrf_token=")?
+                .split(';')
+                .next()
+                .map(str::to_owned)
+        })
+        .expect("register sets a CSRF cookie");
+    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
+    let token2 = body["access_token"].as_str().unwrap().to_owned();
+
+    let (status, body) = post_json(
+        &state,
+        &token2,
+        &csrf2,
+        &format!("/api/v1/cbl/1/reading-plans/{plan_id}/adoption-commit"),
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(
+        body["detail"]["message"], "Reading Plan not found",
+        "{body}"
+    );
+}

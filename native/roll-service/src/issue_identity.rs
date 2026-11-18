@@ -370,9 +370,9 @@ pub async fn discover_cbl_source_lists(
     };
 
     let rows = if term.is_empty() {
-        pool.query(sql, &[&limit]).await
+        pool.run_query(sql, &[&limit]).await
     } else {
-        pool.query(sql, &[&pattern, &limit]).await
+        pool.run_query(sql, &[&pattern, &limit]).await
     }
     .map_err(|error| {
         tracing::error!(
@@ -417,7 +417,7 @@ pub async fn get_cbl_source_list(
 
     let pool = checkout(&state).await?;
     let list_row = pool
-        .query_opt(
+        .run_query_opt(
             r#"
         SELECT csl.id, csl.name, csl.source_path, cs.repository,
                csl.declared_issue_count, csl.content_hash, csl.revision_sha
@@ -450,7 +450,7 @@ pub async fn get_cbl_source_list(
     let source_ref = public_cbl_source_ref(&repository, &raw_source_path);
 
     let entries_rows = pool
-        .query(
+        .run_query(
             r#"
         SELECT cse.position, cse.series_name, cse.issue_number,
                cse.volume_year, cse.publication_year,
@@ -491,7 +491,7 @@ pub async fn get_cbl_source_list(
         .collect();
 
     let total_count: i64 = pool
-        .query_one(
+        .run_query_one(
             "SELECT COUNT(*) FROM cbl_source_entries WHERE list_id = $1",
             &[&list_id],
         )
@@ -562,7 +562,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
 
     let pool = checkout(&state).await?;
     let rows = pool
-        .query(
+        .run_query(
             r#"
         SELECT csl.id, csl.name, csl.source_path, cs.repository, csl.revision_sha,
                cse.position, cse.series_name, cse.issue_number,
@@ -619,7 +619,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
         .collect();
 
     let totals = pool
-        .query_one(
+        .run_query_one(
             r#"
         SELECT COUNT(cse.id), COUNT(DISTINCT csl.id)
         FROM cbl_source_entries cse
@@ -792,7 +792,7 @@ pub async fn compare_cbl_sources(
 
     // Candidate coverage rows: active lists containing at least one exact input identity.
     let coverage_rows = pool
-        .query(
+        .run_query(
             r#"
         WITH matched AS (
             SELECT DISTINCT cse.list_id
@@ -832,7 +832,7 @@ pub async fn compare_cbl_sources(
     let mut rows_by_list: HashMap<i32, Vec<(i32, String)>> = HashMap::new(); // (position, comicvine_id)
     if !list_ids.is_empty() {
         let matched_rows = pool
-            .query(
+            .run_query(
                 r#"
             SELECT cse.list_id, cse.position, ei.external_id
             FROM cbl_source_entries cse
@@ -1034,7 +1034,7 @@ pub async fn find_cbl_candidates_for_reading_list(
     let pool = checkout(&state).await?;
     // Owned reading list lookup: must be 404 if missing or not owned (same as Python get_custom_cbl_response).
     let list_row = pool
-        .query_opt(
+        .run_query_opt(
             "SELECT id, name FROM custom_cbl_lists WHERE id = $1 AND user_id = $2",
             &[&list_id, &auth.id()],
         )
@@ -1050,7 +1050,7 @@ pub async fn find_cbl_candidates_for_reading_list(
     let list_name: String = list_row.get(1);
 
     let entry_rows = pool
-        .query(
+        .run_query(
             r#"
         SELECT e.position, e.issue_id, t.title, i.issue_number
         FROM custom_cbl_entries e
@@ -1078,7 +1078,7 @@ pub async fn find_cbl_candidates_for_reading_list(
     let mut identities_by_issue: HashMap<i32, Vec<String>> = HashMap::new();
     if !issue_ids.is_empty() {
         let id_rows = pool
-            .query(
+            .run_query(
                 r#"
             SELECT m.issue_id, ei.external_id
             FROM issue_external_identity_mappings m
@@ -1182,7 +1182,7 @@ async fn compute_source_comparison(
     }
     let input_ids_vec = input_ids.to_vec();
     let coverage_rows = pool
-        .query(
+        .run_query(
             r#"
         WITH matched AS (
             SELECT DISTINCT cse.list_id
@@ -1222,7 +1222,7 @@ async fn compute_source_comparison(
     let mut rows_by_list: HashMap<i32, Vec<(i32, String)>> = HashMap::new();
     if !list_ids.is_empty() {
         let matched_rows = pool
-            .query(
+            .run_query(
                 r#"
             SELECT cse.list_id, cse.position, ei.external_id
             FROM cbl_source_entries cse
@@ -1597,7 +1597,7 @@ async fn load_active_cbl_list_meta(
     list_id: i32,
 ) -> Result<CblListMeta, ApiError> {
     let row = pool
-        .query_opt(
+        .run_query_opt(
             r#"
         SELECT csl.id, cs.repository, csl.source_path, csl.content_hash, csl.revision_sha, csl.name, csl.declared_issue_count
         FROM cbl_source_lists csl
@@ -1629,7 +1629,7 @@ pub async fn cbl_adoption_plan(
 ) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
     let pool = checkout(&state).await?;
     let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
-    // Build reconciliation entries (best-effort faithful port of core fields used by adoption plan).
+    // Build reconciliation entries (faithful port of core fields used by adoption plan).
     let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
     let planned = calculate_adoption_plan_entries(
         &report_entries,
@@ -1983,16 +1983,132 @@ fn add_metadata_volumes(
     }
 }
 
-async fn load_collection_guard_state_pool(
-    pool: &deadpool_postgres::Object,
+trait DbExec {
+    async fn run_query(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error>;
+    async fn run_query_opt(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error>;
+    async fn run_query_one(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error>;
+    async fn run_execute(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error>;
+}
+
+impl DbExec for deadpool_postgres::Object {
+    async fn run_query(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.query(sql, params).await
+    }
+    async fn run_query_opt(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.query_opt(sql, params).await
+    }
+    async fn run_query_one(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+        self.query_one(sql, params).await
+    }
+    async fn run_execute(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error> {
+        self.execute(sql, params).await
+    }
+}
+
+impl<'a> DbExec for tokio_postgres::Transaction<'a> {
+    async fn run_query(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+        tokio_postgres::Transaction::query(self, sql, params).await
+    }
+    async fn run_query_opt(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+        tokio_postgres::Transaction::query_opt(self, sql, params).await
+    }
+    async fn run_query_one(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+        tokio_postgres::Transaction::query_one(self, sql, params).await
+    }
+    async fn run_execute(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error> {
+        tokio_postgres::Transaction::execute(self, sql, params).await
+    }
+}
+
+impl<'a> DbExec for deadpool_postgres::Transaction<'a> {
+    async fn run_query(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.query(sql, params).await
+    }
+    async fn run_query_opt(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+        self.query_opt(sql, params).await
+    }
+    async fn run_query_one(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+        self.query_one(sql, params).await
+    }
+    async fn run_execute(
+        &self,
+        sql: &str,
+        params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+    ) -> Result<u64, tokio_postgres::Error> {
+        self.execute(sql, params).await
+    }
+}
+
+async fn load_collection_guard_state<E: DbExec>(
+    tx: &E,
     user_id: i32,
     facts: &[serde_json::Map<String, JsonValue>],
 ) -> Result<CollectionGuardState, ApiError> {
     let mut state = CollectionGuardState::default();
-    let rows = pool.query(
+    let rows = tx.run_query(
         "SELECT id, provider, external_volume_id, thread_id, issue_id FROM collection_exclusions WHERE user_id = $1 ORDER BY id",
         &[&user_id],
-    ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load collection exclusions failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+    ).await.map_err(|e| tx_db_error(e, ""))?;
     for row in rows {
         let id: i32 = row.get(0);
         let provider: Option<String> = row.get(1);
@@ -2012,7 +2128,6 @@ async fn load_collection_guard_state_pool(
     if state.volumes.is_empty() && state.threads.is_empty() && state.issues.is_empty() {
         return Ok(state);
     }
-    // collect identity ids and issue ids
     let mut identity_ids: Vec<i32> = Vec::new();
     let mut issue_ids: Vec<i32> = Vec::new();
     let mut thread_ids: Vec<i32> = Vec::new();
@@ -2045,8 +2160,7 @@ async fn load_collection_guard_state_pool(
     thread_ids.dedup();
 
     if !identity_ids.is_empty() {
-        // identity metadata/provider/external_id for volume candidates
-        let rows = pool.query("SELECT id, provider, entity_type, external_id, metadata_json::text FROM external_identities WHERE id = ANY($1)", &[&identity_ids]).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load identities failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        let rows = tx.run_query("SELECT id, provider, entity_type, external_id, metadata_json::text FROM external_identities WHERE id = ANY($1)", &[&identity_ids]).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let id: i32 = row.get(0);
             let provider: String = row.get(1);
@@ -2063,11 +2177,10 @@ async fn load_collection_guard_state_pool(
                 state.identity_volumes.insert(id, vals);
             }
         }
-        // series -> owned threads
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT tesm.external_identity_id, t.id FROM thread_external_series_mappings tesm JOIN threads t ON t.id = tesm.thread_id WHERE tesm.external_identity_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2",
             &[&identity_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load series threads failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             state
                 .series_threads
@@ -2075,11 +2188,10 @@ async fn load_collection_guard_state_pool(
                 .or_default()
                 .insert(row.get(1));
         }
-        // issue identity -> owned issues
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT ieim.external_identity_id, i.id FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id WHERE ieim.external_identity_id = ANY($1) AND ieim.status='confirmed' AND t.user_id=$2",
             &[&identity_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load issue targets failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             state
                 .issue_targets
@@ -2098,19 +2210,17 @@ async fn load_collection_guard_state_pool(
     all_issue_ids.sort_unstable();
     all_issue_ids.dedup();
     if !all_issue_ids.is_empty() {
-        let rows = pool.query("SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1) AND t.user_id=$2", &[&all_issue_ids, &user_id]).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load issue threads failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        let rows = tx.run_query("SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1) AND t.user_id=$2", &[&all_issue_ids, &user_id]).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let issue_id: i32 = row.get(0);
             let tid: i32 = row.get(1);
             state.issue_threads.insert(issue_id, tid);
             thread_ids.push(tid);
         }
-
-        // Confirmed issue metadata / volume evidence for owned issues.
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT i.id, ei.provider, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
             &[&all_issue_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load issue identities failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let issue_id: i32 = row.get(0);
             let provider: String = row.get(1);
@@ -2125,12 +2235,10 @@ async fn load_collection_guard_state_pool(
                     .extend(vals);
             }
         }
-
-        // Catalog-backed issue volumes.
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT i.id, ei.provider, ei.external_id FROM issues i JOIN threads t ON t.id = i.thread_id JOIN catalog_issues ci ON ci.id = i.catalog_issue_id JOIN catalog_series cs ON cs.id = ci.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2",
             &[&all_issue_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load catalog issue volumes failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let issue_id: i32 = row.get(0);
             let provider: String = row.get(1);
@@ -2146,11 +2254,10 @@ async fn load_collection_guard_state_pool(
     thread_ids.sort_unstable();
     thread_ids.dedup();
     if !thread_ids.is_empty() {
-        // Confirmed thread series volumes.
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT tesm.thread_id, ei.provider, ei.external_id FROM thread_external_series_mappings tesm JOIN external_identities ei ON ei.id = tesm.external_identity_id JOIN threads t ON t.id = tesm.thread_id WHERE tesm.thread_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2 AND ei.entity_type='series'",
             &[&thread_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load thread identities failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let tid: i32 = row.get(0);
             let p: String = row.get(1);
@@ -2161,11 +2268,10 @@ async fn load_collection_guard_state_pool(
                 .or_default()
                 .insert(normalize_volume(&p, &e));
         }
-        // Catalog-backed thread volumes.
-        let rows = pool.query(
+        let rows = tx.run_query(
             "SELECT t.id, ei.provider, ei.external_id FROM threads t JOIN catalog_series cs ON cs.id = t.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE t.id = ANY($1) AND t.user_id=$2",
             &[&thread_ids, &user_id]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "load catalog thread volumes failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let tid: i32 = row.get(0);
             let p: String = row.get(1);
@@ -2177,233 +2283,15 @@ async fn load_collection_guard_state_pool(
                 .insert(normalize_volume(&p, &e));
         }
     }
-
     Ok(state)
 }
 
-async fn annotate_collection_exclusions_pool(
-    pool: &deadpool_postgres::Object,
+async fn annotate_collection_exclusions<E: DbExec>(
+    tx: &E,
     user_id: i32,
     facts: &mut [serde_json::Map<String, JsonValue>],
 ) -> Result<(), ApiError> {
-    let state = load_collection_guard_state_pool(pool, user_id, facts).await?;
-    for fact in facts.iter_mut() {
-        if let Some((reason, ids)) = guard_check(&state, fact) {
-            fact.insert("collection_excluded".into(), JsonValue::Bool(true));
-            fact.insert(
-                "collection_exclusion_reason".into(),
-                JsonValue::String(reason),
-            );
-            fact.insert(
-                "collection_exclusion_ids".into(),
-                JsonValue::Array(
-                    ids.into_iter()
-                        .map(|i| JsonValue::Number(i.into()))
-                        .collect(),
-                ),
-            );
-        } else {
-            fact.insert("collection_excluded".into(), JsonValue::Bool(false));
-            fact.insert("collection_exclusion_reason".into(), JsonValue::Null);
-            fact.insert("collection_exclusion_ids".into(), JsonValue::Array(vec![]));
-        }
-    }
-    Ok(())
-}
-
-async fn load_collection_guard_state_tx(
-    tx: &tokio_postgres::Transaction<'_>,
-    user_id: i32,
-    facts: &[serde_json::Map<String, JsonValue>],
-) -> Result<CollectionGuardState, String> {
-    let mut state = CollectionGuardState::default();
-    let rows = tx.query(
-        "SELECT id, provider, external_volume_id, thread_id, issue_id FROM collection_exclusions WHERE user_id = $1 ORDER BY id",
-        &[&user_id],
-    ).await.map_err(|e| e.to_string())?;
-    for row in rows {
-        let id: i32 = row.get(0);
-        let provider: Option<String> = row.get(1);
-        let external_volume_id: Option<String> = row.get(2);
-        let thread_id: Option<i32> = row.get(3);
-        let issue_id: Option<i32> = row.get(4);
-        if let (Some(p), Some(ev)) = (provider, external_volume_id) {
-            state.volumes.insert(normalize_volume(&p, &ev), id);
-        }
-        if let Some(tid) = thread_id {
-            state.threads.insert(tid, id);
-        }
-        if let Some(iid) = issue_id {
-            state.issues.insert(iid, id);
-        }
-    }
-    if state.volumes.is_empty() && state.threads.is_empty() && state.issues.is_empty() {
-        return Ok(state);
-    }
-    let mut identity_ids: Vec<i32> = Vec::new();
-    let mut issue_ids: Vec<i32> = Vec::new();
-    let mut thread_ids: Vec<i32> = Vec::new();
-    for fact in facts {
-        for key in ["external_series_identity_id", "external_issue_identity_id"] {
-            if let Some(id) = fact.get(key).and_then(|v| v.as_i64()).map(|v| v as i32) {
-                identity_ids.push(id);
-            }
-        }
-        if let Some(id) = fact
-            .get("resolved_issue_id")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32)
-        {
-            issue_ids.push(id);
-        }
-        if let Some(id) = fact
-            .get("thread_id")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32)
-        {
-            thread_ids.push(id);
-        }
-    }
-    identity_ids.sort_unstable();
-    identity_ids.dedup();
-    issue_ids.sort_unstable();
-    issue_ids.dedup();
-    thread_ids.sort_unstable();
-    thread_ids.dedup();
-
-    if !identity_ids.is_empty() {
-        let rows = tx.query("SELECT id, provider, entity_type, external_id, metadata_json::text FROM external_identities WHERE id = ANY($1)", &[&identity_ids]).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let id: i32 = row.get(0);
-            let provider: String = row.get(1);
-            let entity_type: String = row.get(2);
-            let external_id: String = row.get(3);
-            let metadata_text: Option<String> = row.get(4);
-            let mut vals: std::collections::HashSet<(String, String)> =
-                std::collections::HashSet::new();
-            if entity_type == "series" {
-                vals.insert(normalize_volume(&provider, &external_id));
-            }
-            add_metadata_volumes(&provider, metadata_text.as_deref(), &mut vals);
-            if !vals.is_empty() {
-                state.identity_volumes.insert(id, vals);
-            }
-        }
-        let rows = tx.query(
-            "SELECT tesm.external_identity_id, t.id FROM thread_external_series_mappings tesm JOIN threads t ON t.id = tesm.thread_id WHERE tesm.external_identity_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2",
-            &[&identity_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            state
-                .series_threads
-                .entry(row.get(0))
-                .or_default()
-                .insert(row.get(1));
-        }
-        let rows = tx.query(
-            "SELECT ieim.external_identity_id, i.id FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id WHERE ieim.external_identity_id = ANY($1) AND ieim.status='confirmed' AND t.user_id=$2",
-            &[&identity_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            state
-                .issue_targets
-                .entry(row.get(0))
-                .or_default()
-                .insert(row.get(1));
-        }
-    }
-
-    let mut all_issue_ids = issue_ids.clone();
-    for targets in state.issue_targets.values() {
-        for id in targets {
-            all_issue_ids.push(*id);
-        }
-    }
-    all_issue_ids.sort_unstable();
-    all_issue_ids.dedup();
-    if !all_issue_ids.is_empty() {
-        let rows = tx.query("SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = ANY($1) AND t.user_id=$2", &[&all_issue_ids, &user_id]).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let issue_id: i32 = row.get(0);
-            let tid: i32 = row.get(1);
-            state.issue_threads.insert(issue_id, tid);
-            thread_ids.push(tid);
-        }
-        let rows = tx.query(
-            "SELECT i.id, ei.provider, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
-            &[&all_issue_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let issue_id: i32 = row.get(0);
-            let provider: String = row.get(1);
-            let metadata_text: Option<String> = row.get(2);
-            let mut vals = std::collections::HashSet::new();
-            add_metadata_volumes(&provider, metadata_text.as_deref(), &mut vals);
-            if !vals.is_empty() {
-                state
-                    .issue_volumes
-                    .entry(issue_id)
-                    .or_default()
-                    .extend(vals);
-            }
-        }
-        let rows = tx.query(
-            "SELECT i.id, ei.provider, ei.external_id FROM issues i JOIN threads t ON t.id = i.thread_id JOIN catalog_issues ci ON ci.id = i.catalog_issue_id JOIN catalog_series cs ON cs.id = ci.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2",
-            &[&all_issue_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let issue_id: i32 = row.get(0);
-            let provider: String = row.get(1);
-            let external_id: String = row.get(2);
-            state
-                .issue_volumes
-                .entry(issue_id)
-                .or_default()
-                .insert(normalize_volume(&provider, &external_id));
-        }
-    }
-
-    thread_ids.sort_unstable();
-    thread_ids.dedup();
-    if !thread_ids.is_empty() {
-        let rows = tx.query(
-            "SELECT tesm.thread_id, ei.provider, ei.external_id FROM thread_external_series_mappings tesm JOIN external_identities ei ON ei.id = tesm.external_identity_id JOIN threads t ON t.id = tesm.thread_id WHERE tesm.thread_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2 AND ei.entity_type='series'",
-            &[&thread_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let tid: i32 = row.get(0);
-            let p: String = row.get(1);
-            let e: String = row.get(2);
-            state
-                .thread_identities
-                .entry(tid)
-                .or_default()
-                .insert(normalize_volume(&p, &e));
-        }
-        let rows = tx.query(
-            "SELECT t.id, ei.provider, ei.external_id FROM threads t JOIN catalog_series cs ON cs.id = t.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE t.id = ANY($1) AND t.user_id=$2",
-            &[&thread_ids, &user_id]
-        ).await.map_err(|e| e.to_string())?;
-        for row in rows {
-            let tid: i32 = row.get(0);
-            let p: String = row.get(1);
-            let e: String = row.get(2);
-            state
-                .thread_identities
-                .entry(tid)
-                .or_default()
-                .insert(normalize_volume(&p, &e));
-        }
-    }
-    Ok(state)
-}
-
-async fn annotate_collection_exclusions_tx(
-    tx: &tokio_postgres::Transaction<'_>,
-    user_id: i32,
-    facts: &mut [serde_json::Map<String, JsonValue>],
-) -> Result<(), String> {
-    let state = load_collection_guard_state_tx(tx, user_id, facts).await?;
+    let state = load_collection_guard_state(tx, user_id, facts).await?;
     for fact in facts.iter_mut() {
         if let Some((reason, ids)) = guard_check(&state, fact) {
             fact.insert("collection_excluded".into(), JsonValue::Bool(true));
@@ -2536,548 +2424,12 @@ fn calculate_adoption_plan_entries(
     planned
 }
 
-async fn reconcile_entries_for_adoption(
-    pool: &deadpool_postgres::Object,
-    user_id: i32,
-    list_meta: &CblListMeta,
-) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
-    // Load source entries with identity external IDs.
-    let rows = pool
-        .query(
-            r#"
-        SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
-               ei.external_id AS comicvine_issue_id,
-               cse.external_issue_identity_id, cse.external_series_identity_id,
-               ev.provider AS series_provider, ev.external_id AS series_external_id,
-               cse.volume_year, cse.publication_year
-        FROM cbl_source_entries cse
-        LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
-        LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
-        WHERE cse.list_id = $1
-        ORDER BY cse.position ASC, cse.id ASC
-        "#,
-            &[&list_meta.id],
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                error_kind = crate::error_kind(&e),
-                "load cbl entries failed"
-            );
-            ApiError::Internal("Internal Server Error".to_string())
-        })?;
-
-    let mut out = Vec::with_capacity(rows.len());
-    for row in rows {
-        let cse_id: i32 = row.get(0);
-        let position: i32 = row.get(1);
-        let series_name: String = row.get(2);
-        let issue_number: String = row.get(3);
-        let comicvine_issue_id: Option<String> = row.get(4);
-        let external_issue_identity_id: Option<i32> = row.get(5);
-        let external_series_identity_id: Option<i32> = row.get(6);
-        let series_provider: Option<String> = row.get(7);
-        let series_external_id: Option<String> = row.get(8);
-        let volume_year: Option<i32> = row.get(9);
-        let publication_year: Option<i32> = row.get(10);
-
-        let series_provider_for_resolution = series_provider.as_deref();
-        let (
-            resolved_issue_id,
-            canonical_issue_id,
-            resolution_status,
-            is_duplicate_identity,
-            read_status,
-            read_at,
-        ) = resolve_canonical_for_entry(
-            pool,
-            user_id,
-            comicvine_issue_id.as_deref(),
-            &series_name,
-            &issue_number,
-            if series_provider_for_resolution
-                .map(|p| p.eq_ignore_ascii_case("comicvine"))
-                .unwrap_or(false)
-            {
-                series_external_id.as_deref()
-            } else {
-                None
-            },
-        )
-        .await?;
-
-        let mut entry = serde_json::Map::new();
-        entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
-        entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
-        entry.insert("series_name".into(), JsonValue::String(series_name));
-        entry.insert("issue_number".into(), JsonValue::String(issue_number));
-        entry.insert(
-            "comicvine_issue_id".into(),
-            comicvine_issue_id
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null),
-        );
-        let comicvine_series_id = if series_provider
-            .as_deref()
-            .map(|s| s.eq_ignore_ascii_case("comicvine"))
-            .unwrap_or(false)
-        {
-            series_external_id.clone()
-        } else {
-            None
-        };
-        entry.insert(
-            "comicvine_series_id".into(),
-            comicvine_series_id
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "series_provider".into(),
-            series_provider
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "series_external_id".into(),
-            series_external_id
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "external_issue_identity_id".into(),
-            external_issue_identity_id
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "external_series_identity_id".into(),
-            external_series_identity_id
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "volume_year".into(),
-            volume_year
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "publication_year".into(),
-            publication_year
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "resolved_issue_id".into(),
-            resolved_issue_id
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "canonical_issue_id".into(),
-            canonical_issue_id
-                .map(|v| JsonValue::Number(v.into()))
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "resolution_status".into(),
-            JsonValue::String(resolution_status),
-        );
-        entry.insert(
-            "is_duplicate_identity".into(),
-            JsonValue::Bool(is_duplicate_identity),
-        );
-        entry.insert(
-            "read_status".into(),
-            read_status
-                .map(JsonValue::String)
-                .unwrap_or(JsonValue::Null),
-        );
-        entry.insert(
-            "read_at".into(),
-            read_at.map(JsonValue::String).unwrap_or(JsonValue::Null),
-        );
-
-        entry.insert(
-            "series_group_id".into(),
-            JsonValue::String(cbl_series_group_id(&entry)),
-        );
-        out.push(entry);
-    }
-    annotate_collection_exclusions_pool(pool, user_id, &mut out).await?;
-    Ok(out)
-}
-
 fn normalize_title_number(value: &str) -> String {
     value
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
-}
-
-async fn title_number_fallback_pool(
-    pool: &deadpool_postgres::Object,
-    user_id: i32,
-    _cvid: &str,
-    series_name: &str,
-    issue_number: &str,
-    series_provider: Option<&str>,
-    series_external_id: Option<&str>,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
-    let want_series = normalize_title_number(series_name);
-    let want_issue = normalize_title_number(issue_number);
-    if want_series.is_empty() || want_issue.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    let rows = pool
-        .query(
-            r#"
-        SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
-        FROM issues i
-        JOIN threads t ON t.id = i.thread_id
-        WHERE t.user_id = $1
-        "#,
-            &[&user_id],
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                error_kind = crate::error_kind(&e),
-                "title/number fallback load failed"
-            );
-            ApiError::Internal("Internal Server Error".to_string())
-        })?;
-
-    let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = Vec::new();
-    for row in &rows {
-        let id: i32 = row.get(0);
-        let status: Option<String> = row.get(1);
-        let read_at: Option<String> = row.get(2);
-        let thread_id: i32 = row.get(3);
-        let ttitle: String = row.get(4);
-        let inum: String = row.get(5);
-        if normalize_title_number(&ttitle) == want_series
-            && normalize_title_number(&inum) == want_issue
-        {
-            matches.push((id, status, read_at, thread_id));
-        }
-    }
-    if matches.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    // Reject candidates that already carry any confirmed ComicVine identity.
-    let candidate_issue_ids: Vec<i32> = matches.iter().map(|m| m.0).collect();
-    let confirmed_rows = pool
-        .query(
-            r#"
-        SELECT m.issue_id
-        FROM issue_external_identity_mappings m
-        JOIN external_identities ei ON ei.id = m.external_identity_id
-        WHERE m.issue_id = ANY($1::int[])
-          AND m.status = 'confirmed'
-          AND ei.provider = 'comicvine'
-          AND ei.entity_type = 'issue'
-        "#,
-            &[&candidate_issue_ids],
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                error_kind = crate::error_kind(&e),
-                "title/number fallback confirmed ids failed"
-            );
-            ApiError::Internal("Internal Server Error".to_string())
-        })?;
-    let mut has_confirmed: std::collections::HashSet<i32> = std::collections::HashSet::new();
-    for row in confirmed_rows {
-        has_confirmed.insert(row.get(0));
-    }
-    matches.retain(|m| !has_confirmed.contains(&m.0));
-    if matches.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    // Series verification when CBL entry names a ComicVine series.
-    let cbl_series_is_comicvine = series_provider
-        .map(|p| p.eq_ignore_ascii_case("comicvine"))
-        .unwrap_or(false);
-    if cbl_series_is_comicvine {
-        if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
-            let thread_ids: Vec<i32> = matches.iter().map(|m| m.3).collect();
-            let series_rows = pool
-                .query(
-                    r#"
-                SELECT tesm.thread_id, ei.external_id
-                FROM thread_external_series_mappings tesm
-                JOIN external_identities ei ON ei.id = tesm.external_identity_id
-                WHERE tesm.thread_id = ANY($1::int[])
-                  AND tesm.status = 'confirmed'
-                  AND ei.provider = 'comicvine'
-                  AND ei.entity_type = 'series'
-                "#,
-                    &[&thread_ids],
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        error_kind = crate::error_kind(&e),
-                        "title/number fallback series ids failed"
-                    );
-                    ApiError::Internal("Internal Server Error".to_string())
-                })?;
-            let mut by_thread: std::collections::HashMap<i32, std::collections::HashSet<String>> =
-                std::collections::HashMap::new();
-            for row in series_rows {
-                by_thread
-                    .entry(row.get(0))
-                    .or_default()
-                    .insert(row.get::<_, String>(1));
-            }
-            let mut verified = Vec::new();
-            let mut unverifiable = Vec::new();
-            for m in &matches {
-                let Some(set) = by_thread.get(&m.3) else {
-                    unverifiable.push(m.clone());
-                    continue;
-                };
-                if set.is_empty() {
-                    unverifiable.push(m.clone());
-                } else if set.contains(series_id) {
-                    verified.push(m.clone());
-                }
-                // confirmed different series -> reject
-            }
-            if !unverifiable.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "ambiguous_title_number_unverifiable_series".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
-            matches = verified;
-            if matches.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "no_owned_issue_for_comicvine_id".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
-        }
-    }
-
-    if matches.len() == 1 {
-        let m = &matches[0];
-        return Ok((
-            Some(m.0),
-            Some(m.0),
-            "resolved_via_title_number_fallback".to_string(),
-            false,
-            m.1.clone(),
-            m.2.clone(),
-        ));
-    }
-
-    Ok((
-        None,
-        None,
-        "ambiguous_title_number_multiple_matches".to_string(),
-        false,
-        None,
-        None,
-    ))
-}
-
-async fn resolve_canonical_for_entry(
-    pool: &deadpool_postgres::Object,
-    user_id: i32,
-    comicvine_issue_id: Option<&str>,
-    series_name: &str,
-    issue_number: &str,
-    series_external_id: Option<&str>,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
-    // Core resolution path: if comicvine id present, find confirmed mapping for this user and canonicalize.
-    if let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) {
-        // Find external identity row
-        let eid = pool.query_opt(
-            "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
-            &[&cvid]
-        ).await.map_err(|e| { tracing::error!(error_kind = crate::error_kind(&e), "resolve identity failed"); ApiError::Internal("Internal Server Error".to_string()) })?;
-        if let Some(eid_row) = eid {
-            let eid: i32 = eid_row.get(0);
-            let issues = pool
-                .query(
-                    r#"
-                SELECT i.id, i.status::text, i.read_at::text
-                FROM issue_external_identity_mappings m
-                JOIN issues i ON i.id = m.issue_id
-                JOIN threads t ON t.id = i.thread_id
-                WHERE m.external_identity_id = $1
-                  AND m.status = 'confirmed'
-                  AND t.user_id = $2
-                ORDER BY i.id
-                "#,
-                    &[&eid, &user_id],
-                )
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        error_kind = crate::error_kind(&e),
-                        "resolve mapped issues failed"
-                    );
-                    ApiError::Internal("Internal Server Error".to_string())
-                })?;
-            if issues.is_empty() {
-                return title_number_fallback_pool(
-                    pool,
-                    user_id,
-                    cvid,
-                    series_name,
-                    issue_number,
-                    Some("comicvine"),
-                    series_external_id,
-                )
-                .await;
-            }
-            if issues.len() == 1 {
-                let r = &issues[0];
-                let id: i32 = r.get(0);
-                let status: Option<String> = r.get(1);
-                let read_at: Option<String> = r.get(2);
-                return Ok((
-                    Some(id),
-                    Some(id),
-                    "resolved_via_comicvine_canonical".to_string(),
-                    false,
-                    status,
-                    read_at,
-                ));
-            }
-            // Duplicate: prefer read history holder with earliest read_at, then lowest id.
-            let mut read_rows: Vec<(i32, Option<String>, Option<String>)> = Vec::new();
-            let mut all_unread = true;
-            for r in &issues {
-                let id: i32 = r.get(0);
-                let status: Option<String> = r.get(1);
-                let read_at: Option<String> = r.get(2);
-                if status.as_deref() == Some("read") {
-                    all_unread = false;
-                    read_rows.push((id, status.clone(), read_at.clone()));
-                }
-            }
-            let canonical = if !all_unread {
-                read_rows.sort_by(|a, b| {
-                    let ad = a.2.as_deref().unwrap_or("9999");
-                    let bd = b.2.as_deref().unwrap_or("9999");
-                    ad.cmp(bd).then(a.0.cmp(&b.0))
-                });
-                read_rows
-                    .first()
-                    .map(|r| r.0)
-                    .unwrap_or_else(|| issues[0].get(0))
-            } else {
-                issues
-                    .iter()
-                    .map(|r| r.get::<_, i32>(0))
-                    .min()
-                    .unwrap_or_else(|| issues[0].get(0))
-            };
-            // find canonical row
-            let canon_row = issues
-                .iter()
-                .find(|r| r.get::<_, i32>(0) == canonical)
-                .unwrap_or(&issues[0]);
-            let cstatus: Option<String> = canon_row.get(1);
-            let cread_at: Option<String> = canon_row.get(2);
-            let has_read = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() == Some("read"));
-            let has_unread = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() != Some("read"));
-            let ambiguous_divergence = has_read && has_unread;
-            let status_str = if ambiguous_divergence {
-                "resolved_via_comicvine_canonical_ambiguous"
-            } else {
-                "resolved_via_comicvine_canonical"
-            };
-            return Ok((
-                Some(canonical),
-                Some(canonical),
-                status_str.to_string(),
-                true,
-                cstatus,
-                cread_at,
-            ));
-        } else {
-            return Ok((
-                None,
-                None,
-                "comicvine_identity_not_known".to_string(),
-                false,
-                None,
-                None,
-            ));
-        }
-    }
-    Ok((
-        None,
-        None,
-        "ambiguous_no_comicvine_id".to_string(),
-        false,
-        None,
-        None,
-    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -3158,6 +2510,9 @@ pub async fn cbl_adoption_commit(
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<(StatusCode, Json<CblAdoptionCommitResponseWire>), (StatusCode, Json<JsonValue>)> {
+    if let Some(err) = validate_commit_request(&request) {
+        return Err(err);
+    }
     match do_cbl_adoption_commit(&state, auth.id(), list_id, None, request).await {
         Ok((status, resp)) => Ok((status, Json(resp))),
         Err(e) => Err(map_commit_error(e)),
@@ -3171,6 +2526,9 @@ pub async fn cbl_targeted_adoption_commit(
     Path((list_id, plan_id)): Path<(i32, i32)>,
     Json(request): Json<CblAdoptionCommitRequest>,
 ) -> Result<(StatusCode, Json<CblAdoptionCommitResponseWire>), (StatusCode, Json<JsonValue>)> {
+    if let Some(err) = validate_commit_request(&request) {
+        return Err(err);
+    }
     match do_cbl_adoption_commit(&state, auth.id(), list_id, Some(plan_id), request).await {
         Ok((_, resp)) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(map_commit_error(e)),
@@ -3185,6 +2543,67 @@ enum CommitErr {
     #[allow(dead_code)]
     Unexpected(String),
     Db(ApiError),
+}
+
+fn validate_commit_request(
+    request: &CblAdoptionCommitRequest,
+) -> Option<(StatusCode, Json<JsonValue>)> {
+    let mut errors = Vec::new();
+    for (key, value) in &request.entry_decisions {
+        if value != "include" && value != "exclude" {
+            errors.push(ValidationErrorItem {
+                error_type: "enum".to_string(),
+                loc: vec![
+                    "body".to_string(),
+                    "entry_decisions".to_string(),
+                    key.to_string(),
+                ],
+                msg: "Input should be 'include' or 'exclude'".to_string(),
+                input: JsonValue::String(value.clone()),
+                ctx: Some(serde_json::json!({"expected": "'include' or 'exclude'"})),
+            });
+        }
+    }
+    for (index, item) in request.series_decisions.iter().enumerate() {
+        if item.decision != "include" && item.decision != "exclude" {
+            errors.push(ValidationErrorItem {
+                error_type: "enum".to_string(),
+                loc: vec![
+                    "body".to_string(),
+                    "series_decisions".to_string(),
+                    index.to_string(),
+                    "decision".to_string(),
+                ],
+                msg: "Input should be 'include' or 'exclude'".to_string(),
+                input: JsonValue::String(item.decision.clone()),
+                ctx: Some(serde_json::json!({"expected": "'include' or 'exclude'"})),
+            });
+        }
+    }
+    for (index, item) in request.series_overrides.iter().enumerate() {
+        if item.decision != "include" && item.decision != "exclude" {
+            errors.push(ValidationErrorItem {
+                error_type: "enum".to_string(),
+                loc: vec![
+                    "body".to_string(),
+                    "series_overrides".to_string(),
+                    index.to_string(),
+                    "decision".to_string(),
+                ],
+                msg: "Input should be 'include' or 'exclude'".to_string(),
+                input: JsonValue::String(item.decision.clone()),
+                ctx: Some(serde_json::json!({"expected": "'include' or 'exclude'"})),
+            });
+        }
+    }
+    if errors.is_empty() {
+        None
+    } else {
+        Some((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"detail": errors})),
+        ))
+    }
 }
 
 fn map_commit_error(e: CommitErr) -> (StatusCode, Json<JsonValue>) {
@@ -3229,6 +2648,16 @@ fn normalize_decisions(
     (req.entry_decisions.clone(), series, overrides)
 }
 
+fn tx_db_error(error: tokio_postgres::Error, context: &str) -> ApiError {
+    if crate::db::is_transport_failure(&error) {
+        ApiError::database_unavailable()
+    } else if context.is_empty() {
+        ApiError::Internal(error.to_string())
+    } else {
+        ApiError::Internal(format!("{context}: {error}"))
+    }
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
@@ -3245,16 +2674,22 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    // Lock reader row best-effort (matches Python lock_reader semantics loosely).
-    let _ = tx
-        .execute("SELECT 1 FROM users WHERE id = $1 FOR UPDATE", &[&user_id])
-        .await;
+    // Lock reader row (Python lock_reader): serialize list writes per reader.
+    tx.run_execute("SELECT 1 FROM users WHERE id = $1 FOR UPDATE", &[&user_id])
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lock reader: {e}"))
+            }
+        })?;
 
-    let list_row = tx.query_opt(
+    let list_row = tx.run_query_opt(
         "SELECT csl.id, cs.repository, csl.source_path, csl.content_hash, csl.revision_sha, csl.name, csl.active
          FROM cbl_source_lists csl JOIN cbl_sources cs ON cs.id = csl.source_id WHERE csl.id = $1",
         &[&list_id]
-    ).await.map_err(|e| CommitErr::Unexpected(format!("list lookup: {e}")))?
+    ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("list lookup: {e}")) })?
         .ok_or_else(|| CommitErr::Adoption("CBL source list not found".to_string()))?;
     let active: bool = list_row.get(6);
     if !active {
@@ -3282,18 +2717,18 @@ async fn do_cbl_adoption_commit(
 
     let (entry_decisions_raw, series_decisions_raw, series_overrides_raw) =
         normalize_decisions(&request);
-    // Convert decisions to bool-like include/exclude semantics used by plan calc: "include"/"INCLUDE"? Python uses SourceBackedDecision enum values; accept strings.
+    // Convert validated decisions to include/exclude booleans (Python SourceBackedDecision).
     let entry_bool: std::collections::HashMap<String, bool> = entry_decisions_raw
         .iter()
-        .map(|(k, v)| (k.to_string(), v.eq_ignore_ascii_case("include")))
+        .map(|(k, v)| (k.to_string(), v == "include"))
         .collect();
     let series_bool: std::collections::HashMap<String, bool> = series_decisions_raw
         .iter()
-        .map(|(k, v)| (k.clone(), v.eq_ignore_ascii_case("include")))
+        .map(|(k, v)| (k.clone(), v == "include"))
         .collect();
     let override_bool: std::collections::HashMap<String, bool> = series_overrides_raw
         .iter()
-        .map(|(k, v)| (k.to_string(), v.eq_ignore_ascii_case("include")))
+        .map(|(k, v)| (k.to_string(), v == "include"))
         .collect();
 
     let list_meta = CblListMeta {
@@ -3305,12 +2740,16 @@ async fn do_cbl_adoption_commit(
         name: list_name.clone(),
         declared_issue_count: None,
     };
-    // Reconcile using checkout-like access not directly on tx; for simplicity query via tx where possible by wrapping pool? easier: use separate reads before tx for reconciliation approximation.
-    // But we already started tx; rollback and redo carefully would be complex. Use tx queries through a helper approach is limited.
-    // Pragmatic: do reconciliation reads via pool before commit transaction in a fuller impl; here approximate using tx-compatible queries.
-    let report_entries = reconcile_entries_for_adoption_tx(&tx, user_id, &list_meta)
+    // Reconcile against the transactional view of the source list.
+    let report_entries = reconcile_entries_for_adoption(&tx, user_id, &list_meta)
         .await
-        .map_err(|e| CommitErr::Unexpected(format!("reconcile: {e}")))?;
+        .map_err(|e| {
+            if e.is_database_unavailable() {
+                CommitErr::Db(e)
+            } else {
+                CommitErr::Unexpected(e.to_string())
+            }
+        })?;
     let planned = calculate_adoption_plan_entries(&report_entries, &series_bool, &entry_bool); // series_overrides handled in merge below
 
     // Determine/create plan
@@ -3324,7 +2763,7 @@ async fn do_cbl_adoption_commit(
         _created_at,
         _updated_at,
     ) = if let Some(pid) = target_plan_id {
-        let prow = tx.query_opt("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| CommitErr::Unexpected(e.to_string()))?
+        let prow = tx.run_query_opt("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(e.to_string()) })?
             .ok_or_else(|| CommitErr::Adoption("Reading Plan not found".to_string()))?;
         (
             prow.get::<_, i32>(0),
@@ -3342,9 +2781,15 @@ async fn do_cbl_adoption_commit(
         // Try existing adopted plan by source path
         let existing = find_existing_adopted_plan_tx(&tx, user_id, &source_path)
             .await
-            .map_err(|e| CommitErr::Unexpected(format!("find existing plan: {e}")))?;
+            .map_err(|e| {
+                if e.is_database_unavailable() {
+                    CommitErr::Db(e)
+                } else {
+                    CommitErr::Unexpected(e.to_string())
+                }
+            })?;
         if let Some(pid) = existing {
-            let prow = tx.query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| CommitErr::Unexpected(format!("load existing plan: {e}")))?;
+            let prow = tx.run_query_one("SELECT id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&pid, &user_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("load existing plan: {e}")) })?;
             (
                 prow.get::<_, i32>(0),
                 false,
@@ -3364,10 +2809,10 @@ async fn do_cbl_adoption_commit(
                 list_name.clone()
             };
             let lanes = serde_json::json!([{"id":"default","name":"Default","order":0}]);
-            let prow = tx.query_one(
+            let prow = tx.run_query_one(
                 "INSERT INTO continuity_plans (user_id,name,ordering_mode,lanes_json,nodes_json,created_at,updated_at) VALUES ($1,$2,'informational',$3::jsonb,'[]'::jsonb,NOW(),NOW()) RETURNING id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text",
                 &[&user_id,&name,&tokio_postgres::types::Json(&lanes)]
-            ).await.map_err(|e| CommitErr::Unexpected(format!("insert plan: {e}")))?;
+            ).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("insert plan: {e}")) })?;
             (
                 prow.get::<_, i32>(0),
                 true,
@@ -3393,14 +2838,26 @@ async fn do_cbl_adoption_commit(
     };
     let merge = merge_adoption_nodes_tx(&tx, &mut nodes_json, &merge_ctx)
         .await
-        .map_err(|e| CommitErr::Unexpected(format!("merge nodes: {e}")))?;
-    tx.execute(
+        .map_err(|e| {
+            if e.is_database_unavailable() {
+                CommitErr::Db(e)
+            } else {
+                CommitErr::Unexpected(e.to_string())
+            }
+        })?;
+    tx.run_execute(
         "UPDATE continuity_plans SET nodes_json=$1::jsonb, updated_at=NOW() WHERE id=$2",
         &[&tokio_postgres::types::Json(&nodes_json), &plan_id],
     )
     .await
-    .map_err(|e| CommitErr::Unexpected(format!("update plan: {e}")))?;
-    let prow = tx.query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| CommitErr::Unexpected(format!("reload plan: {e}")))?;
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("update plan: {e}"))
+        }
+    })?;
+    let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     tx.commit().await.map_err(|e| {
         if crate::db::is_transport_failure(&e) {
             CommitErr::Db(ApiError::database_unavailable())
@@ -3433,13 +2890,13 @@ async fn do_cbl_adoption_commit(
     Ok((status, resp))
 }
 
-async fn reconcile_entries_for_adoption_tx(
-    tx: &tokio_postgres::Transaction<'_>,
+async fn reconcile_entries_for_adoption<E: DbExec>(
+    tx: &E,
     user_id: i32,
     list_meta: &CblListMeta,
-) -> Result<Vec<serde_json::Map<String, JsonValue>>, String> {
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
     let rows = tx
-        .query(
+        .run_query(
             r#"
         SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
                ei.external_id AS comicvine_issue_id,
@@ -3455,7 +2912,7 @@ async fn reconcile_entries_for_adoption_tx(
             &[&list_meta.id],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let cse_id: i32 = row.get(0);
@@ -3477,7 +2934,7 @@ async fn reconcile_entries_for_adoption_tx(
             is_duplicate_identity,
             read_status,
             read_at,
-        ) = resolve_canonical_for_entry_tx(
+        ) = resolve_canonical_for_entry(
             tx,
             user_id,
             comicvine_issue_id.as_deref(),
@@ -3492,8 +2949,7 @@ async fn reconcile_entries_for_adoption_tx(
                 None
             },
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
@@ -3592,12 +3048,12 @@ async fn reconcile_entries_for_adoption_tx(
         );
         out.push(entry);
     }
-    annotate_collection_exclusions_tx(tx, user_id, &mut out).await?;
+    annotate_collection_exclusions(tx, user_id, &mut out).await?;
     Ok(out)
 }
 
-async fn title_number_fallback_tx(
-    tx: &tokio_postgres::Transaction<'_>,
+async fn title_number_fallback<E: DbExec>(
+    tx: &E,
     user_id: i32,
     _cvid: &str,
     series_name: &str,
@@ -3613,7 +3069,7 @@ async fn title_number_fallback_tx(
         Option<String>,
         Option<String>,
     ),
-    String,
+    ApiError,
 > {
     let want_series = normalize_title_number(series_name);
     let want_issue = normalize_title_number(issue_number);
@@ -3629,7 +3085,7 @@ async fn title_number_fallback_tx(
     }
 
     let rows = tx
-        .query(
+        .run_query(
             r#"
         SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
         FROM issues i
@@ -3639,7 +3095,7 @@ async fn title_number_fallback_tx(
             &[&user_id],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
 
     let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = Vec::new();
     for row in &rows {
@@ -3668,7 +3124,7 @@ async fn title_number_fallback_tx(
 
     let candidate_issue_ids: Vec<i32> = matches.iter().map(|m| m.0).collect();
     let confirmed_rows = tx
-        .query(
+        .run_query(
             r#"
         SELECT m.issue_id
         FROM issue_external_identity_mappings m
@@ -3681,7 +3137,7 @@ async fn title_number_fallback_tx(
             &[&candidate_issue_ids],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
     let mut has_confirmed: std::collections::HashSet<i32> = std::collections::HashSet::new();
     for row in confirmed_rows {
         has_confirmed.insert(row.get(0));
@@ -3705,7 +3161,7 @@ async fn title_number_fallback_tx(
         if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
             let thread_ids: Vec<i32> = matches.iter().map(|m| m.3).collect();
             let series_rows = tx
-                .query(
+                .run_query(
                     r#"
                 SELECT tesm.thread_id, ei.external_id
                 FROM thread_external_series_mappings tesm
@@ -3718,7 +3174,7 @@ async fn title_number_fallback_tx(
                     &[&thread_ids],
                 )
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| tx_db_error(e, ""))?;
             let mut by_thread: std::collections::HashMap<i32, std::collections::HashSet<String>> =
                 std::collections::HashMap::new();
             for row in series_rows {
@@ -3786,8 +3242,8 @@ async fn title_number_fallback_tx(
     ))
 }
 
-async fn resolve_canonical_for_entry_tx(
-    tx: &tokio_postgres::Transaction<'_>,
+async fn resolve_canonical_for_entry<E: DbExec>(
+    tx: &E,
     user_id: i32,
     comicvine_issue_id: Option<&str>,
     series_name: &str,
@@ -3802,17 +3258,17 @@ async fn resolve_canonical_for_entry_tx(
         Option<String>,
         Option<String>,
     ),
-    String,
+    ApiError,
 > {
     if let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) {
-        let eid = tx.query_opt(
+        let eid = tx.run_query_opt(
             "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
             &[&cvid]
-        ).await.map_err(|e| e.to_string())?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         if let Some(eid_row) = eid {
             let eid: i32 = eid_row.get(0);
             let issues = tx
-                .query(
+                .run_query(
                     r#"
                 SELECT i.id, i.status::text, i.read_at::text
                 FROM issue_external_identity_mappings m
@@ -3824,9 +3280,9 @@ async fn resolve_canonical_for_entry_tx(
                     &[&eid, &user_id],
                 )
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| tx_db_error(e, ""))?;
             if issues.is_empty() {
-                return title_number_fallback_tx(
+                return title_number_fallback(
                     tx,
                     user_id,
                     cvid,
@@ -3924,14 +3380,14 @@ async fn find_existing_adopted_plan_tx(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     source_path: &str,
-) -> Result<Option<i32>, String> {
+) -> Result<Option<i32>, ApiError> {
     let rows = tx
-        .query(
+        .run_query(
             "SELECT id, nodes_json::text FROM continuity_plans WHERE user_id=$1",
             &[&user_id],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
     for row in rows {
         let pid: i32 = row.get(0);
         let nodes_text: String = row.get(1);
@@ -3963,7 +3419,7 @@ async fn merge_adoption_nodes_tx(
     tx: &tokio_postgres::Transaction<'_>,
     nodes_json: &mut JsonValue,
     ctx: &MergeAdoptionCtx<'_>,
-) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), String> {
+) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), ApiError> {
     let user_id = ctx.user_id;
     let planned = ctx.planned;
     let source_path = ctx.source_path;
@@ -3971,7 +3427,7 @@ async fn merge_adoption_nodes_tx(
     let preserve_existing_order = ctx.preserve_existing_order;
     let nodes_arr = nodes_json
         .as_array_mut()
-        .ok_or_else(|| "invalid nodes_json".to_string())?;
+        .ok_or_else(|| ApiError::Internal("invalid nodes_json".to_string()))?;
     let mut reused_positions = Vec::new();
     let mut created_positions = Vec::new();
     let mut excluded_positions = Vec::new();
@@ -4209,7 +3665,7 @@ async fn materialize_missing_issue_tx(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
     entry: &serde_json::Map<String, JsonValue>,
-) -> Result<(i32, bool), String> {
+) -> Result<(i32, bool), ApiError> {
     let series_name = entry
         .get("series_name")
         .and_then(|v| v.as_str())
@@ -4229,7 +3685,7 @@ async fn materialize_missing_issue_tx(
     });
     // Reuse by confirmed identity if present
     if let Some(ref cvid) = comicvine_id {
-        let row = tx.query_opt(
+        let row = tx.run_query_opt(
             r#"
             SELECT i.id FROM issues i
             JOIN issue_external_identity_mappings m ON m.issue_id = i.id
@@ -4239,7 +3695,7 @@ async fn materialize_missing_issue_tx(
             LIMIT 1
             "#,
             &[&user_id, cvid]
-        ).await.map_err(|e| e.to_string())?;
+        ).await.map_err(|e| tx_db_error(e, ""))?;
         if let Some(r) = row {
             return Ok((r.get(0), false));
         }
@@ -4251,65 +3707,65 @@ async fn materialize_missing_issue_tx(
         title = format!("{title} ({y})");
     }
     let thread_row = tx
-        .query_opt(
+        .run_query_opt(
             "SELECT id FROM threads WHERE user_id=$1 AND title=$2",
             &[&user_id, &title],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
     let thread_id: i32 = if let Some(r) = thread_row {
         r.get(0)
     } else {
         let max_q: Option<i32> = tx
-            .query_one(
+            .run_query_one(
                 "SELECT COALESCE(MAX(queue_position),0) FROM threads WHERE user_id=$1",
                 &[&user_id],
             )
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|e| tx_db_error(e, ""))?
             .get(0);
         let qp = max_q.unwrap_or(0) + 1;
-        tx.query_one(
+        tx.run_query_one(
             "INSERT INTO threads (user_id,title,format,issues_remaining,queue_position,status,total_issues,reading_progress,created_at) VALUES ($1,$2,'comic',1,$3,'active',1,'not_started',NOW()) RETURNING id",
             &[&user_id,&title,&qp]
-        ).await.map_err(|e| e.to_string())?.get(0)
+        ).await.map_err(|e| tx_db_error(e, ""))?.get(0)
     };
     // Reuse existing issue in thread by number
     let existing_issue = tx
-        .query_opt(
+        .run_query_opt(
             "SELECT id FROM issues WHERE thread_id=$1 AND issue_number=$2",
             &[&thread_id, &issue_number],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| tx_db_error(e, ""))?;
     if let Some(r) = existing_issue {
         return Ok((r.get(0), false));
     }
     // Insert issue at end (simplified natural order)
     let max_pos: Option<i32> = tx
-        .query_one(
+        .run_query_one(
             "SELECT COALESCE(MAX(position),-1) FROM issues WHERE thread_id=$1",
             &[&thread_id],
         )
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| tx_db_error(e, ""))?
         .get(0);
     let pos = max_pos.unwrap_or(-1) + 1;
-    let issue_id: i32 = tx.query_one(
+    let issue_id: i32 = tx.run_query_one(
         "INSERT INTO issues (thread_id,issue_number,position,status,created_at) VALUES ($1,$2,$3,'unread',NOW()) RETURNING id",
         &[&thread_id,&issue_number,&pos]
-    ).await.map_err(|e| e.to_string())?.get(0);
+    ).await.map_err(|e| tx_db_error(e, ""))?.get(0);
     // Update thread tracking counts best-effort
-    let _ = tx.execute("UPDATE threads SET total_issues = (SELECT COUNT(*) FROM issues WHERE thread_id=$1), issues_remaining = (SELECT COUNT(*) FROM issues WHERE thread_id=$1 AND status='unread') WHERE id=$1", &[&thread_id]).await;
+    let _ = tx.run_execute("UPDATE threads SET total_issues = (SELECT COUNT(*) FROM issues WHERE thread_id=$1), issues_remaining = (SELECT COUNT(*) FROM issues WHERE thread_id=$1 AND status='unread') WHERE id=$1", &[&thread_id]).await;
     // Confirm comicvine mapping if provided
     if let Some(cvid) = comicvine_id {
-        let ei = tx.query_opt("SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1", &[&cvid]).await.map_err(|e| e.to_string())?;
+        let ei = tx.run_query_opt("SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1", &[&cvid]).await.map_err(|e| tx_db_error(e, ""))?;
         let ei_id: i32 = if let Some(r) = ei {
             r.get(0)
         } else {
-            tx.query_one("INSERT INTO external_identities (provider,entity_type,external_id,metadata_json,created_at,updated_at) VALUES ('comicvine','issue',$1,'{}'::jsonb,NOW(),NOW()) RETURNING id", &[&cvid]).await.map_err(|e| e.to_string())?.get(0)
+            tx.run_query_one("INSERT INTO external_identities (provider,entity_type,external_id,metadata_json,created_at,updated_at) VALUES ('comicvine','issue',$1,'{}'::jsonb,NOW(),NOW()) RETURNING id", &[&cvid]).await.map_err(|e| tx_db_error(e, ""))?.get(0)
         };
-        tx.execute("INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING", &[&issue_id,&ei_id]).await.map_err(|e| e.to_string())?;
+        tx.run_execute("INSERT INTO issue_external_identity_mappings (issue_id,external_identity_id,status,evidence_source,evidence_json,created_at,updated_at) VALUES ($1,$2,'confirmed','cbl_adoption_commit','{}'::json,NOW(),NOW()) ON CONFLICT DO NOTHING", &[&issue_id,&ei_id]).await.map_err(|e| tx_db_error(e, ""))?;
     }
     Ok((issue_id, true))
 }
