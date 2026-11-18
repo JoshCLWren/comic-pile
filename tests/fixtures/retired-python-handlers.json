@@ -224,14 +224,6 @@
     "name": "get_creator_summaries_endpoint"
   },
   {
-    "path": "/api/v1/taste/discoveries",
-    "methods": [
-      "GET"
-    ],
-    "module": "app.api.taste",
-    "name": "list_taste_discoveries"
-  },
-  {
     "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
     "methods": [
       "POST"

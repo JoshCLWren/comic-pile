@@ -129,6 +129,13 @@ def _register_creators(app: FastAPI) -> None:
     app.include_router(creators.router, tags=["creators"])
 
 
+def _register_taste(app: FastAPI) -> None:
+    """Register taste-discovery routers."""
+    from app.api import taste
+
+    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
+
+
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
@@ -207,6 +214,7 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         _register_comicvine_resolution,
     ),
     RouterMount("creators", frozenset({"creators"}), _register_creators),
+    RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),

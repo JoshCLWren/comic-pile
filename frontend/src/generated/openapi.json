@@ -15259,6 +15259,64 @@
         ],
         "type": "object"
       },
+      "NativeTasteDiscovery": {
+        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "distinct_thread_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "evidence_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "signal_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "signal_type",
+          "external_key",
+          "display_name",
+          "prompt",
+          "evidence_count",
+          "distinct_thread_count"
+        ],
+        "type": "object"
+      },
+      "NativeTasteDiscoveryListResponse": {
+        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
+        "properties": {
+          "discoveries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeTasteDiscovery"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "discoveries",
+          "generated_at"
+        ],
+        "type": "object"
+      },
       "NearMatch": {
         "properties": {
           "color": {
@@ -22499,27 +22557,34 @@
         "description": "One prompt-eligible inferred taste pattern shown on Roll.",
         "properties": {
           "display_name": {
+            "title": "Display Name",
             "type": "string"
           },
           "distinct_thread_count": {
-            "format": "int32",
+            "minimum": 0.0,
+            "title": "Distinct Thread Count",
             "type": "integer"
           },
           "evidence_count": {
-            "format": "int32",
+            "minimum": 0.0,
+            "title": "Evidence Count",
             "type": "integer"
           },
           "external_key": {
+            "minLength": 1,
+            "title": "External Key",
             "type": "string"
           },
           "id": {
-            "format": "int32",
+            "title": "Id",
             "type": "integer"
           },
           "prompt": {
+            "title": "Prompt",
             "type": "string"
           },
           "signal_type": {
+            "title": "Signal Type",
             "type": "string"
           }
         },
@@ -22532,18 +22597,22 @@
           "evidence_count",
           "distinct_thread_count"
         ],
+        "title": "TasteDiscovery",
         "type": "object"
       },
       "TasteDiscoveryListResponse": {
-        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
+        "description": "Ranked prompt-eligible discoveries for the authenticated user.",
         "properties": {
           "discoveries": {
             "items": {
               "$ref": "#/components/schemas/TasteDiscovery"
             },
+            "title": "Discoveries",
             "type": "array"
           },
           "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
             "type": "string"
           }
         },
@@ -22551,6 +22620,7 @@
           "discoveries",
           "generated_at"
         ],
+        "title": "TasteDiscoveryListResponse",
         "type": "object"
       },
       "TasteDismissResponse": {
@@ -31029,7 +31099,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
+                  "$ref": "#/components/schemas/NativeTasteDiscoveryListResponse"
                 }
               }
             },
