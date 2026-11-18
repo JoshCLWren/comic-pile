@@ -331,7 +331,6 @@ fn crossover_progress(
         total_issues += i64::from(*total);
         read_issues += i64::from(*total) - remaining;
     }
-    let mut read_issues = read_issues;
     for member in memberships {
         let Some(issue_id) = member.issue_id else {
             continue;
