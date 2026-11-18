@@ -67,6 +67,7 @@ const headerBaseProps = {
   setDiePending: false,
   onSetDie: vi.fn(),
   onOpenOverride: vi.fn(),
+  onOpenDirectIssue: vi.fn(),
   onOpenDieModal: vi.fn(),
 }
 

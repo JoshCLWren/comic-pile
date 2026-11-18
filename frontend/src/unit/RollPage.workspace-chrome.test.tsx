@@ -51,6 +51,7 @@ function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>>
     setDiePending: false,
     onSetDie: vi.fn(),
     onOpenOverride: vi.fn(),
+    onOpenDirectIssue: vi.fn(),
     onOpenDieModal: vi.fn(),
     ...overrides,
   }
