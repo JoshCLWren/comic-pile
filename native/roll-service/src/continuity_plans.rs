@@ -837,7 +837,7 @@ fn source_metadata_for_node(node: &ContinuityPlanNode) -> Option<serde_json::Val
 /// Rebuild normalized membership, source snapshots and placements for one plan.
 /// Mirrors `rebuild_plan_membership` (issue rows only; non-issue nodes keep no
 /// normalized membership until an explicit mapping exists).
-async fn rebuild_plan_membership(
+pub(crate) async fn rebuild_plan_membership(
     tx: &Transaction<'_>,
     plan_id: i32,
     nodes: &[ContinuityPlanNode],
