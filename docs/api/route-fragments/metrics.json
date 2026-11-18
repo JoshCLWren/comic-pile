@@ -50,7 +50,7 @@
       "path": "/api/v2/analytics/metrics",
       "dest": "/api/native_roll.rs",
       "exclude_from_inventory": true,
-      "comment": "Retired by #5437 after #5446 removed the Analytics page. The Rust handler is gone; the ingress route stays only until the post-merge route bot drops it, at which point requests fall through to the native 404 catch-all."
+      "comment": "Retired by #5437 after #5446 removed the Analytics page. The Rust handler is gone and the operation is excluded from the inventory. The ingress rewrite is kept (as for other excluded native operations) so requests reach the native catch-all and get a 404 rather than a Python fallback."
     }
   ]
 }
