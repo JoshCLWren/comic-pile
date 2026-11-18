@@ -215,20 +215,20 @@ fn unprocessable(detail: String) -> ApiError {
 }
 
 /// FastAPI/Pydantic `missing` validation item.
-fn validation_missing(field: &str) -> serde_json::Value {
+fn validation_missing(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "missing",
-        "loc": ["body", field],
+        "loc": loc,
         "msg": "Field required",
-        "input": null,
+        "input": input,
     })
 }
 
 /// FastAPI/Pydantic `string_type` validation item.
-fn validation_string_type(field: &str, input: &serde_json::Value) -> serde_json::Value {
+fn validation_string_type(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "string_type",
-        "loc": ["body", field],
+        "loc": loc,
         "msg": "Input should be a valid string",
         "input": input,
     })
@@ -236,14 +236,17 @@ fn validation_string_type(field: &str, input: &serde_json::Value) -> serde_json:
 
 /// FastAPI/Pydantic `string_too_short` validation item.
 fn validation_string_too_short(
-    field: &str,
+    loc: &[&str],
     input: &serde_json::Value,
     min_length: usize,
 ) -> serde_json::Value {
     serde_json::json!({
         "type": "string_too_short",
-        "loc": ["body", field],
-        "msg": format!("String should have at least {min_length} characters"),
+        "loc": loc,
+        "msg": format!(
+            "String should have at least {min_length} character{}",
+            if min_length == 1 { "" } else { "s" }
+        ),
         "input": input,
         "ctx": {"min_length": min_length},
     })
@@ -251,44 +254,48 @@ fn validation_string_too_short(
 
 /// FastAPI/Pydantic `string_too_long` validation item.
 fn validation_string_too_long(
-    field: &str,
+    loc: &[&str],
     input: &serde_json::Value,
     max_length: usize,
 ) -> serde_json::Value {
     serde_json::json!({
         "type": "string_too_long",
-        "loc": ["body", field],
-        "msg": format!("String should have at most {max_length} characters"),
+        "loc": loc,
+        "msg": format!(
+            "String should have at most {max_length} character{}",
+            if max_length == 1 { "" } else { "s" }
+        ),
         "input": input,
         "ctx": {"max_length": max_length},
     })
 }
 
 /// FastAPI/Pydantic `json_invalid` validation item.
-fn validation_json_invalid() -> serde_json::Value {
+fn validation_json_invalid(pos: usize, error: &str) -> serde_json::Value {
     serde_json::json!({
         "type": "json_invalid",
-        "loc": ["body"],
+        "loc": ["body", pos],
         "msg": "JSON decode error",
-        "input": null,
+        "input": {},
+        "ctx": {"error": error},
     })
 }
 
-/// FastAPI/Pydantic `model_type` validation item.
-fn validation_model_type(loc: &str, input: &serde_json::Value) -> serde_json::Value {
+/// FastAPI/Pydantic `model_attributes_type` validation item.
+fn validation_model_type(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
-        "type": "model_type",
-        "loc": ["body", loc],
-        "msg": "Input should be a valid dictionary",
+        "type": "model_attributes_type",
+        "loc": loc,
+        "msg": "Input should be a valid dictionary or object to extract fields from",
         "input": input,
     })
 }
 
 /// FastAPI/Pydantic `literal_error` validation item for `report_type`.
-fn validation_literal_error(input: &serde_json::Value) -> serde_json::Value {
+fn validation_literal_error(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "literal_error",
-        "loc": ["body", "report_type"],
+        "loc": loc,
         "msg": "Input should be 'bug' or 'feature'",
         "input": input,
         "ctx": {"expected": "'bug' or 'feature'"},
@@ -301,12 +308,333 @@ fn validation_literal_error(input: &serde_json::Value) -> serde_json::Value {
 /// rejected malformed bodies before the handler ran with a `detail` array.
 /// The native service must produce the same shape even though serde has no
 /// field-level length constraints.
+fn python_json_error_message(serde_msg: &str) -> String {
+    let base = serde_msg
+        .split(" at line ")
+        .next()
+        .unwrap_or(serde_msg)
+        .trim();
+    match base {
+        "key must be a string" | "EOF while parsing an object" => {
+            "Expecting property name enclosed in double quotes".to_string()
+        }
+        "EOF while parsing a value" => "Expecting value".to_string(),
+        _ => base.to_string(),
+    }
+}
+
+fn json_error_pos(err: &serde_json::Error) -> usize {
+    let msg = err.to_string();
+    if msg.contains("EOF") {
+        err.column()
+    } else {
+        err.column().saturating_sub(1)
+    }
+}
+
+fn validate_int_field(loc: &[&str], value: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let ok = if value.is_boolean() || value.is_i64() {
+        true
+    } else if let Some(f) = value.as_f64() {
+        f.fract() == 0.0
+    } else if let Some(s) = value.as_str() {
+        s.parse::<i64>().is_ok()
+    } else {
+        false
+    };
+    if ok {
+        return;
+    }
+    let (typ, msg) = if value.is_null() {
+        ("int_type", "Input should be a valid integer")
+    } else if value.as_f64().map(|f| f.fract() != 0.0).unwrap_or(false) {
+        (
+            "int_from_float",
+            "Input should be a valid integer, got a number with a fractional part",
+        )
+    } else if value.is_string() {
+        (
+            "int_parsing",
+            "Input should be a valid integer, unable to parse string as an integer",
+        )
+    } else {
+        ("int_type", "Input should be a valid integer")
+    };
+    items.push(serde_json::json!({
+        "type": typ,
+        "loc": loc,
+        "msg": msg,
+        "input": value,
+    }));
+}
+
+fn validate_float_field(
+    loc: &[&str],
+    value: &serde_json::Value,
+    items: &mut Vec<serde_json::Value>,
+) {
+    let ok = if value.is_boolean() || value.is_i64() || value.is_f64() {
+        true
+    } else if let Some(s) = value.as_str() {
+        s.parse::<f64>().is_ok()
+    } else {
+        false
+    };
+    if ok || value.is_null() {
+        // null is allowed (Optional)
+        return;
+    }
+    let (typ, msg) = if value.is_string() {
+        (
+            "float_parsing",
+            "Input should be a valid number, unable to parse string as a number",
+        )
+    } else {
+        ("float_type", "Input should be a valid number")
+    };
+    items.push(serde_json::json!({
+        "type": typ,
+        "loc": loc,
+        "msg": msg,
+        "input": value,
+    }));
+}
+
+fn validate_screen(screen: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let input = screen.clone();
+    for field in ["width", "height"] {
+        match screen.get(field) {
+            None => items.push(validation_missing(
+                &["body", "diagnostics", "screen", field],
+                &input,
+            )),
+            Some(v) => validate_int_field(&["body", "diagnostics", "screen", field], v, items),
+        }
+    }
+    match screen.get("pixelRatio") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "screen", "pixelRatio"],
+            &input,
+        )),
+        Some(v) => validate_float_field(&["body", "diagnostics", "screen", "pixelRatio"], v, items),
+    }
+}
+
+fn validate_viewport(viewport: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let input = viewport.clone();
+    for field in ["width", "height"] {
+        match viewport.get(field) {
+            None => items.push(validation_missing(
+                &["body", "diagnostics", "viewport", field],
+                &input,
+            )),
+            Some(v) => validate_int_field(&["body", "diagnostics", "viewport", field], v, items),
+        }
+    }
+}
+
+fn validate_scroll(scroll: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let input = scroll.clone();
+    for field in ["x", "y"] {
+        match scroll.get(field) {
+            None => items.push(validation_missing(
+                &["body", "diagnostics", "scroll", field],
+                &input,
+            )),
+            Some(v) => validate_int_field(&["body", "diagnostics", "scroll", field], v, items),
+        }
+    }
+}
+
+fn validate_performance(perf: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let input = perf.clone();
+    for (wire, _rust) in [("domContentLoaded", ()), ("loadComplete", ())] {
+        if let Some(v) = perf.get(wire) {
+            if !v.is_null() {
+                validate_float_field(&["body", "diagnostics", "performance", wire], v, items);
+            }
+        }
+    }
+    // required? performance object itself required; fields optional with defaults
+    let _ = input;
+}
+
+fn validate_diagnostics(diag: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    let input = diag.clone();
+    for field in ["timestamp", "url"] {
+        // wire field same
+        match diag.get(field) {
+            None => items.push(validation_missing(&["body", "diagnostics", field], &input)),
+            Some(v) => {
+                if !v.is_string() {
+                    items.push(validation_string_type(&["body", "diagnostics", field], v));
+                }
+            }
+        }
+    }
+    // userAgent alias
+    match diag.get("userAgent") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "userAgent"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_string() {
+                items.push(validation_string_type(
+                    &["body", "diagnostics", "userAgent"],
+                    v,
+                ));
+            }
+        }
+    }
+    // screen
+    match diag.get("screen") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "screen"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_object() {
+                items.push(validation_model_type(&["body", "diagnostics", "screen"], v));
+            } else {
+                validate_screen(v, items);
+            }
+        }
+    }
+    // viewport
+    match diag.get("viewport") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "viewport"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_object() {
+                items.push(validation_model_type(
+                    &["body", "diagnostics", "viewport"],
+                    v,
+                ));
+            } else {
+                validate_viewport(v, items);
+            }
+        }
+    }
+    // scroll
+    match diag.get("scroll") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "scroll"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_object() {
+                items.push(validation_model_type(&["body", "diagnostics", "scroll"], v));
+            } else {
+                validate_scroll(v, items);
+            }
+        }
+    }
+    // performance required
+    match diag.get("performance") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "performance"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_object() {
+                items.push(validation_model_type(
+                    &["body", "diagnostics", "performance"],
+                    v,
+                ));
+            } else {
+                validate_performance(v, items);
+            }
+        }
+    }
+    // errors required list
+    match diag.get("errors") {
+        None => items.push(validation_missing(
+            &["body", "diagnostics", "errors"],
+            &input,
+        )),
+        Some(v) => {
+            if !v.is_array() {
+                items.push(serde_json::json!({
+                    "type": "list_type",
+                    "loc": ["body", "diagnostics", "errors"],
+                    "msg": "Input should be a valid list",
+                    "input": v,
+                }));
+            } else if let Some(arr) = v.as_array() {
+                for (i, item) in arr.iter().enumerate() {
+                    if !item.is_object() {
+                        items.push(validation_model_type(
+                            &["body", "diagnostics", "errors", &i.to_string()],
+                            item,
+                        ));
+                    } else {
+                        // message
+                        match item.get("message") {
+                            None => items.push(validation_missing(
+                                &["body", "diagnostics", "errors", &i.to_string(), "message"],
+                                item,
+                            )),
+                            Some(mv) => {
+                                if !mv.is_string() {
+                                    items.push(validation_string_type(
+                                        &[
+                                            "body",
+                                            "diagnostics",
+                                            "errors",
+                                            &i.to_string(),
+                                            "message",
+                                        ],
+                                        mv,
+                                    ));
+                                }
+                            }
+                        }
+                        match item.get("timestamp") {
+                            None => items.push(validation_missing(
+                                &["body", "diagnostics", "errors", &i.to_string(), "timestamp"],
+                                item,
+                            )),
+                            Some(tv) => {
+                                if !tv.is_string() {
+                                    items.push(validation_string_type(
+                                        &[
+                                            "body",
+                                            "diagnostics",
+                                            "errors",
+                                            &i.to_string(),
+                                            "timestamp",
+                                        ],
+                                        tv,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
-    let value: serde_json::Value = serde_json::from_slice(body)
-        .map_err(|_| BugReportError::Validation(vec![validation_json_invalid()]))?;
+    let err = match serde_json::from_slice::<serde_json::Value>(body) {
+        Ok(v) => v,
+        Err(e) => {
+            let pos = json_error_pos(&e);
+            let msg = python_json_error_message(&e.to_string());
+            return Err(BugReportError::Validation(vec![validation_json_invalid(
+                pos, &msg,
+            )]));
+        }
+    };
+    let value = err;
     let Some(object) = value.as_object() else {
         return Err(BugReportError::Validation(vec![validation_model_type(
-            "input", &value,
+            &["body"],
+            &value,
         )]));
     };
 
@@ -315,17 +643,22 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
         ("title", MAX_TITLE_CHARS),
         ("description", MAX_DESCRIPTION_CHARS),
     ] {
+        let loc = if field == "title" {
+            ["body", "title"]
+        } else {
+            ["body", "description"]
+        };
         match object.get(field) {
-            None => items.push(validation_missing(field)),
+            None => items.push(validation_missing(&loc, &value)),
             Some(input) => match input.as_str() {
-                None => items.push(validation_string_type(field, input)),
+                None => items.push(validation_string_type(&loc, input)),
                 Some(text) => {
                     let length = text.chars().count();
                     if length < 1 {
-                        items.push(validation_string_too_short(field, input, 1));
+                        items.push(validation_string_too_short(&loc, input, 1));
                     }
                     if length > max_length {
-                        items.push(validation_string_too_long(field, input, max_length));
+                        items.push(validation_string_too_long(&loc, input, max_length));
                     }
                 }
             },
@@ -333,12 +666,16 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
     }
     if let Some(input) = object.get("report_type") {
         if !matches!(input.as_str(), Some("bug") | Some("feature")) {
-            items.push(validation_literal_error(input));
+            items.push(validation_literal_error(&["body", "report_type"], input));
         }
     }
     if let Some(input) = object.get("diagnostics") {
-        if !input.is_null() && !input.is_object() {
-            items.push(validation_model_type("diagnostics", input));
+        if input.is_null() {
+            // allowed (Option)
+        } else if !input.is_object() {
+            items.push(validation_model_type(&["body", "diagnostics"], input));
+        } else {
+            validate_diagnostics(input, &mut items);
         }
     }
     if !items.is_empty() {
@@ -719,7 +1056,7 @@ fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugRep
     if title_chars < 1 {
         return Err(BugReportError::Validation(vec![
             validation_string_too_short(
-                "title",
+                &["body", "title"],
                 &serde_json::Value::String(request.title.clone()),
                 1,
             ),
@@ -728,7 +1065,7 @@ fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugRep
     if title_chars > MAX_TITLE_CHARS {
         return Err(BugReportError::Validation(vec![
             validation_string_too_long(
-                "title",
+                &["body", "title"],
                 &serde_json::Value::String(request.title.clone()),
                 MAX_TITLE_CHARS,
             ),
@@ -738,7 +1075,7 @@ fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugRep
     if description_chars < 1 {
         return Err(BugReportError::Validation(vec![
             validation_string_too_short(
-                "description",
+                &["body", "description"],
                 &serde_json::Value::String(request.description.clone()),
                 1,
             ),
@@ -747,7 +1084,7 @@ fn validate_create(request: &BugReportCreate) -> Result<(String, String), BugRep
     if description_chars > MAX_DESCRIPTION_CHARS {
         return Err(BugReportError::Validation(vec![
             validation_string_too_long(
-                "description",
+                &["body", "description"],
                 &serde_json::Value::String(request.description.clone()),
                 MAX_DESCRIPTION_CHARS,
             ),
@@ -1068,33 +1405,46 @@ mod tests {
     /// ran, so the native port must emit the same `detail` array shape.
     #[test]
     fn parse_request_preserves_pydantic_validation_error_shapes() {
-        let cases: Vec<(&str, Vec<u8>, Vec<serde_json::Value>)> = vec![
+        let cases: Vec<(&str, Vec<u8>, serde_json::Value)> = vec![
             (
                 "malformed JSON",
                 b"{not json".to_vec(),
-                vec![validation_json_invalid()],
+                serde_json::json!([{
+                    "type": "json_invalid",
+                    "loc": ["body", 1],
+                    "msg": "JSON decode error",
+                    "input": {},
+                    "ctx": {"error": "Expecting property name enclosed in double quotes"}
+                }]),
             ),
             (
                 "non-object body",
                 br#"[]"#.to_vec(),
-                vec![validation_model_type("input", &serde_json::json!([]))],
+                serde_json::json!([{
+                    "type": "model_attributes_type",
+                    "loc": ["body"],
+                    "msg": "Input should be a valid dictionary or object to extract fields from",
+                    "input": []
+                }]),
             ),
             (
                 "missing required fields",
                 br#"{}"#.to_vec(),
-                vec![
-                    validation_missing("title"),
-                    validation_missing("description"),
-                ],
+                serde_json::json!([
+                    {"type":"missing","loc":["body","title"],"msg":"Field required","input":{}},
+                    {"type":"missing","loc":["body","description"],"msg":"Field required","input":{}}
+                ]),
             ),
             (
                 "empty title",
                 br#"{"title":"","description":"details"}"#.to_vec(),
-                vec![validation_string_too_short(
-                    "title",
-                    &serde_json::Value::String(String::new()),
-                    1,
-                )],
+                serde_json::json!([{
+                    "type": "string_too_short",
+                    "loc": ["body", "title"],
+                    "msg": "String should have at least 1 character",
+                    "input": "",
+                    "ctx": {"min_length": 1}
+                }]),
             ),
             (
                 "overlong description",
@@ -1103,29 +1453,44 @@ mod tests {
                     "d".repeat(2001)
                 )
                 .into_bytes(),
-                vec![validation_string_too_long(
-                    "description",
-                    &serde_json::Value::String("d".repeat(2001)),
-                    MAX_DESCRIPTION_CHARS,
-                )],
+                serde_json::json!([{
+                    "type": "string_too_long",
+                    "loc": ["body", "description"],
+                    "msg": "String should have at most 2000 characters",
+                    "input": "d".repeat(2001),
+                    "ctx": {"max_length": 2000}
+                }]),
             ),
             (
                 "non-string title",
                 br#"{"title":3,"description":"details"}"#.to_vec(),
-                vec![validation_string_type("title", &serde_json::json!(3))],
+                serde_json::json!([{
+                    "type": "string_type",
+                    "loc": ["body", "title"],
+                    "msg": "Input should be a valid string",
+                    "input": 3
+                }]),
             ),
             (
                 "invalid report type",
                 br#"{"title":"title","description":"details","report_type":"other"}"#.to_vec(),
-                vec![validation_literal_error(&serde_json::json!("other"))],
+                serde_json::json!([{
+                    "type": "literal_error",
+                    "loc": ["body", "report_type"],
+                    "msg": "Input should be 'bug' or 'feature'",
+                    "input": "other",
+                    "ctx": {"expected": "'bug' or 'feature'"}
+                }]),
             ),
             (
                 "non-object diagnostics",
                 br#"{"title":"title","description":"details","diagnostics":"broken"}"#.to_vec(),
-                vec![validation_model_type(
-                    "diagnostics",
-                    &serde_json::json!("broken"),
-                )],
+                serde_json::json!([{
+                    "type": "model_attributes_type",
+                    "loc": ["body", "diagnostics"],
+                    "msg": "Input should be a valid dictionary or object to extract fields from",
+                    "input": "broken"
+                }]),
             ),
         ];
 
@@ -1134,7 +1499,7 @@ mod tests {
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
             assert_eq!(
                 error.detail_json(),
-                serde_json::json!({"detail": expected}),
+                serde_json::json!({"detail": expected.as_array().cloned().unwrap_or_default()}),
                 "{name}"
             );
         }
