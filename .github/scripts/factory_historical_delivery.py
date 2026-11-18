@@ -123,19 +123,19 @@ def receipt_for_pr(repo: str, number: int) -> dict[str, Any] | None:
         return None
     worker = source_worker(run)
     comments = pages(f"repos/{repo}/issues/{number}/comments")
-    candidates: set[str] = set()
+    candidates: list[str] = []
     for comment in comments:
         if comment.get("user", {}).get("login") != "github-actions[bot]":
             continue
         for source, sha in SAVED_MARKER.findall(comment.get("body") or ""):
-            if source == run_id:
-                candidates.add(sha)
+            if source == run_id and sha not in candidates:
+                candidates.append(sha)
     if not candidates:
         return None
     # Every original snapshot is checked; no trusted source can be replaced
     # by a later worker's mutable checkpoint tip.
     verified: dict[str, str] | None = None
-    for checkpoint in sorted(candidates):
+    for checkpoint in candidates:
         try:
             source = snapshot_for_run(repo, checkpoint, run_id, worker)
         except ValueError:
@@ -143,8 +143,8 @@ def receipt_for_pr(repo: str, number: int) -> dict[str, Any] | None:
         comparison = obj(f"repos/{repo}/compare/{source['head']}...{head['sha']}")
         if comparison.get("status") not in {"ahead", "identical"}:
             continue
-        if verified is not None and verified != source:
-            raise ValueError("Multiple distinct immutable source snapshots")
+        # The final bot-recorded revision of *this same source run* is the
+        # last complete checkpoint, not another worker's later PR head.
         verified = source
     if verified is None:
         return None
