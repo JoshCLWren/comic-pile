@@ -36,13 +36,26 @@ async fn setup_user(
     i32,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
+    setup_user_with_pool(prefix, 2).await
+}
+
+async fn setup_user_with_pool(
+    prefix: &str,
+    pool_size: usize,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(
         AppState::new(
             Config::from_lookup(|key| match key {
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
                 "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+                "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
                 _ => None,
             })
             .unwrap(),
@@ -811,6 +824,100 @@ async fn bulk_mark_unread_reactivates_completed_series_with_not_started_progress
 }
 
 #[tokio::test]
+async fn bulk_mark_unread_seats_reactivated_series_after_retained_queue_positions() {
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-bulkq").await;
+    let conn = state.pool.get().await.unwrap();
+    let (first, _) = series(&conn, user_id, "Live", 1, "active", &[("1", "unread")]).await;
+    let (kept, k) = series(&conn, user_id, "Kept", 5, "completed", &[("1", "read")]).await;
+    let (later, l) = series(&conn, user_id, "Later", 0, "completed", &[("1", "read")]).await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v1/issues:bulkMarkUnread",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": [l[0], k[0]]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    // The retained position 5 counts toward the end of the queue, so the series
+    // without a seat is appended after it (Python `max_queue_position + 1`).
+    assert_eq!(thread_row(&conn, first).await.queue_position, 1);
+    assert_eq!(thread_row(&conn, kept).await.queue_position, 2);
+    assert_eq!(thread_row(&conn, later).await.queue_position, 3);
+}
+
+#[tokio::test]
+async fn bulk_errors_follow_request_order() {
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-bulko").await;
+    let conn = state.pool.get().await.unwrap();
+    let (_t, ids) = series(
+        &conn,
+        user_id,
+        "Order",
+        1,
+        "active",
+        &[("1", "read"), ("2", "unread")],
+    )
+    .await;
+    let (read_id, unread_id) = (ids[0], ids[1]);
+    let cases = [
+        (
+            "bulkMarkRead",
+            json!([read_id, 2147483648_i64]),
+            StatusCode::BAD_REQUEST,
+            format!("Issue {read_id} is already marked as read"),
+        ),
+        (
+            "bulkMarkRead",
+            json!([2147483648_i64, read_id]),
+            StatusCode::NOT_FOUND,
+            "Issue 2147483648 not found".to_string(),
+        ),
+        (
+            "bulkMarkRead",
+            json!([unread_id, 999_999, read_id]),
+            StatusCode::NOT_FOUND,
+            "Issue 999999 not found".to_string(),
+        ),
+        (
+            "bulkMarkUnread",
+            json!([unread_id, 2147483648_i64]),
+            StatusCode::BAD_REQUEST,
+            format!("Issue {unread_id} is already marked as unread"),
+        ),
+        (
+            "bulkMarkUnread",
+            json!([read_id, 999_999, unread_id]),
+            StatusCode::NOT_FOUND,
+            "Issue 999999 not found".to_string(),
+        ),
+    ];
+    for (op, issue_ids, expected_status, detail) in cases {
+        let (status, body) = send(
+            &state,
+            post(
+                &format!("/api/v1/issues:{op}"),
+                &token,
+                &csrf,
+                Some(json!({"issue_ids": issue_ids})),
+            ),
+        )
+        .await;
+        assert_eq!(
+            (status, body),
+            (expected_status, json!({"detail": detail})),
+            "{op} {issue_ids}"
+        );
+    }
+    // Nothing changed: every case failed before the write.
+    assert_eq!(issue_state(&conn, read_id).await.0, "read");
+    assert_eq!(issue_state(&conn, unread_id).await.0, "unread");
+}
+
+#[tokio::test]
 async fn move_reorders_and_refreshes_the_thread_counters() {
     let (state, token, csrf, user_id, _guard) = setup_user("irs-move").await;
     let (_t2, _c2, user2) = register_extra_user(&state, "irs-move2").await;
@@ -1216,122 +1323,143 @@ async fn reader_context_reports_series_crossovers_local_chain_and_edges() {
     assert_eq!(body["local_chain"]["issues"].as_array().unwrap().len(), 3);
 }
 
-/// Concurrent mark-unread and PATCH roll_offer on the same thread must not
-/// deadlock: both writers take the queue advisory lock before any row lock.
+/// Number of sessions currently waiting on this reader's queue advisory lock.
+async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM pg_locks
+         WHERE locktype = 'advisory' AND NOT granted
+           AND classid::int = 699001 AND objid::int = $1",
+        &[&user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+/// Block until exactly `expected` sessions wait on the queue lock. This observes
+/// database state (no sleeps-as-synchronization, no retries): the loop only
+/// yields between observations and the bound exists solely to fail a hung run.
+async fn wait_for_queue_lock_waiters(conn: &Conn, user_id: i32, expected: i64) {
+    for _ in 0..3000 {
+        if queue_lock_waiters(conn, user_id).await == expected {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("expected {expected} queue-lock waiters");
+}
+
+/// Mark-unread (reactivating a completed series) and a roll_offer PATCH on the
+/// same thread must not deadlock. The interleaving is forced: a holder keeps the
+/// queue lock while the PATCH arrives first and queues on it, then markUnread
+/// arrives and queues behind it. Under the old order (thread row lock before
+/// the queue lock) markUnread would already own the row the PATCH needs once the
+/// holder releases, giving a lock cycle (40P01). Taking the queue lock first
+/// means markUnread waits before touching the row, so the writers serialize.
 #[tokio::test]
 async fn mark_unread_and_roll_offer_patch_on_same_thread_do_not_deadlock() {
-    for _ in 0..5 {
-        let (state, token, csrf, user_id, _guard) = setup_user("isdld").await;
-        let conn = state.pool.get().await.unwrap();
+    let (state, token, csrf, user_id, _guard) = setup_user_with_pool("isdld", 8).await;
+    let mut holder = state.pool.get().await.unwrap();
+    let conn = state.pool.get().await.unwrap();
 
-        // A read issue in an active tracked thread so :markUnread is valid, and a
-        // conflicting stored receipt so the roll_offer PATCH reaches persist (and
-        // acquires locks) then returns 409 instead of needing full roll context.
-        let (thread_id, issue_ids) = series(
-            &conn,
-            user_id,
-            "Deadlock race",
-            1,
-            "active",
-            &[("1", "read"), ("2", "unread")],
-        )
-        .await;
-        let issue_id = issue_ids[0];
-        conn.execute(
-            "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, context)
-             VALUES ('rate', NOW(), $1, $2, $3, $4::jsonb::text)",
-            &[
-                &user_id,
-                &thread_id,
-                &issue_id,
-                &serde_json::json!({
-                    "issue_command_key": "race-key-deadlock-01",
-                    "issue_command_payload": {
-                        "issue_id": issue_id,
-                        "status": "read",
-                        "rating": 1.0,
-                        "source": "roll_offer"
-                    }
-                })
-                .to_string(),
-            ],
-        )
+    // A completed, unseated series so :markUnread reactivates it (queue lock
+    // required), and a conflicting stored receipt so the roll_offer PATCH
+    // acquires its locks and returns 409 without needing full roll context.
+    let (thread_id, issue_ids) = series(
+        &conn,
+        user_id,
+        "Deadlock race",
+        0,
+        "completed",
+        &[("1", "read")],
+    )
+    .await;
+    let issue_id = issue_ids[0];
+    conn.execute(
+        "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, context)
+         VALUES ('rate', NOW(), $1, $2, $3, $4::text::json)",
+        &[
+            &user_id,
+            &thread_id,
+            &issue_id,
+            &serde_json::json!({
+                "issue_command_key": "race-key-deadlock-01",
+                "issue_command_payload": {
+                    "issue_id": issue_id,
+                    "status": "read",
+                    "rating": 1.0,
+                    "source": "roll_offer"
+                }
+            })
+            .to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let hold = holder.transaction().await.unwrap();
+    hold.execute("SELECT pg_advisory_xact_lock(699001, $1)", &[&user_id])
         .await
         .unwrap();
 
-        let unread = {
-            let state = state.clone();
-            let token = token.clone();
-            let csrf = csrf.clone();
-            tokio::spawn(async move {
-                send(
-                    &state,
-                    authed(
-                        "POST",
-                        &format!("/api/v1/issues/{issue_id}:markUnread"),
-                        &token,
-                        &csrf,
-                        None,
-                    ),
-                )
-                .await
-            })
-        };
-        let patch = {
-            let state = state.clone();
-            let token = token.clone();
-            let csrf = csrf.clone();
-            tokio::spawn(async move {
-                send(
-                    &state,
-                    authed(
-                        "PATCH",
-                        &format!("/api/v2/issues/{issue_id}"),
-                        &token,
-                        &csrf,
-                        Some(json!({
-                            "status": "read",
-                            "rating": 4.0,
-                            "idempotency_key": "race-key-deadlock-01",
-                            "source": "roll_offer"
-                        })),
-                    ),
-                )
-                .await
-            })
-        };
+    let patch = {
+        let state = state.clone();
+        let token = token.clone();
+        let csrf = csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "PATCH",
+                    &format!("/api/v2/issues/{issue_id}"),
+                    &token,
+                    &csrf,
+                    Some(json!({
+                        "status": "read",
+                        "rating": 4.0,
+                        "idempotency_key": "race-key-deadlock-01",
+                        "source": "roll_offer"
+                    })),
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, user_id, 1).await;
+    let unread = {
+        let state = state.clone();
+        let token = token.clone();
+        let csrf = csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/issues/{issue_id}:markUnread"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, user_id, 2).await;
+    hold.commit().await.unwrap();
 
-        let (u, p) = tokio::join!(unread, patch);
-        let (u_status, u_body) = u.expect("markUnread task");
-        let (p_status, p_body) = p.expect("roll_offer patch task");
-        assert_ne!(
-            u_status,
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "markUnread deadlocked or errored: {u_status} {u_body:?}"
-        );
-        assert_ne!(
-            p_status,
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "roll_offer patch deadlocked or errored: {p_status} {p_body:?}"
-        );
-        assert!(
-            matches!(
-                u_status,
-                StatusCode::NO_CONTENT | StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND
-            ),
-            "unexpected markUnread status: {u_status} {u_body:?}"
-        );
-        assert!(
-            matches!(
-                p_status,
-                StatusCode::OK
-                    | StatusCode::CONFLICT
-                    | StatusCode::NO_CONTENT
-                    | StatusCode::BAD_REQUEST
-                    | StatusCode::NOT_FOUND
-                    | StatusCode::UNPROCESSABLE_ENTITY
-            ),
-            "unexpected roll_offer patch status: {p_status} {p_body:?}"
-        );
-    }
+    let (u, p) = tokio::join!(unread, patch);
+    let (u_status, u_body) = u.expect("markUnread task");
+    let (p_status, p_body) = p.expect("roll_offer patch task");
+    assert_eq!(
+        p_status,
+        StatusCode::CONFLICT,
+        "roll_offer patch: {p_status} {p_body:?}"
+    );
+    assert_eq!(
+        u_status,
+        StatusCode::NO_CONTENT,
+        "markUnread deadlocked or errored: {u_status} {u_body:?}"
+    );
+    let reactivated = thread_row(&conn, thread_id).await;
+    assert_eq!(reactivated.queue_position, 1);
 }

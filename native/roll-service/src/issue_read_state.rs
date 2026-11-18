@@ -508,14 +508,15 @@ async fn bulk_mark(
     // Queue lock first, then row locks — one global order with every queue writer.
     issue_mutation::lock_reader(&tx, user.id()).await?;
 
-    // Parse and verify every requested id, in request order, before changing anything.
-    let mut requested_ids: Vec<i32> = Vec::with_capacity(requested.len());
-    for raw_id in requested {
-        requested_ids.push(i32::try_from(*raw_id).map_err(|_| issue_not_found(raw_id))?);
-    }
-
-    let distinct_ids: Vec<i32> = requested_ids
+    // Ids outside the int4 range cannot exist; they are checked in request order below.
+    let convertible: Vec<Option<i32>> = requested
         .iter()
+        .map(|raw_id| i32::try_from(*raw_id).ok())
+        .collect();
+
+    let distinct_ids: Vec<i32> = convertible
+        .iter()
+        .flatten()
         .copied()
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
@@ -541,16 +542,17 @@ async fn bulk_mark(
         by_id.insert(issue.id, issue);
     }
 
-    // Validate in request order (including duplicates) against the pre-update state.
-    let mut issues: Vec<OwnedIssue> = Vec::with_capacity(requested_ids.len());
-    for issue_id in &requested_ids {
-        let issue = by_id
-            .get(issue_id)
-            .cloned()
-            .ok_or_else(|| issue_not_found(*issue_id))?;
+    // Validate in request order (including duplicates) against the pre-update
+    // state, so the first failing entry decides the error exactly like Python.
+    let mut issues: Vec<OwnedIssue> = Vec::with_capacity(requested.len());
+    for (raw_id, converted) in requested.iter().zip(&convertible) {
+        let issue = converted
+            .and_then(|issue_id| by_id.get(&issue_id).cloned())
+            .ok_or_else(|| issue_not_found(raw_id))?;
         if issue.status == refused_status {
             return Err(ApiError::BadRequest(format!(
-                "Issue {issue_id} is already marked as {refused_status}"
+                "Issue {} is already marked as {refused_status}",
+                issue.id
             )));
         }
         issues.push(issue);
@@ -652,7 +654,8 @@ async fn bulk_mark(
                 .await
                 .map_err(db::query_error)?;
             if written > 0 {
-                // Reactivated series with no queue seat move to the end.
+                // Reactivated series with no queue seat move after every seated active series,
+                // including reactivated ones that kept a positive position.
                 tx.execute(
                     "UPDATE threads t SET queue_position = base.max_pos + ranked.seq
                      FROM (
@@ -664,7 +667,6 @@ async fn bulk_mark(
                          SELECT COALESCE(MAX(queue_position), 0) AS max_pos
                          FROM threads
                          WHERE user_id = $2 AND status = 'active' AND queue_position >= 1
-                           AND NOT (id = ANY($1::int[]))
                      ) base
                      WHERE t.id = ranked.id",
                     &[&reactivate_ids, &user.id()],
