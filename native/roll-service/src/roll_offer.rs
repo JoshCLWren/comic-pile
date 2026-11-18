@@ -121,8 +121,10 @@ async fn offer_metadata(
     let row = conn
         .query_opt(
             "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
-               t.total_issues,t.reading_progress
+               t.total_issues,t.reading_progress,t.next_unread_issue_id,
+               i.issue_number
              FROM threads t
+             LEFT JOIN issues i ON i.id = t.next_unread_issue_id AND i.thread_id = t.id
              WHERE t.id=$1 AND t.user_id=$2",
             &[&thread_id, &user.id()],
         )
@@ -137,6 +139,8 @@ async fn offer_metadata(
         queue_position: row.try_get(4).map_err(db::query_error)?,
         total_issues: row.try_get(5).map_err(db::query_error)?,
         reading_progress: row.try_get(6).map_err(db::query_error)?,
+        next_unread_issue_id: row.try_get(7).map_err(db::query_error)?,
+        next_unread_issue_number: row.try_get(8).map_err(db::query_error)?,
     })
 }
 
