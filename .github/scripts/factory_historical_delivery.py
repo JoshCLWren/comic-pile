@@ -45,8 +45,9 @@ def recent_candidate_prs(repo: str, *, now: datetime, days: int,
     for page in range(1, max(1, min(max_pages, 10)) + 1):
         batch = api(f"repos/{repo}/pulls?state=closed&sort=updated"
                     f"&direction=desc&per_page=100&page={page}")
-        if not isinstance(batch, list) or not all(isinstance(x, dict) for x in batch)
-                or len(batch) > 100:
+        if (not isinstance(batch, list)
+                or not all(isinstance(x, dict) for x in batch)
+                or len(batch) > 100):
             raise RuntimeError("Invalid closed PR page")
         for pr in batch:
             number = pr.get("number")
