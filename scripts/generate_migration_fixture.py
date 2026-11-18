@@ -28,48 +28,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import insert
-from sqlalchemy.engine import Engine
-
-from app.models.cbl_adoption_receipt import CblAdoptionReceipt
-from app.models.cbl_reference import CBLSource, CBLSourceList
-from app.models.collection_exclusion import CollectionExclusion
-from app.models.continuity_plan import ContinuityPlan
-from app.models.continuity_rule import ContinuityRule
-from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
-from app.models.custom_cbl_source_link import CustomCBLSourceLink
-from app.models.dependency import Dependency
-from app.models.issue import Issue
-from app.models.reading_plan_membership import (
-    ReadingPlanDependency,
-    ReadingPlanIssue,
-    ReadingPlanSource,
-)
-from app.models.reading_session import ReadingSession
-from app.models.thread import Thread
-from app.models.user import User
+from sqlalchemy import MetaData, Table, insert, inspect
+from sqlalchemy.engine import Connection, Engine
 
 SYNTHETIC_EMAIL_DOMAIN = "example.invalid"
-
-_TABLES: dict[str, Any] = {
-    "users": User.__table__,
-    "threads": Thread.__table__,
-    "issues": Issue.__table__,
-    "dependencies": Dependency.__table__,
-    "continuity_plans": ContinuityPlan.__table__,
-    "reading_plan_issues": ReadingPlanIssue.__table__,
-    "reading_plan_sources": ReadingPlanSource.__table__,
-    "reading_plan_dependencies": ReadingPlanDependency.__table__,
-    "continuity_rules": ContinuityRule.__table__,
-    "custom_cbl_lists": CustomCBLList.__table__,
-    "custom_cbl_entries": CustomCBLEntry.__table__,
-    "custom_cbl_source_links": CustomCBLSourceLink.__table__,
-    "cbl_sources": CBLSource.__table__,
-    "cbl_source_lists": CBLSourceList.__table__,
-    "cbl_adoption_receipts": CblAdoptionReceipt.__table__,
-    "collection_exclusions": CollectionExclusion.__table__,
-    "sessions": ReadingSession.__table__,
-}
+VOLUME_THREAD_COUNT = 20
+VOLUME_ISSUES_PER_THREAD = 50
+REVIEWED_DANGLING_OWNER_USER_ID = 23199
+REVIEWED_DANGLING_RULE_IDS = (1715192, 1715241, 1715291, 1715333, 1715578, 1715620)
 
 
 def _utc_now() -> datetime:
