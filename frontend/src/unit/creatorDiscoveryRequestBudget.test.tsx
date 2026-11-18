@@ -545,25 +545,23 @@ describe('comparison and CBL discovery request budgets', () => {
         }),
         // #4444/#4445: membership rows with an exact owned issue id share one
         // bounded card batch on cold open, never one request per row.
-        'POST /api/v2/issues/cards': (request) => ({
+        'POST /api/v2/issues/cards': () => ({
           data: {
-            items: (request as unknown as { body?: string }).body
-              ? [
-                  {
-                    issue_id: 11,
-                    thread_id: 0,
-                    thread_title: 'Nova',
-                    issue_number: '4',
-                    status: 'unread',
-                    rating: null,
-                    read_at: null,
-                    mapping_state: 'confirmed',
-                    has_confirmed_identity: true,
-                    comicvine_issue_id: '1',
-                    cover_image_url: null,
-                  },
-                ]
-              : [],
+            items: [
+              {
+                issue_id: 11,
+                thread_id: 0,
+                thread_title: 'Nova',
+                issue_number: '4',
+                status: 'unread',
+                rating: null,
+                read_at: null,
+                mapping_state: 'confirmed',
+                has_confirmed_identity: true,
+                comicvine_issue_id: '1',
+                cover_image_url: null,
+              },
+            ],
           },
         }),
       },
