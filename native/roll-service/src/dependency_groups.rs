@@ -85,10 +85,6 @@ const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.pos
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
      to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
      FROM issues i WHERE i.id = ANY($1::int[])";
-const BLOCKING_EDGES_SQL: &str = "SELECT tt.id, si.issue_number, st.title FROM dependencies d \
-     JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id \
-     JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id \
-     WHERE tt.user_id = $1 AND tt.id = ANY($2::int[]) ORDER BY tt.id, si.id";
 const OTHER_COUPLERS_SQL: &str = "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
      AS thread_id FROM dependency_group_memberships m \
      JOIN dependency_groups g ON g.id = m.group_id AND g.user_id = $1 AND g.id <> $2 \
@@ -591,32 +587,6 @@ async fn issues_by_ids(
                 created_at: row.get(6),
             }),
         );
-    }
-    Ok(result)
-}
-
-async fn blocking_reasons_by_thread(
-    connection: &deadpool_postgres::Object,
-    user_id: i32,
-    thread_ids: &BTreeSet<i32>,
-) -> Result<BTreeMap<i32, Vec<String>>, ApiError> {
-    let mut result: BTreeMap<i32, Vec<String>> = BTreeMap::new();
-    if thread_ids.is_empty() {
-        return Ok(result);
-    }
-    let ids: Vec<i32> = thread_ids.iter().copied().collect();
-    let rows = connection
-        .query(BLOCKING_EDGES_SQL, &[&user_id, &ids])
-        .await
-        .map_err(db::query_error)?;
-    for row in rows {
-        let thread_id: i32 = row.get(0);
-        let issue_number: String = row.get(1);
-        let thread_title: String = row.get(2);
-        result
-            .entry(thread_id)
-            .or_default()
-            .push(format!("Blocked by {thread_title}: #{issue_number}"));
     }
     Ok(result)
 }
