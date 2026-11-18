@@ -7,10 +7,14 @@ fail-closed implementation.
 
 The canonical rehearsal sequence against a disposable database is:
 
-1. ``upgrade_head`` - run ``alembic upgrade head`` (fresh disposable database -> head);
-2. ``apply_fixture`` - load the prod-shaped synthetic migration fixture;
-3. ``downgrade_base`` - run ``alembic downgrade <base_revision>`` to roll back the migrations under rehearsal;
-4. ``upgrade_head`` - run ``alembic upgrade head`` again to re-apply.
+1. ``upgrade_base`` - establish the schema at the fixture's historical revision;
+2. ``apply_fixture`` - load prod-shaped synthetic history into that base schema;
+3. ``upgrade_head`` - apply the migrations under rehearsal to that history;
+4. ``downgrade_base`` - roll back the migrations under rehearsal;
+5. ``upgrade_head`` - re-apply them to prove the complete cycle.
+
+Deploy uses the first three steps only because history-preserving migrations are
+deliberately irreversible.
 
 Every step is timed and fail-closed: the first failing step raises
 :class:`MigrationRehearsalError` and the runner stops, so a rehearsal can never
@@ -38,8 +42,9 @@ from sqlalchemy.engine import Engine
 
 #: Ordered rehearsal steps executed against the disposable database (full cycle).
 REHEARSAL_STEPS: tuple[str, ...] = (
-    "upgrade_head",
+    "upgrade_base",
     "apply_fixture",
+    "upgrade_head",
     "downgrade_base",
     "upgrade_head",
 )
@@ -50,7 +55,7 @@ REHEARSAL_STEPS: tuple[str, ...] = (
 #: downgrade is attempted, because history-preserving migrations are
 #: deliberately irreversible.
 UPGRADE_ONLY_STEPS: tuple[str, ...] = (
-    "upgrade_head",
+    "upgrade_base",
     "apply_fixture",
     "upgrade_head",
 )
@@ -123,6 +128,34 @@ def _alembic_config(database_url: str, alembic_config_path: Path) -> Config:
     return config
 
 
+def _resolve_base_revision(database_url: str, alembic_config_path: Path, revision: str) -> str:
+    """Resolve the local ``-1`` shorthand before an empty database has a revision.
+
+    Args:
+        database_url: Disposable rehearsal database URL.
+        alembic_config_path: Repository ``alembic.ini`` path.
+        revision: Explicit revision identifier or the default ``-1`` shorthand.
+
+    Returns:
+        The concrete base revision to establish before loading historical rows.
+
+    Raises:
+        MigrationRehearsalError: If a merge revision makes ``-1`` ambiguous.
+    """
+    if revision != BASE_REVISION:
+        return revision
+    config = _alembic_config(database_url, alembic_config_path)
+    scripts = ScriptDirectory.from_config(config)
+    down_revision = scripts.get_revision(scripts.get_current_head()).down_revision
+    if isinstance(down_revision, str):
+        return down_revision
+    if down_revision is None:
+        return "base"
+    raise MigrationRehearsalError(
+        "default base revision -1 is ambiguous at a merge revision; pass --base-revision"
+    )
+
+
 def _run_step(step: str, action: Callable[[], object]) -> RehearsalStepResult:
     """Execute one rehearsal step, timing it and failing closed on error.
 
@@ -137,15 +170,16 @@ def _run_step(step: str, action: Callable[[], object]) -> RehearsalStepResult:
         MigrationRehearsalError: When the step fails; no later step runs.
     """
     started = time.monotonic()
-    error: str | None = None
     try:
         action()
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
-        raise MigrationRehearsalError(f"migration rehearsal step {step!r} failed: {error}") from exc
-    finally:
         duration_ms = (time.monotonic() - started) * 1000
-    return RehearsalStepResult(step=step, duration_ms=round(duration_ms, 3), error=error)
+        error = f"{type(exc).__name__}: {exc}"
+        raise MigrationRehearsalError(
+            f"migration rehearsal step {step!r} failed after {duration_ms:.3f}ms: {error}"
+        ) from exc
+    duration_ms = (time.monotonic() - started) * 1000
+    return RehearsalStepResult(step=step, duration_ms=round(duration_ms, 3))
 
 
 def _normalize_mode(mode: str) -> str:
@@ -173,8 +207,8 @@ def run_migration_rehearsal(
         database_url: Disposable rehearsal database URL (throwaway container).
         alembic_config_path: Repository ``alembic.ini`` path.
         fixture_applier: Optional callable that receives the disposable sync
-            engine and loads the prod-shaped fixture before the rollback step.
-            When omitted, only the migration cycle runs.
+            engine and loads prod-shaped history at the base revision before
+            upgrading. When omitted, only the migration cycle runs.
         base_revision: Migration revision the rollback step targets (the base
             revision of the migration set under rehearsal, or ``-1``).
         budget_seconds: Optional migration safety budget. When the summed step
@@ -195,6 +229,7 @@ def run_migration_rehearsal(
     mode = _normalize_mode(mode)
     if mode not in ("full", "upgrade-only"):
         raise ValueError(f"unknown migration rehearsal mode: {mode!r}")
+    base_revision = _resolve_base_revision(database_url, alembic_config_path, base_revision)
 
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
@@ -208,10 +243,8 @@ def run_migration_rehearsal(
         final_revision = ScriptDirectory.from_config(config).get_current_head()
 
     def _upgrade_base() -> None:
-        nonlocal final_revision
         config = _alembic_config(database_url, alembic_config_path)
         command.upgrade(config, base_revision)
-        final_revision = ScriptDirectory.from_config(config).get_current_head()
 
     def _downgrade_base() -> None:
         command.downgrade(_alembic_config(database_url, alembic_config_path), base_revision)
@@ -222,17 +255,12 @@ def run_migration_rehearsal(
     previous_database_url = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = sync_url
     try:
-        if mode == "upgrade-only":
-            steps.append(_run_step("upgrade_head", _upgrade_base))
-            if fixture_applier is not None and engine is not None:
-                steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
-            steps.append(_run_step("upgrade_head", _upgrade_head))
-        else:
-            steps.append(_run_step("upgrade_head", _upgrade_head))
-            if fixture_applier is not None and engine is not None:
-                steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
-            if not skip_downgrade:
-                steps.append(_run_step("downgrade_base", _downgrade_base))
+        steps.append(_run_step("upgrade_base", _upgrade_base))
+        if fixture_applier is not None and engine is not None:
+            steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
+        steps.append(_run_step("upgrade_head", _upgrade_head))
+        if mode == "full":
+            steps.append(_run_step("downgrade_base", _downgrade_base))
             steps.append(_run_step("upgrade_head", _upgrade_head))
     finally:
         if previous_database_url is None:
@@ -301,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--apply-fixture",
         action="store_true",
-        help="Load the prod-shaped migration fixture before upgrading",
+        help="Load prod-shaped synthetic history at the base revision before upgrading",
     )
     args = parser.parse_args(argv)
 
