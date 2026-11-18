@@ -891,10 +891,10 @@ pub async fn get_group_detail(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
-    let memberships = memberships(&connection, group_id).await?;
+    let memberships = memberships(&*connection, group_id).await?;
     let mut thread_ids: BTreeSet<i32> = BTreeSet::new();
     let mut issue_ids: BTreeSet<i32> = BTreeSet::new();
     for member in &memberships {
