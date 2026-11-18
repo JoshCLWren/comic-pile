@@ -305,44 +305,240 @@ struct GroupRecord {
     created_at: DateTime<Utc>,
 }
 
-fn format_created_at(created_at: DateTime<Utc>) -> String {
-    let precision = if created_at.timestamp_subsec_micros() == 0 {
+fn format_python_datetime(value: DateTime<Utc>) -> String {
+    let precision = if value.timestamp_subsec_micros() == 0 {
         SecondsFormat::Secs
     } else {
         SecondsFormat::Micros
     };
-    created_at.to_rfc3339_opts(precision, true)
+    value.to_rfc3339_opts(precision, true)
 }
 
-fn normalize_thread_format(format: &str) -> String {
-    let trimmed = format.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => trimmed.to_string(),
-    }
+fn format_optional_python_datetime(value: Option<DateTime<Utc>>) -> Option<String> {
+    value.map(format_python_datetime)
 }
 
 fn unprocessable(detail: impl Into<String>) -> ApiError {
     ApiError::Unprocessable(detail.into())
 }
 
+fn validation_failed(errors: Vec<serde_json::Value>) -> ApiError {
+    ApiError::structured(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        serde_json::Value::Array(errors),
+    )
+}
+
+fn pydantic_error(
+    error_type: &str,
+    location: &[serde_json::Value],
+    message: impl Into<String>,
+    input: serde_json::Value,
+    context: serde_json::Value,
+) -> serde_json::Value {
+    let mut loc = Vec::with_capacity(location.len() + 1);
+    loc.push(serde_json::json!("body"));
+    loc.extend_from_slice(location);
+    serde_json::json!({
+        "type": error_type,
+        "loc": loc,
+        "msg": message.into(),
+        "input": input,
+        "ctx": context,
+        "url": format!("https://errors.pydantic.dev/2.12/v/{error_type}"),
+    })
+}
+
+fn greater_than_error(location: &[serde_json::Value], input: i32) -> serde_json::Value {
+    pydantic_error(
+        "greater_than",
+        location,
+        "Input should be greater than 0",
+        serde_json::json!(input),
+        serde_json::json!({"gt": 0}),
+    )
+}
+
+fn model_validation_error(message: &str, input: serde_json::Value) -> serde_json::Value {
+    pydantic_error(
+        "value_error",
+        &[],
+        format!("Value error, {message}"),
+        input,
+        serde_json::json!({"error": {}}),
+    )
+}
+
 fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
 }
 
-/// Strip and validate a group name (Python `app/services/dependency_group_service.py::_normalize_name`).
+fn validate_group_name_schema(name: &str) -> Result<(), ApiError> {
+    let raw_length = name.chars().count();
+    if raw_length == 0 {
+        return Err(validation_failed(vec![pydantic_error(
+            "string_too_short",
+            &[serde_json::json!("name")],
+            "String should have at least 1 character",
+            serde_json::json!(name),
+            serde_json::json!({"min_length": 1}),
+        )]));
+    }
+    if raw_length > MAX_GROUP_NAME_CHARS {
+        return Err(validation_failed(vec![pydantic_error(
+            "string_too_long",
+            &[serde_json::json!("name")],
+            format!("String should have at most {MAX_GROUP_NAME_CHARS} characters"),
+            serde_json::json!(name),
+            serde_json::json!({"max_length": MAX_GROUP_NAME_CHARS}),
+        )]));
+    }
+    Ok(())
+}
+
+/// Apply Pydantic's raw-name bounds before the service's strip/non-blank rule.
 fn normalize_group_name(name: &str) -> Result<String, ApiError> {
+    validate_group_name_schema(name)?;
     let normalized = name.trim();
-    if normalized.chars().count() == 0 {
+    if normalized.is_empty() {
         return Err(unprocessable("Group name must not be blank"));
     }
-    if normalized.chars().count() > MAX_GROUP_NAME_CHARS {
-        return Err(unprocessable(format!(
-            "Group name must be at most {MAX_GROUP_NAME_CHARS} characters"
-        )));
-    }
     Ok(normalized.to_string())
+}
+
+fn validate_member_request(request: &DependencyGroupMemberCreateRequest) -> Result<(), ApiError> {
+    let mut errors = Vec::new();
+    if let Some(thread_id) = request.thread_id.filter(|id| *id <= 0) {
+        errors.push(greater_than_error(
+            &[serde_json::json!("thread_id")],
+            thread_id,
+        ));
+    }
+    if let Some(issue_id) = request.issue_id.filter(|id| *id <= 0) {
+        errors.push(greater_than_error(
+            &[serde_json::json!("issue_id")],
+            issue_id,
+        ));
+    }
+    if let Some(sequence_order) = request.sequence_order.filter(|position| *position < 1) {
+        errors.push(pydantic_error(
+            "greater_than_equal",
+            &[serde_json::json!("sequence_order")],
+            "Input should be greater than or equal to 1",
+            serde_json::json!(sequence_order),
+            serde_json::json!({"ge": 1}),
+        ));
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
+    }
+    if request.thread_id.is_none() == request.issue_id.is_none() {
+        return Err(validation_failed(vec![model_validation_error(
+            "Exactly one of thread_id or issue_id is required",
+            request.validation_input.clone(),
+        )]));
+    }
+    Ok(())
+}
+
+fn validate_issue_range_request(
+    request: &DependencyGroupIssueRangeCreateRequest,
+) -> Result<(), ApiError> {
+    let mut errors = Vec::new();
+    for (field, value) in [
+        ("thread_id", request.thread_id),
+        ("start_position", request.start_position),
+        ("end_position", request.end_position),
+    ] {
+        if value <= 0 {
+            errors.push(greater_than_error(&[serde_json::json!(field)], value));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
+    }
+    if request.end_position < request.start_position {
+        return Err(validation_failed(vec![model_validation_error(
+            "end_position must be greater than or equal to start_position",
+            request.validation_input.clone(),
+        )]));
+    }
+    Ok(())
+}
+
+fn validate_group_order_request(
+    request: &DependencyGroupOrderUpdateRequest,
+) -> Result<(), ApiError> {
+    let mut errors = Vec::new();
+    if request.items.is_empty() {
+        errors.push(pydantic_error(
+            "too_short",
+            &[serde_json::json!("items")],
+            "List should have at least 1 item after validation, not 0",
+            serde_json::json!([]),
+            serde_json::json!({
+                "field_type": "List",
+                "min_length": 1,
+                "actual_length": 0,
+            }),
+        ));
+    } else if request.items.len() > MAX_ORDER_ITEMS {
+        let actual_length = request.items.len();
+        let input = request
+            .items
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "issue_id": item.issue_id,
+                    "sequence_order": item.sequence_order,
+                })
+            })
+            .collect();
+        errors.push(pydantic_error(
+            "too_long",
+            &[serde_json::json!("items")],
+            format!(
+                "List should have at most {MAX_ORDER_ITEMS} items after validation, not {actual_length}"
+            ),
+            serde_json::Value::Array(input),
+            serde_json::json!({
+                "field_type": "List",
+                "max_length": MAX_ORDER_ITEMS,
+                "actual_length": actual_length,
+            }),
+        ));
+    }
+    for (index, item) in request.items.iter().enumerate() {
+        for (field, value) in [
+            ("issue_id", item.issue_id),
+            ("sequence_order", item.sequence_order),
+        ] {
+            if value <= 0 {
+                errors.push(greater_than_error(
+                    &[
+                        serde_json::json!("items"),
+                        serde_json::json!(index),
+                        serde_json::json!(field),
+                    ],
+                    value,
+                ));
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_failed(errors));
+    }
+    Ok(())
+}
+
+fn group_order_update_parameters(
+    member_by_issue: &BTreeMap<i32, i32>,
+    ordered_positions: &BTreeMap<i32, i32>,
+) -> (Vec<i32>, Vec<Option<i32>>) {
+    member_by_issue
+        .iter()
+        .map(|(issue_id, membership_id)| (*membership_id, ordered_positions.get(issue_id).copied()))
+        .unzip()
 }
 
 fn member_response(
