@@ -923,6 +923,7 @@ pub async fn update_group(
     let result = update_group_tx(&tx, group_id, user.id(), &name).await;
     match result {
         Ok(group) => {
+            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             let memberships = memberships(&connection, group_id).await?;
             let response = group_response(&connection, &group, &memberships).await?;
