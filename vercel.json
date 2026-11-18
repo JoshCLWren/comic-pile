@@ -805,6 +805,48 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issues/[^/]+/reader\\-context$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:markRead$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:markUnread$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:move$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues:bulkMarkRead$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues:bulkMarkUnread$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/metrics$",
       "methods": [
         "GET"
@@ -1562,54 +1604,6 @@
       "src": "^/api/v1/creators/team\\-chemistry$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+/reader\\-context$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:markRead$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:markUnread$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:move$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues:bulkMarkRead$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues:bulkMarkUnread$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
