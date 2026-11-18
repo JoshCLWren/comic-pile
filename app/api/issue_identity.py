@@ -1,19 +1,29 @@
-"""Retired Python handlers for CBL adoption preview/plan endpoints (#4843).
+"""CBL adoption preview and plan endpoints.
 
-The same-path operations are served by the native Rust router. This module keeps
-the response schema types and serialization helpers for any remaining Python
-tests while registering no HTTP handlers.
+GET adoption-preview is cut over to native Rust for this PR, but the Python
+implementation is retained in this cutover PR and must not be removed until a
+successful authenticated production request has been verified against Rust
+(AGENTS.md / #4335 / #4843). POST adoption-plan is already migrated to Rust.
+This module keeps the preview handler and shared schema/serialization helpers.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.cbl_reconciliation import CBLAdoptionPlan, CBLReconciliationReport
+from app.auth import get_current_user
+from app.database import get_db
+from app.models.user import User
+from app.services.cbl_reconciliation import (
+    CBLAdoptionPlan,
+    CBLReconciliationReport,
+    preview_cbl_adoption,
+)
 from app.services.cbl_source_public import public_cbl_repository
 
 router = APIRouter(prefix="/api/v1/issue-identity", tags=["issue-identity"])
@@ -155,3 +165,18 @@ def _adoption_payload(
             awaiting_opt_in_positions=positions_by_decision["awaiting_opt_in"],
         ),
     )
+
+
+@router.get("/cbl/{list_id}/adoption-preview", response_model=CBLAdoptionPreviewResponse)
+async def api_cbl_adoption_preview(
+    list_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CBLAdoptionPreviewResponse:
+    """Preview all CBL positions and their default read-only adoption choices.
+
+    Retained in this cutover PR for required production verification before
+    Python retirement (see AGENTS.md same-path cutover rule).
+    """
+    report, plan = await preview_cbl_adoption(db, user_id=current_user.id, list_id=list_id)
+    return _adoption_payload(report, plan)

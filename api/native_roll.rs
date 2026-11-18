@@ -352,6 +352,10 @@ fn app() -> Router {
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
         .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(native_dispatch),
+        )
+        .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(native_dispatch),
         )
@@ -695,6 +699,32 @@ mod tests {
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
         );
+    }
+
+    #[tokio::test]
+    async fn v1_cbl_adoption_preview_ingress_reaches_rust_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/issue-identity/cbl/1/adoption-preview")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "adoption-preview must reach Rust ingress, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
         let bytes = to_bytes(response.into_body(), 8192)
             .await
             .expect("body bytes");

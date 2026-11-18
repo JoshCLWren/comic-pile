@@ -1208,3 +1208,125 @@ async fn adoption_commit_returns_503_on_database_outage() {
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
     assert_eq!(body["error"]["code"], "database_unavailable", "{body}");
 }
+
+#[tokio::test]
+async fn adoption_preview_and_explicit_include_cannot_restore_excluded_volumes() {
+    let (state, token, csrf, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO collection_exclusions (user_id, provider, external_volume_id, created_at) VALUES ($1, 'comicvine', $2, NOW())",
+        &[&user_id, &VOLUME_ID],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let entries = body["entries"].as_array().unwrap();
+    assert!(!entries.is_empty(), "{body}");
+    for entry in entries {
+        assert_eq!(entry["adoption_decision"], "excluded", "{body}");
+        assert_eq!(
+            entry["collection_exclusion_reason"], "collection_volume_excluded",
+            "{body}"
+        );
+    }
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {"1": "include", "2": "include"},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([]), "{body}");
+    assert_eq!(
+        body["excluded_positions"].as_array().unwrap().len(),
+        2,
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn adoption_commit_rechecks_exclusions_added_after_preview() {
+    let (state, token, csrf, _guard) = setup().await;
+
+    let (status, preview) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert!(
+        preview["summary"]["missing_would_create_count"]
+            .as_i64()
+            .unwrap_or(0)
+            >= 1
+            || preview["summary"]["final_adopted_count"]
+                .as_i64()
+                .unwrap_or(0)
+                >= 1,
+        "preview should be adoptable before exclusion: {preview}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let user_id: i32 = conn
+        .query_one("SELECT id FROM users LIMIT 1", &[])
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO collection_exclusions (user_id, provider, external_volume_id, created_at) VALUES ($1, 'comicvine', $2, NOW())",
+        &[&user_id, &VOLUME_ID],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/cbl/1/adoption-commit",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert!(
+        status == StatusCode::CREATED || status == StatusCode::OK,
+        "{status} {body}"
+    );
+    assert_eq!(body["created_positions"], json!([]), "{body}");
+    assert!(
+        !body["excluded_positions"].as_array().unwrap().is_empty(),
+        "{body}"
+    );
+}
