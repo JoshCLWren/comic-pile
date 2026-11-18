@@ -101,7 +101,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/kilo-bin"
           binary="$(find "$RUNNER_TEMP/kilo-bin" -type f -name kilo -perm -111 | head -n 1)"
           test -n "$binary"
-          echo "$(dirname "$binary")" >> "$GITHUB_PATH"
+          dirname "$binary" >> "$GITHUB_PATH"
           npm install -g pnpm@10.15.0
       - name: Run isolated contributor repair
         shell: bash

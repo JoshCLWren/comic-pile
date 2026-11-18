@@ -12,8 +12,11 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
+pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
+pub mod cron_auth;
+pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -30,6 +33,7 @@ pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
 pub mod reading_blocker_projection;
@@ -45,19 +49,27 @@ pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
 pub mod reading_session;
+pub mod recommendation_explanation;
 pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
+pub mod roll_override;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod roll_switch_prerequisite;
+pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
+pub mod session_details;
 pub mod session_history;
+pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod undo_apply;
+pub mod undo_snapshots;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -241,6 +253,17 @@ pub enum ApiError {
         /// Wire detail message.
         detail: String,
     },
+    /// A FastAPI-style `HTTPException(detail=<object>)` response. Some clients
+    /// decode `detail.code` / `detail.path` / `detail.issue_ids`, so the object
+    /// must be emitted under `detail` rather than stringified into a message.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Text form used for `Display` and secret-free classification.
+        message: String,
+        /// Structured detail emitted verbatim as the `detail` value.
+        detail: serde_json::Value,
+    },
 }
 
 impl ApiError {
@@ -255,6 +278,23 @@ impl ApiError {
         Self::Detail {
             status,
             detail: detail.into(),
+        }
+    }
+
+    /// Structured JSON detail emitted as `{"detail": <value>}`.
+    ///
+    /// The text form is taken from `detail.message` when present so logging and
+    /// `Display` stay meaningful without leaking the whole payload.
+    pub fn structured(status: StatusCode, detail: serde_json::Value) -> Self {
+        let message = detail
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("Structured validation error")
+            .to_string();
+        Self::StructuredDetail {
+            status,
+            message,
+            detail,
         }
     }
 
@@ -274,7 +314,7 @@ impl ApiError {
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
-            ApiError::Detail { status, .. } => *status,
+            ApiError::Detail { status, .. } | ApiError::StructuredDetail { status, .. } => *status,
         }
     }
 
@@ -295,7 +335,16 @@ impl ApiError {
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
+            ApiError::StructuredDetail { message, .. } => message.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
+        }
+    }
+
+    /// Structured detail payload for FastAPI-style object errors, if any.
+    pub fn structured_detail(&self) -> Option<&serde_json::Value> {
+        match self {
+            ApiError::StructuredDetail { detail, .. } => Some(detail),
+            _ => None,
         }
     }
 
@@ -351,14 +400,21 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
-        let detail_owned = self.detail().to_string();
-        let mut response = (
-            status,
-            Json(ErrorBody {
-                detail: &detail_owned,
-            }),
-        )
-            .into_response();
+        let mut response = match self {
+            ApiError::StructuredDetail { detail, .. } => {
+                (status, Json(serde_json::json!({ "detail": detail }))).into_response()
+            }
+            other => {
+                let detail_owned = other.detail().to_string();
+                (
+                    status,
+                    Json(ErrorBody {
+                        detail: &detail_owned,
+                    }),
+                )
+                    .into_response()
+            }
+        };
         if status == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,
@@ -366,6 +422,21 @@ impl IntoResponse for ApiError {
             );
         }
         response
+    }
+}
+
+/// Per-route request deadlines used by `bound_request`. Cron drains run longer
+/// than ordinary requests. The release-sync deadline is derived from the
+/// handler's own wall-clock budget (`CRON_MAX_DURATION`) with a margin so the
+/// budget-exhaustion branch can actually return its truncated 200 report
+/// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
+fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
+    match path {
+        "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        "/api/v1/cron/release-sync" => {
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        }
+        _ => default_timeout,
     }
 }
 
@@ -377,11 +448,7 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
-        Duration::from_secs(50)
-    } else {
-        state.request_timeout
-    };
+    let timeout = request_timeout_for(request.uri().path(), state.request_timeout);
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|e| {
@@ -459,6 +526,11 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
+    use custom_cbl::{
+        apply_custom_cbl, create_custom_cbl, delete_overlap_decision, export_custom_cbl,
+        get_custom_cbl, get_overlap_decisions, list_custom_cbls, read_custom_cbl,
+        save_overlap_decision, search_custom_cbl_issues, update_custom_cbl,
+    };
     Router::new()
         .route(
             "/health",
@@ -527,6 +599,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
+        .route("/api/v1/roll/override", post(roll_override::override_roll))
+        .route("/api/roll/override", post(roll_override::override_roll))
+        .route(
+            "/api/v1/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/v1/roll/switch-prerequisite",
+            post(roll_switch_prerequisite::switch_prerequisite),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
@@ -547,6 +633,36 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
+        // Session list (issue #4839)
+        .route("/api/sessions/", get(session_list::list_sessions))
+        .route("/api/v1/sessions/", get(session_list::list_sessions))
+        // Session details (issue #4839)
+        .route(
+            "/api/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        // Undo snapshots list (issue #4839)
+        .route(
+            "/api/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        // Undo apply snapshot (issue #4839)
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
@@ -561,6 +677,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
+        )
+        .route(
+            "/api/v1/cron/release-sync",
+            get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
             "/api/v1/reading-plan-sync/status",
@@ -616,6 +736,39 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
+        )
+        // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
+        .route("/api/v1/custom-cbls", get(list_custom_cbls))
+        .route("/api/v1/custom-cbls", post(create_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/issue-search",
+            get(search_custom_cbl_issues),
+        )
+        .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
+        .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/export",
+            get(export_custom_cbl),
+        )
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
+        // Axum (matchit) forbids a parameter sharing a segment with a literal,
+        // so the colon-action wire suffix is captured whole and parsed inside
+        // the handler; the public path stays exactly `{plan_id}:apply`.
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            post(apply_custom_cbl),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(get_overlap_decisions),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(save_overlap_decision),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
@@ -770,6 +923,67 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
         )
+        // Continuity plans v1 routes (cutover from Python)
+        .route(
+            "/api/v1/continuity-plans/",
+            get(continuity_plans::list_continuity_plans),
+        )
+        .route(
+            "/api/v1/continuity-plans/",
+            post(continuity_plans::create_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            get(continuity_plans::get_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            put(continuity_plans::update_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(continuity_plans::delete_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(continuity_plans::get_continuity_plan_membership),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(continuity_plans::link_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(continuity_plans::list_release_sources),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(continuity_plans::list_release_sources_for_reader),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(continuity_plans::create_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(continuity_plans::update_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(continuity_plans::delete_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(continuity_plans::adopt_reading_order),
+        )
         .route(
             "/api/v1/taste/discoveries",
             get(taste_discoveries::list_taste_discoveries),
@@ -851,6 +1065,28 @@ mod tests {
     use super::*;
     use axum::body::{to_bytes, Body};
     use tower::ServiceExt;
+
+    #[test]
+    fn release_sync_ingress_deadline_exceeds_handler_budget() {
+        let default = Duration::from_secs(3);
+        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        assert!(
+            bound > reading_plan_sync::CRON_MAX_DURATION,
+            "the release-sync ingress deadline must be reachable after the handler budget"
+        );
+        assert_eq!(
+            bound,
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
+            Duration::from_secs(50)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v1/roll/bootstrap", default),
+            default
+        );
+    }
 
     #[tokio::test]
     async fn timeout_cancels_work_and_returns_json() {

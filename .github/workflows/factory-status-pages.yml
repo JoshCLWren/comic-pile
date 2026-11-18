@@ -238,7 +238,7 @@ jobs:
           marker='Can the fleet move work, and which factories are actually useful?'
           loader='factory-status-live/index.html'
 
-          for attempt in {1..18}; do
+          for _ in {1..18}; do
             shell="$(curl --fail --silent --show-error --location \
               -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "$page_url" 2>/dev/null || true)"
             live="$(curl --fail --silent --show-error --location \
