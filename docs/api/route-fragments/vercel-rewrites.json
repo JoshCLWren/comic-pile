@@ -1,5 +1,5 @@
 {
-  "generated_by": "scripts/generate_route_burndown.mjs",
+  "generated_by": "scripts/generate_route_burndown.py",
   "source_fragments": [
     "activity",
     "bug-reports",
