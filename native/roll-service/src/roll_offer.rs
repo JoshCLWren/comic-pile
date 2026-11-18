@@ -794,6 +794,19 @@ mod tests {
     }
 
     #[test]
+    fn unsnooze_request_shape_requires_explicit_thread_id_and_rejects_unknown_fields() {
+        assert!(serde_json::from_str::<UnsnoozeRequest>(
+            r#"{"thread_id": 42}"#
+        )
+        .is_ok());
+        assert!(serde_json::from_str::<UnsnoozeRequest>(
+            r#"{"thread_id": 42, "user_id": 9}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<UnsnoozeRequest>(r#"{}"#).is_err());
+    }
+
+    #[test]
     fn request_shape_requires_an_explicit_key_and_rejects_unknown_fields() {
         assert!(serde_json::from_str::<RollOfferRequest>(
             r#"{"idempotency_key":"roll-offer-0123456789","snoozed_thread_ids":[4,8]}"#
