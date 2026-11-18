@@ -1188,7 +1188,7 @@ struct SeriesLocalIssue {
     confirmed_external_id: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SeriesExternalMapping {
     issue_id: Option<i32>,
     issue_number: String,
