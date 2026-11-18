@@ -458,8 +458,8 @@ async fn load_issue_progress(
     Ok(issues)
 }
 
-async fn owned_group<T: GenericClient>(
-    connection: &T,
+async fn owned_group(
+    connection: &dyn GenericClient,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -474,8 +474,8 @@ async fn owned_group<T: GenericClient>(
     }))
 }
 
-async fn owned_thread_id<T: GenericClient>(
-    connection: &T,
+async fn owned_thread_id(
+    connection: &dyn GenericClient,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -486,8 +486,8 @@ async fn owned_thread_id<T: GenericClient>(
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn owned_issue_thread_id<T: GenericClient>(
-    connection: &T,
+async fn owned_issue_thread_id(
+    connection: &dyn GenericClient,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
