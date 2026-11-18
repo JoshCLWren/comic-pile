@@ -43,7 +43,7 @@ export interface CompareRequest {
   }
 }
 
-export type CompareResponse = components['schemas']['NativeCreatorComparisonResponse']
+export type CompareResponse = components['schemas']['CreatorComparisonResponse']
 
 export interface ConfirmRequest {
   path: {
@@ -259,11 +259,11 @@ export interface DetailRequest {
   }
 }
 
-export type DetailResponse = components['schemas']['NativeCreatorDetailResponse']
+export type DetailResponse = components['schemas']['CreatorDetailResponse']
 
 export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
-export type DiscoveriesResponse = components['schemas']['NativeCreatorDiscoveryResponse']
+export type DiscoveriesResponse = components['schemas']['CreatorDiscoveryResponse']
 
 export interface EligibleIssueIdsRequest {
   query?: {
@@ -438,7 +438,7 @@ export interface MetricRequest {
   }
 }
 
-export type MetricResponse = components['schemas']['NativeCreatorMetricDrilldown']
+export type MetricResponse = components['schemas']['CreatorMetricDrilldown']
 
 export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
@@ -467,7 +467,7 @@ export interface RatingDistributionRequest {
   }
 }
 
-export type RatingDistributionResponse = components['schemas']['NativeCreatorMetricDrilldown']
+export type RatingDistributionResponse = components['schemas']['CreatorMetricDrilldown']
 
 export interface ReadRequest {
   path: {
@@ -643,7 +643,7 @@ export interface RoleRequest {
   }
 }
 
-export type RoleResponse = components['schemas']['NativeCreatorMetricDrilldown']
+export type RoleResponse = components['schemas']['CreatorMetricDrilldown']
 
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
 
@@ -658,7 +658,7 @@ export interface SeriesRequest {
   }
 }
 
-export type SeriesResponse = components['schemas']['NativeCreatorMetricDrilldown']
+export type SeriesResponse = components['schemas']['CreatorMetricDrilldown']
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -679,7 +679,7 @@ export interface SeriesIssuesRequest {
   }
 }
 
-export type SeriesIssuesResponse = components['schemas']['NativeCreatorSeriesIssueListResponse']
+export type SeriesIssuesResponse = components['schemas']['CreatorSeriesIssueListResponse']
 
 export interface SkipRequest {
   path: {
@@ -697,7 +697,7 @@ export interface SummariesRequest {
 
 export type SummariesResponse = components['schemas']['CreatorSummariesResponse']
 
-export type TeamChemistryResponse = components['schemas']['NativeCreatorTeamChemistryResponse']
+export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
 export interface UpdateLegacyDependencyRequest {
   path: {

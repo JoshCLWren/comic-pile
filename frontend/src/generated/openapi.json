@@ -5616,98 +5616,71 @@
         "type": "object"
       },
       "CreatorComparisonCoverage": {
-        "description": "Coverage state distinguishing complete from lower-bound statistics across compared creators.",
         "properties": {
           "rated_issues_total": {
-            "default": 0,
-            "description": "Total owned issues with an effective rating across all compared creators.",
-            "minimum": 0.0,
-            "title": "Rated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Rated owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Rated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "ratings_complete": {
-            "default": true,
-            "description": "True only when every owned rated issue has confirmed usable creator metadata.",
-            "title": "Ratings Complete",
             "type": "boolean"
           },
           "read_unrated_complete": {
-            "default": true,
-            "description": "True only when every owned read-but-unrated issue has confirmed usable creator metadata.",
-            "title": "Read Unrated Complete",
             "type": "boolean"
           },
           "read_unrated_issues_total": {
-            "default": 0,
-            "description": "Total owned read-but-unrated issues.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Read-but-unrated owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "unread_issues_total": {
-            "default": 0,
-            "description": "Total owned unread issues.",
-            "minimum": 0.0,
-            "title": "Unread Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "unread_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Unread owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Unread Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "upcoming_complete": {
-            "default": true,
-            "description": "True only when every owned unread issue considered by the library has confirmed usable creator metadata. While false, per-creator unread counts are lower bounds: an unread issue without creator metadata cannot be attributed to any creator.",
-            "title": "Upcoming Complete",
             "type": "boolean"
           }
         },
-        "title": "CreatorComparisonCoverage",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
         "type": "object"
       },
       "CreatorComparisonIssueRef": {
-        "description": "Bounded navigable reference to one creator-attributed issue (issue #3174).",
         "properties": {
           "issue_id": {
-            "description": "Local ComicPile issue ID.",
-            "title": "Issue Id",
+            "format": "int64",
             "type": "integer"
           },
           "issue_number": {
-            "description": "Display issue number within its thread.",
-            "title": "Issue Number",
             "type": "string"
           },
           "status": {
-            "description": "Local issue status (``read`` or ``unread``) at aggregation time.",
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local ComicPile thread ID owning the issue.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Title of the thread owning the issue.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -5718,216 +5691,165 @@
           "issue_number",
           "status"
         ],
-        "title": "CreatorComparisonIssueRef",
         "type": "object"
       },
       "CreatorComparisonItem": {
-        "description": "Comparison data for one creator identity.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no ratings.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "canonical_creator_key": {
-            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
-            "title": "Canonical Creator Key",
             "type": "string"
           },
           "display_name": {
-            "description": "Human-readable creator name from confirmed issue metadata.",
-            "title": "Display Name",
             "type": "string"
           },
           "insufficient_data": {
-            "default": false,
-            "description": "True when the creator has fewer than 5 rated issues, making statistics less reliable.",
-            "title": "Insufficient Data",
             "type": "boolean"
           },
           "max_issue_refs_per_group": {
-            "default": 5,
-            "description": "Maximum issue references returned per drilldown group. Exposed so the UI can explain a truncated list instead of silently hiding it.",
-            "minimum": 1.0,
-            "title": "Max Issue Refs Per Group",
+            "format": "int64",
             "type": "integer"
           },
           "median_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Median of the user's latest effective ratings across headline-eligible issues. ``null`` when fewer than 1 rated issue.",
-            "title": "Median Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "min_rated_issues_per_series": {
-            "default": 5,
-            "description": "Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.",
-            "minimum": 1.0,
-            "title": "Min Rated Issues Per Series",
+            "format": "int64",
             "type": "integer"
           },
           "normalized_roles": {
-            "description": "Distinct roles seen for this creator across the user's issues.",
             "items": {
               "type": "string"
             },
-            "title": "Normalized Roles",
             "type": "array"
           },
           "rating_distribution": {
             "additionalProperties": {
+              "format": "int64",
               "type": "integer"
             },
-            "description": "Distribution of ratings (e.g. {'5': 3, '4': 2, '3': 1}).",
-            "title": "Rating Distribution",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "ratings_count": {
-            "default": 0,
-            "description": "Number of distinct rated issues contributing to the headline average.",
-            "minimum": 0.0,
-            "title": "Ratings Count",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_count": {
-            "default": 0,
-            "description": "Number of read owned issues attributed to this creator with no stored effective rating.",
-            "minimum": 0.0,
-            "title": "Read Unrated Count",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_issue_refs": {
-            "description": "Bounded sample of the read attributed issues behind ``read_unrated_count`` with no stored effective rating. At most ``max_issue_refs_per_group`` entries; the count remains the full total.",
             "items": {
               "$ref": "#/components/schemas/CreatorComparisonIssueRef"
             },
-            "title": "Read Unrated Issue Refs",
             "type": "array"
           },
           "role_stats": {
-            "description": "Breakdown of statistics per role.",
             "items": {
               "$ref": "#/components/schemas/CreatorComparisonRoleStat"
             },
-            "title": "Role Stats",
             "type": "array"
           },
           "strongest_series": {
-            "description": "Series ranked by rating strength, strongest first. Series with fewer than min_rated_issues_per_series rated issues are excluded.",
             "items": {
               "$ref": "#/components/schemas/CreatorComparisonSeriesAggregate"
             },
-            "title": "Strongest Series",
             "type": "array"
           },
           "top_rating_rate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Proportion of ratings at the top of ComicPile's 1-5 scale (5★). ``null`` when no ratings.",
-            "title": "Top Rating Rate"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "unread_issue_refs": {
-            "description": "Bounded sample of the unread attributed issues behind ``unread_upcoming_count`` in stable display order. At most ``max_issue_refs_per_group`` entries; the count remains the full total.",
             "items": {
               "$ref": "#/components/schemas/CreatorComparisonIssueRef"
             },
-            "title": "Unread Issue Refs",
             "type": "array"
           },
           "unread_upcoming_count": {
-            "default": 0,
-            "description": "Number of unread owned issues attributed to this creator (``Issue.status == 'unread'``). This is unread attributed work already in the user's library, not queue position, roll eligibility, or upcoming scheduling.",
-            "minimum": 0.0,
-            "title": "Unread Upcoming Count",
+            "format": "int64",
             "type": "integer"
           }
         },
         "required": [
           "canonical_creator_key",
-          "display_name"
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "rating_distribution",
+          "role_stats",
+          "strongest_series",
+          "min_rated_issues_per_series",
+          "unread_upcoming_count",
+          "read_unrated_count",
+          "unread_issue_refs",
+          "read_unrated_issue_refs",
+          "max_issue_refs_per_group",
+          "insufficient_data"
         ],
-        "title": "CreatorComparisonItem",
         "type": "object"
       },
       "CreatorComparisonResponse": {
-        "description": "Response body for the batch creator comparison API.",
         "properties": {
           "comparisons": {
             "additionalProperties": {
               "$ref": "#/components/schemas/CreatorComparisonItem"
             },
-            "description": "Mapping from canonical creator key to comparison data for every requested key visible in the authenticated user's library.",
-            "title": "Comparisons",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "coverage": {
-            "$ref": "#/components/schemas/CreatorComparisonCoverage",
-            "description": "Coverage state distinguishing complete from lower-bound statistics."
+            "$ref": "#/components/schemas/CreatorComparisonCoverage"
           },
           "insufficient_data_keys": {
-            "description": "Canonical keys of creators with insufficient data (fewer than 5 rated issues).",
             "items": {
               "type": "string"
             },
-            "title": "Insufficient Data Keys",
             "type": "array"
           }
         },
         "required": [
           "comparisons",
-          "coverage"
+          "coverage",
+          "insufficient_data_keys"
         ],
-        "title": "CreatorComparisonResponse",
         "type": "object"
       },
       "CreatorComparisonRoleStat": {
-        "description": "Role-specific statistics for a creator in comparison.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average rating for issues where the creator held this specific role.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "issue_count": {
-            "description": "Number of issues the creator held this role on.",
-            "minimum": 0.0,
-            "title": "Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issue_count": {
-            "description": "Number of rated issues backing the average_rating for this role.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "role": {
-            "description": "The normalized role name.",
-            "title": "Role",
             "type": "string"
           }
         },
@@ -5936,37 +5858,27 @@
           "issue_count",
           "rated_issue_count"
         ],
-        "title": "CreatorComparisonRoleStat",
         "type": "object"
       },
       "CreatorComparisonSeriesAggregate": {
-        "description": "Strongest series/thread aggregate for a creator.",
         "properties": {
           "average_rating": {
-            "description": "Average rating for this creator's rated issues in this series. Always present because only series meeting the minimum rated sample are returned.",
-            "title": "Average Rating",
+            "format": "double",
             "type": "number"
           },
           "issue_count": {
-            "description": "Number of issues by this creator in this series.",
-            "minimum": 0.0,
-            "title": "Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issue_count": {
-            "description": "Number of rated issues backing average_rating. Series below the minimum rated sample are excluded from strongest_series entirely.",
-            "minimum": 5.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "thread_id": {
-            "description": "Local ComicPile thread ID.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Title of the series/thread.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -5977,148 +5889,115 @@
           "rated_issue_count",
           "average_rating"
         ],
-        "title": "CreatorComparisonSeriesAggregate",
         "type": "object"
       },
       "CreatorDetailResponse": {
-        "description": "Full detail response for a single creator identity.",
         "properties": {
           "coverage": {
-            "$ref": "#/components/schemas/CreatorSummaryCoverage",
-            "description": "Metadata coverage state (from #2028)."
+            "$ref": "#/components/schemas/CreatorSummaryCoverage"
           },
           "headline_roles": {
-            "description": "The explicit role set that makes an issue headline-eligible. A credited role outside this set is visible in role stats and series groups but never in the headline Rated list.",
             "items": {
               "type": "string"
             },
-            "title": "Headline Roles",
             "type": "array"
           },
           "insights": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/CreatorInsights"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092). ``null`` when the creator has no headline-eligible ratings."
+            ]
           },
           "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Cursor for paginating long collections.",
-            "title": "Next Cursor"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rated_issues": {
-            "description": "Bounded list of headline-eligible rated issues, recent-first.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueRow"
             },
-            "title": "Rated Issues",
             "type": "array"
           },
           "rated_population_scope": {
-            "const": "headline_roles_only",
-            "default": "headline_roles_only",
-            "description": "Population used by the headline summary and the Rated list. Only issues where the creator held a headline role count, matching the Rated heading and rating distribution denominator.",
-            "title": "Rated Population Scope",
             "type": "string"
           },
           "rating_distribution": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/CreatorRatingDistribution"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "Headline-eligible rating distribution (half-star buckets, median, range, mean, sample count). ``null`` when the creator has no eligible ratings."
+            ]
           },
           "read_unrated_issues": {
-            "description": "Bounded list of read-but-unrated issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueRow"
             },
-            "title": "Read Unrated Issues",
             "type": "array"
           },
           "role_stats": {
-            "description": "Breakdown of statistics per role.",
             "items": {
               "$ref": "#/components/schemas/CreatorRoleStat"
             },
-            "title": "Role Stats",
             "type": "array"
           },
           "series_groups": {
-            "description": "Bounded page of series/run-level aggregates, most-rated first.",
             "items": {
               "$ref": "#/components/schemas/CreatorSeriesGroup"
             },
-            "title": "Series Groups",
             "type": "array"
           },
           "series_groups_complete": {
-            "default": true,
-            "description": "False when this page does not contain every series/run group, so the listed groups are a lower bound until further pages are loaded.",
-            "title": "Series Groups Complete",
             "type": "boolean"
           },
           "series_groups_total": {
-            "default": 0,
-            "description": "Total series/run groups with attributed rated work for this creator.",
-            "minimum": 0.0,
-            "title": "Series Groups Total",
+            "format": "int64",
             "type": "integer"
           },
           "summary": {
-            "$ref": "#/components/schemas/CreatorSummaryItem",
-            "description": "The headline summary for the creator (from #2028)."
+            "$ref": "#/components/schemas/CreatorSummaryItem"
           },
           "upcoming_issues": {
-            "description": "Bounded list of upcoming unread issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueRow"
             },
-            "title": "Upcoming Issues",
             "type": "array"
           }
         },
         "required": [
           "summary",
-          "coverage"
+          "coverage",
+          "role_stats",
+          "series_groups",
+          "series_groups_total",
+          "series_groups_complete",
+          "rated_issues",
+          "rated_population_scope",
+          "headline_roles",
+          "read_unrated_issues",
+          "upcoming_issues"
         ],
-        "title": "CreatorDetailResponse",
         "type": "object"
       },
       "CreatorDiscoveryCoverage": {
-        "description": "Explicit metadata-coverage state for the discovery aggregation.",
         "properties": {
           "rated_issues_total": {
-            "description": "Rated issues in the library.",
-            "minimum": 0.0,
-            "title": "Rated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
-            "description": "Rated issues carrying at least one usable confirmed credit.",
-            "minimum": 0.0,
-            "title": "Rated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "ratings_complete": {
-            "description": "True only when every rated issue carries confirmed creator metadata.",
-            "title": "Ratings Complete",
             "type": "boolean"
           }
         },
@@ -6127,253 +6006,155 @@
           "rated_issues_with_creator_metadata",
           "ratings_complete"
         ],
-        "title": "CreatorDiscoveryCoverage",
         "type": "object"
       },
       "CreatorDiscoveryEntry": {
-        "description": "One canonical creator inside a discovery view with supporting metrics.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Personal average across the rated sample.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "canonical_creator_key": {
-            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
-            "title": "Canonical Creator Key",
             "type": "string"
           },
           "display_name": {
-            "description": "Human-readable creator name from confirmed issue metadata.",
-            "title": "Display Name",
             "type": "string"
           },
           "earlier_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average of the earlier half of a trend-eligible history.",
-            "title": "Earlier Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "max_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Highest effective rating.",
-            "title": "Max Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "median_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Personal median across the rated sample.",
-            "title": "Median Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "min_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Lowest effective rating.",
-            "title": "Min Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "normalized_roles": {
-            "description": "Distinct confirmed roles seen for this creator.",
             "items": {
               "type": "string"
             },
-            "title": "Normalized Roles",
             "type": "array"
           },
           "rated_issue_count": {
-            "description": "Headline-eligible rated issues contributing to the metrics.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "rating_spread": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Highest minus lowest effective rating, or null when unrated.",
-            "title": "Rating Spread"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "rating_stddev": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Population standard deviation across the rated sample, or null when unrated.",
-            "title": "Rating Stddev"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "read_unrated_issue_count": {
-            "default": 0,
-            "description": "Attributed read-but-unrated owned issues.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "reasons": {
-            "description": "Every deterministic rule that qualified this creator for this view.",
             "items": {
               "$ref": "#/components/schemas/CreatorDiscoveryReason"
             },
-            "title": "Reasons",
             "type": "array"
           },
           "recent_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average of the recent half of a trend-eligible history.",
-            "title": "Recent Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "top_rating_count": {
-            "default": 0,
-            "description": "Count of ratings at the top of the scale.",
-            "minimum": 0.0,
-            "title": "Top Rating Count",
+            "format": "int64",
             "type": "integer"
           },
           "top_rating_rate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Proportion of ratings at the top of the scale (0.0-1.0).",
-            "title": "Top Rating Rate"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "trend_delta": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Recent average minus earlier average for the trend view.",
-            "title": "Trend Delta"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "trend_direction": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "``warmed`` or ``cooled`` for the trend view, otherwise null.",
-            "title": "Trend Direction"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "trend_sample_count": {
-            "default": 0,
-            "description": "Rated issues carrying a timestamp that supported a trend, else 0.",
-            "minimum": 0.0,
-            "title": "Trend Sample Count",
+            "format": "int64",
             "type": "integer"
           },
           "unread_issue_count": {
-            "default": 0,
-            "description": "Attributed unread owned issues for this creator.",
-            "minimum": 0.0,
-            "title": "Unread Issue Count",
+            "format": "int64",
             "type": "integer"
           }
         },
         "required": [
           "canonical_creator_key",
           "display_name",
-          "rated_issue_count"
+          "normalized_roles",
+          "rated_issue_count",
+          "top_rating_count",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "trend_sample_count",
+          "reasons"
         ],
-        "title": "CreatorDiscoveryEntry",
         "type": "object"
       },
-      "CreatorDiscoveryMode": {
-        "description": "The fixed, deterministic set of personal taste-discovery views.\n\nOrdering in this enum is the canonical display order of the views.",
-        "enum": [
-          "consistently_loved",
-          "polarizing",
-          "most_read",
-          "highest_top_rating_rate",
-          "great_average_small_sample",
-          "loved_with_unread",
-          "moved_over_time"
-        ],
-        "title": "CreatorDiscoveryMode",
-        "type": "string"
-      },
       "CreatorDiscoveryReason": {
-        "description": "One deterministic rule that qualified a creator for a view.\n\n``value`` is the observed metric and ``threshold`` is the fixed rule the\nmetric had to satisfy. ``comparison`` is one of ``gte``, ``lte``, ``gt``,\n``lt`` so the UI can render the relationship without parsing prose.",
         "properties": {
           "comparison": {
-            "description": "One of gte, lte, gt, lt.",
-            "title": "Comparison",
             "type": "string"
           },
           "label": {
-            "description": "Human-readable metric name for UI copy.",
-            "title": "Label",
             "type": "string"
           },
           "metric": {
-            "description": "Machine key of the qualifying metric.",
-            "title": "Metric",
             "type": "string"
           },
           "threshold": {
-            "description": "Threshold the value had to satisfy.",
-            "title": "Threshold",
+            "format": "double",
             "type": "number"
           },
           "value": {
-            "description": "Observed value of the metric.",
-            "title": "Value",
+            "format": "double",
             "type": "number"
           }
         },
@@ -6384,90 +6165,66 @@
           "threshold",
           "comparison"
         ],
-        "title": "CreatorDiscoveryReason",
         "type": "object"
       },
       "CreatorDiscoveryResponse": {
-        "description": "Response body for the bounded personal taste-discovery endpoint.",
         "properties": {
           "coverage": {
-            "$ref": "#/components/schemas/CreatorDiscoveryCoverage",
-            "description": "Metadata-coverage state distinguishing complete from lower bounds."
+            "$ref": "#/components/schemas/CreatorDiscoveryCoverage"
           },
           "max_entries_per_view": {
-            "description": "Bounding constant applied per view.",
-            "minimum": 1.0,
-            "title": "Max Entries Per View",
+            "format": "int64",
             "type": "integer"
           },
           "minimum_reliable_sample": {
-            "description": "The canonical personal-reliability rated-sample floor.",
-            "minimum": 1.0,
-            "title": "Minimum Reliable Sample",
+            "format": "int64",
             "type": "integer"
           },
           "views": {
-            "description": "One entry per view in canonical order, including empty views.",
             "items": {
               "$ref": "#/components/schemas/CreatorDiscoveryView"
             },
-            "title": "Views",
             "type": "array"
           }
         },
         "required": [
+          "views",
           "coverage",
           "minimum_reliable_sample",
           "max_entries_per_view"
         ],
-        "title": "CreatorDiscoveryResponse",
         "type": "object"
       },
       "CreatorDiscoveryView": {
-        "description": "One bounded taste-discovery view and its qualifying creators.",
         "properties": {
           "description": {
-            "description": "Deterministic explanation of what qualifies a creator.",
-            "title": "Description",
             "type": "string"
           },
           "entries": {
             "items": {
               "$ref": "#/components/schemas/CreatorDiscoveryEntry"
             },
-            "title": "Entries",
             "type": "array"
           },
           "max_entries": {
-            "description": "Bounding constant applied to entries.",
-            "minimum": 1.0,
-            "title": "Max Entries",
+            "format": "int64",
             "type": "integer"
           },
           "min_sample": {
-            "description": "Minimum rated sample the view requires (0 = no floor).",
-            "minimum": 0.0,
-            "title": "Min Sample",
+            "format": "int64",
             "type": "integer"
           },
           "mode": {
-            "$ref": "#/components/schemas/CreatorDiscoveryMode",
-            "description": "Stable view identifier."
+            "type": "string"
           },
           "title": {
-            "description": "Short human-readable view title.",
-            "title": "Title",
             "type": "string"
           },
           "total": {
-            "description": "Qualifying creators before bounded truncation.",
-            "minimum": 0.0,
-            "title": "Total",
+            "format": "int64",
             "type": "integer"
           },
           "truncated": {
-            "description": "True when more creators qualified than the bounded response returns.",
-            "title": "Truncated",
             "type": "boolean"
           }
         },
@@ -6478,153 +6235,118 @@
           "min_sample",
           "total",
           "truncated",
-          "max_entries"
+          "max_entries",
+          "entries"
         ],
-        "title": "CreatorDiscoveryView",
         "type": "object"
       },
       "CreatorInsights": {
-        "description": "Evidence-backed strongest/weakest/most-read highlights (issue #3092).\n\nEvery highlight links back to its supporting series or issues so a reader\nnever has to trust an unexplained summary. Series conclusions require a\nminimum rated-issue sample and complete creator metadata; individual issue\nextremes are labeled separately from the aggregate series conclusions.\n\nThe explanation for a missing series comparison names the real reason\n(issue #3946), and an individual issue never appears in both the highest\nand the lowest list.",
         "properties": {
           "excluded_incomplete_series_count": {
-            "default": 0,
-            "description": "Series with attributed rated work excluded because their creator metadata is incomplete; a partial series is never presented as exhaustive evidence.",
-            "minimum": 0.0,
-            "title": "Excluded Incomplete Series Count",
+            "format": "int64",
             "type": "integer"
           },
           "highest_rated_issues": {
-            "description": "Top individual rated issues, distinct from aggregate series conclusions. Never overlaps with lowest_rated_issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueInsight"
             },
-            "title": "Highest Rated Issues",
             "type": "array"
           },
           "individual_issue_limit": {
-            "description": "Maximum number of individual issue extremes listed per direction.",
-            "minimum": 0.0,
-            "title": "Individual Issue Limit",
+            "format": "int64",
             "type": "integer"
           },
           "individual_issues_combined": {
-            "default": false,
-            "description": "True when the rated set is too small to separate into distinct highest and lowest lists. The UI then shows every rated issue once in a single list instead of repeating the same issues as both the best and the worst work.",
-            "title": "Individual Issues Combined",
             "type": "boolean"
           },
           "lowest_rated_issues": {
-            "description": "Bottom individual rated issues, distinct from aggregate series conclusions. Never overlaps with highest_rated_issues.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueInsight"
             },
-            "title": "Lowest Rated Issues",
             "type": "array"
           },
           "min_series_sample": {
-            "description": "Rated issues a series needs before it can be ranked as best/worst.",
-            "minimum": 1.0,
-            "title": "Min Series Sample",
+            "format": "int64",
             "type": "integer"
           },
           "most_rated_series": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/CreatorSeriesInsight"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "Qualifying series with the most rated issues, or null when none qualify."
+            ]
           },
           "series_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Plain-language explanation when no series comparison is available. It names the real reason: incomplete creator metadata, credits that do not count toward the average, or a genuinely thin rated-issue sample.",
-            "title": "Series Message"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "series_sample_met": {
-            "description": "True when at least one series meets the minimum rated-issue sample.",
-            "title": "Series Sample Met",
             "type": "boolean"
           },
           "strongest_series": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/CreatorSeriesInsight"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "Highest-average qualifying series, or null when the sample is too thin."
+            ]
           },
           "weakest_series": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/CreatorSeriesInsight"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "Lowest-average qualifying series, or null when the sample is too thin."
+            ]
           }
         },
         "required": [
           "min_series_sample",
           "series_sample_met",
-          "individual_issue_limit"
+          "excluded_incomplete_series_count",
+          "individual_issue_limit",
+          "individual_issues_combined",
+          "highest_rated_issues",
+          "lowest_rated_issues"
         ],
-        "title": "CreatorInsights",
         "type": "object"
       },
       "CreatorIssueInsight": {
-        "description": "One individual issue extreme backing a creator highlight (issue #3092).\n\nIndividual issue extremes are deliberately modeled separately from the\naggregate series conclusions so a one-off rating is never presented as a\ncreator's overall \"best work\".",
         "properties": {
           "effective_rating": {
-            "description": "Latest effective rating for this issue, one per issue.",
-            "title": "Effective Rating",
+            "format": "double",
             "type": "number"
           },
           "issue_id": {
-            "description": "Local ComicPile issue ID.",
-            "title": "Issue Id",
+            "format": "int64",
             "type": "integer"
           },
           "issue_number": {
-            "description": "Issue number of the comic.",
-            "title": "Issue Number",
             "type": "string"
           },
           "roles": {
-            "description": "Sorted distinct roles the creator held on this issue.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           },
           "sort_key": {
-            "description": "Stable deterministic key for this issue extreme.",
-            "title": "Sort Key",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local thread the issue belongs to.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Title of the containing thread.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -6637,73 +6359,47 @@
           "roles",
           "sort_key"
         ],
-        "title": "CreatorIssueInsight",
         "type": "object"
       },
       "CreatorIssueRow": {
-        "description": "Detail for a specific issue attributed to the creator.",
         "properties": {
           "effective_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The latest effective rating for this issue, if any.",
-            "title": "Effective Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "issue_id": {
-            "description": "Local ComicPile issue ID.",
-            "title": "Issue Id",
+            "format": "int64",
             "type": "integer"
           },
           "issue_number": {
-            "description": "Issue number of the comic.",
-            "title": "Issue Number",
             "type": "string"
           },
           "rating_timestamp": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Timestamp of the effective rating event, if any.",
-            "title": "Rating Timestamp"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "roles": {
-            "description": "Roles the creator held on this specific issue.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           },
           "sort_key": {
-            "description": "Deterministic local ordering information for the UI.",
-            "title": "Sort Key",
             "type": "string"
           },
           "status": {
-            "description": "Read/unread status.",
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local ComicPile thread ID.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Title of the containing thread.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -6716,7 +6412,6 @@
           "roles",
           "sort_key"
         ],
-        "title": "CreatorIssueRow",
         "type": "object"
       },
       "CreatorListItem": {
@@ -6756,7 +6451,7 @@
       "CreatorListResponse": {
         "properties": {
           "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorSummaryCoverage"
+            "$ref": "#/components/schemas/CreatorSummaryCoverage"
           },
           "items": {
             "items": {
@@ -6787,105 +6482,141 @@
         "type": "object"
       },
       "CreatorMetricCalculation": {
-        "description": "Human-readable calculation explaining how a metric was derived.",
         "properties": {
           "denominator": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Description of the denominator/lower value when applicable.",
-            "title": "Denominator"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "formula": {
-            "description": "Human-readable formula showing the calculation.",
-            "title": "Formula",
             "type": "string"
           },
           "numerator": {
-            "description": "Description of the numerator/upper value.",
-            "title": "Numerator",
             "type": "string"
           },
           "percentage": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Formatted percentage when applicable.",
-            "title": "Percentage"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "formula",
           "numerator"
         ],
-        "title": "CreatorMetricCalculation",
         "type": "object"
       },
       "CreatorMetricDrilldown": {
-        "description": "Response for a creator metric drilldown.",
         "properties": {
+          "bucket_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "bucket_percentage": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "calculation": {
-            "$ref": "#/components/schemas/CreatorMetricCalculation",
-            "description": "Human-readable calculation."
+            "$ref": "#/components/schemas/CreatorMetricCalculation"
           },
           "creator_key": {
-            "description": "Canonical creator key.",
-            "title": "Creator Key",
             "type": "string"
           },
           "excluded_issues": {
-            "description": "Issues excluded from the calculation with reasons.",
             "items": {
               "$ref": "#/components/schemas/CreatorMetricIssue"
             },
-            "title": "Excluded Issues",
             "type": "array"
           },
           "included_issues": {
-            "description": "Issues included in the calculation.",
             "items": {
               "$ref": "#/components/schemas/CreatorMetricIssue"
             },
-            "title": "Included Issues",
             "type": "array"
           },
           "metric_type": {
-            "description": "Type of metric being drilled down.",
-            "title": "Metric Type",
             "type": "string"
           },
           "pagination": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "description": "Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
-            "title": "Pagination",
-            "type": "object"
+            "$ref": "#/components/schemas/CreatorMetricPagination"
+          },
+          "rating_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "role_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "role_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "series_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "total_count": {
-            "description": "Total number of issues in the calculation.",
-            "minimum": 0.0,
-            "title": "Total Count",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -6893,105 +6624,67 @@
           "metric_type",
           "creator_key",
           "calculation",
-          "total_count"
+          "total_count",
+          "included_issues",
+          "excluded_issues",
+          "pagination"
         ],
-        "title": "CreatorMetricDrilldown",
         "type": "object"
       },
       "CreatorMetricIssue": {
-        "description": "Single issue with context for a metric drilldown.",
         "properties": {
           "creator_roles": {
-            "description": "Roles this creator held on this issue.",
             "items": {
               "type": "string"
             },
-            "title": "Creator Roles",
             "type": "array"
           },
           "effective_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Effective rating for this issue when applicable.",
-            "title": "Effective Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "effective_rating_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Source of the effective rating (e.g., 'historical', 'manual', 'inferred').",
-            "title": "Effective Rating Source"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "effective_rating_timestamp": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ISO 8601 timestamp when the effective rating was established.",
-            "title": "Effective Rating Timestamp"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "exclusion_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Why this issue is excluded from the calculation (if applicable).",
-            "title": "Exclusion Reason"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "issue_id": {
-            "description": "Local ComicPile issue ID.",
-            "title": "Issue Id",
+            "format": "int64",
             "type": "integer"
           },
           "issue_number": {
-            "description": "Display issue number within its thread.",
-            "title": "Issue Number",
             "type": "string"
           },
           "missing_rating_cause": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Machine-readable cause for a read issue with no effective rating (issue #3175 classification, e.g. 'no_source_rating', 'missing_rate_event', 'unresolved_mapping', 'edition_conflict', 'ambiguous_thread_rating'). None when the issue is rated, unread, or the cause has not been classified.",
-            "title": "Missing Rating Cause"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
-            "description": "Local issue status (``read`` or ``unread``).",
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local ComicPile thread ID owning the issue.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Title of the thread owning the issue.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -7000,9 +6693,9 @@
           "thread_id",
           "thread_title",
           "issue_number",
-          "status"
+          "status",
+          "creator_roles"
         ],
-        "title": "CreatorMetricIssue",
         "type": "object"
       },
       "CreatorMetricPagination": {
@@ -7035,17 +6728,13 @@
         "type": "object"
       },
       "CreatorRatingBucket": {
-        "description": "One half-star bucket in a creator's rating distribution.",
         "properties": {
           "count": {
-            "description": "Number of issues whose effective rating falls in this bucket.",
-            "minimum": 0.0,
-            "title": "Count",
+            "format": "int64",
             "type": "integer"
           },
           "rating": {
-            "description": "Bucket center on the product's real half-star scale (0.5–5.0).",
-            "title": "Rating",
+            "format": "double",
             "type": "number"
           }
         },
@@ -7053,44 +6742,34 @@
           "rating",
           "count"
         ],
-        "title": "CreatorRatingBucket",
         "type": "object"
       },
       "CreatorRatingDistribution": {
-        "description": "Distribution, median, range, mean, and sample strength for one creator.",
         "properties": {
           "buckets": {
-            "description": "Half-star buckets from 0.5 to 5.0, always a complete fixed shape with explicit zero counts.",
             "items": {
               "$ref": "#/components/schemas/CreatorRatingBucket"
             },
-            "title": "Buckets",
             "type": "array"
           },
           "max_rating": {
-            "description": "Maximum effective rating observed for this creator.",
-            "title": "Max Rating",
+            "format": "double",
             "type": "number"
           },
           "mean_rating": {
-            "description": "Mean of the latest effective ratings across contributing issues.",
-            "title": "Mean Rating",
+            "format": "double",
             "type": "number"
           },
           "median_rating": {
-            "description": "Median of the latest effective ratings across contributing issues.",
-            "title": "Median Rating",
+            "format": "double",
             "type": "number"
           },
           "min_rating": {
-            "description": "Minimum effective rating observed for this creator.",
-            "title": "Min Rating",
+            "format": "double",
             "type": "number"
           },
           "sample_count": {
-            "description": "Number of distinct rated issues contributing (at most one per issue).",
-            "minimum": 0.0,
-            "title": "Sample Count",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -7102,226 +6781,26 @@
           "min_rating",
           "max_rating"
         ],
-        "title": "CreatorRatingDistribution",
-        "type": "object"
-      },
-      "CreatorRatingDistributionDrilldown": {
-        "description": "Specialized drilldown for rating distribution buckets.",
-        "properties": {
-          "bucket_count": {
-            "description": "Number of issues in this rating bucket.",
-            "minimum": 0.0,
-            "title": "Bucket Count",
-            "type": "integer"
-          },
-          "bucket_percentage": {
-            "description": "Percentage of total rated issues.",
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Bucket Percentage",
-            "type": "number"
-          },
-          "calculation": {
-            "$ref": "#/components/schemas/CreatorMetricCalculation",
-            "description": "Human-readable calculation."
-          },
-          "creator_key": {
-            "description": "Canonical creator key.",
-            "title": "Creator Key",
-            "type": "string"
-          },
-          "excluded_issues": {
-            "description": "Issues excluded from the calculation with reasons.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Excluded Issues",
-            "type": "array"
-          },
-          "included_issues": {
-            "description": "Issues included in the calculation.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Included Issues",
-            "type": "array"
-          },
-          "metric_type": {
-            "description": "Type of metric being drilled down.",
-            "title": "Metric Type",
-            "type": "string"
-          },
-          "pagination": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "description": "Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
-            "title": "Pagination",
-            "type": "object"
-          },
-          "rating_value": {
-            "description": "The specific rating value (e.g., '5.0', '4.5').",
-            "title": "Rating Value",
-            "type": "string"
-          },
-          "total_count": {
-            "description": "Total number of issues in the calculation.",
-            "minimum": 0.0,
-            "title": "Total Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "metric_type",
-          "creator_key",
-          "calculation",
-          "total_count",
-          "rating_value",
-          "bucket_count",
-          "bucket_percentage"
-        ],
-        "title": "CreatorRatingDistributionDrilldown",
-        "type": "object"
-      },
-      "CreatorRoleDrilldown": {
-        "description": "Specialized drilldown for role statistics.",
-        "properties": {
-          "calculation": {
-            "$ref": "#/components/schemas/CreatorMetricCalculation",
-            "description": "Human-readable calculation."
-          },
-          "creator_key": {
-            "description": "Canonical creator key.",
-            "title": "Creator Key",
-            "type": "string"
-          },
-          "excluded_issues": {
-            "description": "Issues excluded from the calculation with reasons.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Excluded Issues",
-            "type": "array"
-          },
-          "included_issues": {
-            "description": "Issues included in the calculation.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Included Issues",
-            "type": "array"
-          },
-          "metric_type": {
-            "description": "Type of metric being drilled down.",
-            "title": "Metric Type",
-            "type": "string"
-          },
-          "pagination": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "description": "Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
-            "title": "Pagination",
-            "type": "object"
-          },
-          "role": {
-            "description": "The specific role being drilled down.",
-            "title": "Role",
-            "type": "string"
-          },
-          "role_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average rating for this role.",
-            "title": "Role Average Rating"
-          },
-          "role_issue_count": {
-            "description": "Total issues with this role.",
-            "minimum": 0.0,
-            "title": "Role Issue Count",
-            "type": "integer"
-          },
-          "role_rated_issue_count": {
-            "description": "Rated issues with this role.",
-            "minimum": 0.0,
-            "title": "Role Rated Issue Count",
-            "type": "integer"
-          },
-          "total_count": {
-            "description": "Total number of issues in the calculation.",
-            "minimum": 0.0,
-            "title": "Total Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "metric_type",
-          "creator_key",
-          "calculation",
-          "total_count",
-          "role",
-          "role_issue_count",
-          "role_rated_issue_count"
-        ],
-        "title": "CreatorRoleDrilldown",
         "type": "object"
       },
       "CreatorRoleStat": {
-        "description": "Statistics for a specific role for a creator.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average rating for issues where the creator held this specific role (computed over rated_issue_count issues).",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "issue_count": {
-            "description": "Number of distinct issues the creator held this role on (includes rated, unrated, and upcoming).",
-            "minimum": 0.0,
-            "title": "Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issue_count": {
-            "description": "Number of those issues that have an effective rating and contributed to average_rating.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "role": {
-            "description": "The normalized role name.",
-            "title": "Role",
             "type": "string"
           }
         },
@@ -7330,209 +6809,66 @@
           "issue_count",
           "rated_issue_count"
         ],
-        "title": "CreatorRoleStat",
-        "type": "object"
-      },
-      "CreatorSeriesDrilldown": {
-        "description": "Specialized drilldown for series statistics.",
-        "properties": {
-          "calculation": {
-            "$ref": "#/components/schemas/CreatorMetricCalculation",
-            "description": "Human-readable calculation."
-          },
-          "creator_key": {
-            "description": "Canonical creator key.",
-            "title": "Creator Key",
-            "type": "string"
-          },
-          "excluded_issues": {
-            "description": "Issues excluded from the calculation with reasons.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Excluded Issues",
-            "type": "array"
-          },
-          "included_issues": {
-            "description": "Issues included in the calculation.",
-            "items": {
-              "$ref": "#/components/schemas/CreatorMetricIssue"
-            },
-            "title": "Included Issues",
-            "type": "array"
-          },
-          "metric_type": {
-            "description": "Type of metric being drilled down.",
-            "title": "Metric Type",
-            "type": "string"
-          },
-          "pagination": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "description": "Pagination info (``page``, ``page_size``, ``next_page_token``, ``total_pages``).",
-            "title": "Pagination",
-            "type": "object"
-          },
-          "series_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average rating for this series.",
-            "title": "Series Average Rating"
-          },
-          "series_id": {
-            "description": "Local thread ID for the series.",
-            "title": "Series Id",
-            "type": "integer"
-          },
-          "series_issue_count": {
-            "description": "Total issues in this series.",
-            "minimum": 0.0,
-            "title": "Series Issue Count",
-            "type": "integer"
-          },
-          "series_rated_issue_count": {
-            "description": "Rated issues in this series.",
-            "minimum": 0.0,
-            "title": "Series Rated Issue Count",
-            "type": "integer"
-          },
-          "series_title": {
-            "description": "Title of the series.",
-            "title": "Series Title",
-            "type": "string"
-          },
-          "total_count": {
-            "description": "Total number of issues in the calculation.",
-            "minimum": 0.0,
-            "title": "Total Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "metric_type",
-          "creator_key",
-          "calculation",
-          "total_count",
-          "series_id",
-          "series_title",
-          "series_issue_count",
-          "series_rated_issue_count"
-        ],
-        "title": "CreatorSeriesDrilldown",
         "type": "object"
       },
       "CreatorSeriesGroup": {
-        "description": "Series/run-level aggregate of one creator's attributed rated work.\n\nGrouping identity is the stable local ComicPile thread id, never the\ndisplay title: two distinct threads that happen to share a title stay in\nseparate groups. Every aggregate is computed over the creator's complete\nattributed work for that thread, so the same group key always carries the\nsame numbers regardless of which page of issue rows was requested.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Personal average over this group's rated issues, or null when none are rated.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "highest_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Highest effective rating in this group, or null when none are rated.",
-            "title": "Highest Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "lowest_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Lowest effective rating in this group, or null when none are rated.",
-            "title": "Lowest Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "metadata_complete": {
-            "description": "False when some issues in this thread still lack confirmed creator metadata, making this group's counts lower bounds.",
-            "title": "Metadata Complete",
             "type": "boolean"
           },
           "population_scope": {
-            "const": "all_verified_credits",
-            "default": "all_verified_credits",
-            "description": "Population used for this aggregate. Series groups cover every verified creator credit in the thread, not only headline roles, so their counts/averages may differ from the headline-only Rated list.",
-            "title": "Population Scope",
             "type": "string"
           },
           "rated_issue_count": {
-            "description": "Attributed issues in this thread with an effective rating. Equals the number of rows the drill-down can return for this group.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_issue_count": {
-            "description": "Attributed issues in this thread that were read but never rated.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "roles": {
-            "description": "Sorted distinct roles the creator held in this thread.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           },
           "series_key": {
-            "description": "Stable series identity key (``thread:<thread_id>``).",
-            "title": "Series Key",
             "type": "string"
           },
           "sort_key": {
-            "description": "Stable final tie-breaker for the deterministic group ordering (most-rated first, then title, then this key).",
-            "title": "Sort Key",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local ComicPile thread (series/run) id used as the group identity.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Current local thread title. Display only; never a grouping identity.",
-            "title": "Thread Title",
             "type": "string"
           },
           "unread_issue_count": {
-            "description": "Attributed unread issues of this creator still in this thread. Includes an unread issue that is also already rated, matching the existing upcoming semantics.",
-            "minimum": 0.0,
-            "title": "Unread Issue Count",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -7545,66 +6881,49 @@
           "unread_issue_count",
           "read_unrated_issue_count",
           "metadata_complete",
-          "sort_key"
+          "sort_key",
+          "population_scope"
         ],
-        "title": "CreatorSeriesGroup",
         "type": "object"
       },
       "CreatorSeriesInsight": {
-        "description": "One series/run extreme backed by a minimum rated-issue sample (#3092).\n\nA series only qualifies as strongest/weakest/most-rated when it has at\nleast :attr:`CreatorInsights.min_series_sample` rated issues and complete\ncreator metadata, so a single 5★ issue cannot outrank a long loved run.",
         "properties": {
           "average_rating": {
-            "description": "Personal average over the series' rated issues.",
-            "title": "Average Rating",
+            "format": "double",
             "type": "number"
           },
           "highest_rating": {
-            "description": "Highest effective rating in the series.",
-            "title": "Highest Rating",
+            "format": "double",
             "type": "number"
           },
           "lowest_rating": {
-            "description": "Lowest effective rating in the series.",
-            "title": "Lowest Rating",
+            "format": "double",
             "type": "number"
           },
           "metadata_complete": {
-            "description": "Always true for a qualifying insight; incomplete series are excluded.",
-            "title": "Metadata Complete",
             "type": "boolean"
           },
           "rated_issue_count": {
-            "description": "Rated attributed issues backing this series insight.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "roles": {
-            "description": "Sorted distinct roles the creator held in this series.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           },
           "series_key": {
-            "description": "Stable series identity key (``thread:<thread_id>``).",
-            "title": "Series Key",
             "type": "string"
           },
           "sort_key": {
-            "description": "Stable deterministic key for this series extreme.",
-            "title": "Sort Key",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local thread (series/run) id.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Current local thread title.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -7620,125 +6939,79 @@
           "metadata_complete",
           "sort_key"
         ],
-        "title": "CreatorSeriesInsight",
         "type": "object"
       },
       "CreatorSeriesIssueListResponse": {
-        "description": "Bounded drill-down of the issues supporting one creator series group.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Personal average over the group's rated issues.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "highest_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Highest effective rating in the group, or null when none are rated.",
-            "title": "Highest Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "issues": {
-            "description": "Bounded page of supporting rated issues, recent-first.",
             "items": {
               "$ref": "#/components/schemas/CreatorIssueRow"
             },
-            "title": "Issues",
             "type": "array"
           },
           "limit": {
-            "description": "Echoed page size.",
-            "minimum": 1.0,
-            "title": "Limit",
+            "format": "int64",
             "type": "integer"
           },
           "lowest_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Lowest effective rating in the group, or null when none are rated.",
-            "title": "Lowest Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "metadata_complete": {
-            "description": "False when some issues in this thread still lack confirmed creator metadata, making this group's counts lower bounds.",
-            "title": "Metadata Complete",
             "type": "boolean"
           },
           "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Cursor for paginating a long drill-down, null when exhausted.",
-            "title": "Next Cursor"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "offset": {
-            "description": "Echoed page offset.",
-            "minimum": 0.0,
-            "title": "Offset",
+            "format": "int64",
             "type": "integer"
           },
           "population_scope": {
-            "const": "all_verified_credits",
-            "default": "all_verified_credits",
-            "description": "Population backing this drill-down. Rows include every verified creator credit in the thread, matching the parent series group exactly.",
-            "title": "Population Scope",
             "type": "string"
           },
           "rated_issue_count": {
-            "description": "Total attributed rated issues backing this group.",
-            "minimum": 0.0,
-            "title": "Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "roles": {
-            "description": "Sorted distinct roles the creator held in this thread.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           },
           "series_key": {
-            "description": "Stable series identity key echoed back.",
-            "title": "Series Key",
             "type": "string"
           },
           "thread_id": {
-            "description": "Local ComicPile thread id.",
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Current local thread title.",
-            "title": "Thread Title",
             "type": "string"
           },
           "total": {
-            "description": "Total supporting rated issues in the group.",
-            "minimum": 0.0,
-            "title": "Total",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -7749,21 +7022,22 @@
           "roles",
           "rated_issue_count",
           "metadata_complete",
+          "population_scope",
+          "issues",
           "total",
           "limit",
           "offset"
         ],
-        "title": "CreatorSeriesIssueListResponse",
         "type": "object"
       },
       "CreatorSummariesResponse": {
         "properties": {
           "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorSummaryCoverage"
+            "$ref": "#/components/schemas/CreatorSummaryCoverage"
           },
           "summaries": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/NativeCreatorSummaryItem"
+              "$ref": "#/components/schemas/CreatorSummaryItem"
             },
             "propertyNames": {
               "type": "string"
@@ -7778,200 +7052,142 @@
         "type": "object"
       },
       "CreatorSummaryCoverage": {
-        "description": "Coverage state distinguishing complete from lower-bound statistics.\n\n``*_complete`` is true only when every owned issue in that category carries\nconfirmed usable creator metadata. Missing/unconfirmed metadata never\ncounts as negative attribution evidence; it only makes the matching result\nexplicitly partial.",
         "properties": {
           "rated_issues_total": {
-            "default": 0,
-            "description": "Total owned issues with an effective rating.",
-            "minimum": 0.0,
-            "title": "Rated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Rated owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Rated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "ratings_complete": {
-            "default": true,
-            "description": "True only when every owned rated issue has confirmed usable creator metadata.",
-            "title": "Ratings Complete",
             "type": "boolean"
           },
           "read_unrated_complete": {
-            "default": true,
-            "description": "True only when every owned read-but-unrated issue has confirmed usable creator metadata.",
-            "title": "Read Unrated Complete",
             "type": "boolean"
           },
           "read_unrated_issues_total": {
-            "default": 0,
-            "description": "Total owned read-but-unrated issues.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Read-but-unrated owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Read Unrated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "unread_issues_total": {
-            "default": 0,
-            "description": "Total owned unread issues.",
-            "minimum": 0.0,
-            "title": "Unread Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "unread_issues_with_creator_metadata": {
-            "default": 0,
-            "description": "Unread owned issues with confirmed usable creator metadata.",
-            "minimum": 0.0,
-            "title": "Unread Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "upcoming_complete": {
-            "default": true,
-            "description": "True only when every owned unread issue considered by the library has confirmed usable creator metadata.",
-            "title": "Upcoming Complete",
             "type": "boolean"
           }
         },
-        "title": "CreatorSummaryCoverage",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
         "type": "object"
       },
       "CreatorSummaryItem": {
-        "description": "Summary data for one creator identity in the batch response.\n\n``canonical_creator_key`` is the stable provider + external-ID key from the\n#2036 creator identity contract (``creator:<external-person-id>``). It is\nnever display-name based.",
         "properties": {
           "average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no ratings.",
-            "title": "Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "canonical_creator_key": {
-            "description": "Stable normalized creator key (e.g. ``creator:12345``).",
-            "title": "Canonical Creator Key",
             "type": "string"
           },
           "display_name": {
-            "description": "Human-readable creator name from confirmed issue metadata.",
-            "title": "Display Name",
             "type": "string"
           },
           "normalized_roles": {
-            "description": "Distinct roles seen for this creator across the user's issues.",
             "items": {
               "type": "string"
             },
-            "title": "Normalized Roles",
             "type": "array"
           },
           "ratings_count": {
-            "default": 0,
-            "description": "Number of distinct rated issues contributing to the headline average.",
-            "minimum": 0.0,
-            "title": "Ratings Count",
+            "format": "int64",
             "type": "integer"
           },
           "read_unrated_count": {
-            "default": 0,
-            "description": "Number of read-but-unrated owned issues attributed to this creator.",
-            "minimum": 0.0,
-            "title": "Read Unrated Count",
+            "format": "int64",
             "type": "integer"
           },
           "upcoming_count": {
-            "default": 0,
-            "description": "Number of unread owned issues already in the user's ComicPile attributed to this creator.",
-            "minimum": 0.0,
-            "title": "Upcoming Count",
+            "format": "int64",
             "type": "integer"
           }
         },
         "required": [
           "canonical_creator_key",
-          "display_name"
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "read_unrated_count",
+          "upcoming_count"
         ],
-        "title": "CreatorSummaryItem",
         "type": "object"
       },
       "CreatorTeamChemistryResponse": {
-        "description": "Response payload for the creator team-chemistry endpoint.",
         "properties": {
           "coverage": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CreatorTeamCoverage"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/CreatorTeamCoverage"
           },
           "max_ranked_pairs": {
-            "description": "Bounding constant applied to the returned pair list.",
-            "minimum": 1.0,
-            "title": "Max Ranked Pairs",
+            "format": "int64",
             "type": "integer"
           },
           "min_shared_team_sample": {
-            "default": 3,
-            "description": "Minimum shared sample required before a pair may rank.",
-            "minimum": 1.0,
-            "title": "Min Shared Team Sample",
+            "format": "int64",
             "type": "integer"
           },
           "pairs": {
-            "description": "Ranked recurring teams, strongest shared average first.",
             "items": {
               "$ref": "#/components/schemas/CreatorTeamPair"
             },
-            "title": "Pairs",
             "type": "array"
           },
           "pairs_total": {
-            "default": 0,
-            "description": "Pairs meeting the minimum shared sample before ranking truncation.",
-            "minimum": 0.0,
-            "title": "Pairs Total",
+            "format": "int64",
             "type": "integer"
           }
         },
         "required": [
-          "max_ranked_pairs"
+          "pairs",
+          "pairs_total",
+          "min_shared_team_sample",
+          "max_ranked_pairs",
+          "coverage"
         ],
-        "title": "CreatorTeamChemistryResponse",
         "type": "object"
       },
       "CreatorTeamCoverage": {
-        "description": "Explicit metadata-coverage state for the team-chemistry aggregation.",
         "properties": {
           "rated_issues_total": {
-            "description": "Rated issues in the library.",
-            "minimum": 0.0,
-            "title": "Rated Issues Total",
+            "format": "int64",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
-            "description": "Rated issues carrying at least one usable confirmed credit.",
-            "minimum": 0.0,
-            "title": "Rated Issues With Creator Metadata",
+            "format": "int64",
             "type": "integer"
           },
           "ratings_complete": {
-            "description": "True when every rated issue carries confirmed creator metadata; otherwise pair results are lower bounds.",
-            "title": "Ratings Complete",
             "type": "boolean"
           }
         },
@@ -7980,47 +7196,32 @@
           "rated_issues_with_creator_metadata",
           "ratings_complete"
         ],
-        "title": "CreatorTeamCoverage",
         "type": "object"
       },
       "CreatorTeamIssueRef": {
-        "description": "One bounded, navigable shared-issue drilldown reference.",
         "properties": {
           "effective_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Effective Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "issue_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Issue Id",
+            "format": "int64",
             "type": "integer"
           },
           "issue_number": {
-            "description": "Issue number within the thread.",
-            "title": "Issue Number",
             "type": "string"
           },
           "status": {
-            "description": "Owned issue status (read/unread).",
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "description": "Owning local thread/series id.",
-            "exclusiveMinimum": 0.0,
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Thread title, for display only.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -8031,58 +7232,38 @@
           "issue_number",
           "status"
         ],
-        "title": "CreatorTeamIssueRef",
         "type": "object"
       },
       "CreatorTeamMember": {
-        "description": "One canonical creator identity inside a ranked team pair.",
         "properties": {
           "baseline_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Creator's personal baseline average, or null when unrated.",
-            "title": "Baseline Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "baseline_rated_count": {
-            "description": "Creator's personal headline-eligible rated sample size.",
-            "minimum": 0.0,
-            "title": "Baseline Rated Count",
+            "format": "int64",
             "type": "integer"
           },
           "canonical_creator_key": {
-            "description": "Stable ``creator:<id>`` key.",
-            "title": "Canonical Creator Key",
             "type": "string"
           },
           "difference_from_baseline": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Shared-pair average minus this creator's baseline average. Descriptive context only.",
-            "title": "Difference From Baseline"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "display_name": {
-            "description": "Latest confirmed display name.",
-            "title": "Display Name",
             "type": "string"
           },
           "roles": {
-            "description": "Interior-storytelling roles on shared issues.",
             "items": {
               "type": "string"
             },
-            "title": "Roles",
             "type": "array"
           }
         },
@@ -8092,110 +7273,86 @@
           "roles",
           "baseline_rated_count"
         ],
-        "title": "CreatorTeamMember",
         "type": "object"
       },
       "CreatorTeamPair": {
-        "description": "One ranked recurring creator pair with explainable shared metrics.",
         "properties": {
           "creators": {
-            "description": "The two canonical creator identities of this team.",
             "items": {
               "$ref": "#/components/schemas/CreatorTeamMember"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "title": "Creators",
             "type": "array"
           },
           "max_shared_issue_refs": {
-            "default": 5,
-            "description": "Bounding constant applied to the returned issue sample.",
-            "minimum": 1.0,
-            "title": "Max Shared Issue Refs",
+            "format": "int64",
             "type": "integer"
           },
           "pair_key": {
-            "description": "Stable unordered pair key, ``a|b`` sorted.",
-            "title": "Pair Key",
             "type": "string"
           },
           "shared_average_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Average of the shared issues' effective ratings.",
-            "title": "Shared Average Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "shared_issue_refs": {
             "items": {
               "$ref": "#/components/schemas/CreatorTeamIssueRef"
             },
-            "title": "Shared Issue Refs",
             "type": "array"
           },
           "shared_median_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Shared Median Rating"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "shared_rated_issue_count": {
-            "description": "Shared rated issues carrying eligible interior credits for both members.",
-            "minimum": 0.0,
-            "title": "Shared Rated Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "shared_rating_distribution": {
             "additionalProperties": {
+              "format": "int64",
               "type": "integer"
             },
-            "title": "Shared Rating Distribution",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "shared_series": {
             "items": {
               "$ref": "#/components/schemas/CreatorTeamSeriesRef"
             },
-            "title": "Shared Series",
             "type": "array"
           }
         },
         "required": [
           "pair_key",
           "creators",
-          "shared_rated_issue_count"
+          "shared_rated_issue_count",
+          "shared_rating_distribution",
+          "shared_series",
+          "shared_issue_refs",
+          "max_shared_issue_refs"
         ],
-        "title": "CreatorTeamPair",
         "type": "object"
       },
       "CreatorTeamSeriesRef": {
-        "description": "Bounded shared-series context behind one team pair.",
         "properties": {
           "shared_issue_count": {
-            "description": "Pair issues from this thread.",
-            "minimum": 1.0,
-            "title": "Shared Issue Count",
+            "format": "int64",
             "type": "integer"
           },
           "thread_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Thread Id",
+            "format": "int64",
             "type": "integer"
           },
           "thread_title": {
-            "description": "Thread title, for display only.",
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -8204,7 +7361,6 @@
           "thread_title",
           "shared_issue_count"
         ],
-        "title": "CreatorTeamSeriesRef",
         "type": "object"
       },
       "CsrfResponse": {
@@ -12058,1637 +11214,6 @@
           "reader_role",
           "reader_optional",
           "convergence_gate"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonCoverage": {
-        "properties": {
-          "rated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unread_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unread_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "upcoming_complete": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete",
-          "read_unrated_issues_total",
-          "read_unrated_issues_with_creator_metadata",
-          "read_unrated_complete",
-          "unread_issues_total",
-          "unread_issues_with_creator_metadata",
-          "upcoming_complete"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonIssueRef": {
-        "properties": {
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonItem": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "insufficient_data": {
-            "type": "boolean"
-          },
-          "max_issue_refs_per_group": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "median_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "min_rated_issues_per_series": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "normalized_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "rating_distribution": {
-            "additionalProperties": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "ratings_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_issue_refs": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
-            },
-            "type": "array"
-          },
-          "role_stats": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorComparisonRoleStat"
-            },
-            "type": "array"
-          },
-          "strongest_series": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorComparisonSeriesAggregate"
-            },
-            "type": "array"
-          },
-          "top_rating_rate": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "unread_issue_refs": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
-            },
-            "type": "array"
-          },
-          "unread_upcoming_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "ratings_count",
-          "rating_distribution",
-          "role_stats",
-          "strongest_series",
-          "min_rated_issues_per_series",
-          "unread_upcoming_count",
-          "read_unrated_count",
-          "unread_issue_refs",
-          "read_unrated_issue_refs",
-          "max_issue_refs_per_group",
-          "insufficient_data"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonResponse": {
-        "properties": {
-          "comparisons": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NativeCreatorComparisonItem"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorComparisonCoverage"
-          },
-          "insufficient_data_keys": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "comparisons",
-          "coverage",
-          "insufficient_data_keys"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonRoleStat": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "role": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "issue_count",
-          "rated_issue_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorComparisonSeriesAggregate": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "thread_id",
-          "thread_title",
-          "issue_count",
-          "rated_issue_count",
-          "average_rating"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDetailResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorSummaryCoverage"
-          },
-          "headline_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "insights": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorInsights"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "rated_population_scope": {
-            "type": "string"
-          },
-          "rating_distribution": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorRatingDistribution"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "read_unrated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "role_stats": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorRoleStat"
-            },
-            "type": "array"
-          },
-          "series_groups": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorSeriesGroup"
-            },
-            "type": "array"
-          },
-          "series_groups_complete": {
-            "type": "boolean"
-          },
-          "series_groups_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/NativeCreatorSummaryItem"
-          },
-          "upcoming_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "summary",
-          "coverage",
-          "role_stats",
-          "series_groups",
-          "series_groups_total",
-          "series_groups_complete",
-          "rated_issues",
-          "rated_population_scope",
-          "headline_roles",
-          "read_unrated_issues",
-          "upcoming_issues"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDiscoveryCoverage": {
-        "properties": {
-          "rated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDiscoveryEntry": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "earlier_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "max_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "median_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "min_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "normalized_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rating_spread": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "rating_stddev": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "read_unrated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "reasons": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorDiscoveryReason"
-            },
-            "type": "array"
-          },
-          "recent_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "top_rating_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "top_rating_rate": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "trend_delta": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "trend_direction": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "trend_sample_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unread_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "rated_issue_count",
-          "top_rating_count",
-          "unread_issue_count",
-          "read_unrated_issue_count",
-          "trend_sample_count",
-          "reasons"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDiscoveryReason": {
-        "properties": {
-          "comparison": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "metric": {
-            "type": "string"
-          },
-          "threshold": {
-            "format": "double",
-            "type": "number"
-          },
-          "value": {
-            "format": "double",
-            "type": "number"
-          }
-        },
-        "required": [
-          "metric",
-          "label",
-          "value",
-          "threshold",
-          "comparison"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDiscoveryResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorDiscoveryCoverage"
-          },
-          "max_entries_per_view": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "minimum_reliable_sample": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "views": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorDiscoveryView"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "views",
-          "coverage",
-          "minimum_reliable_sample",
-          "max_entries_per_view"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorDiscoveryView": {
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorDiscoveryEntry"
-            },
-            "type": "array"
-          },
-          "max_entries": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "min_sample": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "truncated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "mode",
-          "title",
-          "description",
-          "min_sample",
-          "total",
-          "truncated",
-          "max_entries",
-          "entries"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorInsights": {
-        "properties": {
-          "excluded_incomplete_series_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "highest_rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
-            },
-            "type": "array"
-          },
-          "individual_issue_limit": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "individual_issues_combined": {
-            "type": "boolean"
-          },
-          "lowest_rated_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
-            },
-            "type": "array"
-          },
-          "min_series_sample": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "most_rated_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "series_message": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_sample_met": {
-            "type": "boolean"
-          },
-          "strongest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "weakest_series": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "min_series_sample",
-          "series_sample_met",
-          "excluded_incomplete_series_count",
-          "individual_issue_limit",
-          "individual_issues_combined",
-          "highest_rated_issues",
-          "lowest_rated_issues"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorIssueInsight": {
-        "properties": {
-          "effective_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "effective_rating",
-          "roles",
-          "sort_key"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorIssueRow": {
-        "properties": {
-          "effective_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "rating_timestamp": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "status",
-          "roles",
-          "sort_key"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorMetricCalculation": {
-        "properties": {
-          "denominator": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "formula": {
-            "type": "string"
-          },
-          "numerator": {
-            "type": "string"
-          },
-          "percentage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "formula",
-          "numerator"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorMetricDrilldown": {
-        "properties": {
-          "bucket_count": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "bucket_percentage": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "calculation": {
-            "$ref": "#/components/schemas/NativeCreatorMetricCalculation"
-          },
-          "creator_key": {
-            "type": "string"
-          },
-          "excluded_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
-            },
-            "type": "array"
-          },
-          "included_issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
-            },
-            "type": "array"
-          },
-          "metric_type": {
-            "type": "string"
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/CreatorMetricPagination"
-          },
-          "rating_value": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "role": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "role_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "role_issue_count": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "role_rated_issue_count": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "series_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "series_id": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "series_issue_count": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "series_rated_issue_count": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "series_title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "total_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "metric_type",
-          "creator_key",
-          "calculation",
-          "total_count",
-          "included_issues",
-          "excluded_issues",
-          "pagination"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorMetricIssue": {
-        "properties": {
-          "creator_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "effective_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "effective_rating_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "effective_rating_timestamp": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "exclusion_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "missing_rating_cause": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status",
-          "creator_roles"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorRatingBucket": {
-        "properties": {
-          "count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rating": {
-            "format": "double",
-            "type": "number"
-          }
-        },
-        "required": [
-          "rating",
-          "count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorRatingDistribution": {
-        "properties": {
-          "buckets": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorRatingBucket"
-            },
-            "type": "array"
-          },
-          "max_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "mean_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "median_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "min_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "sample_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "buckets",
-          "sample_count",
-          "mean_rating",
-          "median_rating",
-          "min_rating",
-          "max_rating"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorRoleStat": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "role": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "issue_count",
-          "rated_issue_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSeriesGroup": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "lowest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "population_scope": {
-            "type": "string"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "unread_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "rated_issue_count",
-          "roles",
-          "unread_issue_count",
-          "read_unrated_issue_count",
-          "metadata_complete",
-          "sort_key",
-          "population_scope"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSeriesInsight": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "highest_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "lowest_rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "sort_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "rated_issue_count",
-          "average_rating",
-          "lowest_rating",
-          "highest_rating",
-          "roles",
-          "metadata_complete",
-          "sort_key"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSeriesIssueListResponse": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "highest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorIssueRow"
-            },
-            "type": "array"
-          },
-          "limit": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "lowest_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "metadata_complete": {
-            "type": "boolean"
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "offset": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "population_scope": {
-            "type": "string"
-          },
-          "rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "series_key": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "total": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "series_key",
-          "thread_id",
-          "thread_title",
-          "roles",
-          "rated_issue_count",
-          "metadata_complete",
-          "population_scope",
-          "issues",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSummaryCoverage": {
-        "properties": {
-          "rated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_complete": {
-            "type": "boolean"
-          },
-          "read_unrated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unread_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unread_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "upcoming_complete": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete",
-          "read_unrated_issues_total",
-          "read_unrated_issues_with_creator_metadata",
-          "read_unrated_complete",
-          "unread_issues_total",
-          "unread_issues_with_creator_metadata",
-          "upcoming_complete"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorSummaryItem": {
-        "properties": {
-          "average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "normalized_roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "ratings_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "read_unrated_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "upcoming_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "normalized_roles",
-          "ratings_count",
-          "read_unrated_count",
-          "upcoming_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamChemistryResponse": {
-        "properties": {
-          "coverage": {
-            "$ref": "#/components/schemas/NativeCreatorTeamCoverage"
-          },
-          "max_ranked_pairs": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "min_shared_team_sample": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "pairs": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorTeamPair"
-            },
-            "type": "array"
-          },
-          "pairs_total": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "pairs",
-          "pairs_total",
-          "min_shared_team_sample",
-          "max_ranked_pairs",
-          "coverage"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamCoverage": {
-        "properties": {
-          "rated_issues_total": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "rated_issues_with_creator_metadata": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "ratings_complete": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "rated_issues_total",
-          "rated_issues_with_creator_metadata",
-          "ratings_complete"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamIssueRef": {
-        "properties": {
-          "effective_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "status"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamMember": {
-        "properties": {
-          "baseline_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "baseline_rated_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "canonical_creator_key": {
-            "type": "string"
-          },
-          "difference_from_baseline": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "canonical_creator_key",
-          "display_name",
-          "roles",
-          "baseline_rated_count"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamPair": {
-        "properties": {
-          "creators": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorTeamMember"
-            },
-            "type": "array"
-          },
-          "max_shared_issue_refs": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "pair_key": {
-            "type": "string"
-          },
-          "shared_average_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "shared_issue_refs": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorTeamIssueRef"
-            },
-            "type": "array"
-          },
-          "shared_median_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "shared_rated_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "shared_rating_distribution": {
-            "additionalProperties": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "shared_series": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCreatorTeamSeriesRef"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "pair_key",
-          "creators",
-          "shared_rated_issue_count",
-          "shared_rating_distribution",
-          "shared_series",
-          "shared_issue_refs",
-          "max_shared_issue_refs"
-        ],
-        "type": "object"
-      },
-      "NativeCreatorTeamSeriesRef": {
-        "properties": {
-          "shared_issue_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "thread_id",
-          "thread_title",
-          "shared_issue_count"
         ],
         "type": "object"
       },
@@ -25792,92 +23317,6 @@
         ]
       }
     },
-    "/api/v1/creators/compare": {
-      "get": {
-        "description": "Return bounded personal side-by-side comparison for the requested creator keys.\n\nCompares 2-4 canonical creators using the same explainable personal analytics\nalready available on creator detail pages. Every metric remains explicitly\npersonal to the authenticated user.\n\nMetrics included per creator:\n- Average rating and median rating\n- Rated sample count\n- Rating distribution\n- 5★/top-rating rate (proportion of 5.0 ratings)\n- Role-specific averages and counts\n- Strongest series/thread aggregates\n- Unread attributed issue count (Issue.status == \"unread\", not queue/upcoming semantics)\n- Read-but-unrated attributed issue count (no stored effective rating)\n- Explicit \"insufficient data\" flag when rated sample < 3\n\nOnly creator keys visible in the authenticated user's own confirmed issue\nmetadata are compared; unknown or foreign keys are silently omitted so a\ncreator key can never leak another user's library state. Same-display-name\ncreators remain distinct via their canonical keys.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    keys: Comma-separated canonical creator keys (2-4).\n    db: Async database session.\n\nReturns:\n    Batch comparison keyed by requested visible creator keys, plus explicit\n    coverage state and list of keys with insufficient data.\n\nRaises:\n    HTTPException: When the ``keys`` parameter is missing, out of bounds, or malformed.",
-        "operationId": "compare_creators_endpoint_api_v1_creators_compare_get",
-        "parameters": [
-          {
-            "description": "Comma-separated canonical creator keys (2-4)",
-            "in": "query",
-            "name": "keys",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Comma-separated canonical creator keys (2-4)",
-              "title": "Keys"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorComparisonResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Compare Creators Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/discoveries": {
-      "get": {
-        "description": "Return explainable personal taste-discovery views for the authenticated user.\n\nEvery view is deterministic and derived only from the user's own latest\neffective ratings and confirmed creator credits. A creator may appear in\nmultiple views, and each entry carries the supporting metrics and the exact\nrules that qualified it, so no ranking is unexplained. Every view has an\nexplicit minimum sample before it ranks creators, and missing creator\nmetadata is reported as partial coverage rather than negative evidence.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Bounded discovery views in canonical order plus metadata-coverage state.",
-        "operationId": "get_creator_discoveries_endpoint_api_v1_creators_discoveries_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorDiscoveryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Discoveries Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
     "/api/v1/creators/summaries": {
       "get": {
         "operationId": "get_summaries_documentation",
@@ -25919,593 +23358,6 @@
         ],
         "summary": "Document native creator summaries with the mounted query and response types.",
         "tags": [
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/team-chemistry": {
-      "get": {
-        "description": "Return ranked recurring creator-team pairs for the authenticated user.\n\nA team is a pair of stable canonical creator identities credited together\non shared rated issues with eligible interior-storytelling roles. Pairs\nbelow ``min_shared_team_sample`` shared rated issues are never ranked, the\nreturned issue drilldown sample is bounded, and every metric stays\ndescriptive personal-reading data: no causation or significance is\nexpressed or implied.\n\nOnly creator identities visible in the authenticated user's own confirmed\nissue metadata are considered, so a creator key can never leak another\nuser's library state, and same-name creators remain distinct via their\ncanonical keys.\n\nArgs:\n    current_user: Authenticated user whose library is aggregated.\n    db: Async database session.\n\nReturns:\n    Ranked bounded team pairs with shared sample, average, distribution,\n    baseline context, and navigable issue references, plus explicit\n    metadata-coverage state.",
-        "operationId": "get_creator_team_chemistry_endpoint_api_v1_creators_team_chemistry_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorTeamChemistryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Team Chemistry Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}": {
-      "get": {
-        "description": "Return full personal creator detail for the specified canonical key.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    current_user: Authenticated user owning the library.\n    limit: Max number of issues per collection.\n    offset: Pagination offset.\n    db: Async database session.\n\nReturns:\n    The full creator detail response including summary, role stats, and issue lists.\n\nRaises:\n    HTTPException: When the key is malformed or the creator is not found\n    in the user's library.",
-        "operationId": "get_creator_detail_endpoint_api_v1_creators__creator_key__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorDetailResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Detail Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
-      "get": {
-        "description": "Return detailed drilldown for a specific rating distribution bucket.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    rating_value: Specific rating value (e.g. ``5.0``, ``4.5``).\n    current_user: Authenticated user owning the library.\n    page: Page number for paginated results.\n    page_size: Number of issues per page.\n    db: Async database session.\n\nReturns:\n    Rating distribution drilldown for the specific bucket.\n\nRaises:\n    HTTPException: When keys are malformed or data is not found.",
-        "operationId": "get_creator_rating_distribution_drilldown_endpoint_api_v1_creators__creator_key__metrics_rating_distribution__rating_value__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "rating_value",
-            "required": true,
-            "schema": {
-              "title": "Rating Value",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Page number for paginated results",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "Page number for paginated results",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Number of items per page",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "description": "Number of items per page",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorRatingDistributionDrilldown"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Rating Distribution Drilldown Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}/metrics/role-stats/{role}": {
-      "get": {
-        "description": "Return detailed drilldown for a specific creator role.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    role: Specific role to drill down (e.g., ``Writer``, ``Artist``, ``Penciler``).\n    current_user: Authenticated user owning the library.\n    page: Page number for paginated results.\n    page_size: Number of issues per page.\n    db: Async database session.\n\nReturns:\n    Role drilldown with calculation, included issues, and role-specific data.\n\nRaises:\n    HTTPException: When keys are malformed or data is not found.",
-        "operationId": "get_creator_role_drilldown_endpoint_api_v1_creators__creator_key__metrics_role_stats__role__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "role",
-            "required": true,
-            "schema": {
-              "title": "Role",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Page number for paginated results",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "Page number for paginated results",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Number of items per page",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "description": "Number of items per page",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorRoleDrilldown"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Role Drilldown Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}": {
-      "get": {
-        "description": "Return detailed drilldown for a specific creator series.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    series_key: Specific series key (e.g. ``thread:123``).\n    current_user: Authenticated user owning the library.\n    page: Page number for paginated results.\n    page_size: Number of issues per page.\n    db: Async database session.\n\nReturns:\n    Series drilldown with calculation, included issues, and series-specific data.\n\nRaises:\n    HTTPException: When keys are malformed or data is not found.",
-        "operationId": "get_creator_series_drilldown_endpoint_api_v1_creators__creator_key__metrics_series_stats__series_key__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "series_key",
-            "required": true,
-            "schema": {
-              "title": "Series Key",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Page number for paginated results",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "Page number for paginated results",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Number of issues per page",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "description": "Number of issues per page",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorSeriesDrilldown"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Series Drilldown Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}/metrics/{metric_type}": {
-      "get": {
-        "description": "Return detailed drilldown for a specific creator metric.\n\nThis endpoint provides the exact calculation, supporting issues, and exclusion\nreasoning for any creator metric shown on comparison or detail pages.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    metric_type: Type of metric to drill down (``average-rating``, ``median-rating``,\n        ``rated-issue-count``, ``five-star-rate``, ``rating-distribution``,\n        ``unread-count``, ``read-unrated-count``, ``role-stats``, ``series-stats``).\n    current_user: Authenticated user owning the library.\n    role: Specific role for role-based metrics (required for ``role-stats``).\n    rating_value: Specific rating value for distribution metrics (e.g. ``5.0``, ``4.5``).\n    series_key: Specific series key for series metrics (e.g. ``thread:123``).\n    page: Page number for paginated issue lists.\n    page_size: Number of issues per page.\n    db: Async database session.\n\nReturns:\n    Detailed drilldown with calculation, included issues, excluded issues, and pagination.\n\nRaises:\n    HTTPException: When keys are malformed, metric type is invalid, or data is not found.",
-        "operationId": "get_creator_metric_drilldown_endpoint_api_v1_creators__creator_key__metrics__metric_type__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "metric_type",
-            "required": true,
-            "schema": {
-              "title": "Metric Type",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Specific role for role-based metrics",
-            "in": "query",
-            "name": "role",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Specific role for role-based metrics",
-              "title": "Role"
-            }
-          },
-          {
-            "description": "Specific rating value for distribution metrics",
-            "in": "query",
-            "name": "rating_value",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Specific rating value for distribution metrics",
-              "title": "Rating Value"
-            }
-          },
-          {
-            "description": "Specific series key for series metrics",
-            "in": "query",
-            "name": "series_key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Specific series key for series metrics",
-              "title": "Series Key"
-            }
-          },
-          {
-            "description": "Page number for paginated results",
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "description": "Page number for paginated results",
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Number of items per page",
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "description": "Number of items per page",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorMetricDrilldown"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Metric Drilldown Endpoint",
-        "tags": [
-          "creators",
-          "creators"
-        ]
-      }
-    },
-    "/api/v1/creators/{creator_key}/series/{series_key}/issues": {
-      "get": {
-        "description": "Return the bounded issues supporting one creator series/run group.\n\nEvery series aggregate on creator detail is explainable from these rows.\nThe series key must be the canonical ``thread:<id>`` identity; a group is\nnever addressed by display-title text, and a series belonging to another\nuser is indistinguishable from one that does not exist.\n\nArgs:\n    creator_key: Canonical creator key (e.g. ``creator:12345``).\n    series_key: Canonical series key (e.g. ``thread:7``).\n    current_user: Authenticated user owning the library.\n    limit: Max number of issue rows.\n    offset: Pagination offset.\n    db: Async database session.\n\nReturns:\n    The bounded drill-down page plus its group-level header aggregates.\n\nRaises:\n    HTTPException: When either key is malformed, or the creator or series\n    group is not found in the user's library.",
-        "operationId": "get_creator_series_issues_endpoint_api_v1_creators__creator_key__series__series_key__issues_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "creator_key",
-            "required": true,
-            "schema": {
-              "title": "Creator Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "series_key",
-            "required": true,
-            "schema": {
-              "title": "Series Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorSeriesIssueListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Creator Series Issues Endpoint",
-        "tags": [
-          "creators",
           "creators"
         ]
       }
@@ -33220,7 +30072,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorComparisonResponse"
+                  "$ref": "#/components/schemas/CreatorComparisonResponse"
                 }
               }
             },
@@ -33251,7 +30103,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorDiscoveryResponse"
+                  "$ref": "#/components/schemas/CreatorDiscoveryResponse"
                 }
               }
             },
@@ -33320,7 +30172,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorTeamChemistryResponse"
+                  "$ref": "#/components/schemas/CreatorTeamChemistryResponse"
                 }
               }
             },
@@ -33377,7 +30229,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorDetailResponse"
+                  "$ref": "#/components/schemas/CreatorDetailResponse"
                 }
               }
             },
@@ -33449,7 +30301,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                  "$ref": "#/components/schemas/CreatorMetricDrilldown"
                 }
               }
             },
@@ -33521,7 +30373,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                  "$ref": "#/components/schemas/CreatorMetricDrilldown"
                 }
               }
             },
@@ -33593,7 +30445,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                  "$ref": "#/components/schemas/CreatorMetricDrilldown"
                 }
               }
             },
@@ -33689,7 +30541,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                  "$ref": "#/components/schemas/CreatorMetricDrilldown"
                 }
               }
             },
@@ -33761,7 +30613,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCreatorSeriesIssueListResponse"
+                  "$ref": "#/components/schemas/CreatorSeriesIssueListResponse"
                 }
               }
             },
