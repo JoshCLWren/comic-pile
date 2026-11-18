@@ -97,6 +97,8 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
           node --test scripts/generate_route_burndown.test.mjs scripts/generate_vercel_routes.test.mjs scripts/generate_ui_audit_ingress.test.mjs
+      - name: Retired v1 plan-reader guard (real FastAPI app and checked-in ingress)
+        run: uv run --no-sync --with pytest pytest -o addopts='' --noconftest -q tests/test_continuity_plan_reader_rust_only.py
 
       - name: Publish resolved ingress for frontend jobs
         uses: actions/upload-artifact@v7

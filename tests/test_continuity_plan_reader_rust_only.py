@@ -15,8 +15,6 @@ import importlib.util
 import json
 import re
 from pathlib import Path
-from typing import Any
-
 from fastapi.routing import APIRoute
 
 from app.main import app
@@ -36,15 +34,27 @@ RETIRED_MODULES = (
 )
 RETIRED_FILES = tuple(module.replace(".", "/") + ".py" for module in RETIRED_MODULES)
 
+type JsonObject = dict[str, object]
 
-def _load_json(relative: str) -> dict[str, Any]:
+
+def _as_object(value: object, label: str) -> JsonObject:
+    """Narrow one decoded JSON value to an object, failing the test otherwise."""
+    assert isinstance(value, dict), f"{label} must be a JSON object"
+    return {str(key): item for key, item in value.items()}
+
+
+def _as_objects(value: object, label: str) -> list[JsonObject]:
+    """Narrow one decoded JSON value to an array of objects."""
+    assert isinstance(value, list), f"{label} must be a JSON array"
+    return [_as_object(item, label) for item in value]
+
+
+def _load_json(relative: str) -> JsonObject:
     """Load one checked-in JSON document from the repository root."""
-    value = json.loads((ROOT / relative).read_text(encoding="utf-8"))
-    assert isinstance(value, dict), f"{relative} must contain a JSON object"
-    return value
+    return _as_object(json.loads((ROOT / relative).read_text(encoding="utf-8")), relative)
 
 
-def _vercel_destination(routes: list[dict[str, Any]], method: str, path: str) -> str | None:
+def _vercel_destination(routes: list[JsonObject], method: str, path: str) -> str | None:
     """Resolve the first matching vercel route destination for one request."""
     for route in routes:
         src = route.get("src")
@@ -85,7 +95,9 @@ def test_retirement_is_recorded_in_the_route_inventory() -> None:
     inventory = _load_json("docs/api/v2-route-inventory.json")
     retired = [
         entry
-        for entry in inventory["retired_legacy_operations"]
+        for entry in _as_objects(
+            inventory["retired_legacy_operations"], "retired_legacy_operations"
+        )
         if entry["path"] == V1_READER_PATH
     ]
     assert retired == [
@@ -97,7 +109,11 @@ def test_retirement_is_recorded_in_the_route_inventory() -> None:
             "replacement": f"GET {V2_READER_PATH}",
         }
     ]
-    live = [entry for entry in inventory["operations"] if entry["path"] == V2_READER_PATH]
+    live = [
+        entry
+        for entry in _as_objects(inventory["operations"], "operations")
+        if entry["path"] == V2_READER_PATH
+    ]
     assert len(live) == 1
     assert live[0]["method"] == "GET"
     assert live[0]["runtime"] == "native-rust"
@@ -106,8 +122,7 @@ def test_retirement_is_recorded_in_the_route_inventory() -> None:
 
 def test_production_ingress_serves_only_the_v2_plan_reader() -> None:
     """vercel.json routes the v2 reader to native Rust; v1 falls to the catch-all."""
-    routes = _load_json("vercel.json")["routes"]
-    assert isinstance(routes, list), "vercel.json must define a routes array"
+    routes = _as_objects(_load_json("vercel.json")["routes"], "vercel.json routes")
     v2_routes = [route for route in routes if route.get("src") == V2_READER_SRC]
     assert v2_routes == [{"src": V2_READER_SRC, "methods": ["GET"], "dest": "/api/native_roll.rs"}]
     # No operation-specific route may capture the retired v1 reader; the only
@@ -128,8 +143,7 @@ def test_production_ingress_serves_only_the_v2_plan_reader() -> None:
 def test_route_fragment_declares_no_v1_plan_reader() -> None:
     """The bot-owned route fragment must not resurrect the retired v1 reader."""
     fragment = _load_json("docs/api/route-fragments/continuity-plans.json")
-    operations = fragment["operations"]
-    assert isinstance(operations, list), "route fragment must define an operations array"
+    operations = _as_objects(fragment["operations"], "route fragment operations")
     assert all(operation.get("path") != V1_READER_PATH for operation in operations)
 
 
@@ -151,8 +165,7 @@ def test_generated_contracts_have_no_v1_plan_reader_path() -> None:
         "native/contracts/same-path-runtime.openapi.json",
     ):
         document = _load_json(relative)
-        paths = document.get("paths")
-        assert isinstance(paths, dict), f"{relative} must define a paths object"
+        paths = _as_object(document["paths"], f"{relative} paths")
         assert V1_READER_PATH not in paths, relative
     for relative in (
         "frontend/src/generated/openapi.ts",
@@ -162,11 +175,14 @@ def test_generated_contracts_have_no_v1_plan_reader_path() -> None:
         assert V1_READER_PATH not in source, relative
         assert V1_READER_CALL.search(source) is None, relative
     runtime = _load_json("native/contracts/v2-runtime.openapi.json")
-    assert V2_READER_PATH in runtime["paths"]
+    assert V2_READER_PATH in _as_object(runtime["paths"], "v2-runtime paths")
 
 
 def test_native_registers_only_the_v2_plan_reader() -> None:
     """The Rust router exposes the v2 reader and no dead parallel v1 port."""
     lib = (ROOT / "native" / "roll-service" / "src" / "lib.rs").read_text(encoding="utf-8")
-    assert '.route(\n            "/api/v2/continuity-plans/{plan_id}/reader",\n            get(reading_plan_reader::read),\n        )' in lib
+    assert (
+        '.route(\n            "/api/v2/continuity-plans/{plan_id}/reader",\n            get(reading_plan_reader::read),\n        )'
+        in lib
+    )
     assert '"/api/v1/continuity-plans/{plan_id}/reader"' not in lib
