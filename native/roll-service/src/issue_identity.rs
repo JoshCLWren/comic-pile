@@ -1620,6 +1620,24 @@ async fn load_active_cbl_list_meta(
     })
 }
 
+#[instrument(skip(state, auth))]
+pub async fn cbl_adoption_preview(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
+    let pool = checkout(&state).await?;
+    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
+    // Build reconciliation entries (faithful port of core fields used by adoption plan).
+    let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
+    let planned = calculate_adoption_plan_entries(
+        &report_entries,
+        &std::collections::HashMap::new(),
+        &std::collections::HashMap::new(),
+    );
+    Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
+}
+
 #[instrument(skip(state, auth, request))]
 pub async fn cbl_adoption_plan(
     State(state): State<Arc<AppState>>,
@@ -2909,6 +2927,7 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
         )
         .await
         .map_err(|e| tx_db_error(e, ""))?;
+    let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let cse_id: i32 = row.get(0);
@@ -2944,6 +2963,7 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
             } else {
                 None
             },
+            &fallback_index,
         )
         .await?;
         let mut entry = serde_json::Map::new();
@@ -3048,14 +3068,65 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
     Ok(out)
 }
 
-async fn title_number_fallback<E: DbExec>(
+#[derive(Clone)]
+struct OwnedIssueFallbackRow {
+    id: i32,
+    status: Option<String>,
+    read_at: Option<String>,
+    thread_id: i32,
+    series_norm: String,
+    issue_norm: String,
+}
+
+/// Preloaded owned-issue index for title/number fallback matching.
+/// Loading this once per reconciliation avoids repeating a whole-library scan
+/// for every unresolved entry (no SQL in row loops).
+struct OwnedIssueFallbackIndex {
+    rows: Vec<OwnedIssueFallbackRow>,
+}
+
+async fn load_owned_issue_fallback_index<E: DbExec>(
     tx: &E,
     user_id: i32,
+) -> Result<OwnedIssueFallbackIndex, ApiError> {
+    let rows = tx
+        .run_query(
+            r#"
+        SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
+        FROM issues i
+        JOIN threads t ON t.id = i.thread_id
+        WHERE t.user_id = $1
+        "#,
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let ttitle: String = row.get(4);
+        let inum: String = row.get(5);
+        out.push(OwnedIssueFallbackRow {
+            id: row.get(0),
+            status: row.get(1),
+            read_at: row.get(2),
+            thread_id: row.get(3),
+            series_norm: normalize_title_number(&ttitle),
+            issue_norm: normalize_title_number(&inum),
+        });
+    }
+    Ok(OwnedIssueFallbackIndex { rows: out })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn title_number_fallback<E: DbExec>(
+    tx: &E,
+    _user_id: i32,
     _cvid: &str,
     series_name: &str,
     issue_number: &str,
     series_provider: Option<&str>,
     series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
 ) -> Result<
     (
         Option<i32>,
@@ -3080,31 +3151,15 @@ async fn title_number_fallback<E: DbExec>(
         ));
     }
 
-    let rows = tx
-        .run_query(
-            r#"
-        SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
-        FROM issues i
-        JOIN threads t ON t.id = i.thread_id
-        WHERE t.user_id = $1
-        "#,
-            &[&user_id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
-
     let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = Vec::new();
-    for row in &rows {
-        let id: i32 = row.get(0);
-        let status: Option<String> = row.get(1);
-        let read_at: Option<String> = row.get(2);
-        let thread_id: i32 = row.get(3);
-        let ttitle: String = row.get(4);
-        let inum: String = row.get(5);
-        if normalize_title_number(&ttitle) == want_series
-            && normalize_title_number(&inum) == want_issue
-        {
-            matches.push((id, status, read_at, thread_id));
+    for row in &fallback_index.rows {
+        if row.series_norm == want_series && row.issue_norm == want_issue {
+            matches.push((
+                row.id,
+                row.status.clone(),
+                row.read_at.clone(),
+                row.thread_id,
+            ));
         }
     }
     if matches.is_empty() {
@@ -3245,6 +3300,7 @@ async fn resolve_canonical_for_entry<E: DbExec>(
     series_name: &str,
     issue_number: &str,
     series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
 ) -> Result<
     (
         Option<i32>,
@@ -3286,6 +3342,7 @@ async fn resolve_canonical_for_entry<E: DbExec>(
                     issue_number,
                     Some("comicvine"),
                     series_external_id,
+                    fallback_index,
                 )
                 .await;
             }
@@ -4414,6 +4471,23 @@ pub fn find_cbl_candidates_for_reading_list_documentation() {}
 
 /// Documentation-only operation for the CBL adoption preview.
 #[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    responses(
+        (status = 200, description = "Adoption preview for the active CBL list", body = CblAdoptionPreviewResponse),
+        (status = 404, description = "CBL source list not found or not active"),
+        (status = 422, description = "Path failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_adoption_preview_documentation() {}
+
+/// Documentation-only operation for the CBL adoption plan.
+#[utoipa::path(
     post,
     path = "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
     tag = "issue-identity",
@@ -4481,6 +4555,7 @@ pub fn cbl_targeted_adoption_commit_documentation() {}
         find_cbl_sources_by_comicvine_issue_documentation,
         compare_cbl_sources_documentation,
         find_cbl_candidates_for_reading_list_documentation,
+        cbl_adoption_preview_documentation,
         cbl_adoption_plan_documentation,
         cbl_adoption_commit_documentation,
         cbl_targeted_adoption_commit_documentation,

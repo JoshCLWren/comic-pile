@@ -5980,6 +5980,32 @@
         "title": "CreatorComparisonSeriesAggregate",
         "type": "object"
       },
+      "CreatorCredit": {
+        "description": "One credited creator (Python `ComicVineCreator`).",
+        "properties": {
+          "creator_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
+        "type": "object"
+      },
       "CreatorDetailResponse": {
         "description": "Full detail response for a single creator identity.",
         "properties": {
@@ -10625,6 +10651,24 @@
         "title": "IssueBulkMarkUnreadRequest",
         "type": "object"
       },
+      "IssueBulkRequest": {
+        "description": "Request body for the bulk read-state operations.",
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
       "IssueCard": {
         "properties": {
           "comicvine_issue_id": {
@@ -14026,6 +14070,47 @@
         ],
         "type": "object"
       },
+      "NativeIssueCreateRange": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
+        "properties": {
+          "insert_after_issue_id": {
+            "description": "Insert after this issue id; omit for natural placement, null to append.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_range": {
+            "description": "Range such as `1-25` or `1, 3, 5-7`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_range"
+        ],
+        "type": "object"
+      },
+      "NativeIssueCreatorsEntry": {
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
+        "properties": {
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorCredit"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "creators"
+        ],
+        "type": "object"
+      },
       "NativeIssueListResponse": {
         "properties": {
           "issues": {
@@ -14053,6 +14138,111 @@
           "issues",
           "total_count",
           "page_size"
+        ],
+        "type": "object"
+      },
+      "NativeIssueMoveRequest": {
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "properties": {
+          "after_issue_id": {
+            "description": "Move after this issue. `null` moves the issue to position 1.",
+            "format": "int32",
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "after_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeIssueReorderRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeIssueResponse": {
+        "description": "One issue row (Python `IssueResponse`).",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "position",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "NativeMigrateToIssuesRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
+        "properties": {
+          "last_issue_read": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_issue_read",
+          "total_issues"
+        ],
+        "type": "object"
+      },
+      "NativeMigrateToIssuesSimpleRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
         ],
         "type": "object"
       },
@@ -14181,6 +14371,404 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "NativeReaderContextCrossover": {
+        "description": "Python `ReaderContextCrossover`.",
+        "properties": {
+          "applies_to_current_issue": {
+            "type": "boolean"
+          },
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "membership_kind": {
+            "description": "`issue` or `thread`.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_member": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeReaderContextCrossoverNextMember"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "membership_kind",
+          "ratings_count",
+          "read_count"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverMembership": {
+        "description": "Python `ReaderContextCrossoverMembership`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverNextMember": {
+        "description": "Python `ReaderContextCrossoverNextMember`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextEdge": {
+        "description": "Python `ReaderContextEdge`.",
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "`dependency` or `continuity`.",
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalChain": {
+        "description": "Python `ReaderContextLocalChain`.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextEdge"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextLocalIssue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues",
+          "edges"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalIssue": {
+        "description": "Python `ReaderContextLocalIssue`.",
+        "properties": {
+          "crossover_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossoverMembership"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "relation": {
+            "description": "`previous`, `current`, `next` or `future`.",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation",
+          "crossover_memberships"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextPreviousIssue": {
+        "description": "Python `ReaderContextPreviousIssue`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextRecentRating": {
+        "description": "Python `ReaderContextRecentRating`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextResponse": {
+        "description": "Python `ReaderContextResponse`.",
+        "properties": {
+          "crossovers": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossover"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/NativeReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/NativeReaderContextSeries"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series",
+          "crossovers",
+          "local_chain"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextSeries": {
+        "description": "Python `ReaderContextSeries`.",
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "identity_source": {
+            "description": "`comicvine` or `unavailable`.",
+            "type": "string"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "previous_issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "recent_ratings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextRecentRating"
+            },
+            "type": "array"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identity_source",
+          "ratings_count",
+          "recent_ratings"
+        ],
         "type": "object"
       },
       "NativeReadingListEntryIntent": {
@@ -14609,6 +15197,88 @@
         },
         "type": "object"
       },
+      "NativeSetCurrentIssueRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeSetCurrentIssueResponse": {
+        "description": "Python `SetCurrentIssueResponse`.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
+        ],
+        "type": "object"
+      },
       "NativeSourceSyncFailure": {
         "properties": {
           "error": {
@@ -14880,6 +15550,132 @@
         "required": [
           "discoveries",
           "generated_at"
+        ],
+        "type": "object"
+      },
+      "NativeThreadIssueCreatorsResponse": {
+        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "NativeThreadResponse": {
+        "description": "Python `ThreadResponse`.",
+        "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_unread_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
         ],
         "type": "object"
       },
@@ -22554,6 +23350,37 @@
         ],
         "type": "object"
       },
+      "ThreadIssueCreateListResponse": {
+        "description": "Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueResponse"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "ThreadIssueCreatorsResponse": {
         "description": "Bulk per-issue ComicVine creator credits for one thread.\n\nIssues without a confirmed ComicVine mapping (or without stored credit\narrays) are omitted; callers fall back to the series' manual creator\ncredits for those rows.",
         "properties": {
@@ -28064,7 +28891,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "summary": "Documentation-only operation for the CBL adoption plan.",
         "tags": [
           "issue-identity"
         ]
@@ -28072,15 +28899,15 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "description": "Preview all CBL positions and their default read-only adoption choices.",
-        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
+        "operationId": "cbl_adoption_preview_documentation",
         "parameters": [
           {
+            "description": "CBL source list identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -28090,21 +28917,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLAdoptionPreviewResponse"
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Adoption preview for the active CBL list"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Path failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28112,9 +28945,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Cbl Adoption Preview",
+        "summary": "Documentation-only operation for the CBL adoption preview.",
         "tags": [
-          "issue-identity",
           "issue-identity"
         ]
       }
@@ -28388,15 +29220,15 @@
     },
     "/api/v1/issues/{issue_id}/reader-context": {
       "get": {
-        "description": "Return bounded reading analytics and local neighborhood for an owned issue.\n\nThe response is decorative context for the Roll experience and must never\nbe a prerequisite for rating. It is computed with bounded, user-scoped\nqueries that do not traverse the full library or hydrate ComicVine.\n\nArgs:\n    issue_id: ComicPile issue identifier.\n    current_user: Authenticated owner of the requested issue.\n    db: Async database session.\n\nReturns:\n    Bounded reader-context payload for the requested issue.\n\nRaises:\n    HTTPException: If the issue does not belong to the user.",
-        "operationId": "get_issue_reader_context_api_v1_issues__issue_id__reader_context_get",
+        "operationId": "issue_read_state_reader_context",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -28406,21 +29238,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
+                  "$ref": "#/components/schemas/NativeReaderContextResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Bounded reader context"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28428,41 +29262,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Issue Reader Context",
+        "summary": "Documentation-only operation for reader context.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markRead": {
       "post": {
-        "description": "Mark an issue as read and update thread's next_unread_issue_id.\n\nArgs:\n    issue_id: The issue ID to mark as read.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already read.",
-        "operationId": "mark_issue_read_api_v1_issues__issue_id__markRead_post",
+        "operationId": "issue_read_state_mark_read",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28470,41 +29308,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Read",
+        "summary": "Documentation-only operation for `:markRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markUnread": {
       "post": {
-        "description": "Mark an issue as unread and update thread's next_unread_issue_id.\n\nReactivates thread if it was completed.\n\nArgs:\n    issue_id: The issue ID to mark as unread.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already unread.",
-        "operationId": "mark_issue_unread_api_v1_issues__issue_id__markUnread_post",
+        "operationId": "issue_read_state_mark_unread",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28512,24 +29354,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Unread",
+        "summary": "Documentation-only operation for `:markUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:move": {
       "post": {
-        "description": "Move a single issue within its thread.\n\nArgs:\n    issue_id: The issue ID to move.\n    request: Move request containing the issue that should come before it.\n    current_user: The authenticated user making the move request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the issue or requested target issue is not found.",
-        "operationId": "move_issue_api_v1_issues__issue_id__move_post",
+        "operationId": "issue_read_state_move",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -28538,7 +29379,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
+                "$ref": "#/components/schemas/NativeIssueMoveRequest"
               }
             }
           },
@@ -28546,17 +29387,19 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28564,22 +29407,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Move Issue",
+        "summary": "Documentation-only operation for `:move`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkRead": {
       "post": {
-        "description": "Bulk mark issues as read.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already read.",
-        "operationId": "bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post",
+        "operationId": "issue_read_state_bulk_mark_read",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkReadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -28587,17 +29428,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28605,22 +29451,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Read",
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkUnread": {
       "post": {
-        "description": "Bulk mark issues as unread.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already unread.",
-        "operationId": "bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post",
+        "operationId": "issue_read_state_bulk_mark_unread",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkUnreadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -28628,17 +29472,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28646,9 +29495,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Unread",
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
@@ -31627,15 +32475,15 @@
         ]
       },
       "post": {
-        "description": "Create issues from a range string and place them in thread order.\n\nOrdinary numeric issue numbers are inserted at their natural position in the\nseries rather than always appended, so adding ``#2`` to ``#33, #34, #35``\nsaves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural\nplacement. Send explicit JSON ``null`` to append at the end (the UI\n\"At the end\" choice). When ``insert_after_issue_id`` is a concrete issue ID,\nexisting issues later in the thread are shifted upward so the new issues are\ninserted immediately after that issue. Irregular numbering such as\n``Annual 1`` or ``0`` falls back to append-only placement.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
-        "operationId": "create_issues_api_v1_threads__thread_id__issues_post",
+        "operationId": "thread_issues_create",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31644,7 +32492,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueCreateRange"
+                "$ref": "#/components/schemas/NativeIssueCreateRange"
               }
             }
           },
@@ -31655,21 +32503,29 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueListResponse"
+                  "$ref": "#/components/schemas/ThreadIssueCreateListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Newly created issues"
+          },
+          "400": {
+            "description": "Invalid or fully duplicate range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or anchor issue not found"
+          },
+          "409": {
+            "description": "Issue number already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31677,24 +32533,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Issues",
+        "summary": "Documentation-only operation for issue creation.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/threads/{thread_id}/issues/creators": {
       "get": {
-        "description": "Return stored ComicVine creator credits for every mapped issue in a thread.\n\nOne bulk read serves the whole issue list's creator column, so expanding\na full page never fans out into one provider-intelligence request per\nrow. Issues without a confirmed ComicVine mapping (or without stored\ncredits) are omitted; clients fall back to the series' manual creator\ncredits for those rows.\n\nArgs:\n    thread_id: ComicPile thread whose issue credits are returned.\n    current_user: Authenticated owner of the requested thread.\n    db: Async database session.\n\nReturns:\n    Per-issue stored ComicVine creator credits for the owned thread.",
-        "operationId": "list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get",
+        "operationId": "thread_issues_creators",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31704,21 +32559,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
+                  "$ref": "#/components/schemas/NativeThreadIssueCreatorsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Stored creator credits per mapped issue"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31726,24 +32583,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Issue Creators",
+        "summary": "Documentation-only operation for the bulk creator read.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/threads/{thread_id}/issues:reorder": {
       "post": {
-        "description": "Rewrite all issue positions in a thread from an explicit ordered ID list.\n\nArgs:\n    thread_id: The thread whose issue order should be rewritten.\n    request: Ordered issue IDs representing the desired canonical order.\n    current_user: The authenticated user making the reorder request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the thread is not found or the issue IDs are invalid.",
-        "operationId": "reorder_issues_api_v1_threads__thread_id__issues_reorder_post",
+        "operationId": "thread_issues_reorder",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31752,7 +32608,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueReorderRequest"
+                "$ref": "#/components/schemas/NativeIssueReorderRequest"
               }
             }
           },
@@ -31760,17 +32616,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Order rewritten"
+          },
+          "400": {
+            "description": "issue_ids must name every issue exactly once"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31778,9 +32639,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Reorder Issues",
+        "summary": "Documentation-only operation for issue reordering.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
@@ -32103,15 +32963,15 @@
     },
     "/api/v1/threads/{thread_id}:migrateToIssues": {
       "post": {
-        "description": "Migrate an old-style thread to issue tracking (#1..total_issues).\n\nMarks #1 through ``last_issue_read`` as read and updates the thread's\nissue-tracking fields.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
-        "operationId": "migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post",
+        "operationId": "thread_issues_migrate",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -32120,7 +32980,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesRequest"
               }
             }
           },
@@ -32131,21 +32991,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Migrated thread"
+          },
+          "400": {
+            "description": "Already migrated or inconsistent range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -32153,24 +33018,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Migrate Thread To Issues",
+        "summary": "Documentation-only operation for the explicit migration.",
         "tags": [
-          "threads",
           "threads"
         ]
       }
     },
     "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
       "post": {
-        "description": "Simplified migration inferred from the issue just rated.\n\nMarks earlier issues read, keeps the rated issue unread so the rating\nflow can mark it read, and points ``next_unread_issue_id`` at it.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
-        "operationId": "migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post",
+        "operationId": "thread_issues_migrate_simple",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -32179,7 +33043,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesSimpleRequest"
               }
             }
           },
@@ -32190,21 +33054,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Migrated thread"
+          },
+          "400": {
+            "description": "Already migrated or issue cannot be created"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -32212,24 +33081,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Migrate Thread To Issues Simple",
+        "summary": "Documentation-only operation for the simplified migration.",
         "tags": [
-          "threads",
           "threads"
         ]
       }
     },
     "/api/v1/threads/{thread_id}:setCurrentIssue": {
       "post": {
-        "description": "Atomically correct the current issue for an active thread.\n\nMarks every earlier issue read, ensures the target is unread, updates\n``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.\n\nRaises:\n    HTTPException: 404 if thread or issue not found, 400 for validation errors.",
-        "operationId": "set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post",
+        "operationId": "thread_issues_set_current",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -32238,7 +33106,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+                "$ref": "#/components/schemas/NativeSetCurrentIssueRequest"
               }
             }
           },
@@ -32249,21 +33117,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                  "$ref": "#/components/schemas/NativeSetCurrentIssueResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Corrected current issue"
+          },
+          "400": {
+            "description": "Thread inactive, untracked or issue unavailable"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -32271,9 +33144,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Set Current Issue",
+        "summary": "Documentation-only operation for correcting the current issue.",
         "tags": [
-          "threads",
           "threads"
         ]
       }

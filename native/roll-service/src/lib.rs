@@ -30,14 +30,17 @@ pub mod issue_handler;
 pub mod issue_identity;
 pub mod issue_mutation;
 pub mod issue_read;
+pub mod issue_read_state;
 pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
+pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
@@ -69,6 +72,7 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_issues;
 pub mod thread_lifecycle;
 pub mod thread_ordering;
 pub mod thread_validation;
@@ -115,6 +119,11 @@ pub struct AppState {
     /// Production always enables this. The regression suite disables it to prove
     /// the first-statement failure it prevents; no environment variable can.
     pub connection_recovery: bool,
+    /// Outbound HTTPS seam (GitHub issue creation, ComicVine). Production
+    /// installs the real client; test builds/environments install a recording
+    /// fake that never opens a socket, so no test can reach the network
+    /// (#5339). See [`outbound`].
+    pub outbound: Arc<dyn outbound::OutboundHttp>,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -133,6 +142,33 @@ impl AppState {
     pub fn with_recycling(
         config: Config,
         recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound::default_transport())
+    }
+
+    /// Construct with an explicit outbound transport. Production callers use
+    /// [`Self::new`]; tests install a recording fake (#5339).
+    pub fn with_outbound(
+        config: Config,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, RecyclingMethod::Fast, outbound)
+    }
+
+    /// Construct with an explicit pool recycling method and outbound
+    /// transport; test-only combination.
+    pub fn with_recycling_and_outbound(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound)
+    }
+
+    fn build(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
     ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
@@ -170,7 +206,14 @@ impl AppState {
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
             connection_recovery: true,
+            outbound,
         })
+    }
+
+    /// The recording fake outbound client when one is installed (test
+    /// contexts), so tests can assert on recorded calls.
+    pub fn recording_fake(&self) -> Option<&outbound::RecordingFakeOutbound> {
+        self.outbound.as_any().downcast_ref()
     }
 }
 
@@ -722,6 +765,23 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
         )
+        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
+        .route(
+            "/api/v1/issues/{issue_id}",
+            post(issue_read_state::post_issue_action),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkRead",
+            post(issue_read_state::bulk_mark_issues_read),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkUnread",
+            post(issue_read_state::bulk_mark_issues_unread),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(reader_context::get_issue_reader_context),
+        )
         .route(
             "/api/v1/threads:getBlockingInfo",
             post(thread_ordering::get_threads_blocking_info),
@@ -733,6 +793,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(thread_issues::reorder_thread_issues),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:validateOrder",
@@ -930,6 +1002,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
             get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity::cbl_adoption_preview),
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
