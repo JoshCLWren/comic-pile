@@ -482,7 +482,9 @@ def test_checkpoint_second_page_missing_connection_fails_closed(monkeypatch: pyt
     assert seen == [None, "next"]
 
 
-def test_closed_recovery_requires_main_and_source_run_bytes(harness: dict) -> None:
+def test_closed_recovery_requires_main_and_source_run_bytes(
+    harness: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A resumed branch's new bytes cannot award its earlier source run a merge."""
     saved = harness["saved"]
     saved["resumed"] = True
@@ -499,7 +501,7 @@ def test_closed_recovery_requires_main_and_source_run_bytes(harness: dict) -> No
         # Simulate B's tip appearing in main, but A's original work reverted.
         return snapshot["tree"] == saved["tree"]
 
-    handoff.incorporated = incorporated
+    monkeypatch.setattr(handoff, "incorporated", incorporated)
     result = handoff.publish(REPO, RUN, cleanup=True)
     assert not result["published"] and not result.get("merged")
     assert observed and observed[-1]["head"] == saved["origin_head"]
