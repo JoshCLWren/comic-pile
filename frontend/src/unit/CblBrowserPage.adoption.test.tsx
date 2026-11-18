@@ -1011,6 +1011,46 @@ describe('CblBrowserPage adoption', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the graph, the loop, and a resolve path when a cycle has no overlap questions (#5379)', async () => {
+    const user = userEvent.setup()
+    mockGraphPreview.mockResolvedValue(
+      readingGraphPreview({
+        overlaps: [],
+        cycle_errors: [
+          {
+            code: 'reading_constraint_cycle',
+            message:
+              'Reading constraint cycle: Supreme (1992) #1 --source order--> Alpha Flight #1 --source order--> Supreme (1992) #1.',
+          },
+        ],
+      }),
+    )
+    renderPage()
+    await searchFor(user)
+    await selectSource(user)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add this reading order' }),
+      ).toBeDisabled()
+    })
+    // The loop itself must be visible, not just the disabled-button tooltip.
+    expect(screen.getByTestId('reading-graph-summary')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Reading constraint cycle: Supreme \(1992\) #1/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Resolve the reading-order loop before adding this source.'),
+    ).toBeInTheDocument()
+    // A resolve path must be visible: the reader can break the loop from the checklist.
+    expect(
+      screen.getByText(/exclude one of the series in this loop under Customize/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Customize' }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps each source\'s own checklist choices when switching sources (#4014)', async () => {
     const user = userEvent.setup()
     renderPage()
