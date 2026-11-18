@@ -222,6 +222,37 @@ mod tests {
         }
     }
 
+    /// The three remaining browser-called preview operations (#4842) must keep
+    /// their wire contract in the same-path document so the generated
+    /// TypeScript client keeps those methods when the shadowed Python handlers
+    /// retire.
+    #[test]
+    fn same_path_contract_documents_all_preview_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method) in [
+            ("/api/v1/catalog/series-mappings/preview", "post"),
+            (
+                "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+                "post",
+            ),
+            (
+                "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+                "post",
+            ),
+        ] {
+            let operation = &paths[path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in same-path contract"
+            );
+            assert!(
+                operation["responses"]["200"].is_object(),
+                "{method} {path} has no 200 response"
+            );
+        }
+    }
+
     /// The six same-path thread issue-management operations (#4832 part D)
     /// must keep their wire contract in the same-path document so the
     /// generated TypeScript client keeps those methods when the retained
