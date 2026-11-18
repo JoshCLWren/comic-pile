@@ -297,6 +297,101 @@ describe('CblComicFinder', () => {
 })
 
 describe('CblReadingListFinder', () => {
+  it('renders covered direct actions for every exact entry in one canonical-id batch', async () => {
+    const user = userEvent.setup()
+    mocks.readingListCandidates.mockResolvedValue(readingListResponse({
+      entries: [
+        {
+          position: 0,
+          issue_id: 5,
+          series_name: 'Ultimate Spider-Man',
+          issue_number: '1',
+          comicvine_issue_id: '4000-1',
+          comicvine_issue_ids: ['4000-1'],
+          identity_status: 'confirmed',
+        },
+        {
+          position: 1,
+          issue_id: 6,
+          series_name: 'Ultimate Spider-Man',
+          issue_number: '2',
+          comicvine_issue_id: null,
+          comicvine_issue_ids: [],
+          identity_status: 'missing',
+        },
+        {
+          position: 2,
+          issue_id: 5,
+          series_name: 'Ultimate Spider-Man',
+          issue_number: '1',
+          comicvine_issue_id: '4000-1',
+          comicvine_issue_ids: ['4000-1'],
+          identity_status: 'confirmed',
+        },
+      ],
+    }))
+    fetchCards.mockResolvedValue([
+      {
+        issue_id: 5,
+        thread_id: 3,
+        thread_title: 'Ultimate Spider-Man',
+        issue_number: '1',
+        status: 'unread',
+        rating: null,
+        mapping_state: 'confirmed',
+        has_confirmed_identity: true,
+        comicvine_issue_id: '4000-1',
+        cover_image_url: 'https://comicvine.gamespot.com/a/ultimate-1.jpg',
+      },
+      {
+        issue_id: 6,
+        thread_id: 3,
+        thread_title: 'Ultimate Spider-Man',
+        issue_number: '2',
+        status: 'read',
+        rating: 4,
+        mapping_state: 'unmapped',
+        has_confirmed_identity: false,
+        comicvine_issue_id: null,
+        cover_image_url: 'https://comicvine.gamespot.com/a/ultimate-2.jpg',
+      },
+    ])
+    renderFinder(
+      <CblReadingListFinder
+        listId={9}
+        listName="My Reading List"
+        backTo="/continuity-plans/4"
+        backLabel="Reading Plans"
+        testIdPrefix="cbl-reading-list"
+      />,
+    )
+    expect(fetchCards).not.toHaveBeenCalled()
+    await user.click(screen.getByTestId('cbl-reading-list-open'))
+
+    const first = await screen.findByTestId('cbl-reading-list-entry-0')
+    const second = screen.getByTestId('cbl-reading-list-entry-1')
+    const duplicate = screen.getByTestId('cbl-reading-list-entry-2')
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([5, 6]))
+    expect(within(first).getByRole('img', {
+      name: 'Cover for Ultimate Spider-Man #1',
+    })).toHaveAttribute('src', 'https://comicvine.gamespot.com/a/ultimate-1.jpg')
+    expect(within(second).getByRole('img', {
+      name: 'Cover for Ultimate Spider-Man #2',
+    })).toHaveAttribute('src', 'https://comicvine.gamespot.com/a/ultimate-2.jpg')
+    expect(within(duplicate).getByRole('img', {
+      name: 'Cover for Ultimate Spider-Man #1',
+    })).toHaveAttribute('src', 'https://comicvine.gamespot.com/a/ultimate-1.jpg')
+    expect(second).toHaveTextContent('No confirmed Comic Vine ID')
+
+    await user.click(within(first).getByRole('button', {
+      name: 'Reading and mapping actions for Ultimate Spider-Man #1',
+    }))
+    expect(within(first).getByTestId('comic-issue-card')).toHaveAttribute(
+      'aria-label', 'Issue Ultimate Spider-Man #1',
+    )
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([5, 6])
+  })
+
   it('measures coverage from the confirmed comics only', async () => {
     const user = userEvent.setup()
     mocks.readingListCandidates.mockResolvedValue(readingListResponse())
