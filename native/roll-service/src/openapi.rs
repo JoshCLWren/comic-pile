@@ -84,6 +84,22 @@ use utoipa::OpenApi;
         crate::continuity_rules::get_documentation,
         crate::continuity_rules::update_documentation,
         crate::continuity_rules::delete_documentation,
+        // Same-path v1 continuity-plans operations cut over to native Rust.
+        crate::continuity_plans::list_documentation,
+        crate::continuity_plans::create_documentation,
+        crate::continuity_plans::get_documentation,
+        crate::continuity_plans::update_documentation,
+        crate::continuity_plans::delete_documentation,
+        crate::continuity_plans::adopt_reading_order_documentation,
+        crate::continuity_plans::membership_documentation,
+        crate::continuity_plans::link_dependency_documentation,
+        crate::continuity_plans::unlink_dependency_documentation,
+        crate::continuity_plans::project_reading_order_documentation,
+        crate::continuity_plans::release_source_create_documentation,
+        crate::continuity_plans::release_source_list_documentation,
+        crate::continuity_plans::release_source_list_reader_documentation,
+        crate::continuity_plans::release_source_update_documentation,
+        crate::continuity_plans::release_source_delete_documentation,
         // All five same-path releases operations are documented in this
         // browser-facing native contract: the two public reads plus the
         // writer-authorized source/publish/retract operations, which carry
@@ -189,6 +205,28 @@ use utoipa::OpenApi;
         crate::continuity_rules::ContinuityRuleRequest,
         crate::continuity_rules::ContinuityRuleResponse,
         crate::continuity_rules::ConvergenceTarget,
+        crate::continuity_plans::ContinuityPlanLane,
+        crate::continuity_plans::ContinuityPlanNode,
+        crate::continuity_plans::ContinuityPlanWrite,
+        crate::continuity_plans::ContinuityPlanResponse,
+        crate::continuity_plans::ContinuityPlanListItem,
+        crate::continuity_plans::ReadingOrderProjectionRequest,
+        crate::continuity_plans::ReadingOrderProjectionEntry,
+        crate::continuity_plans::ReadingOrderProjectionConflict,
+        crate::continuity_plans::ReadingOrderProjectionPreview,
+        crate::continuity_plans::ReadingOrderProjectionResult,
+        crate::continuity_plans::ReadingOrderAdoptRequest,
+        crate::continuity_plans::ReleaseSourceCreate,
+        crate::continuity_plans::ReleaseSourceUpdate,
+        crate::continuity_plans::ReleaseSourceResponse,
+        crate::continuity_plans::ReadingPlanReleaseSourceStatus,
+        crate::continuity_plans::ReadingPlanMemberIssue,
+        crate::continuity_plans::ReadingPlanSourceSnapshot,
+        crate::continuity_plans::ReadingPlanSourcePlacementView,
+        crate::continuity_plans::ReadingPlanProgress,
+        crate::continuity_plans::ReadingPlanMembershipResponse,
+        crate::continuity_plans::ReadingPlanDependencyLink,
+        crate::continuity_plans::ReadingPlanDependencyLinkRequest,
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
@@ -304,6 +342,55 @@ mod tests {
             );
         }
         assert!(document["components"]["securitySchemes"]["HTTPBearer"].is_object());
+    }
+
+    /// The same-path continuity-plans cutover must keep its v1 operations and
+    /// response schemas in the generated native contract (issue #4838).
+    #[test]
+    fn continuity_plans_same_path_operations_and_schemas_are_documented() {
+        let document = document();
+        for path in [
+            "/api/v1/continuity-plans/",
+            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v1/continuity-plans/release-sources/",
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+        ] {
+            assert!(
+                document["paths"].get(path).is_some(),
+                "migrated v1 path missing from native contract: {path}"
+            );
+        }
+        for schema in [
+            "ContinuityPlanResponse",
+            "ContinuityPlanWrite",
+            "ContinuityPlanListItem",
+            "ReadingPlanDependencyLink",
+            "ReadingPlanMembershipResponse",
+            "ReleaseSourceCreate",
+            "ReleaseSourceUpdate",
+            "ContinuityReleaseSourceResponse",
+        ] {
+            assert!(
+                document["components"]["schemas"].get(schema).is_some(),
+                "migrated response schema missing from native contract: {schema}"
+            );
+        }
+        assert_fields(
+            &document,
+            "ContinuityReleaseSourceResponse",
+            &[
+                "id",
+                "plan_id",
+                "thread_id",
+                "provider_volume_id",
+                "enabled",
+            ],
+        );
     }
 
     #[test]

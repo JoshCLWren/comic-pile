@@ -166,9 +166,15 @@ def test_read_token_is_optional_and_verified_before_use() -> None:
     for name in ("fixed-model-factory-dispatch.yml", "free-model-factory-run.yml"):
         data = yaml.safe_load((WORKFLOWS / name).read_text())
         steps = [s for job in data["jobs"].values() for s in job.get("steps", [])]
+        resolve = next(s for s in steps if s.get("name") == "Resolve existing read-only App client ID")
+        assert resolve["if"] == "${{ env.FACTORY_READER_APP_ID != '' }}"
+        assert resolve["continue-on-error"] is True
+        assert "factory_app_client_id.py" in resolve["run"]
         mint = next(s for s in steps if s.get("name") == "Mint optional read-only factory App token")
         assert mint["continue-on-error"] is True
-        assert mint["if"] == "${{ env.FACTORY_READER_APP_ID != '' }}"
+        assert mint["if"] == "${{ steps.read_app_identity.outputs.client_id != '' }}"
+        assert mint["with"]["client-id"] == "${{ steps.read_app_identity.outputs.client_id }}"
+        assert "app-id" not in mint["with"]
         assert all(v == "read" for k, v in mint["with"].items() if k.startswith("permission-"))
         verify = next(s for s in steps if s.get("name") == "Verify and enable read-only factory App token")
         assert verify["run"].index("gh api") < verify["run"].index("FACTORY_READ_TOKEN=")

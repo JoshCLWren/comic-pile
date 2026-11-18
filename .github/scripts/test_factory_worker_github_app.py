@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -325,6 +326,16 @@ class HandoffTest(unittest.TestCase):
             else:
                 os.environ["FACTORY_WORKER_APP_MINT_STUB_TOKEN"] = previous
         self.assertEqual((source, token), ("installation", "handoff-token"))
+
+
+def test_faker_bootstrap_version_matches_the_actual_dependency_lock() -> None:
+    """Prevent test-only Faker substitution from masking a broken App bootstrap."""
+    config = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads((REPO / "uv.lock").read_text(encoding="utf-8"))
+    assert f"faker=={app.FAKER_VERSION}" in config["dependency-groups"]["dev"]
+    faker_packages = [entry for entry in lock["package"] if entry["name"] == "faker"]
+    assert len(faker_packages) == 1
+    assert faker_packages[0]["version"] == app.FAKER_VERSION
 
 
 if __name__ == "__main__":

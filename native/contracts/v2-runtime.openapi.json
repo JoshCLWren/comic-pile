@@ -119,6 +119,568 @@
         ]
       }
     },
+    "/api/v1/continuity-plans/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityPlanListItem"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/from-reading-order": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_adopt_reading_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/{source_id}": {
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_update",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_get",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_update",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_delete",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_link_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_unlink_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_membership",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "operationId": "continuity_plans_project_to_reading_order",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list_reader",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "tags": [
@@ -1583,663 +2145,6 @@
             "description": "Database temporarily unavailable"
           }
         }
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/identity": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "get_issue_identity_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned identity state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueIdentityResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "remove_identity_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Identity removed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueIdentityResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/identity:confirm": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "confirm_identity_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmIdentityRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Confirmed identity state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueIdentityResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/identity:replace": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "replace_identity_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceIdentityRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Replaced identity state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueIdentityResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/metadata:correct": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "apply_correction_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MetadataCorrectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Corrections after apply",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/metadata:corrections": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "list_corrections_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Active corrections",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/metadata:refresh": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "refresh_metadata_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Refresh signal",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataRefreshResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues/{issue_id}/metadata:revert": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "revert_correction_documentation",
-        "parameters": [
-          {
-            "name": "issue_id",
-            "in": "path",
-            "description": "ComicPile issue ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MetadataCorrectionRevertRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Corrections after revert",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataCorrectionsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Issue not owned"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/issues:import": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "import_issue_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportIssueRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Imported issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportIssueResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Reading order not owned"
-          },
-          "409": {
-            "description": "ComicVine issue already imported"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/resolve": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "resolve_input_documentation",
-        "parameters": [
-          {
-            "name": "input",
-            "in": "query",
-            "description": "Search text or ComicVine URL",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Resolved input",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineResolveResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/search/series": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "search_series_documentation",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Series title query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum results",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Zero-based offset",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated series search",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineSeriesSearchResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/series/{comicvine_volume_id}/import-status": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "series_import_status_v2_documentation",
-        "parameters": [
-          {
-            "name": "comicvine_volume_id",
-            "in": "path",
-            "description": "ComicVine volume ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned import status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/series/{comicvine_volume_id}/issues": {
-      "get": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "series_issues_documentation",
-        "parameters": [
-          {
-            "name": "comicvine_volume_id",
-            "in": "path",
-            "description": "ComicVine volume ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "series_name",
-            "in": "query",
-            "description": "Pre-fetched series name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Volume issue roster",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComicVineSeriesIssuesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/comicvine/series:import": {
-      "post": {
-        "tags": [
-          "comicvine-v2"
-        ],
-        "operationId": "import_series_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImportSeriesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Imported series",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportSeriesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or revoked access token"
-          },
-          "404": {
-            "description": "Reading order not owned"
-          },
-          "503": {
-            "description": "ComicVine unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     },
     "/api/v2/continuity-plans/{plan_id}/reader": {
@@ -4729,45 +4634,6 @@
           "unavailable"
         ]
       },
-      "CanonicalCorrection": {
-        "type": "object",
-        "required": [
-          "id",
-          "field_name",
-          "canonical_value",
-          "provenance",
-          "created_by",
-          "created_at"
-        ],
-        "properties": {
-          "canonical_value": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "field_name": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "provenance": {
-            "type": "string"
-          },
-          "provider_value": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "ComicPileMatch": {
         "type": "object",
         "description": "Owner-scoped local representations of a related ComicVine issue.",
@@ -4795,54 +4661,6 @@
           },
           "thread_title": {
             "type": "string"
-          }
-        }
-      },
-      "ComicVineIssueCandidate": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "cover_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "store_date": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -4879,232 +4697,6 @@
           },
           "tracked_issue_count": {
             "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "ComicVineResolveResponse": {
-        "type": "object",
-        "required": [
-          "input",
-          "kind",
-          "issues"
-        ],
-        "properties": {
-          "input": {
-            "type": "string"
-          },
-          "issue": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ComicVineResolvedIssue"
-              }
-            ]
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineIssueCandidate"
-            }
-          },
-          "kind": {
-            "type": "string"
-          },
-          "validation_error": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ComicVineSeriesResult"
-              }
-            ]
-          }
-        }
-      },
-      "ComicVineResolvedIssue": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "cover_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "series_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "store_date": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ComicVineSeriesIssuesResponse": {
-        "type": "object",
-        "required": [
-          "comicvine_volume_id",
-          "series_name",
-          "issues"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineIssueCandidate"
-            }
-          },
-          "series_name": {
-            "type": "string"
-          }
-        }
-      },
-      "ComicVineSeriesResult": {
-        "type": "object",
-        "required": [
-          "comicvine_volume_id",
-          "name"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "image_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "name": {
-            "type": "string"
-          },
-          "publisher": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_detail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "start_year": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ComicVineSeriesSearchResponse": {
-        "type": "object",
-        "required": [
-          "query",
-          "results",
-          "offset",
-          "limit",
-          "has_more"
-        ],
-        "properties": {
-          "has_more": {
-            "type": "boolean"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "next_offset": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "query": {
-            "type": "string"
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComicVineSeriesResult"
-            }
-          },
-          "total_available": {
-            "type": [
-              "integer",
-              "null"
-            ],
             "format": "int32"
           }
         }
@@ -5200,15 +4792,328 @@
           }
         }
       },
-      "ConfirmIdentityRequest": {
+      "ContinuityPlanLane": {
         "type": "object",
         "required": [
-          "comicvine_issue_id"
+          "id",
+          "name",
+          "order"
         ],
         "properties": {
-          "comicvine_issue_id": {
+          "id": {
+            "type": "string"
+          },
+          "inferred_gate_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "migration_contract": {},
+          "name": {
+            "type": "string"
+          },
+          "order": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityPlanListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ordering_mode",
+          "lane_count",
+          "step_count",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lane_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "source_names": {},
+          "source_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "step_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ContinuityPlanNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position"
+        ],
+        "properties": {
+          "checkpoint_target_ref_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "checkpoint_target_ref_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "convergence_gate": {
+            "type": "array",
+            "items": {}
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_cbl_placements": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {}
+          },
+          "source_confidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_story_arc_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_target_story_arc_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityPlanResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            }
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ContinuityPlanWrite": {
+        "type": "object",
+        "required": [
+          "name",
+          "ordering_mode"
+        ],
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            }
+          },
+          "ordering_mode": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityReleaseSourceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
           }
         }
       },
@@ -5975,241 +5880,6 @@
           }
         }
       },
-      "ImportIssueRequest": {
-        "type": "object",
-        "required": [
-          "title",
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "anchor_after_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "anchor_before_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_order_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "title": {
-            "type": "string"
-          }
-        }
-      },
-      "ImportIssueResponse": {
-        "type": "object",
-        "required": [
-          "thread_id",
-          "issue_id",
-          "external_identity_id"
-        ],
-        "properties": {
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "position": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "reading_order_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_items": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ImportSeriesIssueResult": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id",
-          "outcome",
-          "hydration"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "conflict_detail": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hydration": {
-            "type": "string"
-          },
-          "issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "outcome": {
-            "type": "string"
-          }
-        }
-      },
-      "ImportSeriesRequest": {
-        "type": "object",
-        "required": [
-          "comicvine_volume_id"
-        ],
-        "properties": {
-          "already_read_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "anchor_after_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "anchor_before_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_order_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
-      "ImportSeriesResponse": {
-        "type": "object",
-        "required": [
-          "thread_id",
-          "series_name",
-          "comicvine_volume_id",
-          "total_issues_in_series",
-          "issues_adopted",
-          "issues_skipped",
-          "issues_conflict",
-          "issue_results",
-          "thread_created"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ImportSeriesIssueResult"
-            }
-          },
-          "issues_adopted": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issues_conflict": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issues_skipped": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "position": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "reading_order_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "thread_created": {
-            "type": "boolean"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_issues_in_series": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total_items": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
       "InitializeSessionRequest": {
         "type": "object",
         "description": "Temporary explicit write boundary for legacy reading-session consumers.\nGET /api/v2/roll/bootstrap never creates or mutates a session.",
@@ -6424,98 +6094,6 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "IssueIdentityMapping": {
-        "type": "object",
-        "required": [
-          "external_identity_id",
-          "provider",
-          "comicvine_id",
-          "status"
-        ],
-        "properties": {
-          "comicvine_id": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "created_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "evidence_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "external_identity_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "IssueIdentityResponse": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "has_confirmed_identity",
-          "confirmed_mappings",
-          "candidate_mappings",
-          "has_unresolved"
-        ],
-        "properties": {
-          "candidate_mappings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueIdentityMapping"
-            }
-          },
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confirmed_mappings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueIdentityMapping"
-            }
-          },
-          "has_confirmed_identity": {
-            "type": "boolean"
-          },
-          "has_unresolved": {
-            "type": "boolean"
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "thread_title": {
-            "type": "string"
           }
         }
       },
@@ -6801,80 +6379,6 @@
             }
           }
         ]
-      },
-      "MetadataCorrectionRequest": {
-        "type": "object",
-        "required": [
-          "field_name",
-          "canonical_value"
-        ],
-        "properties": {
-          "canonical_value": {
-            "type": "string"
-          },
-          "field_name": {
-            "type": "string"
-          },
-          "reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "MetadataCorrectionRevertRequest": {
-        "type": "object",
-        "required": [
-          "correction_id"
-        ],
-        "properties": {
-          "correction_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "MetadataCorrectionsResponse": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "corrections"
-        ],
-        "properties": {
-          "corrections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CanonicalCorrection"
-            }
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "MetadataRefreshResponse": {
-        "type": "object",
-        "required": [
-          "issue_id",
-          "refreshed"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "refreshed": {
-            "type": "boolean"
-          }
-        }
       },
       "MinimalReleaseResponse": {
         "type": "object",
@@ -8476,6 +7980,505 @@
         },
         "additionalProperties": false
       },
+      "ReadingOrderAdoptRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "lane_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingOrderProjectionConflict": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderProjectionEntry": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReadingOrderProjectionPreview": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionConflict"
+            }
+          },
+          "dropped_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionEntry"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderProjectionRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingOrderProjectionResult": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
+        ],
+        "properties": {
+          "added_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kept_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanDependencyLink": {
+        "type": "object",
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "properties": {
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanDependencyLinkRequest": {
+        "type": "object",
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingPlanMemberIssue": {
+        "type": "object",
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position",
+          "is_checkpoint"
+        ],
+        "properties": {
+          "display_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_metadata": {}
+        }
+      },
+      "ReadingPlanMembershipResponse": {
+        "type": "object",
+        "description": "Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`.",
+        "required": [
+          "plan_id",
+          "issues",
+          "dependencies",
+          "sources",
+          "placements",
+          "progress"
+        ],
+        "properties": {
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanMemberIssue"
+            }
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourcePlacementView"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReadingPlanProgress"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
+            }
+          }
+        }
+      },
+      "ReadingPlanProgress": {
+        "type": "object",
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "properties": {
+          "read_issues": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanReleaseSourceStatus": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "provider_publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanSourcePlacementView": {
+        "type": "object",
+        "required": [
+          "id",
+          "occurrence_id",
+          "plan_source_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "plan_source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanSourceSnapshot": {
+        "type": "object",
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
+        ],
+        "properties": {
+          "adopted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "raw_source_path": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ReadingSessionCreatedResponse": {
         "type": "object",
         "description": "Result of the explicit v2 reading-session initialization write.",
@@ -8780,6 +8783,29 @@
           }
         }
       },
+      "ReleaseSourceCreate": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "thread_id",
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "ReleaseSourceResponse": {
         "type": "object",
         "description": "Result of reconciling a GitHub source identity with the ledger.",
@@ -8801,6 +8827,18 @@
             ]
           }
         }
+      },
+      "ReleaseSourceUpdate": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "ReleaseUpsertRequest": {
         "type": "object",
@@ -8862,24 +8900,6 @@
           },
           "visibility": {
             "type": "string"
-          }
-        }
-      },
-      "ReplaceIdentityRequest": {
-        "type": "object",
-        "required": [
-          "comicvine_issue_id"
-        ],
-        "properties": {
-          "comicvine_issue_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reason": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -9204,6 +9224,7 @@
       },
       "SeriesImportStatusResponse": {
         "type": "object",
+        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "required": [
           "comicvine_volume_id",
           "imported"

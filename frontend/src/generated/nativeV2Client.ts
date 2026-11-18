@@ -23,15 +23,6 @@ export function compactQuery(
   return Object.keys(params).length > 0 ? params : undefined
 }
 
-export interface ApplyCorrectionRequest {
-  path: {
-    issue_id: number
-  }
-  body: components['schemas']['NativeMetadataCorrectionRequest']
-}
-
-export type ApplyCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
-
 export interface BootstrapRequest {
   query?: {
     timezone?: string
@@ -55,14 +46,80 @@ export interface ConfirmRequest {
 
 export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
 
-export interface ConfirmIdentityRequest {
-  path: {
-    issue_id: number
-  }
-  body: components['schemas']['NativeConfirmIdentityRequest']
+export interface ContinuityPlansAdoptReadingOrderRequest {
+  body: components['schemas']['ReadingOrderAdoptRequest']
 }
 
-export type ConfirmIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
+export type ContinuityPlansAdoptReadingOrderResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansCreateRequest {
+  body: components['schemas']['ContinuityPlanWrite']
+}
+
+export type ContinuityPlansCreateResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansDeleteRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansDeleteResponse = void
+
+export interface ContinuityPlansGetRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansGetResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansLinkDependencyRequest {
+  path: {
+    plan_id: number
+    dependency_id: number
+  }
+  body: components['schemas']['ReadingPlanDependencyLinkRequest']
+}
+
+export type ContinuityPlansLinkDependencyResponse = components['schemas']['ReadingPlanDependencyLink']
+
+export type ContinuityPlansListResponse = Array<components['schemas']['ContinuityPlanListItem']>
+
+export interface ContinuityPlansMembershipRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansMembershipResponse = components['schemas']['ReadingPlanMembershipResponse']
+
+export interface ContinuityPlansProjectToReadingOrderRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['NativeReadingOrderProjectionRequest']
+}
+
+export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['NativeReadingOrderProjectionResult']
+
+export interface ContinuityPlansUnlinkDependencyRequest {
+  path: {
+    plan_id: number
+    dependency_id: number
+  }
+}
+
+export type ContinuityPlansUnlinkDependencyResponse = void
+
+export interface ContinuityPlansUpdateRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['ContinuityPlanWrite']
+}
+
+export type ContinuityPlansUpdateResponse = components['schemas']['ContinuityPlanResponse']
 
 export interface ContinuityRulesCreateRequest {
   body: components['schemas']['ContinuityRuleRequest']
@@ -196,14 +253,6 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
-export interface GetIssueIdentityRequest {
-  path: {
-    issue_id: number
-  }
-}
-
-export type GetIssueIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
-
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -247,18 +296,6 @@ export interface GetThreadIssueDependenciesRequest {
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
 export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
-
-export interface ImportIssueRequest {
-  body: components['schemas']['NativeImportIssueRequest']
-}
-
-export type ImportIssueResponse = components['schemas']['NativeImportIssueResponse']
-
-export interface ImportSeriesRequest {
-  body: components['schemas']['NativeImportSeriesRequest']
-}
-
-export type ImportSeriesResponse = components['schemas']['NativeImportSeriesResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -310,14 +347,6 @@ export interface ListActivityRequest {
 export type ListActivityResponse = components['schemas']['ActivityResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
-
-export interface ListCorrectionsRequest {
-  path: {
-    issue_id: number
-  }
-}
-
-export type ListCorrectionsResponse = components['schemas']['NativeMetadataCorrectionsResponse']
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -409,14 +438,6 @@ export interface RefreshRequest {
 
 export type RefreshResponse = components['schemas']['TokenResponse']
 
-export interface RefreshMetadataRequest {
-  path: {
-    issue_id: number
-  }
-}
-
-export type RefreshMetadataResponse = components['schemas']['NativeMetadataRefreshResponse']
-
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']
 }
@@ -431,6 +452,45 @@ export interface RejectRequest {
 }
 
 export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
+
+export interface ReleaseSourcesCreateRequest {
+  body: components['schemas']['ReleaseSourceCreate']
+}
+
+export type ReleaseSourcesCreateResponse = components['schemas']['ContinuityReleaseSourceResponse']
+
+export interface ReleaseSourcesDeleteRequest {
+  path: {
+    source_id: number
+  }
+}
+
+export type ReleaseSourcesDeleteResponse = void
+
+export interface ReleaseSourcesListRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ReleaseSourcesListResponse = Array<components['schemas']['ContinuityReleaseSourceResponse']>
+
+export interface ReleaseSourcesListReaderRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ReleaseSourcesListReaderResponse = Array<components['schemas']['ReadingPlanReleaseSourceStatus']>
+
+export interface ReleaseSourcesUpdateRequest {
+  path: {
+    source_id: number
+  }
+  body: components['schemas']['ReleaseSourceUpdate']
+}
+
+export type ReleaseSourcesUpdateResponse = components['schemas']['ContinuityReleaseSourceResponse']
 
 export interface ReleasesGetRequest {
   path: {
@@ -469,7 +529,7 @@ export interface ReleasesReconcileRequest {
   }
 }
 
-export type ReleasesReconcileResponse = components['schemas']['NativeReleaseSourceResponse']
+export type ReleasesReconcileResponse = components['schemas']['ReleaseSourceResponse']
 
 export interface ReleasesRetractRequest {
   path: {
@@ -491,28 +551,11 @@ export interface RelinkRequest {
 
 export type RelinkResponse = components['schemas']['PlanRelinkResult']
 
-export interface RemoveIdentityRequest {
-  path: {
-    issue_id: number
-  }
-}
-
-export type RemoveIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
-
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
 }
 
 export type RepairResponse = components['schemas']['ReadingGraphRepairResponse']
-
-export interface ReplaceIdentityRequest {
-  path: {
-    issue_id: number
-  }
-  body: components['schemas']['NativeReplaceIdentityRequest']
-}
-
-export type ReplaceIdentityResponse = components['schemas']['NativeIssueIdentityResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -526,34 +569,7 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
 
-export interface ResolveInputRequest {
-  query: {
-    input: string
-  }
-}
-
-export type ResolveInputResponse = components['schemas']['NativeComicVineResolveResponse']
-
-export interface RevertCorrectionRequest {
-  path: {
-    issue_id: number
-  }
-  body: components['schemas']['NativeMetadataCorrectionRevertRequest']
-}
-
-export type RevertCorrectionResponse = components['schemas']['NativeMetadataCorrectionsResponse']
-
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
-
-export interface SearchSeriesRequest {
-  query: {
-    q: string
-    limit: number
-    offset: number
-  }
-}
-
-export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -562,25 +578,6 @@ export interface SeriesImportStatusRequest {
 }
 
 export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
-
-export interface SeriesImportStatusV2Request {
-  path: {
-    comicvine_volume_id: number
-  }
-}
-
-export type SeriesImportStatusV2Response = components['schemas']['SeriesImportStatusResponse']
-
-export interface SeriesIssuesRequest {
-  path: {
-    comicvine_volume_id: number
-  }
-  query: {
-    series_name: string
-  }
-}
-
-export type SeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
 
 export interface SkipRequest {
   path: {
@@ -618,11 +615,19 @@ export interface UpdateReadingListRequest {
 export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
-  applyCorrection(args: ApplyCorrectionRequest): Promise<ApplyCorrectionResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
-  confirmIdentity(args: ConfirmIdentityRequest): Promise<ConfirmIdentityResponse>
+  continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
+  continuityPlansCreate(args: ContinuityPlansCreateRequest): Promise<ContinuityPlansCreateResponse>
+  continuityPlansDelete(args: ContinuityPlansDeleteRequest): Promise<ContinuityPlansDeleteResponse>
+  continuityPlansGet(args: ContinuityPlansGetRequest): Promise<ContinuityPlansGetResponse>
+  continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest): Promise<ContinuityPlansLinkDependencyResponse>
+  continuityPlansList(): Promise<ContinuityPlansListResponse>
+  continuityPlansMembership(args: ContinuityPlansMembershipRequest): Promise<ContinuityPlansMembershipResponse>
+  continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest): Promise<ContinuityPlansProjectToReadingOrderResponse>
+  continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest): Promise<ContinuityPlansUnlinkDependencyResponse>
+  continuityPlansUpdate(args: ContinuityPlansUpdateRequest): Promise<ContinuityPlansUpdateResponse>
   continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
   continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
   continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
@@ -643,7 +648,6 @@ export interface NativeV2Client {
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
-  getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
@@ -651,8 +655,6 @@ export interface NativeV2Client {
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   getV1Metrics(): Promise<GetV1MetricsResponse>
-  importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
-  importSeries(args: ImportSeriesRequest): Promise<ImportSeriesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -661,7 +663,6 @@ export interface NativeV2Client {
   list(): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
-  listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
@@ -678,27 +679,24 @@ export interface NativeV2Client {
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
-  refreshMetadata(args: RefreshMetadataRequest): Promise<RefreshMetadataResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
+  releaseSourcesCreate(args: ReleaseSourcesCreateRequest): Promise<ReleaseSourcesCreateResponse>
+  releaseSourcesDelete(args: ReleaseSourcesDeleteRequest): Promise<ReleaseSourcesDeleteResponse>
+  releaseSourcesList(args: ReleaseSourcesListRequest): Promise<ReleaseSourcesListResponse>
+  releaseSourcesListReader(args: ReleaseSourcesListReaderRequest): Promise<ReleaseSourcesListReaderResponse>
+  releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest): Promise<ReleaseSourcesUpdateResponse>
   releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
   releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
   releasesPublish(args: ReleasesPublishRequest): Promise<ReleasesPublishResponse>
   releasesReconcile(args: ReleasesReconcileRequest): Promise<ReleasesReconcileResponse>
   releasesRetract(args: ReleasesRetractRequest): Promise<ReleasesRetractResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
-  removeIdentity(args: RemoveIdentityRequest): Promise<RemoveIdentityResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
-  replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
-  resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
-  revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   search(): Promise<SearchResponse>
-  searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
-  seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
-  seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
@@ -707,12 +705,6 @@ export interface NativeV2Client {
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
   return {
-    applyCorrection(args: ApplyCorrectionRequest) {
-      return client.post<ApplyCorrectionResponse, ApplyCorrectionRequest['body']>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:correct`,
-        args.body,
-      )
-    },
     bootstrap(args: BootstrapRequest = {}) {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
@@ -731,9 +723,56 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    confirmIdentity(args: ConfirmIdentityRequest) {
-      return client.post<ConfirmIdentityResponse, ConfirmIdentityRequest['body']>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:confirm`,
+    continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest) {
+      return client.post<ContinuityPlansAdoptReadingOrderResponse, ContinuityPlansAdoptReadingOrderRequest['body']>(
+        "/v1/continuity-plans/from-reading-order",
+        args.body,
+      )
+    },
+    continuityPlansCreate(args: ContinuityPlansCreateRequest) {
+      return client.post<ContinuityPlansCreateResponse, ContinuityPlansCreateRequest['body']>(
+        "/v1/continuity-plans/",
+        args.body,
+      )
+    },
+    continuityPlansDelete(args: ContinuityPlansDeleteRequest) {
+      return client.delete<ContinuityPlansDeleteResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    continuityPlansGet(args: ContinuityPlansGetRequest) {
+      return client.get<ContinuityPlansGetResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest) {
+      return client.post<ContinuityPlansLinkDependencyResponse, ContinuityPlansLinkDependencyRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        args.body,
+      )
+    },
+    continuityPlansList() {
+      return client.get<ContinuityPlansListResponse>("/v1/continuity-plans/")
+    },
+    continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
+      return client.get<ContinuityPlansMembershipResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+      )
+    },
+    continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
+      return client.post<ContinuityPlansProjectToReadingOrderResponse, ContinuityPlansProjectToReadingOrderRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
+        args.body,
+      )
+    },
+    continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest) {
+      return client.delete<ContinuityPlansUnlinkDependencyResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+      )
+    },
+    continuityPlansUpdate(args: ContinuityPlansUpdateRequest) {
+      return client.put<ContinuityPlansUpdateResponse, ContinuityPlansUpdateRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
         args.body,
       )
     },
@@ -838,11 +877,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
       )
     },
-    getIssueIdentity(args: GetIssueIdentityRequest) {
-      return client.get<GetIssueIdentityResponse>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
-      )
-    },
     getLegacyDependency(args: GetLegacyDependencyRequest) {
       return client.get<GetLegacyDependencyResponse>(
         `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
@@ -873,18 +907,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     getV1Metrics() {
       return client.get<GetV1MetricsResponse>("/v1/metrics")
-    },
-    importIssue(args: ImportIssueRequest) {
-      return client.post<ImportIssueResponse, ImportIssueRequest['body']>(
-        "/v2/comicvine/issues:import",
-        args.body,
-      )
-    },
-    importSeries(args: ImportSeriesRequest) {
-      return client.post<ImportSeriesResponse, ImportSeriesRequest['body']>(
-        "/v2/comicvine/series:import",
-        args.body,
-      )
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
@@ -926,11 +948,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
-    },
-    listCorrections(args: ListCorrectionsRequest) {
-      return client.get<ListCorrectionsResponse>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:corrections`,
-      )
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
@@ -1007,9 +1024,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    refreshMetadata(args: RefreshMetadataRequest) {
-      return client.post<RefreshMetadataResponse>(`/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:refresh`)
-    },
     register(args: RegisterRequest) {
       return client.post<RegisterResponse, RegisterRequest['body']>(
         "/v2/auth/register",
@@ -1019,6 +1033,33 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     reject(args: RejectRequest) {
       return client.post<RejectResponse, RejectRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        args.body,
+      )
+    },
+    releaseSourcesCreate(args: ReleaseSourcesCreateRequest) {
+      return client.post<ReleaseSourcesCreateResponse, ReleaseSourcesCreateRequest['body']>(
+        "/v1/continuity-plans/release-sources/",
+        args.body,
+      )
+    },
+    releaseSourcesDelete(args: ReleaseSourcesDeleteRequest) {
+      return client.delete<ReleaseSourcesDeleteResponse>(
+        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+      )
+    },
+    releaseSourcesList(args: ReleaseSourcesListRequest) {
+      return client.get<ReleaseSourcesListResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
+      )
+    },
+    releaseSourcesListReader(args: ReleaseSourcesListReaderRequest) {
+      return client.get<ReleaseSourcesListReaderResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
+      )
+    },
+    releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest) {
+      return client.patch<ReleaseSourcesUpdateResponse, ReleaseSourcesUpdateRequest['body']>(
+        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
         args.body,
       )
     },
@@ -1059,20 +1100,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    removeIdentity(args: RemoveIdentityRequest) {
-      return client.delete<RemoveIdentityResponse>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity`,
-      )
-    },
     repair(args: RepairRequest) {
       return client.post<RepairResponse, RepairRequest['body']>(
         "/v2/reading-graph/repairs",
-        args.body,
-      )
-    },
-    replaceIdentity(args: ReplaceIdentityRequest) {
-      return client.post<ReplaceIdentityResponse, ReplaceIdentityRequest['body']>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:replace`,
         args.body,
       )
     },
@@ -1088,41 +1118,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    resolveInput(args: ResolveInputRequest) {
-      return client.get<ResolveInputResponse>(
-        "/v2/comicvine/resolve",
-        { params: compactQuery(args.query) },
-      )
-    },
-    revertCorrection(args: RevertCorrectionRequest) {
-      return client.post<RevertCorrectionResponse, RevertCorrectionRequest['body']>(
-        `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/metadata:revert`,
-        args.body,
-      )
-    },
     search() {
       return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
-    },
-    searchSeries(args: SearchSeriesRequest) {
-      return client.get<SearchSeriesResponse>(
-        "/v2/comicvine/search/series",
-        { params: compactQuery(args.query) },
-      )
     },
     seriesImportStatus(args: SeriesImportStatusRequest) {
       return client.get<SeriesImportStatusResponse>(
         `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
-      )
-    },
-    seriesImportStatusV2(args: SeriesImportStatusV2Request) {
-      return client.get<SeriesImportStatusV2Response>(
-        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
-      )
-    },
-    seriesIssues(args: SeriesIssuesRequest) {
-      return client.get<SeriesIssuesResponse>(
-        `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
-        { params: compactQuery(args.query) },
       )
     },
     skip(args: SkipRequest) {

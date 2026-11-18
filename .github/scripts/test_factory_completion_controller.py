@@ -27,6 +27,21 @@ factory_completion = load_module(
 
 
 class SignalCompletionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Unit tests must not call the live GitHub CLI or mutate factory leases.
+        controller_patch = patch.object(factory_completion, "load_controller")
+        policy_patch = patch.object(factory_completion, "load_policy")
+        self.addCleanup(controller_patch.stop)
+        self.addCleanup(policy_patch.stop)
+        controller = controller_patch.start().return_value
+        policy = policy_patch.start().return_value
+        controller.list_issues.return_value = []
+        controller.list_prs.return_value = []
+        controller.omniroute_free_entry_capacity.return_value = {
+            "enabled": True, "remaining": 0,
+        }
+        policy.factory_review_backlog_count.return_value = 0
+
     def test_signal_completion_has_signal_key(self) -> None:
         """Completion drain must return a signal field."""
         result = factory_completion.signal_completion_mode()
