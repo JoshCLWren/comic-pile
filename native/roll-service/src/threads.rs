@@ -406,6 +406,13 @@ pub async fn get_thread_detail(
                  WHERE u.username = $1
                    AND COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) <= $3
                    AND NOT EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2)
+             ),
+             queue_disp AS (
+                 SELECT t.id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS display_position
+                 FROM threads t
+                 WHERE t.user_id = (SELECT user_id FROM auth)
+                   AND t.status = 'active'
+                   AND t.queue_position >= 1
              )
              SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                     t.status, t.last_rating,
@@ -414,9 +421,11 @@ pub async fn get_thread_detail(
                     to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
                     t.total_issues, t.reading_progress,
                     t.next_unread_issue_id, t.manual_creator_credits::text,
-                    (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id)
+                    (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id),
+                    qd.display_position AS computed_position
              FROM threads t
              JOIN auth ON auth.user_id = t.user_id
+             LEFT JOIN queue_disp qd ON qd.id = t.id
              WHERE t.id = $4",
             &[
                 &claims.username(),
@@ -431,12 +440,15 @@ pub async fn get_thread_detail(
         StatusCode::NOT_FOUND,
         "Thread not found".to_string(),
     ))?;
+
+    let computed_position: i32 = row.get(18);
+
     Ok(Json(ThreadDetailResponse {
         id: row.get(0),
         title: row.get(1),
         format: normalize_format(row.get(2)),
         issues_remaining: row.get(3),
-        queue_position: row.get(4),
+        queue_position: computed_position,
         status: row.get(5),
         last_rating: row.get(6),
         last_activity_at: row.get(7),
@@ -448,10 +460,11 @@ pub async fn get_thread_detail(
         total_issues: row.get(12),
         reading_progress: row.get(13),
         next_unread_issue_id: row.get(14),
-        next_unread_issue_number: row.get(16),
+        next_unread_issue_number: row.get::<_, Option<String>>(16),
         manual_creator_credits: row
             .get::<_, Option<String>>(15)
-            .and_then(|value| serde_json::from_str(&value).ok())
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<Value>(s).ok())
             .unwrap_or_else(|| Value::Array(Vec::new())),
     }))
 }

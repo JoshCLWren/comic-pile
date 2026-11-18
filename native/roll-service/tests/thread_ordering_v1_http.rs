@@ -645,3 +645,89 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn thread_detail_queue_position_matches_queue_list_position() {
+    // Regression test for issue #5263: position numbers should agree across
+    // Queue list, Thread Detail page, and pending Roll label.
+    //
+    // The display position is computed as row_number() over:
+    //   ORDER BY is_blocked ASC, queue_position ASC, id ASC
+    // Only threads with status='active' and queue_position >= 1 are in the queue.
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-pos").await;
+    let conn = state.pool.get().await.unwrap();
+
+    // Create threads with non-sequential stored queue_position values.
+    // The display position should follow the ORDER BY (is_blocked, queue_position, id).
+    // Thread "Gamma" has stored position 3, but will be position 3 (not blocked).
+    // Thread "Alpha" has stored position 5, but will be position 2 (not blocked, lower id).
+    // Thread "Beta" has stored position 2, but will be position 1 (not blocked, lowest id).
+    let alpha = thread(&conn, user_id, "Alpha").await;
+    let beta = thread(&conn, user_id, "Beta").await;
+    let gamma = thread(&conn, user_id, "Gamma").await;
+
+    // Set non-sequential stored queue positions.
+    conn.execute(
+        "UPDATE threads SET queue_position = 5 WHERE id = $1",
+        &[&alpha],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads SET queue_position = 2 WHERE id = $1",
+        &[&beta],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads SET queue_position = 3 WHERE id = $1",
+        &[&gamma],
+    )
+    .await
+    .unwrap();
+
+    // Fetch queue list (v2) to see the expected display positions.
+    let (list_status, list_body) = send(
+        &state,
+        get("/api/v2/threads", &token, &csrf),
+    )
+    .await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+
+    // The threads should be ordered by: is_blocked ASC, queue_position ASC, id ASC
+    // Beta: queue_position=2, id=beta (smallest queue_position) -> position 1
+    // Gamma: queue_position=3, id=gamma -> position 2
+    // Alpha: queue_position=5, id=alpha (largest queue_position) -> position 3
+    let threads = list_body["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), 3, "{list_body:?}");
+
+    let beta_list_pos = threads.iter().find(|t| t["id"].as_i64().unwrap() == beta as i64).unwrap();
+    let gamma_list_pos = threads.iter().find(|t| t["id"].as_i64().unwrap() == gamma as i64).unwrap();
+    let alpha_list_pos = threads.iter().find(|t| t["id"].as_i64().unwrap() == alpha as i64).unwrap();
+
+    let beta_display_pos = beta_list_pos["queue_position"].as_i64().unwrap();
+    let gamma_display_pos = gamma_list_pos["queue_position"].as_i64().unwrap();
+    let alpha_display_pos = alpha_list_pos["queue_position"].as_i64().unwrap();
+
+    // Verify order: Beta (pos 1), Gamma (pos 2), Alpha (pos 3)
+    assert_eq!(beta_display_pos, 1, "Beta should be position 1 in queue list");
+    assert_eq!(gamma_display_pos, 2, "Gamma should be position 2 in queue list");
+    assert_eq!(alpha_display_pos, 3, "Alpha should be position 3 in queue list");
+
+    // Now fetch each thread's detail and verify the queue_position matches.
+    for (thread_id, expected_position) in
+        [(beta, 1i64), (gamma, 2i64), (alpha, 3i64)]
+    {
+        let (detail_status, detail_body) = send(
+            &state,
+            get(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+        )
+        .await;
+        assert_eq!(detail_status, StatusCode::OK, "detail body: {detail_body:?}");
+        let actual_position = detail_body["queue_position"].as_i64().unwrap();
+        assert_eq!(
+            actual_position, expected_position,
+            "Thread {thread_id} detail queue_position should be {expected_position}, was {actual_position}. Detail body: {detail_body:?}"
+        );
+    }
+}
