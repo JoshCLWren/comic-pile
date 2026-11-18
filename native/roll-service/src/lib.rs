@@ -12,6 +12,7 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
+pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
 pub mod cron_auth;
@@ -241,6 +242,19 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
+    /// Explicit status with a structured JSON `detail` object.
+    ///
+    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
+    /// conflicts and validation errors. The scalar variants above cannot
+    /// represent that shape (their detail is a JSON string), so cutover
+    /// handlers that must preserve a structured wire contract use this
+    /// variant. The payload is serialized JSON text and parsed on response.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Serialized JSON object used as the `detail` value.
+        detail: String,
+    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -282,6 +296,7 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             ApiError::Detail { status, .. } => *status,
         }
@@ -303,6 +318,7 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
+            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
         }
@@ -360,6 +376,18 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
+        if let ApiError::StructuredDetail { detail, .. } = &self {
+            let value: serde_json::Value = serde_json::from_str(detail)
+                .unwrap_or_else(|_| serde_json::Value::String(detail.clone()));
+            let mut response = (status, Json(serde_json::json!({"detail": value}))).into_response();
+            if status == StatusCode::UNAUTHORIZED {
+                response.headers_mut().insert(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    axum::http::HeaderValue::from_static("Bearer"),
+                );
+            }
+            return response;
+        }
         let detail_owned = self.detail().to_string();
         let mut response = (
             status,
@@ -837,6 +865,67 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(continuity_rules::get)
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
+        )
+        // Continuity plans v1 routes (cutover from Python)
+        .route(
+            "/api/v1/continuity-plans/",
+            get(continuity_plans::list_continuity_plans),
+        )
+        .route(
+            "/api/v1/continuity-plans/",
+            post(continuity_plans::create_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            get(continuity_plans::get_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            put(continuity_plans::update_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(continuity_plans::delete_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(continuity_plans::get_continuity_plan_membership),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(continuity_plans::link_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(continuity_plans::list_release_sources),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(continuity_plans::list_release_sources_for_reader),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(continuity_plans::create_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(continuity_plans::update_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(continuity_plans::delete_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(continuity_plans::adopt_reading_order),
         )
         .route(
             "/api/v1/taste/discoveries",
