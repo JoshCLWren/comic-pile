@@ -91,7 +91,7 @@ const OTHER_COUPLERS_SQL: &str = "SELECT DISTINCT m.group_id, g.name, COALESCE(m
      WHERE m.group_id <> $2 AND (m.thread_id = ANY($3::int[]) OR i.thread_id = ANY($3::int[])) \
      ORDER BY g.name";
 const LINKED_PLANS_SQL: &str = "SELECT id, name FROM continuity_plans \
-     WHERE user_id = $1 AND nodes_json @> $2::jsonb ORDER BY name, id";
+     WHERE user_id = $1 AND nodes_json::jsonb @> $2::jsonb ORDER BY name, id";
 const DELETE_GROUP_SQL: &str = "DELETE FROM dependency_groups WHERE id = $1 AND user_id = $2";
 const SEQUENCE_OCCUPIED_SQL: &str = "SELECT id FROM dependency_group_memberships \
      WHERE group_id = $1 AND sequence_order = $2 LIMIT 1";
