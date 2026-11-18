@@ -41,7 +41,10 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{
+        rejection::{JsonRejection, PathRejection},
+        Path, State,
+    },
     http::StatusCode,
     Json,
 };
