@@ -254,7 +254,10 @@ export function ComicPillar({
           onClose={() => setIsCorrectionDialogOpen(false)}
           onSuccess={(options) => {
             setIsCorrectionDialogOpen(false)
-            if (options?.alreadyRefreshed) return
+            if (options?.alreadyRefreshed) {
+              void onRefreshThread()
+              return
+            }
             void onRefreshThread({ forceRefresh: true })
           }}
         />
