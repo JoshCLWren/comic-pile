@@ -19,6 +19,13 @@ CALLER_ROOTS = (
 )
 CALLER_SUFFIXES = {".py", ".sh", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".yml", ".yaml"}
 LEGACY_AUTH = re.compile(r"/api/(?:v1/)?auth/|[\"'`]/(?:v1/)?auth/")
+# Routing-fixture unit tests *declare* legacy method/path patterns as data for
+# the nginx ingress renderer; they do not issue auth calls. This is the same
+# non-live-client category as the generated OpenAPI aliases and Python server
+# tests the guard already excludes, and the production alias exercised by this
+# fixture is intentional. Keep the exemption to this one file so every real
+# maintained caller stays in scope.
+ROUTING_FIXTURE_FILES = frozenset({"scripts/generate_ui_audit_ingress.test.mjs"})
 
 
 @pytest.mark.parametrize(
@@ -43,24 +50,47 @@ def test_canonical_auth_callers_are_allowed(source: str) -> None:
     assert LEGACY_AUTH.search(source) is None
 
 
+def _find_legacy_auth_callers(scan_root: Path, repository: Path) -> list[str]:
+    """Return authored files under ``scan_root`` that call retired auth paths."""
+    offenders: list[str] = []
+    for path in scan_root.rglob("*"):
+        if path.suffix not in CALLER_SUFFIXES or not path.is_file():
+            continue
+        relative = path.relative_to(repository)
+        if "node_modules" in relative.parts or "generated" in relative.parts:
+            continue
+        if str(relative) in ROUTING_FIXTURE_FILES:
+            continue
+        if LEGACY_AUTH.search(path.read_text(encoding="utf-8")):
+            offenders.append(str(relative))
+    return offenders
+
+
 def test_maintained_callers_use_canonical_auth_paths() -> None:
     """Guard executable callers while retaining undeleted compatibility contracts.
 
     Generated OpenAPI describes legacy server aliases until production proof
-    permits their removal. Historical archives and Python server tests are not
-    live clients and remain outside this caller migration guard.
+    permits their removal. Historical archives, routing-fixture unit tests and
+    Python server tests are not live clients and remain outside this guard.
     """
-    offenders = []
-    for root in CALLER_ROOTS:
-        for path in (REPOSITORY / root).rglob("*"):
-            if path.suffix not in CALLER_SUFFIXES or not path.is_file():
-                continue
-            relative = path.relative_to(REPOSITORY)
-            if "node_modules" in relative.parts or "generated" in relative.parts:
-                continue
-            if LEGACY_AUTH.search(path.read_text(encoding="utf-8")):
-                offenders.append(str(relative))
+    offenders = [
+        offender
+        for root in CALLER_ROOTS
+        for offender in _find_legacy_auth_callers(REPOSITORY / root, REPOSITORY)
+    ]
     assert not offenders, f"Maintained callers still use retired auth URLs: {sorted(offenders)}"
+
+
+def test_routing_fixture_exemption_does_not_hide_real_callers(tmp_path: Path) -> None:
+    """A routing fixture declaring a legacy pattern stays exempt; a real caller is flagged."""
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "login.ts").write_text('post("/api/v1/auth/login")', encoding="utf-8")
+    (scripts / "generate_ui_audit_ingress.test.mjs").write_text(
+        "{src: '^/api/v1/auth/login$', dest: '/api/native_roll.rs'}", encoding="utf-8"
+    )
+
+    assert _find_legacy_auth_callers(scripts, tmp_path) == ["scripts/login.ts"]
 
 
 def test_script_login_preserves_credentials_and_token_contract() -> None:

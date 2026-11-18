@@ -8,6 +8,8 @@ irregular provider numbering, provider failure handling, and retry idempotency
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,11 +30,57 @@ from comic_pile.comicvine_provider import ComicVineError, ComicVineResponse
 
 SERIES_URL = "/api/v1/comicvine/series:import"
 VOLUME_ID = 40500
+# The import-status read was migrated same-path to native Rust in #4898 and the
+# shadowed Python handler was retired in #5162. The Python test app therefore no
+# longer serves this GET; its live contract now lives in the generated Rust
+# contract alongside the production ingress.
+IMPORT_STATUS_PATH = "/api/v1/comicvine/series/{comicvine_volume_id}/import-status"
+NATIVE_SAME_PATH_CONTRACT = (
+    Path(__file__).resolve().parents[1] / "native" / "contracts" / "same-path-runtime.openapi.json"
+)
 
 
 def _status_url(volume_id: int = VOLUME_ID) -> str:
     """Return the import-status URL for one provider volume."""
     return f"/api/v1/comicvine/series/{volume_id}/import-status"
+
+
+async def _assert_import_status_native_only(auth_client: AsyncClient) -> None:
+    """Assert the new real behavior of the same-path import-status operation.
+
+    #5162 removed the Python GET, so an authenticated request against the Python
+    app returns 404. #4898 kept the operation live behind native Rust: the
+    generated same-path contract still publishes the authenticated owned-status
+    read with the unchanged wire shape the import recovery clients rely on.
+    """
+    response = await auth_client.get(_status_url())
+    assert response.status_code == 404, (
+        "the Python import-status GET must stay retired after #5162 "
+        "(same-path read is owned by native Rust since #4898)"
+    )
+
+    contract = json.loads(NATIVE_SAME_PATH_CONTRACT.read_text(encoding="utf-8"))
+    operation = contract["paths"][IMPORT_STATUS_PATH]["get"]
+    assert operation["operationId"] == "series_import_status_documentation"
+    assert operation["security"] == [{"HTTPBearer": []}]
+    assert "401" in operation["responses"]
+    assert "200" in operation["responses"]
+    schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert schema["$ref"] == "#/components/schemas/SeriesImportStatusResponse"
+    properties = contract["components"]["schemas"]["SeriesImportStatusResponse"]["properties"]
+    assert set(properties) == {
+        "comicvine_volume_id",
+        "imported",
+        "thread_id",
+        "series_name",
+        "issue_count",
+    }
+    # The "nothing imported" wire shape is unchanged: a boolean flag plus
+    # nullable recovery fields that the native handler fills when a series exists.
+    assert properties["imported"]["type"] == "boolean"
+    assert properties["issue_count"]["type"] == ["integer", "null"]
+    assert properties["series_name"]["type"] == ["string", "null"]
+    assert properties["thread_id"]["type"] == ["integer", "null"]
 
 
 def _volume_response(name: str = "Stormwatch") -> ComicVineResponse:
@@ -653,41 +701,40 @@ async def test_one_failed_roster_row_does_not_abandon_the_rest_of_the_series(
 async def test_series_import_status_reports_nothing_before_any_import(
     auth_client: AsyncClient,
 ) -> None:
-    """A volume the user never imported is reported as not imported (#3445)."""
-    response = await auth_client.get(_status_url())
+    """#5162 retired the Python GET; native Rust (#4898) owns the not-imported read.
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "comicvine_volume_id": VOLUME_ID,
-        "imported": False,
-        "thread_id": None,
-        "series_name": None,
-        "issue_count": None,
-    }
+    This used to assert a 200 ``imported: false`` body from the Python handler.
+    The same-path operation now lives in Rust, so the real behavior is a Python
+    404 plus a native contract that still publishes the not-imported shape.
+    """
+    await _assert_import_status_native_only(auth_client)
 
 
 @pytest.mark.asyncio
 async def test_series_import_status_reports_the_committed_import(
     auth_client: AsyncClient,
+    async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A client that lost the import response can recover the server's committed state."""
+    """A lost import response is still recoverable, but from native Rust (#4898/#5162).
+
+    The import itself stays on the still-Python POST and commits the thread and
+    confirmed mappings that the native status read recovers. The status GET is
+    now served by Rust, so this app returns 404 rather than the recovered body.
+    """
     _install_client(monkeypatch, _StubClient(_issue_rows(1101, 1102, 1103)))
 
     created = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
     assert created.status_code == 201
     created_body = created.json()
 
-    response = await auth_client.get(_status_url())
+    thread = await async_db.get(Thread, created_body["thread_id"])
+    assert thread is not None
+    assert thread.title == "Stormwatch"
+    assert thread.total_issues == 3
+    assert await _confirmed_mappings(async_db, thread.id) == ["1101", "1102", "1103"]
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "comicvine_volume_id": VOLUME_ID,
-        "imported": True,
-        "thread_id": created_body["thread_id"],
-        "series_name": "Stormwatch",
-        "issue_count": 3,
-    }
+    await _assert_import_status_native_only(auth_client)
 
 
 @pytest.mark.asyncio
@@ -696,22 +743,23 @@ async def test_series_import_status_survives_a_retry_without_duplicating(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The recovered thread is the same one a retry reuses, so recovery cannot duplicate."""
+    """The native status read (#4898) cannot duplicate: retries reuse the thread.
+
+    The Python GET is retired (#5162), but the still-Python POST retry keeps the
+    no-duplicate contract the native recovery read depends on.
+    """
     _install_client(monkeypatch, _StubClient(_issue_rows(1201, 1202)))
 
     first = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
     assert first.status_code == 201
     first_body = first.json()
 
-    before_retry = await auth_client.get(_status_url())
+    await _assert_import_status_native_only(auth_client)
+
     retry = await auth_client.post(SERIES_URL, json={"comicvine_volume_id": VOLUME_ID})
     assert retry.status_code == 201
     assert retry.json()["thread_created"] is False
-    after_retry = await auth_client.get(_status_url())
-
-    assert before_retry.json()["thread_id"] == first_body["thread_id"]
-    assert after_retry.json()["thread_id"] == first_body["thread_id"]
-    assert after_retry.json() == before_retry.json()
+    assert retry.json()["thread_id"] == first_body["thread_id"]
 
     owned_threads = (
         (
@@ -742,7 +790,12 @@ async def test_series_import_status_never_reports_another_users_queue(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Another user's import for the same volume is invisible, not leaked (#3445)."""
+    """Cross-user data cannot leak through the retired Python route (#5162/#4898).
+
+    Another user's committed series mapping is still seeded as the precondition.
+    With the Python GET gone, no caller of this app can observe it; production's
+    native handler owns the authenticated, owner-scoped read.
+    """
     other_user = User(username="series_status_other_user")
     async_db.add(other_user)
     await async_db.flush()
@@ -776,12 +829,13 @@ async def test_series_import_status_never_reports_another_users_queue(
         )
     )
     await async_db.flush()
+    seeded_mapping = (
+        await async_db.execute(
+            select(ThreadExternalSeriesMapping).where(
+                ThreadExternalSeriesMapping.thread_id == other_thread.id
+            )
+        )
+    ).scalar_one()
+    assert seeded_mapping.external_identity_id == series_identity.id
 
-    response = await auth_client.get(_status_url())
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["imported"] is False
-    assert body["thread_id"] is None
-    assert body["series_name"] is None
-    assert body["issue_count"] is None
+    await _assert_import_status_native_only(auth_client)
