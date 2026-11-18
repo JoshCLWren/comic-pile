@@ -234,8 +234,21 @@ fn unprocessable(detail: String) -> ApiError {
     ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail)
 }
 
+/// One segment of a Pydantic `loc` path: a field name or a list index.
+///
+/// FastAPI serializes list positions as JSON numbers (`0`), not strings
+/// (`"0"`). The `loc` helpers are generic over the segment type so every
+/// error builder can take either plain string paths or a mixed path built
+/// from [`LocSegment::Index`] for list positions.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(untagged)]
+enum LocSegment<'a> {
+    Field(&'a str),
+    Index(usize),
+}
+
 /// FastAPI/Pydantic `missing` validation item.
-fn validation_missing(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
+fn validation_missing<T: Serialize>(loc: &[T], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "missing",
         "loc": loc,
@@ -245,7 +258,7 @@ fn validation_missing(loc: &[&str], input: &serde_json::Value) -> serde_json::Va
 }
 
 /// FastAPI/Pydantic `string_type` validation item.
-fn validation_string_type(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
+fn validation_string_type<T: Serialize>(loc: &[T], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "string_type",
         "loc": loc,
@@ -255,8 +268,8 @@ fn validation_string_type(loc: &[&str], input: &serde_json::Value) -> serde_json
 }
 
 /// FastAPI/Pydantic `string_too_short` validation item.
-fn validation_string_too_short(
-    loc: &[&str],
+fn validation_string_too_short<T: Serialize>(
+    loc: &[T],
     input: &serde_json::Value,
     min_length: usize,
 ) -> serde_json::Value {
@@ -273,8 +286,8 @@ fn validation_string_too_short(
 }
 
 /// FastAPI/Pydantic `string_too_long` validation item.
-fn validation_string_too_long(
-    loc: &[&str],
+fn validation_string_too_long<T: Serialize>(
+    loc: &[T],
     input: &serde_json::Value,
     max_length: usize,
 ) -> serde_json::Value {
@@ -302,7 +315,7 @@ fn validation_json_invalid(pos: usize, error: &str) -> serde_json::Value {
 }
 
 /// FastAPI/Pydantic `model_attributes_type` validation item.
-fn validation_model_type(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
+fn validation_model_type<T: Serialize>(loc: &[T], input: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "type": "model_attributes_type",
         "loc": loc,
@@ -312,7 +325,10 @@ fn validation_model_type(loc: &[&str], input: &serde_json::Value) -> serde_json:
 }
 
 /// FastAPI/Pydantic `literal_error` validation item for `report_type`.
-fn validation_literal_error(loc: &[&str], input: &serde_json::Value) -> serde_json::Value {
+fn validation_literal_error<T: Serialize>(
+    loc: &[T],
+    input: &serde_json::Value,
+) -> serde_json::Value {
     serde_json::json!({
         "type": "literal_error",
         "loc": loc,
@@ -338,18 +354,40 @@ fn python_json_error_message(serde_msg: &str) -> String {
         "key must be a string" | "EOF while parsing an object" => {
             "Expecting property name enclosed in double quotes".to_string()
         }
-        "EOF while parsing a value" => "Expecting value".to_string(),
+        // serde says "expected value"; Python's JSONDecodeError says
+        // "Expecting value" for the same malformed token.
+        "expected value" | "EOF while parsing a value" => "Expecting value".to_string(),
         _ => base.to_string(),
     }
 }
 
-fn json_error_pos(err: &serde_json::Error) -> usize {
-    let msg = err.to_string();
-    if msg.contains("EOF") {
+/// Character offset of a JSON decode error from the start of the whole body.
+///
+/// FastAPI derives `loc[1]` from `json.JSONDecodeError.pos`, which counts
+/// **characters from the beginning of the request body**. serde_json instead
+/// reports a one-based `line()` plus a zero-based `column()` measured in bytes
+/// within that line, so a naive `column()` is wrong for multi-line bodies and
+/// can drift from Python for non-ASCII text (bytes vs characters). Convert to
+/// an absolute byte offset first, then count characters in that prefix.
+fn json_error_pos(err: &serde_json::Error, body: &[u8]) -> usize {
+    let text = String::from_utf8_lossy(body);
+    let line_start_byte: usize = text
+        .split_inclusive('\n')
+        .take(err.line().saturating_sub(1))
+        .map(str::len)
+        .sum();
+    // On EOF serde's column already points at the end of the line; otherwise
+    // it points one byte past the offending byte (peek position).
+    let within_line = if err.to_string().contains("EOF") {
         err.column()
     } else {
         err.column().saturating_sub(1)
+    };
+    let mut byte_pos = (line_start_byte + within_line).min(text.len());
+    while byte_pos > 0 && !text.is_char_boundary(byte_pos) {
+        byte_pos -= 1;
     }
+    text[..byte_pos].chars().count()
 }
 
 /// Coerce a wire value the way Pydantic v2 (2.12.5) lax mode coerces into an
@@ -515,7 +553,11 @@ where
         .ok_or_else(|| serde::de::Error::custom("invalid number"))
 }
 
-fn validate_int_field(loc: &[&str], value: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+fn validate_int_field<T: Serialize>(
+    loc: &[T],
+    value: &serde_json::Value,
+    items: &mut Vec<serde_json::Value>,
+) {
     if pydantic_lax_int(value).is_some() {
         return;
     }
@@ -542,15 +584,15 @@ fn validate_int_field(loc: &[&str], value: &serde_json::Value, items: &mut Vec<s
     }));
 }
 
-fn validate_float_field(
-    loc: &[&str],
+fn validate_float_field<T: Serialize>(
+    loc: &[T],
     value: &serde_json::Value,
     items: &mut Vec<serde_json::Value>,
 ) {
-    if value.is_null() {
-        // Optional field: null is always allowed.
-        return;
-    }
+    // Required floats such as `screen.pixelRatio` reject null with a
+    // `float_type` item at the field's own loc. Optional performance floats
+    // are filtered by `validate_performance` before reaching this helper, so
+    // their null stays valid without weakening this required-field check.
     if pydantic_lax_float(value).is_some() {
         return;
     }
@@ -734,53 +776,31 @@ fn validate_diagnostics(diag: &serde_json::Value, items: &mut Vec<serde_json::Va
                     "input": v,
                 }));
             } else if let Some(arr) = v.as_array() {
-                for (i, item) in arr.iter().enumerate() {
+                for (index, item) in arr.iter().enumerate() {
+                    let item_loc = [
+                        LocSegment::Field("body"),
+                        LocSegment::Field("diagnostics"),
+                        LocSegment::Field("errors"),
+                        LocSegment::Index(index),
+                    ];
                     if !item.is_object() {
-                        items.push(validation_model_type(
-                            &["body", "diagnostics", "errors", &i.to_string()],
-                            item,
-                        ));
-                    } else {
-                        // message
-                        match item.get("message") {
-                            None => items.push(validation_missing(
-                                &["body", "diagnostics", "errors", &i.to_string(), "message"],
-                                item,
-                            )),
-                            Some(mv) => {
-                                if !mv.is_string() {
-                                    items.push(validation_string_type(
-                                        &[
-                                            "body",
-                                            "diagnostics",
-                                            "errors",
-                                            &i.to_string(),
-                                            "message",
-                                        ],
-                                        mv,
-                                    ));
-                                }
+                        items.push(validation_model_type(&item_loc, item));
+                        continue;
+                    }
+                    for field in ["message", "timestamp"] {
+                        let field_loc = [
+                            LocSegment::Field("body"),
+                            LocSegment::Field("diagnostics"),
+                            LocSegment::Field("errors"),
+                            LocSegment::Index(index),
+                            LocSegment::Field(field),
+                        ];
+                        match item.get(field) {
+                            None => items.push(validation_missing(&field_loc, item)),
+                            Some(value) if !value.is_string() => {
+                                items.push(validation_string_type(&field_loc, value));
                             }
-                        }
-                        match item.get("timestamp") {
-                            None => items.push(validation_missing(
-                                &["body", "diagnostics", "errors", &i.to_string(), "timestamp"],
-                                item,
-                            )),
-                            Some(tv) => {
-                                if !tv.is_string() {
-                                    items.push(validation_string_type(
-                                        &[
-                                            "body",
-                                            "diagnostics",
-                                            "errors",
-                                            &i.to_string(),
-                                            "timestamp",
-                                        ],
-                                        tv,
-                                    ));
-                                }
-                            }
+                            Some(_) => {}
                         }
                     }
                 }
@@ -803,7 +823,7 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
     let err = match serde_json::from_slice::<serde_json::Value>(body) {
         Ok(v) => v,
         Err(e) => {
-            let pos = json_error_pos(&e);
+            let pos = json_error_pos(&e, body);
             let msg = python_json_error_message(&e.to_string());
             return Err(BugReportError::Validation(vec![validation_json_invalid(
                 pos, &msg,
@@ -1374,6 +1394,26 @@ async fn submit_with_issuer(
     Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response())
 }
 
+/// Same create flow as the axum handler with an explicitly injected issuer.
+///
+/// Production [`create`] always passes the real HTTPS GitHub issuer. Tests
+/// pass an in-process fake so no network request is ever made while still
+/// exercising parsing, validation, rate limiting and transaction semantics.
+async fn create_with_issuer(
+    state: Arc<AppState>,
+    user_id: i32,
+    body: Bytes,
+    issuer: &GithubIssuer<'_>,
+) -> Result<Response, BugReportError> {
+    let request = parse_request(&body)?;
+    let (username, is_admin) = load_user(&state, user_id).await?;
+    let settings = github_settings();
+    submit_with_issuer(
+        &state, user_id, username, is_admin, request, settings, issuer,
+    )
+    .await
+}
+
 /// `POST /api/bug-reports/` and `POST /api/v1/bug-reports/`.
 ///
 /// Wire parity with the retired Python `create_bug_report`: same method/path,
@@ -1384,25 +1424,13 @@ pub async fn create(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> Result<Response, BugReportError> {
-    let request = parse_request(&body)?;
-    let (username, is_admin) = load_user(&state, user.id()).await?;
-    let settings = github_settings();
     let issuer =
         |settings: GithubSettings,
          title: String,
          body: String,
          labels: Vec<String>|
          -> GithubFuture { Box::pin(create_github_issue(settings, title, body, labels)) };
-    submit_with_issuer(
-        &state,
-        user.id(),
-        username,
-        is_admin,
-        request,
-        settings,
-        &issuer,
-    )
-    .await
+    create_with_issuer(state, user.id(), body, &issuer).await
 }
 
 /// Documentation-only operation for the mounted unversioned create.
@@ -1483,7 +1511,59 @@ impl utoipa::Modify for BugReportsSecurityAddon {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
     use utoipa::OpenApi;
+
+    /// Records issuer calls so a handler-boundary test can prove the in-process
+    /// fake ran and that `create_github_issue` (real network) was never used.
+    struct IssuerProbe {
+        calls: Arc<AtomicUsize>,
+        body: Arc<Mutex<String>>,
+    }
+
+    impl IssuerProbe {
+        fn new() -> Self {
+            Self {
+                calls: Arc::new(AtomicUsize::new(0)),
+                body: Arc::new(Mutex::new(String::new())),
+            }
+        }
+
+        fn issuer(
+            &self,
+            detail: &'static str,
+        ) -> impl Fn(GithubSettings, String, String, Vec<String>) -> GithubFuture + Send + Sync + '_
+        {
+            let calls = Arc::clone(&self.calls);
+            let body = Arc::clone(&self.body);
+            move |_settings, _title, issue_body, _labels| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                *body.lock().expect("record issuer body") = issue_body;
+                let detail = detail.to_string();
+                Box::pin(async move { Err(detail) }) as GithubFuture
+            }
+        }
+
+        fn assert_issued_via_fake(&self, error: &BugReportError) {
+            assert_eq!(
+                self.calls.load(Ordering::SeqCst),
+                1,
+                "the injected fake issuer must be used; no real GitHub request may be made"
+            );
+            assert_eq!(
+                error.detail_json(),
+                serde_json::Value::String("SYNTHETIC_ISSUER_FAILURE".to_string()),
+                "the 502 detail must come from the fake issuer, not the network path"
+            );
+        }
+
+        fn captured_body(&self) -> String {
+            self.body.lock().expect("read issuer body").clone()
+        }
+    }
 
     fn sample_diagnostics() -> BugReportDiagnostics {
         BugReportDiagnostics {
@@ -1939,6 +2019,8 @@ mod tests {
             (serde_json::json!("5_"), Err("float_parsing")),
             (serde_json::json!("1__0"), Err("float_parsing")),
             (serde_json::json!("0x10"), Err("float_parsing")),
+            // Required float rejects null with float_type at the field loc.
+            (serde_json::json!(null), Err("float_type")),
         ];
         for (raw, expected) in float_cases {
             let actual = float_outcome(raw.clone());
@@ -1948,6 +2030,180 @@ mod tests {
                 }
                 Ok(want) => assert_eq!(actual, Ok(want), "float raw={raw}"),
                 Err(kind) => assert_eq!(actual, Err(kind.to_string()), "float raw={raw}"),
+            }
+        }
+    }
+
+    /// Empirical 422 golden table for the FastAPI validation-shape parity
+    /// findings, captured from the frozen Pydantic 2.12.5 `BugReportCreate`
+    /// (commit f0d6b24e6) via a FastAPI `TestClient` posting the exact bytes
+    /// below. Only the raw `RequestValidationError.errors()` shape is pinned:
+    /// the retired app's custom handler sanitized it to `{"detail":
+    /// "Validation failed"}` in production (detailed `field`/`message`/`type`
+    /// entries only in non-production), so these are the detailed shapes that
+    /// the native port intentionally preserves without adding an env split.
+    #[test]
+    fn pydantic_validation_shape_golden_table() {
+        fn diagnostic_body(screen: serde_json::Value, errors: serde_json::Value) -> Vec<u8> {
+            serde_json::to_vec(&serde_json::json!({
+                "title": "Bug",
+                "description": "Details",
+                "diagnostics": {
+                    "timestamp": "t",
+                    "url": "u",
+                    "userAgent": "a",
+                    "screen": screen,
+                    "viewport": {"width": 390, "height": 664},
+                    "scroll": {"x": 0, "y": 1},
+                    "performance": {},
+                    "errors": errors,
+                }
+            }))
+            .expect("golden body")
+        }
+
+        let valid_screen = serde_json::json!({"width": 390, "height": 844, "pixelRatio": 3});
+        let detail = |body: &[u8]| {
+            let error = parse_request(body).expect_err("golden body must fail validation");
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            error.detail_json()["detail"].clone()
+        };
+
+        // (1) A required float's null is a field-level float_type, not the
+        // fabricated fallback value_error at ["body"], and it is not hidden
+        // by other invalid fields. Optional performance null stays valid.
+        assert_eq!(
+            detail(&diagnostic_body(
+                serde_json::json!({"width": 390, "height": 844, "pixelRatio": null}),
+                serde_json::json!([])
+            )),
+            serde_json::json!([{
+                "type": "float_type",
+                "loc": ["body", "diagnostics", "screen", "pixelRatio"],
+                "msg": "Input should be a valid number",
+                "input": null
+            }])
+        );
+        assert_eq!(
+            detail(&diagnostic_body(
+                serde_json::json!({"width": "abc", "height": 844, "pixelRatio": null}),
+                serde_json::json!([])
+            )),
+            serde_json::json!([
+                {
+                    "type": "int_parsing",
+                    "loc": ["body", "diagnostics", "screen", "width"],
+                    "msg": "Input should be a valid integer, unable to parse string as an integer",
+                    "input": "abc"
+                },
+                {
+                    "type": "float_type",
+                    "loc": ["body", "diagnostics", "screen", "pixelRatio"],
+                    "msg": "Input should be a valid number",
+                    "input": null
+                }
+            ])
+        );
+        let optional_nulls = diagnostic_body(valid_screen.clone(), serde_json::json!([]));
+        let optional_nulls_value: serde_json::Value =
+            serde_json::from_slice(&optional_nulls).expect("golden body json");
+        let mut optional_nulls_object = optional_nulls_value.as_object().expect("object").clone();
+        optional_nulls_object["diagnostics"]["performance"] = serde_json::json!({
+            "domContentLoaded": null,
+            "loadComplete": null
+        });
+        let optional_null_bytes = serde_json::to_vec(&optional_nulls_object).expect("body");
+        assert!(parse_request(&optional_null_bytes).is_ok());
+
+        // (2) List positions in nested loc arrays are JSON numbers.
+        assert_eq!(
+            detail(&diagnostic_body(
+                valid_screen.clone(),
+                serde_json::json!([{}])
+            )),
+            serde_json::json!([
+                {
+                    "type": "missing",
+                    "loc": ["body", "diagnostics", "errors", 0, "message"],
+                    "msg": "Field required",
+                    "input": {}
+                },
+                {
+                    "type": "missing",
+                    "loc": ["body", "diagnostics", "errors", 0, "timestamp"],
+                    "msg": "Field required",
+                    "input": {}
+                }
+            ])
+        );
+        assert_eq!(
+            detail(&diagnostic_body(
+                valid_screen,
+                serde_json::json!([
+                    {"message": "ok", "timestamp": "t"},
+                    {"message": 3, "timestamp": false}
+                ])
+            )),
+            serde_json::json!([
+                {
+                    "type": "string_type",
+                    "loc": ["body", "diagnostics", "errors", 1, "message"],
+                    "msg": "Input should be a valid string",
+                    "input": 3
+                },
+                {
+                    "type": "string_type",
+                    "loc": ["body", "diagnostics", "errors", 1, "timestamp"],
+                    "msg": "Input should be a valid string",
+                    "input": false
+                }
+            ])
+        );
+
+        // (3) json_invalid loc is the character offset from the start of the
+        // body: single-line, multi-line, non-ASCII (chars vs bytes), both
+        // combined, and EOF after a newline.
+        let json_cases: Vec<(&str, &[u8], usize, &str)> = vec![
+            (
+                "single line",
+                b"{not json",
+                1,
+                "Expecting property name enclosed in double quotes",
+            ),
+            (
+                "multi line",
+                b"{\n  \"title\": \"Bug\",\n  \"description\": \"Details\",\n  \"diagnostics\": {\"oops\": }\n}",
+                74,
+                "Expecting value",
+            ),
+            (
+                "non-ASCII",
+                "{\"title\": \"café 😀\", \"description\": \"d\", \"diagnostics\": {\"oops\": }}"
+                    .as_bytes(),
+                64,
+                "Expecting value",
+            ),
+            (
+                "non-ASCII multi line",
+                "{\n  \"title\": \"café 😀\",\n  \"description\": \"d\",\n  \"diagnostics\": {\"oops\": }\n}"
+                    .as_bytes(),
+                71,
+                "Expecting value",
+            ),
+            // Python's message here is "Expecting ',' delimiter", which the
+            // shared message mapper does not reproduce from serde's single
+            // "EOF while parsing an object" category; pin only the loc/type
+            // that this fix covers.
+            ("EOF multi line", b"{\n  \"title\": \"Bug\"\n", 19, ""),
+        ];
+        for (name, body, pos, message) in json_cases {
+            let items = detail(body);
+            assert_eq!(items[0]["loc"], serde_json::json!(["body", pos]), "{name}");
+            assert_eq!(items[0]["type"], "json_invalid", "{name}");
+            assert_eq!(items[0]["msg"], "JSON decode error", "{name}");
+            assert_eq!(items[0]["input"], serde_json::json!({}), "{name}");
+            if !message.is_empty() {
+                assert_eq!(items[0]["ctx"]["error"], message, "{name}");
             }
         }
     }
@@ -2128,14 +2384,17 @@ mod tests {
         drop(connection);
 
         let _env = TempGitHubEnv::install();
-        let error = create(
-            State(state.clone()),
-            AuthenticatedUser::for_test(1101),
+        let probe = IssuerProbe::new();
+        let error = create_with_issuer(
+            state.clone(),
+            1101,
             Bytes::from(r#"{"title":"Something broke","description":"Details"}"#),
+            &probe.issuer("SYNTHETIC_ISSUER_FAILURE"),
         )
         .await
         .expect_err("synthetic issuer must fail so the claim rolls back");
         assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
+        probe.assert_issued_via_fake(&error);
 
         let connection = db::checkout(&state).await.expect("verify connection");
         let consumed: i64 = connection
@@ -2175,13 +2434,15 @@ mod tests {
         drop(connection);
 
         let _env = TempGitHubEnv::install();
-        let error = create(
-            State(state.clone()),
-            AuthenticatedUser::for_test(1102),
+        let probe = IssuerProbe::new();
+        let error = create_with_issuer(
+            state.clone(),
+            1102,
             Bytes::from(
                 br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":"5","height":true,"pixelRatio":"2.5"},"viewport":{"width":3.0,"height":"4"},"scroll":{"x":"0","y":5.0},"performance":{"domContentLoaded":"2","loadComplete":true},"errors":[]}}"#
                     .to_vec(),
             ),
+            &probe.issuer("SYNTHETIC_ISSUER_FAILURE"),
         )
         .await
         .expect_err("synthetic issuer must fail so the request reaches filing");
@@ -2189,6 +2450,20 @@ mod tests {
             error.status(),
             StatusCode::BAD_GATEWAY,
             "lax diagnostics must clear Pydantic validation and reach the issuer, not return a fabricated 422"
+        );
+        probe.assert_issued_via_fake(&error);
+        // The coerced Pydantic values, not the raw wire strings, reach the
+        // issue body builder that the real issuer would have called.
+        let issued_body = probe.captured_body();
+        assert!(
+            issued_body.contains("**Screen:** 5×1 @2.5x"),
+            "{issued_body}"
+        );
+        assert!(issued_body.contains("**Viewport:** 3×4"), "{issued_body}");
+        assert!(issued_body.contains("**Scroll:** (0, 5)"), "{issued_body}");
+        assert!(
+            issued_body.contains("**Performance:** DOMContentLoaded: 2ms, Load: 1ms"),
+            "{issued_body}"
         );
     }
 
