@@ -25,8 +25,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import insert
-from sqlalchemy.engine import Engine
+from sqlalchemy import insert, inspect
+from sqlalchemy.engine import Connection, Engine
 
 from app.models.cbl_adoption_receipt import CblAdoptionReceipt
 from app.models.cbl_reference import CBLSource, CBLSourceList
@@ -512,6 +512,44 @@ def build_fixture() -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _rehearsal_column_names(connection: Connection, table_name: str) -> set[str]:
+    """Return the columns that exist in the disposable database right now.
+
+    Args:
+        connection: Open connection to the disposable rehearsal database.
+        table_name: Physical table name to inspect.
+
+    Returns:
+        The column names present at the rehearsed Alembic revision.
+    """
+    return {column["name"] for column in inspect(connection).get_columns(table_name)}
+
+
+def _rows_for_columns(
+    rows: list[dict[str, Any]], columns: set[str]
+) -> list[dict[str, Any]]:
+    """Restrict fixture rows to the columns present at the rehearsed revision.
+
+    The generator is written against the current application models, while the
+    deploy rehearsal loads the fixture at the production base revision and only
+    then applies the pending migrations. Dropping columns that do not exist yet
+    keeps the fixture load valid at the base revision and lets the pending
+    migration exercise its own ``NOT NULL``/backfill handling instead of the
+    rehearsal failing on an unrelated ``INSERT``. At head every model column
+    exists, so this is the identity transform for the full CI cycle.
+
+    Args:
+        rows: Fixture rows for one table.
+        columns: Column names available in the rehearsed database.
+
+    Returns:
+        Rows containing only columns that exist at the rehearsed revision.
+    """
+    return [
+        {name: value for name, value in row.items() if name in columns} for row in rows
+    ]
+
+
 def apply_fixture(engine: Engine) -> None:
     """Apply the prod-shaped synthetic fixture through bulk inserts.
 
@@ -527,4 +565,8 @@ def apply_fixture(engine: Engine) -> None:
             if not rows:
                 continue
             table = _TABLES[table_name]
-            connection.execute(insert(table).values(rows))
+            columns = _rehearsal_column_names(connection, table.name)
+            filtered = _rows_for_columns(rows, columns)
+            if not filtered or not filtered[0]:
+                continue
+            connection.execute(insert(table).values(filtered))
