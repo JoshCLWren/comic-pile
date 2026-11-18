@@ -209,6 +209,25 @@ impl BugReportError {
             Self::Validation(items) => serde_json::json!({"detail": items}),
         }
     }
+
+    /// Sanitize validation internals in production, mirroring FastAPI's
+    /// `RequestValidationError` handler: detailed `detail[]` only in
+    /// non-production, generic `{"detail":"Validation failed"}` in production.
+    /// String-detail 422s raised as explicit API errors (e.g. blank after trim)
+    /// are preserved unchanged.
+    pub fn sanitized_for(self, environment: crate::config::Environment) -> Self {
+        if environment == crate::config::Environment::Production {
+            match self {
+                Self::Validation(_) => Self::Api(ApiError::with_status(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Validation failed".to_string(),
+                )),
+                other => other,
+            }
+        } else {
+            self
+        }
+    }
 }
 
 impl From<ApiError> for BugReportError {
@@ -1405,20 +1424,25 @@ async fn create_with_issuer(
     body: Bytes,
     issuer: &GithubIssuer<'_>,
 ) -> Result<Response, BugReportError> {
-    let request = parse_request(&body)?;
-    let (username, is_admin) = load_user(&state, user_id).await?;
+    let environment = state.environment;
+    let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
+    let (username, is_admin) = load_user(&state, user_id)
+        .await
+        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
     let settings = github_settings();
     submit_with_issuer(
         &state, user_id, username, is_admin, request, settings, issuer,
     )
     .await
+    .map_err(|e| e.sanitized_for(environment))
 }
 
 /// `POST /api/bug-reports/` and `POST /api/v1/bug-reports/`.
 ///
 /// Wire parity with the retired Python `create_bug_report`: same method/path,
 /// 201 on success, 422 validation, 503 unconfigured, 429 rate-limit with
-/// headers, 502 GitHub failures.
+/// headers, 502 GitHub failures. Validation detail arrays are exposed only in
+/// non-production; production returns `{"detail":"Validation failed"}`.
 pub async fn create(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -2037,11 +2061,10 @@ mod tests {
     /// Empirical 422 golden table for the FastAPI validation-shape parity
     /// findings, captured from the frozen Pydantic 2.12.5 `BugReportCreate`
     /// (commit f0d6b24e6) via a FastAPI `TestClient` posting the exact bytes
-    /// below. Only the raw `RequestValidationError.errors()` shape is pinned:
-    /// the retired app's custom handler sanitized it to `{"detail":
-    /// "Validation failed"}` in production (detailed `field`/`message`/`type`
-    /// entries only in non-production), so these are the detailed shapes that
-    /// the native port intentionally preserves without adding an env split.
+    /// below. These pin the non-production detailed `detail[]` shapes that the
+    /// retired app's custom handler exposed outside production; in production
+    /// the handler sanitized request-validation errors to
+    /// `{"detail":"Validation failed"}` (see the production sanitization tests).
     #[test]
     fn pydantic_validation_shape_golden_table() {
         fn diagnostic_body(screen: serde_json::Value, errors: serde_json::Value) -> Vec<u8> {
@@ -2278,6 +2301,113 @@ mod tests {
             "Non-admin accounts can submit one GitHub issue per hour. Try again in 60 minute(s), after 2026-11-08 04:05 UTC."
         );
         assert_eq!(retry_after_seconds(resets_at, resets_at), 1);
+    }
+
+    /// Production must return only `{"detail":"Validation failed"}` for each
+    /// request-validation failure class, mirroring FastAPI's
+    /// RequestValidationError handler in production (no validation internals).
+    /// Detailed `detail[]` remains the non-production shape (golden tables).
+    #[tokio::test]
+    async fn production_sanitizes_validation_errors_to_generic_detail() {
+        use axum::body::to_bytes;
+        use crate::config::Environment;
+
+        // Bodies covering each required validation failure class.
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("missing body", Vec::new()),
+            ("json_invalid", b"{not json".to_vec()),
+            (
+                "float_type",
+                serde_json::to_vec(&serde_json::json!({
+                    "title": "Bug",
+                    "description": "Details",
+                    "diagnostics": {
+                        "timestamp": "t",
+                        "url": "u",
+                        "userAgent": "a",
+                        "screen": {"width": 390, "height": 844, "pixelRatio": null},
+                        "viewport": {"width": 390, "height": 664},
+                        "scroll": {"x": 0, "y": 1},
+                        "performance": {},
+                        "errors": []
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                "int parsing",
+                serde_json::to_vec(&serde_json::json!({
+                    "title": "Bug",
+                    "description": "Details",
+                    "diagnostics": {
+                        "timestamp": "t",
+                        "url": "u",
+                        "userAgent": "a",
+                        "screen": {"width": "abc", "height": 844, "pixelRatio": 3},
+                        "viewport": {"width": 390, "height": 664},
+                        "scroll": {"x": 0, "y": 1},
+                        "performance": {},
+                        "errors": []
+                    }
+                }))
+                .unwrap(),
+            ),
+            (
+                "nested list errors",
+                serde_json::to_vec(&serde_json::json!({
+                    "title": "Bug",
+                    "description": "Details",
+                    "diagnostics": {
+                        "timestamp": "t",
+                        "url": "u",
+                        "userAgent": "a",
+                        "screen": {"width": 390, "height": 844, "pixelRatio": 3},
+                        "viewport": {"width": 390, "height": 664},
+                        "scroll": {"x": 0, "y": 1},
+                        "performance": {},
+                        "errors": [{}]
+                    }
+                }))
+                .unwrap(),
+            ),
+        ];
+
+        // Production state: parse-level validation is sanitized before any DB
+        // access, so a lazy pool against a dummy TLS-required URL is sufficient.
+        let config = crate::config::Config::from_lookup(|name| match name {
+            "RUST_ROLL_ENV" => Some("production".into()),
+            "RUST_ROLL_DATABASE_URL" => {
+                Some("postgresql://reader:password@localhost/unused?sslmode=require".into())
+            }
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .expect("production test config");
+        assert_eq!(config.environment, Environment::Production);
+        let state = Arc::new(AppState::new(config).expect("production test state"));
+
+        for (name, body) in cases {
+            let error = create_with_issuer(
+                state.clone(),
+                1,
+                Bytes::from(body),
+                &|_: GithubSettings, _: String, _: String, _: Vec<String>| -> GithubFuture {
+                    Box::pin(async { panic!("issuer must not run for validation failures") })
+                },
+            )
+            .await
+            .expect_err(name);
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
+            let response = error.into_response();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
+            let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(
+                payload,
+                serde_json::json!({"detail": "Validation failed"}),
+                "{name}"
+            );
+        }
     }
 
     #[test]
