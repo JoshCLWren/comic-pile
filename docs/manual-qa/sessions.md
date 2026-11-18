@@ -22,7 +22,7 @@
 
 **Test:** Leave a QA selection unresolved, return to the app and resolve it.
 
-**Expected:** The pending choice isn't replaced or silently rated; subsequent history is accurate. Per #4405 (UPDATE 2026-11-18) the pending selection is browser-owned: it survives reload and syncs across tabs of the same signed-in reader, clears only after successfully rating/reading that same issue (or Reset Dice), is kept on failed requests, and never leaks to another account on the same browser.
+**Expected:** The pending choice isn't replaced or silently rated; subsequent history is accurate. Per #4405 (UPDATE 2026-11-18) the pending selection is browser-owned: it survives reload and syncs across tabs of the same signed-in reader, clears only after successfully rating/reading that same issue, a successful explicit Cancel Roll (MQA-ROLL-008), or Reset Dice, is kept on failed requests, and never leaks to another account on the same browser.
 
 ## MQA-SESSION-004: Restore Session Start is gone; Undo Latest remains
 
