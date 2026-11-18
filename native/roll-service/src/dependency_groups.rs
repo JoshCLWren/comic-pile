@@ -1206,7 +1206,7 @@ pub async fn add_member(
         .map_err(db::query_error)?;
     let result = add_member_tx(&tx, group_id, user.id(), &request).await;
     match result {
-        Ok((member, thread_id, issue_id, sequence_order)) => {
+        Ok((member, thread_id, issue_id, _sequence_order)) => {
             tx.commit().await.map_err(db::query_error)?;
             let thread_ids: BTreeSet<i32> = thread_id.into_iter().collect();
             let issue_ids: BTreeSet<i32> = issue_id.into_iter().collect();
@@ -1455,7 +1455,7 @@ async fn set_group_order_tx(
     for (issue_id, membership_id) in &member_by_issue {
         tx.execute(
             "UPDATE dependency_group_memberships SET sequence_order = $1 WHERE id = $2",
-            &[ordered_positions.get(issue_id).copied(), Some(*membership_id)],
+            &[&ordered_positions.get(issue_id).copied(), &Some(*membership_id)],
         )
         .await
         .map_err(db::query_error)?;
