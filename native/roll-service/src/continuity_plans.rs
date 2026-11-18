@@ -319,10 +319,7 @@ fn not_found(detail: impl Into<String>) -> ApiError {
 /// wire and break the frontend's `detail.code` branching. This helper keeps
 /// the exact object shape (review #4838 finding #6).
 fn structured(status: StatusCode, detail: serde_json::Value) -> ApiError {
-    ApiError::StructuredDetail {
-        status,
-        detail: detail.to_string(),
-    }
+    ApiError::structured(status, detail)
 }
 
 /// Build a 422 envelope matching the Python Pydantic `model_validator` shape.
@@ -4019,9 +4016,9 @@ mod tests {
     fn dangling_node_uses_422_envelope() {
         let err = dangling_node("n7");
         assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
-        let text = err.detail().to_string();
-        assert!(text.contains("dangling_plan_reference"));
-        assert!(text.contains("n7"));
+        let detail = err.structured_detail().expect("structured detail");
+        assert_eq!(detail["code"], "dangling_plan_reference");
+        assert_eq!(detail["node_id"], "n7");
     }
 
     async fn plan_db_fixture() -> (
@@ -4140,7 +4137,10 @@ mod tests {
             .await
             .expect_err("a convergence cycle must be rejected");
         assert_eq!(error.status(), StatusCode::CONFLICT);
-        assert!(error.detail().contains("plan_convergence_cycle"));
+        assert_eq!(
+            error.structured_detail().expect("structured detail")["code"],
+            "plan_convergence_cycle"
+        );
 
         let conn = db::checkout(&state).await.expect("verify connection");
         let plans: i64 = conn
@@ -4181,7 +4181,10 @@ mod tests {
         .await
         .expect_err("a stale version must be rejected");
         assert_eq!(error.status(), StatusCode::CONFLICT);
-        assert!(error.detail().contains("plan_version_conflict"));
+        assert_eq!(
+            error.structured_detail().expect("structured detail")["code"],
+            "plan_version_conflict"
+        );
     }
 
     #[tokio::test]
