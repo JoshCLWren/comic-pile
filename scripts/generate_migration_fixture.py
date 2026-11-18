@@ -15,9 +15,13 @@ personal data; every value is synthetic or derived from synthetic identities.
 It is applied to a disposable database by :func:`apply_fixture` before the
 migration rehearsal runs ``alembic upgrade head``.
 
-Every inserted row satisfies the live PostgreSQL CHECK / NOT NULL constraints
-so the rehearsal fixture itself cannot fail for fixture-shape reasons before
-exercising the migrations under test.
+The default :func:`build_fixture` returns rows that satisfy the live
+PostgreSQL CHECK / NOT NULL constraints, so the rehearsal fixture itself
+cannot fail for fixture-shape reasons before exercising the migrations under
+test. :func:`build_adversarial_fixture` extends the default with rows that are
+valid under the current schema but would break a data-dependent migration
+(for example a dangling ContinuityRule whose target issue no longer exists),
+reproducing the class of failure seen in #3359/#3495.
 """
 
 from __future__ import annotations
@@ -512,6 +516,91 @@ def build_fixture() -> dict[str, list[dict[str, Any]]]:
     }
 
 
+#: ContinuityRule id used by the adversarial fixture. It is deliberately not on
+#: the reviewed allowlist in ``app/services/canonical_backfill.py`` and its
+#: target issue does not exist, so migration ``c25530000001`` (#3359/#3495)
+#: aborts when it encounters the row during a replay upgrade.
+ADVERSARIAL_DANGLING_RULE_ID = 960002
+
+
+def build_adversarial_fixture() -> dict[str, list[dict[str, Any]]]:
+    """Build the default fixture plus rows that trigger data-dependent failures.
+
+    The returned rows are valid under the current schema (every FK target that
+    has one exists, every CHECK constraint passes) but represent the data shapes
+    that make real migrations fail: a dangling rule-native ContinuityRule whose
+    target issue was dropped, NULL-heavy legacy rows, and a legacy ``cbl-order:%``
+    edge. Running the rehearsal against this fixture exercises the fail-closed
+    path: the re-upgrade step aborts on the dangling rule instead of silently
+    weakening the user's prerequisite graph.
+
+    Returns:
+        Mapping of table name to inserted row dictionaries, in fixture order.
+    """
+    fixture = build_fixture()
+    now = _utc_now()
+    fixture["continuity_rules"].append(
+        {
+            "id": ADVERSARIAL_DANGLING_RULE_ID,
+            "user_id": 900001,
+            "legacy_dependency_id": None,
+            "source_type": "issue",
+            "source_id": 920001,
+            "target_type": "issue",
+            "target_id": 999999,  # this issue does not exist -> dangling rule
+            "satisfaction_type": "item_read",
+            "checkpoint_issue_id": None,
+            "convergence_targets": None,
+            "note": "synthetic-dangling-rule",
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    # Duplicate/conflicting legacy key shape: a second NULL-keyed legacy row
+    # with the same source/target as an existing edge is prevented by the
+    # unique constraint at insert time, so instead record a second legacy
+    # cbl-order row pointing at an existing issue with NULL classification.
+    fixture["dependencies"].append(
+        {
+            "id": 930003,
+            "source_issue_id": 920002,
+            "target_issue_id": 920001,
+            "created_at": now,
+            "note": "cbl-order:9999999999999",
+            "origin": None,
+            "classification": None,
+            "provenance": None,
+        },
+    )
+    # Extreme/legacy NULL-heavy thread row: blocked, no catalog series, NULL
+    # rating and activity, manual queue position at the boundary.
+    fixture["threads"].append(
+        {
+            "id": 910004,
+            "title": "Rehearsal Legacy Edge Case",
+            "format": "Comic",
+            "issues_remaining": 0,
+            "total_issues": 0,
+            "next_unread_issue_id": None,
+            "reading_progress": "completed",
+            "queue_position": 999999,
+            "queue_order_key": None,
+            "status": "completed",
+            "last_rating": None,
+            "last_activity_at": None,
+            "notes": None,
+            "manual_creator_credits": None,
+            "is_test": True,
+            "is_blocked": True,
+            "queue_position_is_manual": True,
+            "created_at": now,
+            "user_id": 900002,
+            "catalog_series_id": None,
+        },
+    )
+    return fixture
+
+
 def apply_fixture(engine: Engine) -> None:
     """Apply the prod-shaped synthetic fixture through bulk inserts.
 
@@ -522,6 +611,29 @@ def apply_fixture(engine: Engine) -> None:
         RuntimeError: When a fixture row violates a constraint.
     """
     fixture = build_fixture()
+    with engine.begin() as connection:
+        for table_name, rows in fixture.items():
+            if not rows:
+                continue
+            table = _TABLES[table_name]
+            connection.execute(insert(table).values(rows))
+
+
+def apply_adversarial_fixture(engine: Engine) -> None:
+    """Apply the adversarial prod-shaped fixture through bulk inserts.
+
+    The adversarial fixture contains a dangling ContinuityRule whose target
+    issue does not exist. It is valid under the current schema but causes
+    migration ``c25530000001`` to abort on replay, which is exactly the
+    data-dependent failure mode the rehearsal must catch (issue #3554 A8/A12).
+
+    Args:
+        engine: Sync SQLAlchemy engine bound to the disposable rehearsal DB.
+
+    Raises:
+        RuntimeError: When a fixture row violates a constraint.
+    """
+    fixture = build_adversarial_fixture()
     with engine.begin() as connection:
         for table_name, rows in fixture.items():
             if not rows:

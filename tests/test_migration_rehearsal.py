@@ -7,6 +7,11 @@ import pytest
 from sqlalchemy.engine import Engine
 
 from scripts import migration_rehearsal as rehearsal_module
+from scripts.generate_migration_fixture import (
+    ADVERSARIAL_DANGLING_RULE_ID,
+    build_adversarial_fixture,
+    build_fixture,
+)
 from scripts.migration_rehearsal import (
     BASE_REVISION,
     REHEARSAL_STEPS,
