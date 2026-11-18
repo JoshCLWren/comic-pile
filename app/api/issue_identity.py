@@ -1,11 +1,4 @@
-"""CBL adoption preview and plan endpoints.
-
-GET adoption-preview is cut over to native Rust for this PR, but the Python
-implementation is retained in this cutover PR and must not be removed until a
-successful authenticated production request has been verified against Rust
-(AGENTS.md / #4335 / #4843). POST adoption-plan is already migrated to Rust.
-This module keeps the preview handler and shared schema/serialization helpers.
-"""
+"""CBL adoption preview and dry-run plan endpoints."""
 
 from __future__ import annotations
 
@@ -105,8 +98,6 @@ class CBLAdoptionPreviewResponse(BaseModel):
     total_positions: int
     entries: list[CBLAdoptionEntryResponse]
     summary: CBLAdoptionSummaryResponse
-
-
 def _cbl_position(entry: dict[str, object]) -> int:
     """Return a validated CBL source position from one adoption-plan entry."""
     position = entry.get("cbl_position")
@@ -120,6 +111,8 @@ def _adoption_payload(
     plan: CBLAdoptionPlan,
 ) -> CBLAdoptionPreviewResponse:
     """Serialize the read-only CBL adoption preview and dry-run summary."""
+    # The concrete dataclasses are intentionally kept in the service layer;
+    # this adapter contains no query or adoption logic.
     adoption_entries = list(plan.entries)
     positions_by_decision = {
         decision: [
@@ -135,11 +128,14 @@ def _adoption_payload(
             "awaiting_opt_in",
         )
     }
-    if report.source_list_id is None:
+    if (
+        report.source_list_id is None
+        or report.source_repository is None
+        or report.source_path is None
+    ):
         raise ValueError("CBL adoption preview requires source list provenance")
     if report.content_hash is None or report.revision_sha is None:
         raise ValueError("CBL adoption preview requires source fingerprint")
-
     return CBLAdoptionPreviewResponse(
         source=CBLSourceFingerprintResponse(
             source_list_id=report.source_list_id,
@@ -173,10 +169,24 @@ async def api_cbl_adoption_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> CBLAdoptionPreviewResponse:
-    """Preview all CBL positions and their default read-only adoption choices.
-
-    Retained in this cutover PR for required production verification before
-    Python retirement (see AGENTS.md same-path cutover rule).
-    """
+    """Preview all CBL positions and their default read-only adoption choices."""
     report, plan = await preview_cbl_adoption(db, user_id=current_user.id, list_id=list_id)
+    return _adoption_payload(report, plan)
+
+
+@router.post("/cbl/{list_id}/adoption-plan", response_model=CBLAdoptionPreviewResponse)
+async def api_cbl_adoption_plan(
+    list_id: int,
+    request: CBLAdoptionPlanRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CBLAdoptionPreviewResponse:
+    """Calculate a dry-run CBL adoption plan with explicit selection overrides."""
+    report, plan = await preview_cbl_adoption(
+        db,
+        user_id=current_user.id,
+        list_id=list_id,
+        series_decisions=request.series_decisions,
+        entry_decisions=request.entry_decisions,
+    )
     return _adoption_payload(report, plan)
