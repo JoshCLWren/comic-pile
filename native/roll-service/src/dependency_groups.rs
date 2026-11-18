@@ -1465,6 +1465,7 @@ pub async fn add_member(
     Path(group_id): Path<i32>,
     Json(request): Json<DependencyGroupMemberCreateRequest>,
 ) -> Result<(StatusCode, Json<DependencyGroupMemberResponse>), ApiError> {
+    validate_member_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
