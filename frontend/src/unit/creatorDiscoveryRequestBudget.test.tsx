@@ -543,6 +543,29 @@ describe('comparison and CBL discovery request budgets', () => {
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
+        // #4444/#4445: membership rows with an exact owned issue id share one
+        // bounded card batch on cold open, never one request per row.
+        'POST /api/v2/issues/cards': (request) => ({
+          data: {
+            items: (request as unknown as { body?: string }).body
+              ? [
+                  {
+                    issue_id: 11,
+                    thread_id: 0,
+                    thread_title: 'Nova',
+                    issue_number: '4',
+                    status: 'unread',
+                    rating: null,
+                    read_at: null,
+                    mapping_state: 'confirmed',
+                    has_confirmed_identity: true,
+                    comicvine_issue_id: '1',
+                    cover_image_url: null,
+                  },
+                ]
+              : [],
+          },
+        }),
       },
       'cold crossovers',
     )
@@ -555,13 +578,14 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
-    await waitFor(() => expect(ledger.requests).toHaveLength(1))
+    await waitFor(() => expect(ledger.requests).toHaveLength(2))
     expect(ledger.requests[0]?.url).toBe('GET /api/v1/reading-order-groups/')
+    expect(ledger.requests[1]?.url).toBe('POST /api/v2/issues/cards')
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
-    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
+    await waitFor(() => expect(ledger.requests).toHaveLength(3))
+    expect(ledger.requests[2]?.url).toBe('GET /api/v2/threads?page_size=100')
   })
 })
