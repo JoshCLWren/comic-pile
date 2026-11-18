@@ -97,7 +97,7 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/groups:batch",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/groups:batch$"
     },
     {
