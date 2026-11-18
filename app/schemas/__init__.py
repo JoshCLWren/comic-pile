@@ -38,7 +38,6 @@ _EXPORT_MODULES: dict[str, str] = {
     "PotentialDuplicateMatch": "app.schemas.thread",
     "CheckPotentialDuplicatesRequest": "app.schemas.thread",
     "CheckPotentialDuplicatesResponse": "app.schemas.thread",
-    "DependencyCreate": "app.schemas.dependency",
     "DependencyResponse": "app.schemas.dependency",
     "BlockingExplanation": "app.schemas.dependency",
     "ThreadDependenciesResponse": "app.schemas.dependency",
@@ -101,7 +100,6 @@ __all__ = [
     "CorrectionChoiceId",
     "CorrectionSheetExamplesResponse",
     "CoverageInfo",
-    "DependencyCreate",
     "DependencyResponse",
     "EffortBandOutcome",
     "EventDetail",
@@ -191,7 +189,6 @@ if TYPE_CHECKING:
     from app.schemas.analytics import AnalyticsMetricsResponse, RecentSession, TopRatedThread
     from app.schemas.dependency import (
         BlockingExplanation,
-        DependencyCreate,
         DependencyResponse,
         ThreadDependenciesResponse,
     )
