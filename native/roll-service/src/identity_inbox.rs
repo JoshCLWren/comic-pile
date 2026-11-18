@@ -137,7 +137,19 @@ fn source_entry_summary(thread_title: &str, issue_number: &str, metadata: &Value
     parts.join(" ")
 }
 
-fn why_stopped(status: &str, evidence: &Value) -> String {
+fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String {
+    // The collapsed inbox header renders this string. The list endpoint now
+    // batch-loads real candidates, so an evidence/status-only reason can
+    // contradict the candidate cards shown on expand (#5382). Reflect the real
+    // candidate state first; the reasons below apply only when there are
+    // genuinely no candidates for the issue.
+    if candidate_count > 0 {
+        return if candidate_count == 1 {
+            "1 candidate found".to_string()
+        } else {
+            format!("{candidate_count} candidates found")
+        };
+    }
     let is_empty_evidence = evidence.is_null()
         || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
@@ -289,7 +301,7 @@ async fn fetch_item(
         status: status.clone(),
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-        why_stopped: why_stopped(&status, &evidence),
+        why_stopped: why_stopped(&status, &evidence, candidates.len()),
         candidates,
         created_at,
         updated_at,
@@ -431,7 +443,7 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-            why_stopped: why_stopped(&status, &evidence),
+            why_stopped: why_stopped(&status, &evidence, candidates.len()),
             candidates,
             created_at,
             updated_at,
@@ -1110,6 +1122,18 @@ mod tests {
     use crate::auth::AuthenticatedUser;
     use crate::test_support;
 
+    #[test]
+    fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
+        let empty = serde_json::json!({});
+        // Real candidate state wins over the parent mapping's evidence.
+        assert_eq!(why_stopped("unresolved", &empty, 1), "1 candidate found");
+        assert_eq!(why_stopped("unresolved", &empty, 3), "3 candidates found");
+        // With no candidates the original evidence/status reasons still apply.
+        assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
+        let with_reason = serde_json::json!({"decision_reason": "ambiguous title"});
+        assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title",);
+    }
+
     #[tokio::test]
     async fn list_empty_returns_ok() {
         let Some(state) = test_support::test_state(2).await else {
@@ -1228,6 +1252,62 @@ mod tests {
             .items
             .iter()
             .any(|item| { item.candidates.iter().any(|c| c.external_identity_id == 6) }));
+    }
+
+    /// Regression test for #5382: the list endpoint now batch-loads real
+    /// candidates, but `why_stopped` was ported from a Python implementation
+    /// whose list response always had `candidates=[]`. An unresolved mapping
+    /// with empty `evidence_json` therefore produced "No candidates found"
+    /// while the very same response carried one candidate. The collapsed
+    /// inbox header rendered that contradiction to the user.
+    #[tokio::test]
+    async fn list_inbox_why_stopped_reflects_real_candidates() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#1','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json);",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.items.len(), 1);
+        let item = &response.items[0];
+        assert_eq!(
+            item.candidates.len(),
+            1,
+            "the issue has one candidate mapping",
+        );
+        assert!(
+            !item.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when a candidate exists; got {:?}",
+            item.why_stopped,
+        );
+        assert_eq!(item.why_stopped, "1 candidate found");
     }
 
     #[tokio::test]
