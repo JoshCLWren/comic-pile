@@ -757,6 +757,14 @@ mod tests {
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
         );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains("Wrong number of path arguments"),
+            "numeric signal ids must not fail Path extraction: {text}"
+        );
     }
 
     #[tokio::test]
@@ -781,15 +789,6 @@ mod tests {
         assert_eq!(
             response.headers().get("x-comicpile-api-runtime").unwrap(),
             "rust"
-        );
-    }
-        let bytes = to_bytes(response.into_body(), 8192)
-            .await
-            .expect("body bytes");
-        let text = String::from_utf8_lossy(&bytes);
-        assert!(
-            !text.contains("Wrong number of path arguments"),
-            "numeric signal ids must not fail Path extraction: {text}"
         );
     }
 
