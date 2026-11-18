@@ -901,7 +901,7 @@ pub async fn get_group_detail(
         }
     }
     let issue_to_thread = issue_parent_threads(&connection, &issue_ids).await?;
-    thread_ids.extend(issue_to_thread.values().copied().filter(|id| !id.is_empty()));
+    thread_ids.extend(issue_to_thread.values().copied());
     let threads = threads_by_ids(&connection, &thread_ids).await?;
     let issues = issues_by_ids(&connection, &issue_ids).await?;
     let reasons = blocking_reasons_by_thread(&connection, user.id(), &thread_ids).await?;
@@ -914,24 +914,23 @@ pub async fn get_group_detail(
         let mut other: Vec<String> = Vec::new();
         let mut blocking: Vec<String> = Vec::new();
         let (series_title, issue_number) = if let Some(thread_id) = member.thread_id {
-            thread = threads.get(&thread_id).cloned().flatten();
-            series_title = thread.as_ref().map(|thread| thread.title.clone());
-            issue_number = None;
+            thread = threads.get(&thread_id).and_then(|opt| opt.clone());
+            let title = thread.as_ref().map(|t| t.title.clone());
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
             blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
+            (title, None)
         } else if let Some(issue_id) = member.issue_id {
-            issue = issues.get(&issue_id).cloned().flatten();
-            let thread_id = issue.as_ref().map(|issue| issue.thread_id);
-            let thread_id = thread_id.unwrap_or_default();
-            thread = threads.get(&thread_id).cloned().flatten();
-            series_title = thread.as_ref().map(|thread| thread.title.clone());
-            issue_number = issue.as_ref().map(|issue| issue.issue_number.clone());
+            issue = issues.get(&issue_id).and_then(|opt| opt.clone());
+            let thread_id = issue.as_ref().map(|i| i.thread_id).unwrap_or_default();
+            thread = threads.get(&thread_id).and_then(|opt| opt.clone());
+            let title = thread.as_ref().map(|t| t.title.clone());
+            let number = issue.as_ref().map(|i| i.issue_number.clone());
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
             blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
+            (title, number)
         } else {
-            series_title = None;
-            issue_number = None;
-        }
+            (None, None)
+        };
         enriched.push(DependencyGroupDetailMemberResponse {
             membership: DependencyGroupMemberResponse {
                 id: member.id,
