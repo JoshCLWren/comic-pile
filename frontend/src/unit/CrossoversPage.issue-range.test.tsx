@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const groupsApi = {
     list: vi.fn(),
@@ -121,6 +122,8 @@ function selectRange(firstIssueId: string, lastIssueId: string) {
     fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: firstIssueId } })
     fireEvent.change(screen.getByRole('combobox', { name: 'Last issue' }), { target: { value: lastIssueId } })
 }
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 beforeEach(() => {
   vi.clearAllMocks()

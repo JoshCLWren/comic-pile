@@ -1,4 +1,7 @@
+import { useMemo } from 'react'
 import type { RollRecoveryInfo, RollRecoveryPrerequisite } from '../../../types/rollBootstrap'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 
 interface RollRecoveryCardProps {
   recovery?: RollRecoveryInfo | null
@@ -22,6 +25,18 @@ export function RollRecoveryCard({
   isLoading = false,
   errorMessage = null,
 }: RollRecoveryCardProps) {
+  // Exact owned issue prerequisites share one bounded card batch; crossover
+  // group nodes never produce one. Hooks run before the early returns.
+  const issuePrerequisiteIds = useMemo(
+    () =>
+      (recovery?.readable_prerequisites ?? [])
+        .filter((prerequisite) => prerequisite.node_type === 'issue')
+        .map((prerequisite) => prerequisite.node_id),
+    [recovery],
+  )
+  const cardsQuery = useIssueCards(issuePrerequisiteIds)
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+
   if (isLoading) {
     return (
       <section
@@ -156,22 +171,36 @@ export function RollRecoveryCard({
             const rowClass =
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
-            return isClickable ? (
-              <button
-                key={`${prerequisite.node_type}-${prerequisite.node_id}`}
-                type="button"
-                onClick={() => onReadNow?.(prerequisite)}
-                disabled={isPending}
-                className={`${rowClass} transition-colors hover:bg-white/10 disabled:opacity-60`}
-              >
-                {content}
-              </button>
-            ) : (
-              <div
-                key={`${prerequisite.node_type}-${prerequisite.node_id}`}
-                className={rowClass}
-              >
-                {content}
+            const isIssue = prerequisite.node_type === 'issue'
+            return (
+              <div key={`${prerequisite.node_type}-${prerequisite.node_id}`} className="space-y-1">
+                {isClickable ? (
+                  <button
+                    type="button"
+                    onClick={() => onReadNow?.(prerequisite)}
+                    disabled={isPending}
+                    className={`${rowClass} transition-colors hover:bg-white/10 disabled:opacity-60`}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div
+                    className={rowClass}
+                  >
+                    {content}
+                  </div>
+                )}
+                {isIssue && (
+                  <div className="pl-4">
+                    <CompactIssueCardTrigger
+                      issueId={prerequisite.node_id}
+                      threadTitle={prerequisite.label}
+                      issueNumber="?"
+                      card={cardsByIssue.get(prerequisite.node_id) ?? null}
+                      hideTitle
+                    />
+                  </div>
+                )}
               </div>
             )
           })}

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 const groupsApi = {
   list: vi.fn(),
@@ -52,6 +53,8 @@ const annihilation = {
     { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
   ],
 }
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 beforeEach(() => {
   vi.clearAllMocks()

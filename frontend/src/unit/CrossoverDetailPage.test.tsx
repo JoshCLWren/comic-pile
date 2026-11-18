@@ -11,6 +11,7 @@ import {
 import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
+import { issueCardsApi } from '../services/issueCardsApi'
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
@@ -125,6 +126,8 @@ function renderPage() {
     </MemoryRouter>,
   )
 }
+
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 beforeEach(() => {
   vi.clearAllMocks()
