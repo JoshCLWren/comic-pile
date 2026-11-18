@@ -1270,6 +1270,7 @@ async fn update_group_tx(
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
+    let name = normalize_group_name(name)?;
     let updated = tx
         .execute(
             "UPDATE dependency_groups SET name = $2 WHERE id = $1 AND user_id = $3",
