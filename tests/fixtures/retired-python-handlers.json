@@ -638,5 +638,85 @@
     ],
     "module": "app.api.reading_order_projection",
     "name": "confirm_plan_projection"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/folders",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "list_cbl_source_folders"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/browse",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_catalog",
+    "name": "browse_cbl_source_catalog"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_sources_by_comicvine_issue"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/compare",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "compare_cbl_sources"
+  },
+  {
+    "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_comicvine_lookup",
+    "name": "find_cbl_candidates_for_reading_list"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "discover_cbl_source_lists"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "get_cbl_source_list"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_plan_adoption",
+    "name": "api_targeted_cbl_adoption_commit"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue_identity",
+    "name": "api_cbl_adoption_plan"
   }
 ]

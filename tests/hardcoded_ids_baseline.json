@@ -20,13 +20,6 @@
         "tests/test_backfill_read_comicvine_script.py": [
             "user_id=1"
         ],
-        "tests/test_cbl_plan_adoption.py": [
-            "user_id=1",
-            "user_id=7"
-        ],
-        "tests/test_cbl_targeted_plan_adoption.py": [
-            "user_id=7"
-        ],
         "tests/test_comicvine_fallback.py": [
             "user_id=1"
         ],

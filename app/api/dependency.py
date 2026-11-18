@@ -145,8 +145,6 @@ def mount_subrouters() -> None:
     if _subrouters_mounted:
         return
 
-    from app.api import cbl_comicvine_lookup
-    from app.api import cbl_catalog
     from app.api import cbl_sources
     from app.api import custom_cbl
     from app.api import dependency_group
@@ -159,8 +157,6 @@ def mount_subrouters() -> None:
     # The confirm/project operation is served by native Rust; its shadowed
     # Python handler has been removed from reading_order_projection.router.
     router.include_router(reading_order_projection.router)
-    router.include_router(cbl_catalog.router)
-    router.include_router(cbl_comicvine_lookup.router)
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
 
