@@ -436,6 +436,57 @@ async def test_backfill_skips_allowlisted_dangling_rules_and_reports_them(
 
 
 @pytest.mark.asyncio
+async def test_3495_fixture_fails_without_allowlist_and_passes_with_fix(
+    _isolated_migration_data: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The #3359 fixture crosses the exact validation seam changed by #3495.
+
+    Before #3495, c25530000001 unconditionally aborted every dangling
+    item_read rule. Removing only the reviewed allowlist recreates that
+    fail-closed decision for the production-shaped fixture; restoring the fix
+    must make the same fixture pass without mutating the dangling row.
+    """
+    db = _isolated_migration_data
+    user = await _reviewed_dangling_owner(db)
+    _, (surviving_target,) = await _thread_with_issues(
+        db, user.id, "3495 Regression Target", ["1"]
+    )
+    rule_id = _ALLOWLISTED_RULE_IDS[0]
+    missing_source_id = _PROD_MISSING_ISSUES[0]
+    dangling = ContinuityRule(
+        id=rule_id,
+        user_id=user.id,
+        source_type="issue",
+        source_id=missing_source_id,
+        target_type="issue",
+        target_id=surviving_target.id,
+        satisfaction_type="item_read",
+        note="continuity-plan:6",
+    )
+    db.add(dangling)
+    await db.commit()
+
+    conn = _sync_connection()
+    try:
+        with monkeypatch.context() as pre_3495:
+            pre_3495.setattr(mig, "DANGLING_RULE_ALLOWLIST", frozenset())
+            with pytest.raises(RuntimeError, match="not on the reviewed allowlist"):
+                mig.validate_compilable_rules(conn)
+
+        skipped = mig.validate_compilable_rules(conn)
+        assert [row.rule_id for row in skipped] == [rule_id]
+        assert skipped[0].is_allowlisted()
+    finally:
+        conn.close()
+
+    persisted = await db.get(ContinuityRule, rule_id)
+    assert persisted is not None
+    assert persisted.source_id == missing_source_id
+    assert persisted.target_id == surviving_target.id
+
+
+@pytest.mark.asyncio
 async def test_validation_aborts_on_unknown_dangling_rule(
     _isolated_migration_data: AsyncSession,
 ) -> None:
