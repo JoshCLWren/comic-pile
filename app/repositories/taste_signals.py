@@ -38,12 +38,3 @@ async def commit(db: AsyncSession) -> None:
         db: Async database session.
     """
     await db.commit()
-
-
-def utc_now() -> datetime:
-    """Return the current UTC time.
-
-    Returns:
-        Timezone-aware UTC datetime.
-    """
-    return datetime.now(UTC)

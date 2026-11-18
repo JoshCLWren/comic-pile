@@ -168,38 +168,8 @@ async def list_discoveries(
     return TasteDiscoveryListResponse(discoveries=discovered, generated_at=now)
 
 
-async def dismiss_discovery(
-    db: AsyncSession, *, signal_id: int, user_id: int
-) -> TasteSignal | None:
-    """Dismiss one discovery without recording any verdict.
-
-    Dismissal writes only ``prompt_suppressed_until``; it can therefore never
-    count as confirmation.
-
-    Args:
-        db: Async database session.
-        signal_id: Target signal id.
-        user_id: Authenticated owner id.
-
-    Returns:
-        The updated signal, or ``None`` when missing or foreign.
-    """
-    signal = await taste_signals_repository.get_owned(
-        db, signal_id=signal_id, user_id=user_id
-    )
-    if signal is None:
-        return None
-
-    signal.prompt_suppressed_until = datetime.now(UTC) + DISMISSAL_SUPPRESSION
-    await taste_signals_repository.commit(db)
-    return signal
-
-
 __all__ = [
-    "DISMISSAL_SUPPRESSION",
-    "DISMISSAL_SUPPRESSION_DAYS",
     "MAX_ACTIVE_DISCOVERIES",
     "build_discovery_prompt",
-    "dismiss_discovery",
     "list_discoveries",
 ]
