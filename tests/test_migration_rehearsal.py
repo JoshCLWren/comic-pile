@@ -1,10 +1,8 @@
 """Unit coverage for the disposable-Postgres migration rehearsal runner (issue #3554)."""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
-from sqlalchemy.engine import Engine
 
 from scripts import migration_rehearsal as rehearsal_module
 from scripts.migration_rehearsal import (
@@ -39,7 +37,7 @@ class _FakeScriptDirectory:
         self.head = head
 
     @classmethod
-    def from_config(cls, config: object) -> "_FakeScriptDirectory":
+    def from_config(cls, config: object) -> _FakeScriptDirectory:
         """Return a directory bound to the fake head."""
         return cls("c85900000001")
 
@@ -48,12 +46,12 @@ class _FakeScriptDirectory:
         return self.head
 
 
-class _FakeEngine(Engine):
+class _FakeEngine:
     """Minimal engine double that records fixture use without opening a pool."""
 
     def __init__(self) -> None:
         """Initialize without a live pool."""
-        self.fixture_applied: list[Engine] = []
+        self.fixture_applied: list[_FakeEngine] = []
         self.disposed = False
 
     def dispose(self) -> None:
