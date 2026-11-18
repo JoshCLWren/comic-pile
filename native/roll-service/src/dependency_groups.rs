@@ -924,7 +924,6 @@ pub async fn get_group_detail(
     thread_ids.extend(issue_to_thread.values().copied());
     let threads = threads_by_ids(&connection, &thread_ids).await?;
     let issues = issues_by_ids(&connection, &issue_ids).await?;
-    let reasons = blocking_reasons_by_thread(&connection, user.id(), &thread_ids).await?;
     let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
     let linked_plans = linked_plans(&connection, group_id, user.id()).await?;
     let mut enriched = Vec::with_capacity(memberships.len());
@@ -932,12 +931,10 @@ pub async fn get_group_detail(
         let mut thread = None;
         let mut issue = None;
         let mut other: Vec<String> = Vec::new();
-        let mut blocking: Vec<String> = Vec::new();
         let (series_title, issue_number) = if let Some(thread_id) = member.thread_id {
             thread = threads.get(&thread_id).and_then(|opt| opt.clone());
             let title = thread.as_ref().map(|t| t.title.clone());
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             (title, None)
         } else if let Some(issue_id) = member.issue_id {
             issue = issues.get(&issue_id).and_then(|opt| opt.clone());
