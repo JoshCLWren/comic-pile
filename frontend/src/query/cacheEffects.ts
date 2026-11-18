@@ -152,6 +152,10 @@ export async function applyRatedThreadCache(
     ...(thread.status === 'completed'
       ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
       : []),
+    // Rating/read progress must reconcile every open view (Queue counts/rows,
+    // Roll pool/bootstrap, History/activity, and plan/list reader blockers)
+    // without requiring a hard reload.
+    invalidateAfterReaderProgress(client),
   ])
 }
 
@@ -205,21 +209,9 @@ export async function invalidateAfterIssueEdit(
       queryKey: queryKeys.thread.summary(threadId),
       exact: true,
     }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
-    client.invalidateQueries({
-      queryKey: queryKeys.queue.pages(),
-    }),
-    // A last-issue edit may also move a series across the finished boundary.
-    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
-    // Marking issues read (including the last unread issue) changes the
-    // reader's canonical availability answer, so the "Next issue availability"
-    // explanation has to stop serving the pre-edit text (#4181).
-    client.invalidateQueries({
-      queryKey: queryKeys.dependencies.all,
-    }),
+    // Read/progress edits can change Queue, Roll, History, session snapshots,
+    // and plan/list reader state across already-open views.
+    invalidateAfterReaderProgress(client),
   ])
 }
 
@@ -256,7 +248,15 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.activeCount(), exact: true }),
     client.resetQueries({ queryKey: queryKeys.completed.pages() }),
+    client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
   ])
 }
 
@@ -418,6 +418,13 @@ export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
+    // Undo restores read state, ratings, blockers, and history across views.
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.all }),
+    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
   ])
 }
 
@@ -956,11 +963,18 @@ async function invalidateReadingEligibility(client: QueryClient, includeAuthorin
     // Legacy read/unread and direct v2 writes change the shared card status too.
     client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
     client.invalidateQueries({ queryKey: queryKeys.queue.all }),
+    // Queue membership/progress changes also move series across the finished
+    // boundary and can leave the excluded library view stale across open tabs.
+    client.resetQueries({ queryKey: queryKeys.completed.pages() }),
+    client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.roll.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
     client.invalidateQueries({ queryKey: queryKeys.session.all }),
+    // Reading/rating actions emit logical history entries surfaced by the
+    // owner-scoped Activity (History) view.
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
   ])
 }
 
