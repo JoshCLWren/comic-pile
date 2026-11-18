@@ -88,7 +88,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
-        .merge_from(crate::custom_cbl::CustomCblApi::openapi());
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.
