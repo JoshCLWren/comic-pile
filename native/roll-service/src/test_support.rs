@@ -27,7 +27,7 @@ use crate::{db, AppState};
 /// excluded fixture, even though no production handler uses test scaffolding.
 fn canonical_schema() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/schema/public_schema.sql");
+        .join("../migrate/migrations/0001_baseline.sql");
     std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
             "read canonical Alembic schema fixture {}: {error}",
@@ -115,7 +115,7 @@ pub async fn truncate_application_tables(state: &AppState) {
     let rows = connection
         .query(
             "SELECT tablename FROM pg_tables \
-             WHERE schemaname = 'public' AND tablename <> 'alembic_version' \
+             WHERE schemaname = 'public' AND tablename NOT IN ('alembic_version', 'schema_migrations') \
              ORDER BY tablename",
             &[],
         )
