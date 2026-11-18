@@ -29,7 +29,7 @@ export interface BootstrapRequest {
   }
 }
 
-export type BootstrapResponse = components['schemas']['NativeBootstrapResponseV2']
+export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']

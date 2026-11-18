@@ -905,7 +905,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "snoozed_thread_ids": {
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "snoozed_threads": {
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set.",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
             },
@@ -931,6 +940,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -11804,130 +11814,6 @@
           "provenance_json",
           "created_at",
           "updated_at"
-        ],
-        "type": "object"
-      },
-      "NativeBootstrapResponseV2": {
-        "description": "Full live `GET /api/v2/roll/bootstrap` payload.\n\nThis is the actual handler response type, so the generated contract and the\nruntime share one authority. It is retained only until the bootstrap\nretirement work removes the route; it is not a new feature surface.",
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BootstrapActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bandwidth": {
-            "$ref": "#/components/schemas/BootstrapBandwidth"
-          },
-          "last_read": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BootstrapLastRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "last_rolled_result": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pending_thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "pool_reason": {
-            "$ref": "#/components/schemas/PoolReason"
-          },
-          "roll_recovery": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BootstrapRollRecovery"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "rollable": {
-            "items": {
-              "$ref": "#/components/schemas/BootstrapRollableItem"
-            },
-            "type": "array"
-          },
-          "session_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "session_mode": {
-            "$ref": "#/components/schemas/BootstrapSessionMode"
-          },
-          "skipped_thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "skipped_threads": {
-            "items": {
-              "$ref": "#/components/schemas/BootstrapThreadSummary"
-            },
-            "type": "array"
-          },
-          "snoozed_count": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "snoozed_thread_ids": {
-            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state.",
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "snoozed_threads": {
-            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set.",
-            "items": {
-              "$ref": "#/components/schemas/BootstrapThreadSummary"
-            },
-            "type": "array"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "session_id",
-          "user_id",
-          "session_mode",
-          "bandwidth",
-          "rollable",
-          "pool_reason",
-          "snoozed_threads",
-          "snoozed_count",
-          "snoozed_thread_ids",
-          "skipped_thread_ids",
-          "skipped_threads"
         ],
         "type": "object"
       },
@@ -33458,7 +33344,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeBootstrapResponseV2"
+                  "$ref": "#/components/schemas/BootstrapResponseV2"
                 }
               }
             },

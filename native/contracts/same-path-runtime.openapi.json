@@ -6409,6 +6409,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -6493,11 +6494,20 @@
             "type": "integer",
             "format": "int64"
           },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state."
+          },
           "snoozed_threads": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
-            }
+            },
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set."
           },
           "timezone": {
             "type": [
