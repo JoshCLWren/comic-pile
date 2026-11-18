@@ -3,7 +3,7 @@
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
   "updated_by_issue": 4739,
   "burndown": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
     "total_live_operations": 42,
@@ -993,11 +993,11 @@
     }
   ],
   "full_surface": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
     "summary": {
-      "generated_by": "scripts/generate_route_burndown.py",
+      "generated_by": "scripts/generate_route_burndown.mjs",
       "issue": 4739,
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
