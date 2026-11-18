@@ -38,7 +38,7 @@ use tracing::instrument;
 // ---------------------------------------------------------------------------
 
 /// Python `ReadingGraphSeriesReference`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphSeriesReference {
     pub comicvine_volume_id: String,
     pub series_name: String,
@@ -47,7 +47,7 @@ pub struct ReadingGraphSeriesReference {
 }
 
 /// Python `ReadingGraphBlocker`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphBlocker {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,7 +59,7 @@ pub struct ReadingGraphBlocker {
 }
 
 /// Python `ReadingGraphIssueReference`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphIssueReference {
     pub issue_id: i32,
     pub series_name: String,
@@ -70,7 +70,7 @@ pub struct ReadingGraphIssueReference {
 }
 
 /// Python `ReadingGraphSeriesNode` (extends ReadingGraphSeriesReference).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphSeriesNode {
     pub comicvine_volume_id: String,
     pub series_name: String,
@@ -84,7 +84,7 @@ pub struct ReadingGraphSeriesNode {
 }
 
 /// Python `ReadingGraphChoiceEffect`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphChoiceEffect {
     pub choice: String,
     pub label: String,
@@ -95,7 +95,7 @@ pub struct ReadingGraphChoiceEffect {
 }
 
 /// Python `ReadingGraphOverlap`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphOverlap {
     pub overlap_id: String,
     pub continuing_series: ReadingGraphSeriesReference,
@@ -108,14 +108,14 @@ pub struct ReadingGraphOverlap {
 }
 
 /// Python `ReadingGraphCycleError`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphCycleError {
     pub code: String,
     pub message: String,
 }
 
 /// Python `ReadingGraphOverlapChoice`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ReadingGraphOverlapChoice {
     pub overlap_id: String,
     pub choice: String,
@@ -257,7 +257,11 @@ pub async fn preview_cbl_reading_graph(
         .collect();
 
     // Validate selected positions.
-    let selected_positions: BTreeSet<i32> = payload.included_positions.iter().cloned().collect();
+    let selected_positions: BTreeSet<i32> = payload
+        .included_positions
+        .iter()
+        .cloned()
+        .collect();
     let unknown: Vec<i32> = selected_positions
         .iter()
         .filter(|p| !entry_positions.contains(p))
