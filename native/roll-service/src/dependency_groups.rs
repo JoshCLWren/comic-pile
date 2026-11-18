@@ -915,7 +915,6 @@ pub async fn get_group_detail(
     thread_ids.extend(issue_parent_map.values().copied());
     let threads = threads_by_ids(&connection, &thread_ids).await?;
     let issues = issues_by_ids(&connection, &issue_ids).await?;
-    let reasons = blocking_reasons_by_thread(&connection, user.id(), &thread_ids).await?;
     let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
     let linked_plans = linked_plans(&connection, group_id, user.id()).await?;
     let mut enriched = Vec::with_capacity(memberships.len());
