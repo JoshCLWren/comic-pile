@@ -6,37 +6,20 @@ sibling repositories; HTTP status mapping lives in routers.
 """
 
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread
 from app.repositories import dependency_repository, issue_repository
-from app.services.dependency_cycle import (
-    build_reading_order_graph,
-    find_thread_cycle_issue_ids,
-)
-from app.services.reading_eligibility_service import (
-    get_execution_eligibility,
-    project_blocking_explanation,
-)
 from app.schemas.dependency import (
-    BlockingDependency,
-    BlockingExplanation,
-    ConnectedThreadInfo,
     DependencyResponse,
     IssueDependenciesResponse,
     IssueDependencyEdge,
     ThreadDependenciesResponse,
-    ThreadConnectedResponse,
 )
 from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from comic_pile.dependencies import (
-    BlockingDependency as InternalBlockingDependency,
-    format_blocking_reason,
     get_blocked_thread_ids,
-    get_blocking_explanations_batch,
-    get_dependency_order_conflicts,
 )
 
 
@@ -109,18 +92,6 @@ async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[
         responses.append(response)
 
     return responses
-
-
-def _to_blocking_dependency_schema(
-    dependency: InternalBlockingDependency,
-) -> BlockingDependency:
-    """Convert an internal blocking dependency into its API schema form."""
-    return BlockingDependency(
-        thread_id=dependency.thread_id,
-        thread_title=dependency.thread_title,
-        issue_number=dependency.issue_number,
-        label=dependency.label,
-    )
 
 
 async def get_all_blocked_thread_ids(
@@ -234,250 +205,6 @@ async def get_issue_dependencies(
         incoming=incoming_edges,
         outgoing=outgoing_edges,
     )
-
-
-async def get_thread_blocking_info(
-    thread_id: int, user_id: int, db: AsyncSession
-) -> BlockingExplanation | None:
-    """Return blocked status and human-readable blocking reasons for a thread."""
-    from app.repositories import thread_repository
-    
-    thread = await thread_repository.find_owned(db, user_id, thread_id)
-    if not thread:
-        return None
-
-    explanations = await get_blocking_details([thread_id], user_id, db)
-    return explanations[thread_id]
-
-
-async def get_threads_blocking_info(
-    thread_ids: list[int], user_id: int, db: AsyncSession
-) -> dict[int, BlockingExplanation] | None:
-    """Return blocked status and human-readable blocking reasons for multiple threads.
-
-    Args:
-        thread_ids: Owned thread IDs to inspect.
-        user_id: Thread owner.
-        db: Database session.
-
-    Returns:
-        Mapping of thread ID to blocking explanation, or ``None`` when one or
-        more threads are missing or owned by another user.
-    """
-    thread_count = await db.scalar(
-        select(func.count()).select_from(Thread).where(
-            Thread.id.in_(thread_ids),
-            Thread.user_id == user_id,
-        )
-    )
-    if thread_count != len(thread_ids):
-        return None
-
-    return await get_blocking_details(thread_ids, user_id, db)
-
-
-async def get_blocking_details(
-    thread_ids: list[int], user_id: int, db: AsyncSession,
-) -> dict[int, BlockingExplanation]:
-    """Project owner-scoped restrictions without repeating a library ownership read.
-
-    Args:
-        thread_ids: Candidate IDs from a reader-owned library query. Public batch
-            endpoints validate existence/ownership separately for their 404 contract.
-        user_id: Authenticated reader. Both execution loaders filter by this owner,
-            so foreign IDs can never reveal another reader's issues or list labels.
-        db: Current request transaction.
-
-    Returns:
-        Live restrictions, or legacy dependencies while execution is disabled.
-    """
-    eligibility = await get_execution_eligibility(db, user_id)
-    if eligibility is not None:
-        return {tid: project_blocking_explanation(eligibility, tid) for tid in thread_ids}
-
-    # Blocking status is derived from the canonical blocking-explanation query
-    # itself, so no separate blocked-ID query is needed.
-    reasons_map = await get_blocking_explanations_batch(thread_ids, user_id, db)
-
-    result: dict[int, BlockingExplanation] = {}
-    for tid in thread_ids:
-        dependencies = reasons_map.get(tid, [])
-        if dependencies:
-            result[tid] = BlockingExplanation(
-                is_blocked=True,
-                blocking_reasons=[format_blocking_reason(dep) for dep in dependencies],
-                blocking_dependencies=[_to_blocking_dependency_schema(dep) for dep in dependencies],
-            )
-        else:
-            result[tid] = BlockingExplanation(
-                is_blocked=False,
-                blocking_reasons=[],
-                blocking_dependencies=[],
-            )
-
-    return result
-
-
-async def check_thread_dependency_order(
-    thread_id: int, user_id: int, db: AsyncSession
-) -> list[dict] | None:
-    """Check for conflicts between dependency order and issue position order.
-
-    Args:
-        thread_id: Thread to inspect.
-        user_id: Thread owner.
-        db: Database session.
-
-    Returns:
-        List of conflict dictionaries, or ``None`` when the thread is missing
-        or owned by another user.
-    """
-    from app.repositories import thread_repository
-    
-    thread = await thread_repository.find_owned(db, user_id, thread_id)
-    if not thread:
-        return None
-
-    raw_conflicts = await get_dependency_order_conflicts(thread_id, user_id, db)
-    return raw_conflicts
-
-
-async def get_thread_connected_threads(
-    thread_id: int, user_id: int, db: AsyncSession
-) -> ThreadConnectedResponse | None:
-    """Return threads connected to this one via dependencies."""
-    from app.repositories import thread_repository
-    
-    thread = await thread_repository.find_owned(db, user_id, thread_id)
-    if not thread:
-        return None
-
-    blocking_deps, blocked_by_deps = await dependency_repository.get_thread_connected_dependencies(
-        db, thread_id, reader_only=get_reading_execution_settings().enabled
-    )
-    all_deps = blocking_deps + blocked_by_deps
-    if not all_deps:
-        return ThreadConnectedResponse(thread_id=thread_id, connected_threads=[])
-
-    issue_ids = set()
-    for dep in all_deps:
-        if dep.source_issue_id is not None:
-            issue_ids.add(dep.source_issue_id)
-        if dep.target_issue_id is not None:
-            issue_ids.add(dep.target_issue_id)
-
-    issue_map: dict[int, Issue] = {}
-    thread_ids: set[int] = set()
-    if issue_ids:
-        result = await db.execute(
-            select(Issue).where(Issue.id.in_(issue_ids))
-        )
-        for issue_obj in result.scalars():
-            issue_map[issue_obj.id] = issue_obj
-            thread_ids.add(issue_obj.thread_id)
-
-    thread_map: dict[int, Thread] = {}
-    if thread_ids:
-        result = await db.execute(
-            select(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == user_id)
-        )
-        for thread_obj in result.scalars():
-            thread_map[thread_obj.id] = thread_obj
-
-    # A prerequisite whose source issue is already read is satisfied: it can no
-    # longer hold this series back, so it is not an active blocker. The same
-    # rule governs Roll eligibility in comic_pile.dependencies, so the
-    # dependency panel and the blocked state can never disagree.
-    active_blocked_by_deps = [
-        dep
-        for dep in blocked_by_deps
-        if (source_issue_obj := issue_map.get(dep.source_issue_id)) is None
-        or source_issue_obj.status != "read"
-    ]
-
-    # Track unique connected threads by thread_id, aggregating connection types.
-    connected_by_thread: dict[int, dict] = {}
-
-    for dep in blocking_deps:
-        if dep.target_issue_id is not None:
-            target_issue_obj = issue_map.get(dep.target_issue_id)
-            if target_issue_obj:
-                target_thread_obj = thread_map.get(target_issue_obj.thread_id)
-                if target_thread_obj and target_issue_obj.thread_id != thread_id:
-                    tid = target_thread_obj.id
-                    if tid not in connected_by_thread:
-                        connected_by_thread[tid] = {
-                            "thread_id": tid,
-                            "title": target_thread_obj.title,
-                            "types": {"blocks"},
-                            "dependency_ids": {dep.id},
-                            "issue_number": target_issue_obj.issue_number,
-                        }
-                    else:
-                        connected_by_thread[tid]["types"].add("blocks")
-                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
-
-    for dep in active_blocked_by_deps:
-        if dep.source_issue_id is not None:
-            source_issue_obj = issue_map.get(dep.source_issue_id)
-            if source_issue_obj:
-                source_thread_obj = thread_map.get(source_issue_obj.thread_id)
-                if source_thread_obj and source_issue_obj.thread_id != thread_id:
-                    tid = source_thread_obj.id
-                    if tid not in connected_by_thread:
-                        connected_by_thread[tid] = {
-                            "thread_id": tid,
-                            "title": source_thread_obj.title,
-                            "types": {"blocked_by"},
-                            "dependency_ids": {dep.id},
-                            "issue_number": source_issue_obj.issue_number,
-                        }
-                    else:
-                        connected_by_thread[tid]["types"].add("blocked_by")
-                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
-
-    # Circularity is a verdict on the effective reading precedence graph: the
-    # stored dependencies plus the required within-series issue order. Two
-    # series that point at each other in both directions through different
-    # issues, such as a forward interleaving, are not a cycle; a backward chain
-    # closes a real loop because the earlier issue in the series must be read
-    # first (issue #3596).
-    graph = await dependency_repository.get_reader_dependency_graph(db, user_id)
-    graph_edges, graph_issue_threads = build_reading_order_graph(graph.edges, graph.issues)
-    cyclic_issue_ids = find_thread_cycle_issue_ids(
-        graph_edges, graph_issue_threads, thread_id
-    )
-    circular_thread_ids = {
-        graph_issue_threads[issue_id]
-        for issue_id in cyclic_issue_ids
-        if issue_id in graph_issue_threads
-    }
-
-    connected: list[ConnectedThreadInfo] = []
-
-    for entry in connected_by_thread.values():
-        types = entry["types"]
-        if types == {"blocks"}:
-            connection_type = "blocks"
-        elif types == {"blocked_by"}:
-            connection_type = "blocked_by"
-        else:
-            connection_type = "blocks & blocked_by"
-
-        # The series shares a genuine issue-level cycle with this thread, so
-        # no issue in that cycle can be read first (issue #3239, #3596).
-        is_circular = entry["thread_id"] in circular_thread_ids
-
-        connected.append(ConnectedThreadInfo(
-            thread_id=entry["thread_id"],
-            title=entry["title"],
-            connection_type=connection_type,
-            dependency_id=min(entry["dependency_ids"]),
-            issue_number=entry["issue_number"],
-            is_circular=is_circular,
-        ))
-
-    return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
 
 
 async def get_thread_issue_dependencies_batch(

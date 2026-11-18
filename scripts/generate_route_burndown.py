@@ -435,6 +435,7 @@ def _fragment_vercel_groups(
 
     Args:
         fragments: Family-owned route metadata.
+        slim: Drop native_roll routes the catch-all already provides.
         previous_routes: Previous Vercel routes for dest/src inference.
 
     Returns:
@@ -467,7 +468,11 @@ def _fragment_vercel_groups(
                     )
                 dest = previous.dest
             if src is None:
-                if previous is not None and previous.src is not None:
+                if (
+                    previous is not None
+                    and previous.src is not None
+                    and previous.src != CATCH_ALL_SRC
+                ):
                     src = previous.src
                 else:
                     src = route_regex_for_path(route_path)
@@ -517,15 +522,135 @@ def _fragment_vercel_groups(
     return ordered
 
 
+ROLL_DESTINATION = "/api/native_roll.rs"
+_REGEX_META = frozenset("[](){}|*+?.^$")
+Segment = tuple[str, str]
+
+
+def _parse_segments(src: str) -> list[Segment] | None:
+    """Parse a simple path regex into (kind, value) segments, else None."""
+    body = src.removeprefix("^").removesuffix("$")
+    # `[^/]+` contains a slash; swap it for a sentinel before splitting.
+    parts = body.replace("[^/]+", "\u0001").split("/")
+    segments: list[Segment] = []
+    for index, part in enumerate(parts):
+        if part == "\u0001":
+            segments.append(("param", ""))
+        elif part == "[0-9]+":
+            segments.append(("num", ""))
+        elif part == ".+":
+            if index != len(parts) - 1:
+                return None
+            segments.append(("rest", ""))
+        else:
+            literal = ""
+            i = 0
+            while i < len(part):
+                ch = part[i]
+                if ch == "\\":
+                    # Only escaped punctuation is a plain literal; \d, \w, ... are classes.
+                    if i + 1 >= len(part) or re.fullmatch(r"[A-Za-z0-9_]", part[i + 1]):
+                        return None
+                    i += 1
+                    literal += part[i]
+                elif ch in _REGEX_META:
+                    return None
+                else:
+                    literal += ch
+                i += 1
+            segments.append(("lit", literal))
+    return segments
+
+
+def _segments_compatible(left: Segment, right: Segment) -> bool:
+    if left[0] == "lit" and right[0] == "lit":
+        return left[1] == right[1]
+    if left[0] == "lit" or right[0] == "lit":
+        lit, other = (left, right) if left[0] == "lit" else (right, left)
+        if lit[1] == "":
+            return False
+        return other[0] != "num" or re.fullmatch(r"[0-9]+", lit[1]) is not None
+    return True
+
+
+def _segments_overlap(left: list[Segment], right: list[Segment]) -> bool:
+    for i in range(max(len(left), len(right))):
+        a = left[i] if i < len(left) else None
+        b = right[i] if i < len(right) else None
+        if (a is not None and a[0] == "rest") or (b is not None and b[0] == "rest"):
+            return a is not None and b is not None
+        if a is None or b is None:
+            return False
+        if not _segments_compatible(a, b):
+            return False
+    return True
+
+
+def _methods_of(route: dict[str, object]) -> list[str]:
+    raw = route.get("methods")
+    return [m for m in raw if isinstance(m, str)] if isinstance(raw, list) else []
+
+
+def _routes_may_overlap(first: dict[str, object], second: dict[str, object]) -> bool:
+    mine = _methods_of(first)
+    theirs = _methods_of(second)
+    if mine and theirs and not any(m in theirs for m in mine):
+        return False
+    src_a = first.get("src")
+    src_b = second.get("src")
+    left = _parse_segments(src_a) if isinstance(src_a, str) else None
+    right = _parse_segments(src_b) if isinstance(src_b, str) else None
+    if left is None or right is None:
+        return True
+    return _segments_overlap(left, right)
+
+
+def _slim_native_roll_routes(
+    routes: list[dict[str, object]],
+    removable: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Drop fragment native_roll routes that the catch-all already provides.
+
+    A route is kept only when a later non-roll route (before the catch-all)
+    may overlap it on method and path; overlap is proven absent segment by
+    segment, and unknown regex shapes count as overlapping. Mirrors
+    scripts/vercel_slim_routes.mjs; keep the two in sync.
+    """
+    catch_index = next(
+        (
+            i
+            for i, route in enumerate(routes)
+            if route.get("src") == CATCH_ALL_SRC and not route.get("methods")
+        ),
+        -1,
+    )
+    limit = len(routes) if catch_index == -1 else catch_index
+    removable_ids = {id(route) for route in removable}
+    kept: list[dict[str, object]] = []
+    for index, route in enumerate(routes):
+        if id(route) not in removable_ids or route.get("dest") != ROLL_DESTINATION:
+            kept.append(route)
+            continue
+        if any(
+            other.get("dest") != ROLL_DESTINATION and _routes_may_overlap(route, other)
+            for other in routes[index + 1 : limit]
+        ):
+            kept.append(route)
+    return kept
+
+
 def _generate_vercel_document(
     previous: dict[str, object],
     fragments: list[RouteFragment],
+    *,
+    slim: bool = True,
 ) -> dict[str, object]:
     """Regenerate ``vercel.json`` API routes from fragments plus baseline.
 
     Args:
         previous: Previous ``vercel.json`` document.
         fragments: Family-owned route metadata.
+        slim: Drop native_roll routes the catch-all already provides.
 
     Returns:
         The new document with API routes in native-before-Python order.
@@ -591,13 +716,16 @@ def _generate_vercel_document(
         {"src": r["src"], "methods": r["methods"], "dest": r["dest"]}
         for r in [*native_fragment, *python_fragment]
     ]
-    new_routes: list[dict[str, object]] = [
+    full_routes: list[dict[str, object]] = [
         *baseline_natives,
         *generated,
         *baseline_pythons,
         catch_all,
         *non_api,
     ]
+    new_routes = (
+        _slim_native_roll_routes(full_routes, generated) if slim else full_routes
+    )
     # Validate native-before-Python precedence and catch-all placement.
     native_indices = [
         index

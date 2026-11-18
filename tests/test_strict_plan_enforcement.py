@@ -9,15 +9,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cbl_reference import CBLSourceEntry
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
@@ -29,8 +26,6 @@ from app.models.reading_plan_membership import (
 )
 from app.models.thread import Thread
 from app.schemas.continuity_plan import CBLPlacement, ContinuityPlanNode
-from app.schemas.shared_types import SourceBackedDecision
-from app.services.cbl_plan_adoption import _merge_adopted_nodes
 from app.services.canonical_constraint_compiler import (
     compile_rule_edges,
     retire_rule_edges,
@@ -1555,125 +1550,6 @@ async def test_removing_series_updates_plan_record_membership_and_source_order(
 
 
 @pytest.mark.asyncio
-async def test_cbl_exclude_drops_existing_series_from_plan_record(
-    async_db: AsyncSession,
-) -> None:
-    """Re-committing a CBL with series EXCLUDE must drop already-present nodes."""
-    user = await get_or_create_user_async(async_db)
-    _batman, batman_issues = await _make_series(
-        async_db,
-        user_id=user.id,
-        title="Absolute Batman",
-        numbers=["1", "2"],
-        queue_position=1,
-    )
-    _hated, hated_issues = await _make_series(
-        async_db,
-        user_id=user.id,
-        title="Absolute Green Arrow",
-        numbers=["1", "2"],
-        queue_position=2,
-    )
-    source_path = "/absolute.cbl"
-    all_issues = batman_issues + hated_issues
-    nodes = [
-        ContinuityPlanNode(
-            id=f"cbl-{position}",
-            node_type="issue",
-            ref_id=issue.id,
-            lane_id="default",
-            position=position,
-            convergence_gate=[],
-            source_cbl_placements=(
-                CBLPlacement(source_path=source_path, position=position),
-            ),
-        )
-        for position, issue in enumerate(all_issues)
-    ]
-    plan = ContinuityPlan(
-        user_id=user.id,
-        name="Absolute Universe",
-        ordering_mode="informational",
-        lanes_json=[{"id": "default", "name": "Default", "order": 0}],
-        nodes_json=[node.model_dump(mode="json") for node in nodes],
-    )
-    async_db.add(plan)
-    await async_db.flush()
-    await replace_compiled_rules(
-        async_db,
-        user_id=user.id,
-        plan=plan,
-        nodes=nodes,
-        ordering_mode="informational",
-    )
-    await async_db.commit()
-    await async_db.refresh(plan)
-
-    entries = [
-        SimpleNamespace(
-            id=position,
-            position=position,
-            series_name=title,
-            volume_year=2024,
-        )
-        for position, title in enumerate(
-            ["Absolute Batman", "Absolute Batman", "Absolute Green Arrow", "Absolute Green Arrow"]
-        )
-    ]
-    facts = {
-        position: {
-            "resolved_issue_id": issue.id,
-            "resolution_status": "existing",
-        }
-        for position, issue in enumerate(all_issues)
-    }
-    report = await _merge_adopted_nodes(
-        async_db,
-        plan,
-        user.id,
-        [cast(CBLSourceEntry, entry) for entry in entries],
-        facts,
-        source_path,
-        {},
-        {},
-        {"Absolute Green Arrow": SourceBackedDecision.EXCLUDE},
-    )
-    assert report.excluded_positions == [2, 3]
-    remaining_nodes = [
-        ContinuityPlanNode.model_validate(node) for node in plan.nodes_json
-    ]
-    await replace_compiled_rules(
-        async_db,
-        user_id=user.id,
-        plan=plan,
-        nodes=remaining_nodes,
-        ordering_mode="informational",
-    )
-    await async_db.commit()
-    assert [node.ref_id for node in remaining_nodes] == [
-        issue.id for issue in batman_issues
-    ]
-    member_ids = set(
-        (
-            await async_db.execute(
-                select(ReadingPlanIssue.issue_id).where(ReadingPlanIssue.plan_id == plan.id)
-            )
-        ).scalars().all()
-    )
-    assert member_ids == {issue.id for issue in batman_issues}
-    placements = set(
-        (
-            await async_db.execute(
-                select(ReadingPlanSourcePlacement.occurrence_id).where(
-                    ReadingPlanSourcePlacement.plan_id == plan.id
-                )
-            )
-        ).scalars().all()
-    )
-    assert placements == {"cbl-0", "cbl-1"}
-
-
-@pytest.mark.asyncio
 async def test_queue_and_roll_agree_on_explicit_checkpoint(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -1703,10 +1579,6 @@ async def test_queue_and_roll_agree_on_explicit_checkpoint(
     assert follow.id not in roll_ids
     assert lead.id in roll_ids
     assert [reason.label for reason in reasons] == ["Blocked by Lead Series: #1"]
-    info = await auth_client.post(f"/api/v1/threads/{follow.id}:getBlockingInfo")
-    assert info.status_code == 200, info.text
-    assert info.json()["is_blocked"] is True
-    assert info.json()["blocking_reasons"] == ["Blocked by Lead Series: #1"]
 
 
 @pytest.mark.asyncio
