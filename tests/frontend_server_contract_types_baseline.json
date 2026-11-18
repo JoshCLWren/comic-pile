@@ -18,17 +18,12 @@
   ],
   "frontend/src/services/api-comicvine.ts": [
     "CanonicalCorrection",
-    "ComicVineComicPileMatch",
-    "ComicVineCreator",
     "ComicVineIssueCandidate",
-    "ComicVineIssueIntelligence",
-    "ComicVineRelatedIssue",
     "ComicVineResolveResponse",
     "ComicVineResolvedIssue",
     "ComicVineSeriesIssuesResponse",
     "ComicVineSeriesResult",
     "ComicVineSeriesSearchResponse",
-    "ComicVineStoryArc",
     "IssueIdentityMapping",
     "IssueIdentityResponse",
     "MetadataCorrectionsResponse",
@@ -126,9 +121,6 @@
     "ThreadReadingOrdersResponse"
   ],
   "frontend/src/services/api-series-mapping.ts": [
-    "SeriesMappingCommitRequest",
-    "SeriesMappingCommitResponse",
-    "SeriesMappingCommitSeriesMapping",
     "SeriesMappingPreviewCounts",
     "SeriesMappingPreviewProviderSeries",
     "SeriesMappingPreviewRequest",
@@ -137,7 +129,13 @@
     "SeriesMappingPreviewScope"
   ],
   "frontend/src/services/api-tags.ts": [
+    "BulkAssignResponse",
+    "CreateTagResponse",
+    "EffectiveTag",
     "EffectiveTagsResponse",
+    "InheritanceSource",
+    "NearMatch",
+    "Tag",
     "TagListResponse",
     "ThreadIssuesEffectiveTagsResponse"
   ],
@@ -183,11 +181,8 @@
     "ReaderContextResponse",
     "ReaderContextSeries",
     "RollResponse",
+    "SessionSnapshotsResponse",
     "SetCurrentIssueResponse",
     "SnoozeCorrectionInfo"
-  ],
-  "frontend/src/types/rollBootstrap.ts": [
-    "RollPrerequisiteSwitchRequest",
-    "RollPrerequisiteSwitchResponse"
   ]
 }

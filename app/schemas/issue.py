@@ -4,8 +4,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.comicvine import ComicVineCreator
-
 
 class IssueResponse(BaseModel):
     """Schema for issue response."""
@@ -19,6 +17,15 @@ class IssueResponse(BaseModel):
     status: str
     read_at: datetime | None
     created_at: datetime
+
+
+class IssueListResponse(BaseModel):
+    """Schema for paginated issue list response."""
+
+    issues: list[IssueResponse]
+    total_count: int
+    page_size: int
+    next_page_token: str | None = None
 
 
 class IssueCreate(BaseModel):
@@ -36,51 +43,6 @@ class IssueUpdate(BaseModel):
     read_at: datetime | None = None
 
 
-class IssueListResponse(BaseModel):
-    """Schema for paginated issue list response."""
-
-    issues: list[IssueResponse]
-    total_count: int
-    page_size: int
-    next_page_token: str | None = None
-
-
-class IssueCreatorsEntry(BaseModel):
-    """Stored ComicVine creator credits for one thread issue."""
-
-    issue_id: int
-    creators: list[ComicVineCreator] = Field(default_factory=list)
-
-
-class ThreadIssueCreatorsResponse(BaseModel):
-    """Bulk per-issue ComicVine creator credits for one thread.
-
-    Issues without a confirmed ComicVine mapping (or without stored credit
-    arrays) are omitted; callers fall back to the series' manual creator
-    credits for those rows.
-    """
-
-    thread_id: int
-    issues: list[IssueCreatorsEntry] = Field(default_factory=list)
-
-
-class IssueCreateRange(BaseModel):
-    """Schema for creating issues from range format."""
-
-    issue_range: str = Field(
-        ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
-    )
-    insert_after_issue_id: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Insert new issues after this issue ID. Omit the field to place ordinary "
-            "numeric issues in natural series order. Send explicit null to append at "
-            "the end."
-        ),
-    )
-
-
 class IssueMoveRequest(BaseModel):
     """Schema for moving an issue to a new position."""
 
@@ -88,16 +50,6 @@ class IssueMoveRequest(BaseModel):
         ...,
         ge=1,
         description="Move after this issue. null = move to position 1 (top).",
-    )
-
-
-class IssueReorderRequest(BaseModel):
-    """Schema for bulk reordering issues within a thread."""
-
-    issue_ids: list[int] = Field(
-        ...,
-        min_length=1,
-        description="Ordered list of issue IDs representing the desired order.",
     )
 
 

@@ -12,7 +12,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import comicvine_metadata_refresh_repository as refresh_repository
-from app.repositories import issue_repository
 from app.schemas.comicvine import (
     ComicVineComicPileMatch,
     ComicVineCreator,
@@ -20,14 +19,12 @@ from app.schemas.comicvine import (
     ComicVineRelatedIssue,
     ComicVineStoryArc,
 )
-from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
 
 from app.services.comicvine_metadata_repair import (
     MetadataRepairState,
     describe_metadata_status,
     refresh_retry_after_seconds,
 )
-from app.services.ownership import get_owned_thread_or_404
 
 COMICVINE_PROVIDER = "comicvine"
 MAX_RELATED_ISSUES_PER_ARC = 60
@@ -432,51 +429,6 @@ async def get_issue_intelligence(
         ),
     )
 
-
-async def get_thread_issue_creators(
-    db: AsyncSession,
-    thread_id: int,
-    user_id: int,
-) -> ThreadIssueCreatorsResponse:
-    """Read stored ComicVine creator credits for every mapped issue in one thread.
-
-    This is the bulk display read behind the thread issue list's creator
-    column. Unlike ``get_issue_intelligence`` it is a pure stored-data read:
-    it never schedules background resolution or metadata refresh jobs and
-    never builds story-arc intelligence, so expanding a full issue page stays
-    one request instead of one heavy provider read per row. Issue-specific
-    credits are returned regardless of whether the series carries manual
-    creator credits, preserving per-issue provider credits as the preferred
-    source with the series credits only a client-side fallback.
-
-    Args:
-        db: Async database session.
-        thread_id: ComicPile thread whose issue credits are read.
-        user_id: Owner who must own the thread.
-
-    Returns:
-        Per-issue creator credits for issues holding a confirmed ComicVine
-        mapping with stored credit arrays; unmapped or credit-less issues are
-        omitted.
-
-    Raises:
-        HTTPException: 404 when the thread does not exist or is not owned by
-            ``user_id``.
-    """
-    await get_owned_thread_or_404(db, user_id, thread_id)
-    rows = await issue_repository.confirmed_comicvine_credits_for_thread(db, thread_id)
-    entries: list[IssueCreatorsEntry] = []
-    for issue_id, person_credits, creator_credits in rows:
-        metadata: dict[str, object] = {}
-        if person_credits is not None:
-            metadata["person_credits"] = person_credits
-        if creator_credits is not None:
-            metadata["creator_credits"] = creator_credits
-        creators = _creators(metadata)[:MAX_BULK_CREDITS_PER_ISSUE]
-        if not creators:
-            continue
-        entries.append(IssueCreatorsEntry(issue_id=issue_id, creators=creators))
-    return ThreadIssueCreatorsResponse(thread_id=thread_id, issues=entries)
 
 
 def schedule_issue_metadata_refresh(identity_id: int) -> bool:

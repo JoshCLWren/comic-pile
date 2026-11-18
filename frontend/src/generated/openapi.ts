@@ -5502,23 +5502,6 @@ export interface components {
             thread_title: string;
         };
         /**
-         * ComicVineCreator
-         * @description One credited creator and their provider-supplied roles.
-         *
-         *     ``creator_id`` is the stable external provider person identifier
-         *     (e.g. the ComicVine person ID).  When the source metadata lacks a
-         *     usable stable ID the field is ``None`` and the row must not be
-         *     treated as analytics-addressable.
-         */
-        ComicVineCreator: {
-            /** Creator Id */
-            creator_id?: number | null;
-            /** Name */
-            name: string;
-            /** Roles */
-            roles?: string[];
-        };
-        /**
          * ComicVineIssueCandidate
          * @description One issue candidate from a series for identity mapping.
          */
@@ -7381,30 +7364,20 @@ export interface components {
             /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
             items: components["schemas"]["IssueCard"][];
         };
-        /**
-         * IssueCreateRange
-         * @description Schema for creating issues from range format.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
         IssueCreateRange: {
             /**
-             * Insert After Issue Id
-             * @description Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
              */
             insert_after_issue_id?: number | null;
-            /**
-             * Issue Range
-             * @description Issue range like '1-25' or '1, 3, 5-7'
-             */
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
             issue_range: string;
         };
-        /**
-         * IssueCreatorsEntry
-         * @description Stored ComicVine creator credits for one thread issue.
-         */
+        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         IssueCreatorsEntry: {
-            /** Creators */
-            creators?: components["schemas"]["ComicVineCreator"][];
-            /** Issue Id */
+            creators: components["schemas"]["CreatorCredit"][];
+            /** Format: int32 */
             issue_id: number;
         };
         /** @description Wire parity with Python `IssueDependenciesResponse`. */
@@ -7499,18 +7472,12 @@ export interface components {
             store_date?: string | null;
             story_arcs: components["schemas"]["StoryArc"][];
         };
-        /**
-         * IssueListResponse
-         * @description Schema for paginated issue list response.
-         */
         IssueListResponse: {
-            /** Issues */
-            issues: components["schemas"]["IssueResponse"][];
-            /** Next Page Token */
+            issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
-            /** Page Size */
+            /** Format: int64 */
             page_size: number;
-            /** Total Count */
+            /** Format: int32 */
             total_count: number;
         };
         /**
@@ -7576,15 +7543,8 @@ export interface components {
             replayed: boolean;
             thread: components["schemas"]["ThreadProgress"];
         };
-        /**
-         * IssueReorderRequest
-         * @description Schema for bulk reordering issues within a thread.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
         IssueReorderRequest: {
-            /**
-             * Issue Ids
-             * @description Ordered list of issue IDs representing the desired order.
-             */
             issue_ids: number[];
         };
         /**
@@ -7683,31 +7643,15 @@ export interface components {
             /** Refreshed */
             refreshed: boolean;
         };
-        /**
-         * MigrateToIssuesRequest
-         * @description Schema for migrating thread to issue tracking.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         MigrateToIssuesRequest: {
-            /**
-             * Last Issue Read
-             * @description The issue number user just finished reading (e.g., 15)
-             */
+            /** Format: int32 */
             last_issue_read: number;
-            /**
-             * Total Issues
-             * @description Total number of issues in the series (e.g., 25)
-             */
+            /** Format: int32 */
             total_issues: number;
         };
-        /**
-         * MigrateToIssuesSimpleRequest
-         * @description Schema for simplified migration (infers total_issues from current state).
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         MigrateToIssuesSimpleRequest: {
-            /**
-             * Issue Number
-             * @description The issue number user just read (e.g., '5', 'Annual 1')
-             */
             issue_number: string;
         };
         /** @description Minimal release data for reconciliation endpoints (no body). */
@@ -7951,30 +7895,6 @@ export interface components {
             mode?: string | null;
             name: string;
         };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
-        NativeIssueCreateRange: {
-            /**
-             * Format: int32
-             * @description Insert after this issue id; omit for natural placement, null to append.
-             */
-            insert_after_issue_id?: number | null;
-            /** @description Range such as `1-25` or `1, 3, 5-7`. */
-            issue_range: string;
-        };
-        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
-        NativeIssueCreatorsEntry: {
-            creators: components["schemas"]["CreatorCredit"][];
-            /** Format: int32 */
-            issue_id: number;
-        };
-        NativeIssueListResponse: {
-            issues: components["schemas"]["IssueMutationItem"][];
-            next_page_token?: string | null;
-            /** Format: int64 */
-            page_size: number;
-            /** Format: int32 */
-            total_count: number;
-        };
         /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
         NativeIssueMoveRequest: {
             /**
@@ -7986,10 +7906,6 @@ export interface components {
         /** @description Python `IssueOrderValidationResponse`. */
         NativeIssueOrderValidationResponse: {
             warnings: string[];
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
-        NativeIssueReorderRequest: {
-            issue_ids: number[];
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -8003,17 +7919,6 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
-        NativeMigrateToIssuesRequest: {
-            /** Format: int32 */
-            last_issue_read: number;
-            /** Format: int32 */
-            total_issues: number;
-        };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
-        NativeMigrateToIssuesSimpleRequest: {
-            issue_number: string;
         };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
@@ -8292,30 +8197,6 @@ export interface components {
             predicted_intent?: string | null;
             source?: string | null;
         };
-        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
-        NativeSetCurrentIssueRequest: {
-            issue_number: string;
-        };
-        /** @description Python `SetCurrentIssueResponse`. */
-        NativeSetCurrentIssueResponse: {
-            format: string;
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number?: string | null;
-            /** Format: int32 */
-            issues_remaining: number;
-            /** Format: int32 */
-            next_issue_id?: number | null;
-            next_issue_number?: string | null;
-            /** Format: int32 */
-            queue_position: number;
-            reading_progress?: string | null;
-            /** Format: int32 */
-            thread_id: number;
-            title: string;
-            /** Format: int32 */
-            total_issues?: number | null;
-        };
         NativeSourceSyncFailure: {
             error: string;
             /** Format: int32 */
@@ -8407,12 +8288,6 @@ export interface components {
         NativeTasteDiscoveryListResponse: {
             discoveries: components["schemas"]["NativeTasteDiscovery"][];
             generated_at: string;
-        };
-        /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
-        NativeThreadIssueCreatorsResponse: {
-            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
-            /** Format: int32 */
-            thread_id: number;
         };
         /** @description Python `ThreadReadingOrdersResponse`. */
         NativeThreadReadingOrdersResponse: {
@@ -10715,43 +10590,28 @@ export interface components {
             id: number;
             title: string;
         };
-        /**
-         * SetCurrentIssueRequest
-         * @description Schema for atomically correcting the current issue in an active thread.
-         */
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         SetCurrentIssueRequest: {
-            /**
-             * Issue Number
-             * @description Target issue number to set as current
-             */
             issue_number: string;
         };
-        /**
-         * SetCurrentIssueResponse
-         * @description Response after atomically correcting the current issue.
-         */
+        /** @description Python `SetCurrentIssueResponse`. */
         SetCurrentIssueResponse: {
-            /** Format */
             format: string;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /** Issue Number */
             issue_number?: string | null;
-            /** Issues Remaining */
+            /** Format: int32 */
             issues_remaining: number;
-            /** Next Issue Id */
+            /** Format: int32 */
             next_issue_id?: number | null;
-            /** Next Issue Number */
             next_issue_number?: string | null;
-            /** Queue Position */
+            /** Format: int32 */
             queue_position: number;
-            /** Reading Progress */
             reading_progress?: string | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Title */
             title: string;
-            /** Total Issues */
+            /** Format: int32 */
             total_issues?: number | null;
         };
         /**
@@ -11202,18 +11062,10 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
-        /**
-         * ThreadIssueCreatorsResponse
-         * @description Bulk per-issue ComicVine creator credits for one thread.
-         *
-         *     Issues without a confirmed ComicVine mapping (or without stored credit
-         *     arrays) are omitted; callers fall back to the series' manual creator
-         *     credits for those rows.
-         */
+        /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
         ThreadIssueCreatorsResponse: {
-            /** Issues */
-            issues?: components["schemas"]["IssueCreatorsEntry"][];
-            /** Thread Id */
+            issues: components["schemas"]["IssueCreatorsEntry"][];
+            /** Format: int32 */
             thread_id: number;
         };
         /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
@@ -17108,7 +16960,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeIssueCreateRange"];
+                "application/json": components["schemas"]["IssueCreateRange"];
             };
         };
         responses: {
@@ -17183,7 +17035,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadIssueCreatorsResponse"];
+                    "application/json": components["schemas"]["ThreadIssueCreatorsResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -17228,7 +17080,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeIssueReorderRequest"];
+                "application/json": components["schemas"]["IssueReorderRequest"];
             };
         };
         responses: {
@@ -17534,7 +17386,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesRequest"];
             };
         };
         responses: {
@@ -17596,7 +17448,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
+                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
             };
         };
         responses: {
@@ -17658,7 +17510,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
+                "application/json": components["schemas"]["SetCurrentIssueRequest"];
             };
         };
         responses: {
@@ -17668,7 +17520,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
+                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
                 };
             };
             /** @description Thread inactive, untracked or issue unavailable */
@@ -20300,7 +20152,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeIssueListResponse"];
+                    "application/json": components["schemas"]["IssueListResponse"];
                 };
             };
             /** @description Invalid issue range or no new issues */

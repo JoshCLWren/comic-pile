@@ -4043,38 +4043,6 @@
         ],
         "type": "object"
       },
-      "ComicVineCreator": {
-        "description": "One credited creator and their provider-supplied roles.\n\n``creator_id`` is the stable external provider person identifier\n(e.g. the ComicVine person ID).  When the source metadata lacks a\nusable stable ID the field is ``None`` and the row must not be\ntreated as analytics-addressable.",
-        "properties": {
-          "creator_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creator Id"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Roles",
-            "type": "array"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "ComicVineCreator",
-        "type": "object"
-      },
       "ComicVineIssueCandidate": {
         "description": "One issue candidate from a series for identity mapping.",
         "properties": {
@@ -9785,53 +9753,44 @@
         "type": "object"
       },
       "IssueCreateRange": {
-        "description": "Schema for creating issues from range format.",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
         "properties": {
           "insert_after_issue_id": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Insert new issues after this issue ID. Omit the field to place ordinary numeric issues in natural series order. Send explicit null to append at the end.",
-            "title": "Insert After Issue Id"
+            "description": "Insert after this issue id; omit for natural placement, null to append.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "issue_range": {
-            "description": "Issue range like '1-25' or '1, 3, 5-7'",
-            "minLength": 1,
-            "title": "Issue Range",
+            "description": "Range such as `1-25` or `1, 3, 5-7`.",
             "type": "string"
           }
         },
         "required": [
           "issue_range"
         ],
-        "title": "IssueCreateRange",
         "type": "object"
       },
       "IssueCreatorsEntry": {
-        "description": "Stored ComicVine creator credits for one thread issue.",
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
         "properties": {
           "creators": {
             "items": {
-              "$ref": "#/components/schemas/ComicVineCreator"
+              "$ref": "#/components/schemas/CreatorCredit"
             },
-            "title": "Creators",
             "type": "array"
           },
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
-          "issue_id"
+          "issue_id",
+          "creators"
         ],
-        "title": "IssueCreatorsEntry",
         "type": "object"
       },
       "IssueDependenciesResponse": {
@@ -10150,32 +10109,25 @@
         "type": "object"
       },
       "IssueListResponse": {
-        "description": "Schema for paginated issue list response.",
         "properties": {
           "issues": {
             "items": {
-              "$ref": "#/components/schemas/IssueResponse"
+              "$ref": "#/components/schemas/IssueMutationItem"
             },
-            "title": "Issues",
             "type": "array"
           },
           "next_page_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Page Token"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "page_size": {
-            "title": "Page Size",
+            "format": "int64",
             "type": "integer"
           },
           "total_count": {
-            "title": "Total Count",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -10184,7 +10136,6 @@
           "total_count",
           "page_size"
         ],
-        "title": "IssueListResponse",
         "type": "object"
       },
       "IssueMoveRequest": {
@@ -10346,22 +10297,19 @@
         "type": "object"
       },
       "IssueReorderRequest": {
-        "description": "Schema for bulk reordering issues within a thread.",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
         "properties": {
           "issue_ids": {
-            "description": "Ordered list of issue IDs representing the desired order.",
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "minItems": 1,
-            "title": "Issue Ids",
             "type": "array"
           }
         },
         "required": [
           "issue_ids"
         ],
-        "title": "IssueReorderRequest",
         "type": "object"
       },
       "IssueResponse": {
@@ -10562,18 +10510,14 @@
         "type": "object"
       },
       "MigrateToIssuesRequest": {
-        "description": "Schema for migrating thread to issue tracking.",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
         "properties": {
           "last_issue_read": {
-            "description": "The issue number user just finished reading (e.g., 15)",
-            "minimum": 0.0,
-            "title": "Last Issue Read",
+            "format": "int32",
             "type": "integer"
           },
           "total_issues": {
-            "description": "Total number of issues in the series (e.g., 25)",
-            "minimum": 1.0,
-            "title": "Total Issues",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -10581,24 +10525,18 @@
           "last_issue_read",
           "total_issues"
         ],
-        "title": "MigrateToIssuesRequest",
         "type": "object"
       },
       "MigrateToIssuesSimpleRequest": {
-        "description": "Schema for simplified migration (infers total_issues from current state).",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
         "properties": {
           "issue_number": {
-            "description": "The issue number user just read (e.g., '5', 'Annual 1')",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Issue Number",
             "type": "string"
           }
         },
         "required": [
           "issue_number"
         ],
-        "title": "MigrateToIssuesSimpleRequest",
         "type": "object"
       },
       "MinimalReleaseResponse": {
@@ -11507,77 +11445,6 @@
         ],
         "type": "object"
       },
-      "NativeIssueCreateRange": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
-        "properties": {
-          "insert_after_issue_id": {
-            "description": "Insert after this issue id; omit for natural placement, null to append.",
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "issue_range": {
-            "description": "Range such as `1-25` or `1, 3, 5-7`.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_range"
-        ],
-        "type": "object"
-      },
-      "NativeIssueCreatorsEntry": {
-        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
-        "properties": {
-          "creators": {
-            "items": {
-              "$ref": "#/components/schemas/CreatorCredit"
-            },
-            "type": "array"
-          },
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "issue_id",
-          "creators"
-        ],
-        "type": "object"
-      },
-      "NativeIssueListResponse": {
-        "properties": {
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/IssueMutationItem"
-            },
-            "type": "array"
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "page_size": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "total_count": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "type": "object"
-      },
       "NativeIssueMoveRequest": {
         "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
         "properties": {
@@ -11608,22 +11475,6 @@
         },
         "required": [
           "warnings"
-        ],
-        "type": "object"
-      },
-      "NativeIssueReorderRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
-        "properties": {
-          "issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "issue_ids"
         ],
         "type": "object"
       },
@@ -11665,36 +11516,6 @@
           "position",
           "status",
           "created_at"
-        ],
-        "type": "object"
-      },
-      "NativeMigrateToIssuesRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
-        "properties": {
-          "last_issue_read": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "total_issues": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "last_issue_read",
-          "total_issues"
-        ],
-        "type": "object"
-      },
-      "NativeMigrateToIssuesSimpleRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
-        "properties": {
-          "issue_number": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_number"
         ],
         "type": "object"
       },
@@ -12721,88 +12542,6 @@
         },
         "type": "object"
       },
-      "NativeSetCurrentIssueRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
-        "properties": {
-          "issue_number": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_number"
-        ],
-        "type": "object"
-      },
-      "NativeSetCurrentIssueResponse": {
-        "description": "Python `SetCurrentIssueResponse`.",
-        "properties": {
-          "format": {
-            "type": "string"
-          },
-          "issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "issues_remaining": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "next_issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "next_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "thread_id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position"
-        ],
-        "type": "object"
-      },
       "NativeSourceSyncFailure": {
         "properties": {
           "error": {
@@ -13074,26 +12813,6 @@
         "required": [
           "discoveries",
           "generated_at"
-        ],
-        "type": "object"
-      },
-      "NativeThreadIssueCreatorsResponse": {
-        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
-        "properties": {
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
-            },
-            "type": "array"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id",
-          "issues"
         ],
         "type": "object"
       },
@@ -19635,110 +19354,76 @@
         "type": "object"
       },
       "SetCurrentIssueRequest": {
-        "additionalProperties": false,
-        "description": "Schema for atomically correcting the current issue in an active thread.",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
         "properties": {
           "issue_number": {
-            "description": "Target issue number to set as current",
-            "minLength": 1,
-            "title": "Issue Number",
             "type": "string"
           }
         },
         "required": [
           "issue_number"
         ],
-        "title": "SetCurrentIssueRequest",
         "type": "object"
       },
       "SetCurrentIssueResponse": {
-        "description": "Response after atomically correcting the current issue.",
+        "description": "Python `SetCurrentIssueResponse`.",
         "properties": {
           "format": {
-            "title": "Format",
             "type": "string"
           },
           "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Number"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "issues_remaining": {
-            "title": "Issues Remaining",
+            "format": "int32",
             "type": "integer"
           },
           "next_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Issue Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "next_issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Issue Number"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "queue_position": {
-            "title": "Queue Position",
+            "format": "int32",
             "type": "integer"
           },
           "reading_progress": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Progress"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           },
           "total_issues": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Issues"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -19748,7 +19433,6 @@
           "issues_remaining",
           "queue_position"
         ],
-        "title": "SetCurrentIssueResponse",
         "type": "object"
       },
       "SnapshotResponse": {
@@ -20899,24 +20583,23 @@
         "type": "object"
       },
       "ThreadIssueCreatorsResponse": {
-        "description": "Bulk per-issue ComicVine creator credits for one thread.\n\nIssues without a confirmed ComicVine mapping (or without stored credit\narrays) are omitted; callers fall back to the series' manual creator\ncredits for those rows.",
+        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
         "properties": {
           "issues": {
             "items": {
               "$ref": "#/components/schemas/IssueCreatorsEntry"
             },
-            "title": "Issues",
             "type": "array"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
-          "thread_id"
+          "thread_id",
+          "issues"
         ],
-        "title": "ThreadIssueCreatorsResponse",
         "type": "object"
       },
       "ThreadIssueDependenciesResponse": {
@@ -29284,7 +28967,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeIssueCreateRange"
+                "$ref": "#/components/schemas/IssueCreateRange"
               }
             }
           },
@@ -29351,7 +29034,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeThreadIssueCreatorsResponse"
+                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
                 }
               }
             },
@@ -29400,7 +29083,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeIssueReorderRequest"
+                "$ref": "#/components/schemas/IssueReorderRequest"
               }
             }
           },
@@ -29772,7 +29455,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeMigrateToIssuesRequest"
+                "$ref": "#/components/schemas/MigrateToIssuesRequest"
               }
             }
           },
@@ -29835,7 +29518,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeMigrateToIssuesSimpleRequest"
+                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
               }
             }
           },
@@ -29898,7 +29581,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeSetCurrentIssueRequest"
+                "$ref": "#/components/schemas/SetCurrentIssueRequest"
               }
             }
           },
@@ -29909,7 +29592,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSetCurrentIssueResponse"
+                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
                 }
               }
             },
@@ -32766,7 +32449,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeIssueListResponse"
+                  "$ref": "#/components/schemas/IssueListResponse"
                 }
               }
             },

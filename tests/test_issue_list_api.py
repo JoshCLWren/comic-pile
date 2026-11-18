@@ -7,7 +7,6 @@ ordering checks below cover Python routes that are still live.
 
 from datetime import UTC, datetime
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -66,38 +65,3 @@ async def test_validate_issue_order_returns_dependency_conflicts(
     assert "issue #1" in data["warnings"][0]
 
 
-async def test_issue_ordering_in_api_response(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """The Python create endpoint stores annual issues in canonical position order."""
-    user = await get_or_create_user_async(async_db)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=10,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.flush()
-
-    for i in range(1, 11):
-        issue = Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
-        async_db.add(issue)
-    await async_db.commit()
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "1-5, Annual 2"}
-    )
-    assert response.status_code == 201
-
-    rows = (
-        await async_db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-        )
-    ).scalars().all()
-    assert len(rows) == 11
-    assert [row.issue_number for row in rows] == [str(i) for i in range(1, 11)] + ["Annual 2"]

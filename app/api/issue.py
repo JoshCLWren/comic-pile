@@ -1,68 +1,26 @@
 """Issue CRUD API endpoints."""
 
-import logging
-
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Issue
 from app.models.user import User
 from app.schemas import (
     IssueBulkMarkReadRequest,
     IssueBulkMarkUnreadRequest,
-    IssueCreateRange,
-    IssueListResponse,
     IssueMoveRequest,
     IssueOrderValidationResponse,
-    IssueReorderRequest,
-    IssueResponse,
-    ThreadIssueCreatorsResponse,
 )
 from app.schemas.reader_context import ReaderContextResponse
 from app.services import issue as issue_service
-from app.services.comicvine_intelligence import (
-    get_thread_issue_creators,
-)
 from app.services.reader_context import get_reader_context
 from app.services.ownership import get_owned_thread_or_404
 from comic_pile.dependencies import validate_position_dependency_consistency
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/v1", tags=["issues"])
-
-
-@router.get(
-    "/threads/{thread_id}/issues/creators",
-    response_model=ThreadIssueCreatorsResponse,
-)
-async def list_thread_issue_creators(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> ThreadIssueCreatorsResponse:
-    """Return stored ComicVine creator credits for every mapped issue in a thread.
-
-    One bulk read serves the whole issue list's creator column, so expanding
-    a full page never fans out into one provider-intelligence request per
-    row. Issues without a confirmed ComicVine mapping (or without stored
-    credits) are omitted; clients fall back to the series' manual creator
-    credits for those rows.
-
-    Args:
-        thread_id: ComicPile thread whose issue credits are returned.
-        current_user: Authenticated owner of the requested thread.
-        db: Async database session.
-
-    Returns:
-        Per-issue stored ComicVine creator credits for the owned thread.
-    """
-    return await get_thread_issue_creators(db, thread_id, current_user.id)
 
 
 @router.get("/issues/{issue_id}/reader-context", response_model=ReaderContextResponse)
@@ -89,44 +47,6 @@ async def get_issue_reader_context(
         HTTPException: If the issue does not belong to the user.
     """
     return await get_reader_context(db, current_user.id, issue_id)
-
-
-def issue_to_response(issue: Issue) -> IssueResponse:
-    """Convert Issue model to IssueResponse.
-
-    Args:
-        issue: Issue model instance
-
-    Returns:
-        IssueResponse schema with position field for ordering
-    """
-    issue_id = issue.id
-    thread_id = issue.thread_id
-    issue_number = issue.issue_number
-    issue_position = issue.position
-    issue_status = issue.status
-    read_at = issue.read_at
-    created_at = issue.created_at
-
-    return IssueResponse(
-        id=issue_id,
-        thread_id=thread_id,
-        issue_number=issue_number,
-        position=issue_position,
-        status=issue_status,
-        read_at=read_at,
-        created_at=created_at,
-    )
-
-
-def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
-    """Return whether the integrity error came from issue thread/number uniqueness."""
-    error_text = str(exc).lower()
-    return "uq_issue_thread_number" in error_text or (
-        "duplicate key value violates unique constraint" in error_text
-        and "thread_id" in error_text
-        and "issue_number" in error_text
-    )
 
 
 @router.get(
@@ -157,82 +77,6 @@ async def validate_issue_order(
     return IssueOrderValidationResponse(warnings=warnings)
 
 
-@router.post(
-    "/threads/{thread_id}/issues",
-    response_model=IssueListResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_issues(
-    thread_id: int,
-    request: IssueCreateRange,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> IssueListResponse:
-    """Create issues from a range string and place them in thread order.
-
-    Ordinary numeric issue numbers are inserted at their natural position in the
-    series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
-    saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
-    placement. Send explicit JSON ``null`` to append at the end (the UI
-    "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
-    existing issues later in the thread are shifted upward so the new issues are
-    inserted immediately after that issue. Irregular numbering such as
-    ``Annual 1`` or ``0`` falls back to append-only placement.
-
-    Args:
-        thread_id: The thread ID to create issues for.
-        request: Request with issue range string.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        IssueListResponse with newly created issues only (not all issues).
-
-    Raises:
-        HTTPException: If thread not found, all issues already exist,
-                      position collision detected, or issue range is invalid.
-    """
-    try:
-        append_to_end = (
-            "insert_after_issue_id" in request.model_fields_set
-            and request.insert_after_issue_id is None
-        )
-        new_issues, total_issue_count = await issue_service.create_issues(
-            db,
-            thread_id,
-            current_user.id,
-            request.issue_range,
-            request.insert_after_issue_id,
-            append_to_end=append_to_end,
-        )
-    except IntegrityError as e:
-        await db.rollback()
-        if _is_issue_thread_number_conflict(e):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Issue number already exists in this thread",
-            ) from e
-        logger.error(
-            "Database integrity error during issue creation",
-            extra={"thread_id": thread_id, "error": str(e)},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Database constraint violation",
-        ) from e
-
-    issue_responses = [issue_to_response(issue) for issue in new_issues]
-
-    await db.commit()
-
-    return IssueListResponse(
-        issues=issue_responses,
-        total_count=total_issue_count,
-        page_size=len(issue_responses),
-        next_page_token=None,
-    )
-
-
 @router.post("/issues/{issue_id}:move", status_code=status.HTTP_204_NO_CONTENT)
 async def move_issue(
     issue_id: int,
@@ -254,37 +98,7 @@ async def move_issue(
     Raises:
         HTTPException: If the issue or requested target issue is not found.
     """
-    await issue_service.move_issue(
-        db, issue_id, current_user.id, request.after_issue_id
-    )
-
-    await db.commit()
-
-
-@router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
-async def reorder_issues(
-    thread_id: int,
-    request: IssueReorderRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> None:
-    """Rewrite all issue positions in a thread from an explicit ordered ID list.
-
-    Args:
-        thread_id: The thread whose issue order should be rewritten.
-        request: Ordered issue IDs representing the desired canonical order.
-        current_user: The authenticated user making the reorder request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        None. The response is HTTP 204 on success.
-
-    Raises:
-        HTTPException: If the thread is not found or the issue IDs are invalid.
-    """
-    await issue_service.reorder_issues(
-        db, thread_id, current_user.id, request.issue_ids
-    )
+    await issue_service.move_issue(db, issue_id, current_user.id, request.after_issue_id)
 
     await db.commit()
 

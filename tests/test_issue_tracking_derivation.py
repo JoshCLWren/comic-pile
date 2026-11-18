@@ -11,14 +11,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread
 from app.services.issue_tracking import derive_thread_issue_tracking_state
-from tests.conftest import get_or_create_user_async
 
 
 async def _declare_volume_thread(
@@ -58,123 +54,12 @@ async def _declare_volume_thread(
     return thread
 
 
-@pytest.mark.asyncio
-async def test_one_adopted_issue_does_not_inherit_external_volume_size(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A single adopted issue from a 20-issue volume yields total_issues of 1."""
-    user = await get_or_create_user_async(async_db)
-    thread = await _declare_volume_thread(
-        async_db, user_id=user.id, title="Alpha Flight (1997)", external_total=20
-    )
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "9"}
-    )
-    assert response.status_code == 201
-
-    await async_db.refresh(thread)
-    assert thread.total_issues == 1
-    assert thread.issues_remaining == 1
-    assert thread.next_unread_issue_id is not None
-    assert thread.reading_progress == "not_started"
-
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
-    owned = result.scalars().all()
-    assert [issue.issue_number for issue in owned] == ["9"]
 
 
-@pytest.mark.asyncio
-async def test_non_contiguous_adopted_issues_do_not_inherit_external_volume_size(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Several non-contiguous adopted issues count only the adopted rows."""
-    user = await get_or_create_user_async(async_db)
-    thread = await _declare_volume_thread(
-        async_db, user_id=user.id, title="Teen Titans (2005)", external_total=44
-    )
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "35, 37"}
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["total_count"] == 2
-
-    await async_db.refresh(thread)
-    assert thread.total_issues == 2
-    assert thread.issues_remaining == 2
-    assert thread.reading_progress == "not_started"
-
-    result = await async_db.execute(
-        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-    )
-    owned = result.scalars().all()
-    assert [issue.issue_number for issue in owned] == ["35", "37"]
 
 
-@pytest.mark.asyncio
-async def test_derived_state_correct_immediately_after_persistence(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """First materialization derives totals, remaining, and next-unread at once."""
-    user = await get_or_create_user_async(async_db)
-    thread = Thread(
-        title="New Series",
-        format="Comic",
-        issues_remaining=0,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        total_issues=None,
-        reading_progress=None,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "1-3"}
-    )
-    assert response.status_code == 201
-
-    result = await async_db.execute(
-        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-    )
-    owned = result.scalars().all()
-    assert [issue.issue_number for issue in owned] == ["1", "2", "3"]
-
-    await async_db.refresh(thread)
-    assert thread.total_issues == 3
-    assert thread.issues_remaining == 3
-    assert thread.next_unread_issue_id == owned[0].id
-    assert thread.reading_progress == "not_started"
-    assert thread.status == "active"
 
 
-@pytest.mark.asyncio
-async def test_imported_thread_does_not_queue_omitted_external_issues(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Listed issues match the adopted rows; volume siblings are not owned."""
-    user = await get_or_create_user_async(async_db)
-    thread = await _declare_volume_thread(
-        async_db, user_id=user.id, title="Wolverine (2005)", external_total=28
-    )
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "900"}
-    )
-    assert response.status_code == 201
-
-    owned_issues = (
-        await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
-    ).scalars().all()
-    assert [issue.issue_number for issue in owned_issues] == ["900"]
-
-    await async_db.refresh(thread)
-    assert thread.total_issues == 1
-    assert thread.issues_remaining == 1
 
 
 def test_derive_empty_issue_set_is_completed() -> None:
