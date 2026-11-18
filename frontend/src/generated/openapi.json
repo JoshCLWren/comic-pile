@@ -1411,6 +1411,148 @@
         ],
         "type": "object"
       },
+      "CBLAdoptionCommitRequest": {
+        "description": "Reader decisions for committing CBL adoption to a Reading Plan.\n\nThe source fingerprint from the preview response is required so the commit\ncan revalidate the source list before any write; a stale preview aborts the\ntransaction with a structured conflict and no partial writes.",
+        "properties": {
+          "content_hash": {
+            "description": "Content hash from the client's preview response for stale check",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "entry_decisions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceBackedDecision"
+            },
+            "description": "Decisions per entry (cbl_position -> decision)",
+            "title": "Entry Decisions",
+            "type": "object"
+          },
+          "revision_sha": {
+            "description": "Revision SHA from the client's preview response for stale check",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "series_decisions": {
+            "description": "Series-level inclusion/exclusion decisions",
+            "items": {
+              "$ref": "#/components/schemas/SeriesDecision"
+            },
+            "title": "Series Decisions",
+            "type": "array"
+          },
+          "series_overrides": {
+            "description": "Individual entry overrides of series decisions",
+            "items": {
+              "$ref": "#/components/schemas/EntryOverride"
+            },
+            "title": "Series Overrides",
+            "type": "array"
+          }
+        },
+        "required": [
+          "content_hash",
+          "revision_sha"
+        ],
+        "title": "CBLAdoptionCommitRequest",
+        "type": "object"
+      },
+      "CBLAdoptionCommitResponse": {
+        "description": "Updated Reading Plan plus machine-readable adoption source positions.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_positions": {
+            "description": "CBL source positions where a missing issue was materialized",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Created Positions",
+            "type": "array"
+          },
+          "excluded_positions": {
+            "description": "CBL source positions explicitly excluded or left unapproved",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Excluded Positions",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            },
+            "maxItems": 100,
+            "minItems": 0,
+            "title": "Lanes",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            },
+            "maxItems": 1000,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ordering_mode": {
+            "default": "informational",
+            "enum": [
+              "informational",
+              "strict_sequential"
+            ],
+            "title": "Ordering Mode",
+            "type": "string"
+          },
+          "reused_positions": {
+            "description": "CBL source positions whose issue/plan node was reused",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Reused Positions",
+            "type": "array"
+          },
+          "unresolved_positions": {
+            "description": "CBL source positions that could not be adopted",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unresolved Positions",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "lanes",
+          "id",
+          "user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CBLAdoptionCommitResponse",
+        "type": "object"
+      },
       "CBLAdoptionEntryResponse": {
         "description": "Typed reconciliation and adoption state for one source position.",
         "properties": {
@@ -1622,6 +1764,27 @@
           "is_duplicate_identity"
         ],
         "title": "CBLAdoptionEntryResponse",
+        "type": "object"
+      },
+      "CBLAdoptionPlanRequest": {
+        "description": "Optional per-series and per-entry choices for a read-only CBL plan.",
+        "properties": {
+          "entry_decisions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Entry Decisions",
+            "type": "object"
+          },
+          "series_decisions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Series Decisions",
+            "type": "object"
+          }
+        },
+        "title": "CBLAdoptionPlanRequest",
         "type": "object"
       },
       "CBLAdoptionPreviewResponse": {
@@ -1903,6 +2066,163 @@
         "title": "CBLCatalogListItem",
         "type": "object"
       },
+      "CBLComicvineOccurrenceDetail": {
+        "description": "One source position that contains an exact Comic Vine issue identity.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "Exact Comic Vine issue ID that matched",
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine volume identity of the occurrence when the source has one",
+            "title": "Comicvine Volume Id"
+          },
+          "issue_number": {
+            "description": "Issue number recorded in the CBL source",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "list_id": {
+            "description": "CBL source list ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Display name of the CBL source list",
+            "title": "List Name",
+            "type": "string"
+          },
+          "position": {
+            "description": "Source position in original CBL order",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication year recorded in the CBL source",
+            "title": "Publication Year"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "series_name": {
+            "description": "Series name recorded in the CBL source",
+            "title": "Series Name",
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Volume year recorded in the CBL source",
+            "title": "Volume Year"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "position",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_id"
+        ],
+        "title": "CBLComicvineOccurrenceDetail",
+        "type": "object"
+      },
+      "CBLComicvineOccurrencePage": {
+        "description": "One page of CBL source occurrences for an exact Comic Vine issue identity.",
+        "properties": {
+          "comicvine_issue_id": {
+            "description": "Exact Comic Vine issue ID queried",
+            "title": "Comicvine Issue Id",
+            "type": "string"
+          },
+          "lists_total": {
+            "description": "Number of distinct source lists containing the identity",
+            "minimum": 0.0,
+            "title": "Lists Total",
+            "type": "integer"
+          },
+          "occurrences": {
+            "description": "Matching source occurrences in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLComicvineOccurrenceDetail"
+            },
+            "title": "Occurrences",
+            "type": "array"
+          },
+          "occurrences_limit": {
+            "description": "Maximum source occurrences per page",
+            "minimum": 1.0,
+            "title": "Occurrences Limit",
+            "type": "integer"
+          },
+          "occurrences_offset": {
+            "description": "Zero-based offset of the returned page",
+            "minimum": 0.0,
+            "title": "Occurrences Offset",
+            "type": "integer"
+          },
+          "occurrences_total": {
+            "description": "Total matching source occurrences in the shared catalog",
+            "minimum": 0.0,
+            "title": "Occurrences Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "occurrences_total",
+          "lists_total",
+          "occurrences_offset",
+          "occurrences_limit"
+        ],
+        "title": "CBLComicvineOccurrencePage",
+        "type": "object"
+      },
       "CBLDatabaseUnavailableDetail": {
         "description": "Application-wide database acquisition error, before route execution.",
         "properties": {
@@ -2039,6 +2359,457 @@
         "title": "CBLPlacement",
         "type": "object"
       },
+      "CBLReadingListCandidatesResponse": {
+        "description": "Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "entries": {
+            "description": "Every current list entry and its identity gap",
+            "items": {
+              "$ref": "#/components/schemas/CBLReadingListInputEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "input_confirmed_total": {
+            "description": "Distinct confirmed Comic Vine issue IDs compared",
+            "minimum": 0.0,
+            "title": "Input Confirmed Total",
+            "type": "integer"
+          },
+          "input_conflict_count": {
+            "description": "List entries with conflicting confirmed Comic Vine issue IDs",
+            "minimum": 0.0,
+            "title": "Input Conflict Count",
+            "type": "integer"
+          },
+          "input_entry_count": {
+            "description": "Every current list entry",
+            "minimum": 0.0,
+            "title": "Input Entry Count",
+            "type": "integer"
+          },
+          "input_ids": {
+            "description": "Distinct confirmed input IDs in list order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Input Ids",
+            "type": "array"
+          },
+          "input_missing_count": {
+            "description": "List entries without a confirmed Comic Vine issue ID",
+            "minimum": 0.0,
+            "title": "Input Missing Count",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "Owned Reading List ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Owned Reading List name",
+            "title": "List Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "input_entry_count",
+          "input_confirmed_total",
+          "input_missing_count",
+          "input_conflict_count",
+          "candidates_total"
+        ],
+        "title": "CBLReadingListCandidatesResponse",
+        "type": "object"
+      },
+      "CBLReadingListInputEntry": {
+        "description": "One current Reading List entry and its confirmed Comic Vine identity state.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Confirmed Comic Vine issue ID when exactly one is confirmed",
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_issue_ids": {
+            "description": "Every confirmed Comic Vine issue ID, including conflicting IDs",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "identity_status": {
+            "description": "Whether this entry has one usable confirmed exact identity",
+            "enum": [
+              "confirmed",
+              "missing",
+              "conflict"
+            ],
+            "title": "Identity Status",
+            "type": "string"
+          },
+          "issue_id": {
+            "description": "ComicPile issue ID",
+            "title": "Issue Id",
+            "type": "integer"
+          },
+          "issue_number": {
+            "description": "Reader-facing issue number",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "description": "Current order position in the Reading List",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "series_name": {
+            "description": "Reader-facing series name",
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "identity_status"
+        ],
+        "title": "CBLReadingListInputEntry",
+        "type": "object"
+      },
+      "CBLSourceComparisonMatch": {
+        "description": "Coverage and order comparison for one shared CBL source list.",
+        "properties": {
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "distinct_source_issues": {
+            "description": "Distinct confirmed Comic Vine issues in the source list",
+            "minimum": 0.0,
+            "title": "Distinct Source Issues",
+            "type": "integer"
+          },
+          "duplicate_match_count": {
+            "description": "Matched positions beyond the first occurrence of each distinct input comic",
+            "minimum": 0.0,
+            "title": "Duplicate Match Count",
+            "type": "integer"
+          },
+          "entries_total": {
+            "description": "Every occurrence in the source list",
+            "minimum": 0.0,
+            "title": "Entries Total",
+            "type": "integer"
+          },
+          "input_coverage_percentage": {
+            "description": "Percentage of distinct input comics covered",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Input Coverage Percentage",
+            "type": "integer"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          },
+          "list_id": {
+            "description": "CBL source list ID",
+            "title": "List Id",
+            "type": "integer"
+          },
+          "list_name": {
+            "description": "Display name of the CBL source list",
+            "title": "List Name",
+            "type": "string"
+          },
+          "matched_input_count": {
+            "description": "Distinct input comics found in this source list",
+            "minimum": 0.0,
+            "title": "Matched Input Count",
+            "type": "integer"
+          },
+          "matched_input_ids": {
+            "description": "Matched distinct IDs in input order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Input Ids",
+            "type": "array"
+          },
+          "matched_occurrence_count": {
+            "description": "Source positions that hold a matching input comic",
+            "minimum": 0.0,
+            "title": "Matched Occurrence Count",
+            "type": "integer"
+          },
+          "missing_input_ids": {
+            "description": "Input IDs absent from this source list",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Input Ids",
+            "type": "array"
+          },
+          "order_disagreement_count": {
+            "description": "Matched pairs whose relative order differs from the input order",
+            "minimum": 0.0,
+            "title": "Order Disagreement Count",
+            "type": "integer"
+          },
+          "order_pair_count": {
+            "description": "Comparable matched comic pairs",
+            "minimum": 0.0,
+            "title": "Order Pair Count",
+            "type": "integer"
+          },
+          "order_status": {
+            "description": "Relative order of matched distinct comics",
+            "enum": [
+              "same_order",
+              "reordered",
+              "not_comparable"
+            ],
+            "title": "Order Status",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "score": {
+            "description": "Relevance score balancing coverage, precision, and order",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "source_coverage_percentage": {
+            "description": "Percentage of this source's distinct comics that matched",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Source Coverage Percentage",
+            "type": "integer"
+          },
+          "source_only_issue_count": {
+            "description": "Distinct source comics whose exact ID is not in the input list",
+            "minimum": 0.0,
+            "title": "Source Only Issue Count",
+            "type": "integer"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "entries_total",
+          "distinct_source_issues",
+          "matched_input_count",
+          "input_total",
+          "matched_occurrence_count",
+          "duplicate_match_count",
+          "source_only_issue_count",
+          "input_coverage_percentage",
+          "source_coverage_percentage",
+          "order_status",
+          "order_pair_count",
+          "order_disagreement_count",
+          "score"
+        ],
+        "title": "CBLSourceComparisonMatch",
+        "type": "object"
+      },
+      "CBLSourceComparisonRequest": {
+        "description": "Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.",
+        "properties": {
+          "comicvine_issue_ids": {
+            "description": "Confirmed Comic Vine issue IDs in the caller's intended order",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_ids"
+        ],
+        "title": "CBLSourceComparisonRequest",
+        "type": "object"
+      },
+      "CBLSourceComparisonResponse": {
+        "description": "Ranked shared CBL source lists for one confirmed input set.",
+        "properties": {
+          "candidates": {
+            "description": "Ranked source list comparisons in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceComparisonMatch"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "Number of source lists containing at least one input comic",
+            "minimum": 0.0,
+            "title": "Candidates Total",
+            "type": "integer"
+          },
+          "comicvine_issue_ids": {
+            "description": "Distinct input IDs that were compared",
+            "items": {
+              "type": "string"
+            },
+            "title": "Comicvine Issue Ids",
+            "type": "array"
+          },
+          "input_total": {
+            "description": "Distinct input comics compared",
+            "minimum": 0.0,
+            "title": "Input Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_total",
+          "candidates_total"
+        ],
+        "title": "CBLSourceComparisonResponse",
+        "type": "object"
+      },
+      "CBLSourceEntryDetail": {
+        "description": "One ordered source occurrence in a CBL list.",
+        "properties": {
+          "comicvine_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine issue ID when the source entry has one",
+            "title": "Comicvine Issue Id"
+          },
+          "comicvine_volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comic Vine volume ID when the source entry has one",
+            "title": "Comicvine Volume Id"
+          },
+          "issue_number": {
+            "description": "Issue number recorded in the CBL source",
+            "title": "Issue Number",
+            "type": "string"
+          },
+          "position": {
+            "description": "Source position in original CBL order",
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "publication_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication year recorded in the CBL source",
+            "title": "Publication Year"
+          },
+          "series_name": {
+            "description": "Series name recorded in the CBL source",
+            "title": "Series Name",
+            "type": "string"
+          },
+          "volume_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Volume year recorded in the CBL source",
+            "title": "Volume Year"
+          }
+        },
+        "required": [
+          "position",
+          "series_name",
+          "issue_number"
+        ],
+        "title": "CBLSourceEntryDetail",
+        "type": "object"
+      },
       "CBLSourceFingerprintResponse": {
         "description": "Immutable source evidence needed to review and later accept a plan.",
         "properties": {
@@ -2106,6 +2877,155 @@
           "total_list_count"
         ],
         "title": "CBLSourceFolder",
+        "type": "object"
+      },
+      "CBLSourceListDetail": {
+        "description": "Read-only detail for one CBL source list.",
+        "properties": {
+          "content_hash": {
+            "description": "Content hash of the imported source list",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "entries": {
+            "description": "Ordered source occurrences in this page",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceEntryDetail"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "entries_limit": {
+            "description": "Maximum source occurrences per page",
+            "minimum": 1.0,
+            "title": "Entries Limit",
+            "type": "integer"
+          },
+          "entries_offset": {
+            "description": "Zero-based offset of the returned page",
+            "minimum": 0.0,
+            "title": "Entries Offset",
+            "type": "integer"
+          },
+          "entries_total": {
+            "description": "Total source occurrences in the list",
+            "minimum": 0.0,
+            "title": "Entries Total",
+            "type": "integer"
+          },
+          "id": {
+            "description": "CBL source list ID",
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Display name of the CBL source list",
+            "title": "Name",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Reader-safe path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_ref": {
+            "description": "Reader-safe ``repository:path`` source identity",
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "content_hash",
+          "revision_sha",
+          "entries_total",
+          "entries_offset",
+          "entries_limit"
+        ],
+        "title": "CBLSourceListDetail",
+        "type": "object"
+      },
+      "CBLSourceListDiscoveryItem": {
+        "description": "One active persisted source list that may be previewed by Add material.",
+        "properties": {
+          "content_hash": {
+            "description": "Content hash of the imported source list",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Issue count declared by the source list",
+            "title": "Declared Issue Count"
+          },
+          "id": {
+            "description": "CBL source list ID",
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Display name of the CBL source list",
+            "title": "Name",
+            "type": "string"
+          },
+          "revision_sha": {
+            "description": "Source revision the list was imported from",
+            "title": "Revision Sha",
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Stored path of the CBL source file",
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_repository": {
+            "description": "Reader-safe source repository identity",
+            "title": "Source Repository",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "content_hash",
+          "revision_sha"
+        ],
+        "title": "CBLSourceListDiscoveryItem",
         "type": "object"
       },
       "CanonicalCorrection": {
@@ -8709,6 +9629,27 @@
           "direct_tags",
           "effective_tags"
         ],
+        "type": "object"
+      },
+      "EntryOverride": {
+        "description": "Individual entry override of a series decision.",
+        "properties": {
+          "cbl_position": {
+            "description": "Position to override",
+            "minimum": 0.0,
+            "title": "Cbl Position",
+            "type": "integer"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/SourceBackedDecision",
+            "description": "Decision for this specific entry"
+          }
+        },
+        "required": [
+          "cbl_position",
+          "decision"
+        ],
+        "title": "EntryOverride",
         "type": "object"
       },
       "EventDetail": {
@@ -18643,6 +19584,27 @@
         "title": "RollResponse",
         "type": "object"
       },
+      "SeriesDecision": {
+        "description": "Series-level decision for CBL adoption.",
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/SourceBackedDecision",
+            "description": "Include or exclude this entire series"
+          },
+          "series_name": {
+            "description": "Series name",
+            "minLength": 1,
+            "title": "Series Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "series_name",
+          "decision"
+        ],
+        "title": "SeriesDecision",
+        "type": "object"
+      },
       "SeriesImportStatusResponse": {
         "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "properties": {
@@ -20629,6 +21591,15 @@
         ],
         "title": "SnoozedThreadInfo",
         "type": "object"
+      },
+      "SourceBackedDecision": {
+        "description": "Decision values for source-backed adoption.",
+        "enum": [
+          "include",
+          "exclude"
+        ],
+        "title": "SourceBackedDecision",
+        "type": "string"
       },
       "SourceSyncFailure": {
         "description": "One source that could not be evaluated during a sync run.",
