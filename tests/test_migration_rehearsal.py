@@ -307,23 +307,29 @@ def test_rehearsal_fails_closed_on_data_dependent_migration_failure(
     def _noop_downgrade(config: object, revision: str) -> None:
         attempted.append(("downgrade_base", revision))
 
+    class _FakeScriptDirectory:
+        @classmethod
+        def from_config(cls, config: object) -> "_FakeScriptDirectory":
+            return cls()
+
+        def get_current_head(self) -> str:
+            return "head"
+
     monkeypatch.setattr(rehearsal_module.command, "upgrade", _failing_upgrade)
     monkeypatch.setattr(rehearsal_module.command, "downgrade", _noop_downgrade)
     monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: None)
-    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", type("_SD", (), {"get_current_head": lambda self: "head"})())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
 
     with pytest.raises(MigrationRehearsalError, match="dangling"):
         run_migration_rehearsal(
             "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
-            fixture_applier=lambda engine: None,
+            fixture_applier=None,
             base_revision=BASE_REVISION,
         )
 
-    # The downgrade and later upgrade must never run after the failing step.
-    assert attempted == [
-        ("upgrade_head", "head"),
-        ("downgrade_base", BASE_REVISION),
-    ] or attempted == [("upgrade_head", "head")]
+    # fixture_applier=None means no engine is created; the failing step is the
+    # first upgrade_head, so no later step runs.
+    assert attempted == [("upgrade_head", "head")]
 
 
 def test_rehearsal_records_step_durations(monkeypatch: pytest.MonkeyPatch) -> None:
