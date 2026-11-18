@@ -315,13 +315,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
             "/api/sessions/{session_id}/snapshots",
         }
     )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/sessions/correction-examples"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
-        for item in v1_ops
-    )
     for item in v1_ops:
         if item.get("burndown_status") == "shadowed by Rust":
             assert item.get("runtime") == "python-fastapi"
@@ -550,8 +543,8 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     (see ``tests/test_retired_session_lifecycle_4343.py``). Only the read-only list/details/history and
     undo operations are cut over to native Rust. Unversioned paths have no
     TypeScript client or FastAPI registry operation; they stay in the fragment
-    only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
-    on Python because no browser caller exists.
+    only for the Vercel rewrite. The no-runtime-caller session examples
+    v1 endpoint is retired.
     """
     sessions = _fragment_named("sessions")
     undo = _fragment_named("undo")
@@ -565,9 +558,7 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
         ("GET", "/api/v1/undo/{session_id}/snapshots"),
         ("POST", "/api/v1/undo/{session_id}/undo/{snapshot_id}"),
     }
-    python_ops = {
-        ("GET", "/api/v1/sessions/correction-examples"),
-    }
+    python_ops: set[tuple[str, str]] = set()
     declared = {
         (operation["method"], operation["path"]): operation
         for fragment in (sessions, undo)
@@ -700,8 +691,12 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
         full = merged["full_surface"]
         assert isinstance(full, dict)
         found: set[tuple[str, str]] = set()
-        for bucket in ("operations", "v1_operations", "unversioned_operations"):
-            operations = full[bucket]
+        # The v2 ``operations`` bucket lives at the top level; the full Python
+        # surface buckets live under ``full_surface`` (see
+        # ``_merge_route_fragments``). Check both so no family merge can alter
+        # another family's route in any bucket.
+        buckets = [merged["operations"], full["v1_operations"], full["unversioned_operations"]]
+        for operations in buckets:
             assert isinstance(operations, list)
             for operation in operations:
                 assert isinstance(operation, dict)

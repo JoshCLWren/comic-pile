@@ -402,6 +402,7 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(native_dispatch),
         )
+        .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(native_dispatch),
@@ -844,6 +845,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cbl_sources_discover_ingress_reaches_rust_and_requires_auth() {
+        // The bare discover path must be registered in this Vercel entry like
+        // its /browse and /folders siblings; an unregistered path falls through
+        // to the Rust JSON 404 that production CBL source search hit (#5449).
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/issue-identity/cbl-sources?q=batman&limit=25")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "cbl-sources discover must reach Rust ingress, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text != r#"{"detail":"Not Found"}"#,
+            "cbl-sources discover must not hit the native 404 fallback: {text}"
+        );
+    }
+
+    #[tokio::test]
     async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
         let mut router = app();
         let response = router
@@ -1051,6 +1088,26 @@ mod tests {
                      timestamp timestamptz NOT NULL DEFAULT now(),
                      user_id integer,
                      thread_id integer
+                 );
+                 CREATE TABLE {schema}.cbl_sources (
+                     id integer PRIMARY KEY,
+                     repository varchar(255) NOT NULL,
+                     revision_sha varchar(64) NOT NULL,
+                     synced_at timestamptz NOT NULL DEFAULT now(),
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.cbl_source_lists (
+                     id integer PRIMARY KEY,
+                     source_id integer NOT NULL,
+                     source_path varchar(1000) NOT NULL,
+                     name varchar(500) NOT NULL,
+                     declared_issue_count integer,
+                     content_hash varchar(64) NOT NULL,
+                     revision_sha varchar(64) NOT NULL,
+                     active boolean NOT NULL,
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
                  );"
             ))
             .await
@@ -1557,6 +1614,95 @@ mod tests {
                 assert_eq!(body["thread_id"], 13);
                 assert_eq!(body["position"], 3);
                 assert_eq!(stored_order(user_id).await, vec![11, 12, 13]);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_is_served_from_rust_ingress_against_postgres() {
+        // Regression for #5449: the bare `GET /api/v1/issue-identity/cbl-sources`
+        // discover path must be registered in this Vercel entry and dispatched
+        // to the Rust service, not fall through to the Rust JSON 404.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-discover-ingress-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (1, 1, 'DC/Batman (1940)/Batman.cbl', 'Batman 1940', 12, \
+                            'h-bat', 'abc123', TRUE), \
+                           (2, 1, 'DC/Batman (1940)/Batman Adventures.cbl', \
+                            'Batman Adventures', 6, 'h-adv', 'abc123', TRUE), \
+                           (3, 1, 'Marvel/X-Men.cbl', 'X-Men', 30, 'h-x', 'abc123', TRUE), \
+                           (4, 1, 'DC/Archived.cbl', 'Archived Batman', 1, \
+                            'h-arch', 'abc123', FALSE);",
+                    )
+                    .await
+                    .expect("seed cbl catalog");
+                drop(connection);
+
+                // Without credentials the registered path must reach the
+                // dispatched handler's 401, not the ingress 404 fallback.
+                let (status, _, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources?q=batman")
+                        .body(Body::empty())
+                        .expect("unauthenticated cbl discover request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+
+                let request = |uri: String| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("cbl discover request")
+                };
+
+                let (status, body, _, text) =
+                    call_app(request("/api/v1/issue-identity/cbl-sources".into())).await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                let items = body.as_array().expect("discovery list");
+                assert_eq!(items.len(), 3, "inactive lists must be excluded: {text}");
+                assert!(
+                    items
+                        .iter()
+                        .all(|item| item["source_repository"] == "JoshCLWren/CBL-ReadingLists"),
+                    "mirror repositories must project to the public name: {text}"
+                );
+
+                let (status, body, _, text) = call_app(request(
+                    "/api/v1/issue-identity/cbl-sources?q=batman&limit=1".into(),
+                ))
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                let items = body.as_array().expect("filtered discovery list");
+                assert_eq!(items.len(), 1, "limit must bound the search: {text}");
+                assert_eq!(items[0]["name"], "Batman 1940", "{text}");
+                assert_eq!(
+                    items[0]["source_path"], "DC/Batman (1940)/Batman.cbl",
+                    "discovery keeps the raw stored path: {text}"
+                );
+                assert_eq!(items[0]["declared_issue_count"], 12, "{text}");
             })
             .await;
     }

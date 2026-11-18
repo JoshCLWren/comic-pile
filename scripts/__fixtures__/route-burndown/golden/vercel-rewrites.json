@@ -6,13 +6,6 @@
   ],
   "routes": [
     {
-      "src": "^/api/v2/alpha$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v2/unicode$",
       "methods": [
         "GET",

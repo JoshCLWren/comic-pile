@@ -2,21 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated, TypedDict
+from typing import TypedDict
 
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter
 
-from app.auth import get_current_user
-from app.database import get_db
-from app.middleware import limiter
-from app.models import User
-from app.schemas import (
-    CorrectionSheetExamplesResponse,
-    SessionListItem,
-    SessionResponse,
-)
-from app.services.correction_examples import generate_correction_examples
+from app.schemas import SessionListItem, SessionResponse
 
 router = APIRouter(tags=["sessions"])
 #: Versioned-only surface for new session client resources. ``app.main`` mounts
@@ -54,28 +44,3 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
         has_restore_point=sr.has_restore_point,
         snapshot_count=sr.snapshot_count,
     )
-
-
-@v1_router.get("/correction-examples", response_model=CorrectionSheetExamplesResponse)
-@limiter.limit("60/minute")
-async def get_correction_sheet_examples(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> CorrectionSheetExamplesResponse:
-    """Get personalized examples for the correction sheet steering choices.
-
-    Returns compact examples drawn from the user's own rated/read history for
-    each correction sheet option. Examples are explanatory only and do not
-    constrain the canonical recommendation behavior. Returns null for options
-    where no honest example exists.
-
-    Args:
-        request: FastAPI request object for rate limiting.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        CorrectionSheetExamplesResponse with examples for each choice.
-    """
-    return await generate_correction_examples(db, current_user.id)
