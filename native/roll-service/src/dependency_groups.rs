@@ -1038,7 +1038,7 @@ pub async fn update_group(
     Path(group_id): Path<i32>,
     Json(request): Json<DependencyGroupUpdateRequest>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
-    let name = normalize_group_name(&request.name)?;
+    validate_group_name_schema(&request.name)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1046,7 +1046,7 @@ pub async fn update_group(
         .start()
         .await
         .map_err(db::query_error)?;
-    let result = update_group_tx(&tx, group_id, user.id(), &name).await;
+    let result = update_group_tx(&tx, group_id, user.id(), &request.name).await;
     match result {
         Ok(group) => {
             tx.commit().await.map_err(db::query_error)?;
@@ -1070,6 +1070,7 @@ async fn update_group_tx(
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
+    let name = normalize_group_name(name)?;
     let updated = tx
         .execute(
             "UPDATE dependency_groups SET name = $2 WHERE id = $1 AND user_id = $3",
@@ -1459,16 +1460,13 @@ async fn set_group_order_tx(
     user_id: i32,
     request: &DependencyGroupOrderUpdateRequest,
 ) -> Result<GroupRecord, ApiError> {
-    if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
-        return Err(unprocessable(format!(
-            "The crossover order must contain between 1 and {MAX_ORDER_ITEMS} items"
-        )));
+    if owned_group(tx, group_id, user_id).await?.is_none() {
+        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
-    let mut seen_issues: BTreeSet<i32> = BTreeSet::new();
-    let mut seen_positions: BTreeSet<i32> = BTreeSet::new();
-    let mut ordered_issue_ids: BTreeSet<i32> = BTreeSet::new();
+    let mut ordered_issue_ids = BTreeSet::new();
+    let mut seen_positions = BTreeSet::new();
     for item in &request.items {
-        if !seen_issues.insert(item.issue_id) {
+        if !ordered_issue_ids.insert(item.issue_id) {
             return Err(unprocessable(
                 "Each crossover issue may appear at most once in the order",
             ));
@@ -1478,10 +1476,6 @@ async fn set_group_order_tx(
                 "Each sequence_order position may appear at most once in the order",
             ));
         }
-        ordered_issue_ids.insert(item.issue_id);
-    }
-    if owned_group(tx, group_id, user_id).await?.is_none() {
-        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
     let member_rows = tx
         .query(ISSUE_MEMBERSHIPS_SQL, &[&group_id])
