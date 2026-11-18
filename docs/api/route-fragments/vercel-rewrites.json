@@ -13,6 +13,7 @@
     "demo",
     "dependencies",
     "issue-identity-cbl-catalog",
+    "issue-identity",
     "issues",
     "metrics",
     "preferences",
@@ -20,6 +21,7 @@
     "reading-orders",
     "reading-plan-sync",
     "releases",
+    "review-previews",
     "roll",
     "sessions",
     "tags",
@@ -134,6 +136,27 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/catalog/series\\-mappings/preview$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/cbl/[^/]+/adoption\\-commit$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/cbl/[^/]+/reading\\-plans/[^/]+/adoption\\-commit$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET"
@@ -174,6 +197,13 @@
     },
     {
       "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
       "methods": [
         "POST"
       ],
@@ -336,6 +366,41 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-plan$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-preview$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
       "methods": [
         "GET"
@@ -343,7 +408,28 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/reading\\-lists/[0-9]+/cbl\\-candidates$",
       "methods": [
         "GET"
       ],
@@ -800,14 +886,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/catalog/series\\-mappings/preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
       "methods": [
         "GET",
@@ -898,14 +976,6 @@
     },
     {
       "src": "^/api/v1/comicvine/series:import$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
       "methods": [
         "POST",
         "OPTIONS"
@@ -1194,14 +1264,6 @@
     },
     {
       "src": "^/api/v1/threads/stale$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[^/]+$",
       "methods": [
         "GET",
         "OPTIONS"

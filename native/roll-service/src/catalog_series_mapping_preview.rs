@@ -6,8 +6,14 @@
 //! intelligible with both the existing Rust commit handler and the retired
 //! Python preview/commit contract.
 
-use crate::{auth::AuthenticatedUser, catalog_commit, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    catalog_commit, db,
+    preview_validation::{parse_body_object, required_int, required_str, validation_failed},
+    ApiError, AppState,
+};
 use axum::{
+    body::Bytes,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -24,16 +30,6 @@ use utoipa::ToSchema;
 pub enum PreviewError {
     Api(ApiError),
     Json(StatusCode, Value),
-}
-
-impl PreviewError {
-    #[cfg(test)]
-    fn status(&self) -> StatusCode {
-        match self {
-            Self::Api(error) => error.status(),
-            Self::Json(status, _) => *status,
-        }
-    }
 }
 
 impl From<ApiError> for PreviewError {
@@ -98,81 +94,40 @@ pub struct SeriesMappingPreviewCounts {
     pub excluded_special: i64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-struct ValidationErrorItem {
-    #[serde(rename = "type")]
-    error_type: String,
-    loc: Vec<String>,
-    msg: String,
-    input: Value,
-}
-
-fn validation_item(field: &str, msg: &str, input: Value, error_type: &str) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: error_type.to_string(),
-        loc: vec!["body".to_string(), field.to_string()],
-        msg: msg.to_string(),
-        input,
+/// Parse and validate the body against the Python pydantic constraints. Every
+/// rejection is the production `{"detail": "Validation failed"}` 422.
+fn parse_request(body: &[u8]) -> Result<SeriesMappingPreviewRequest, ApiError> {
+    let map = parse_body_object(body)?;
+    let origin_issue_id = i32::try_from(required_int(&map, "origin_issue_id")?)
+        .ok()
+        .filter(|id| *id >= 1)
+        .ok_or_else(validation_failed)?;
+    let provider = required_str(&map, "provider")?.to_string();
+    if provider != "comicvine" {
+        return Err(validation_failed());
     }
-}
-
-/// Validate the request against the Python Pydantic constraints, emitting the
-/// FastAPI 422 `{"detail": [...]}` body for every rejected field.
-fn validate_request(request: &SeriesMappingPreviewRequest) -> Result<(), PreviewError> {
-    let mut items = Vec::new();
-    if request.origin_issue_id < 1 {
-        items.push(validation_item(
-            "origin_issue_id",
-            "Input should be greater than or equal to 1",
-            Value::from(request.origin_issue_id),
-            "greater_than_equal",
-        ));
+    let provider_series_external_id =
+        required_str(&map, "provider_series_external_id")?.to_string();
+    if provider_series_external_id.is_empty() {
+        return Err(validation_failed());
     }
-    if request.provider.is_empty() {
-        items.push(validation_item(
-            "provider",
-            "Input should have at least 1 character",
-            Value::String(request.provider.clone()),
-            "string_too_short",
-        ));
-    } else if request.provider != "comicvine" {
-        items.push(validation_item(
-            "provider",
-            &format!("Value error, unsupported provider: {}", request.provider),
-            Value::String(request.provider.clone()),
-            "value_error",
-        ));
-    }
-    if request.provider_series_external_id.is_empty() {
-        items.push(validation_item(
-            "provider_series_external_id",
-            "Input should have at least 1 character",
-            Value::String(request.provider_series_external_id.clone()),
-            "string_too_short",
-        ));
-    }
+    let scope_mode = match map.get("scope_mode") {
+        None => default_scope_mode(),
+        Some(Value::String(mode)) => mode.clone(),
+        Some(_) => return Err(validation_failed()),
+    };
     if !matches!(
-        request.scope_mode.as_str(),
+        scope_mode.as_str(),
         SCOPE_MODE_CONFIRMED_ORIGIN | "queue_thread_bootstrap"
     ) {
-        items.push(validation_item(
-            "scope_mode",
-            &format!(
-                "Value error, unsupported scope_mode: {}",
-                request.scope_mode
-            ),
-            Value::String(request.scope_mode.clone()),
-            "value_error",
-        ));
+        return Err(validation_failed());
     }
-    if items.is_empty() {
-        Ok(())
-    } else {
-        Err(PreviewError::Json(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            serde_json::json!({ "detail": items }),
-        ))
-    }
+    Ok(SeriesMappingPreviewRequest {
+        origin_issue_id,
+        provider,
+        provider_series_external_id,
+        scope_mode,
+    })
 }
 
 /// Build the HMAC-SHA256 token returned by the preview so that the commit
@@ -239,7 +194,7 @@ fn count(plan: &Value, key: &str) -> i64 {
     responses(
         (status = 200, description = "Read-only series mapping preview", body = SeriesMappingPreviewResponse),
         (status = 401, description = "Unauthorized"),
-        (status = 422, description = "Invalid request body"),
+        (status = 422, description = "Validation failed"),
     ),
     security(("HTTPBearer" = []))
 )]
@@ -249,9 +204,9 @@ pub fn documentation() {}
 pub async fn preview_series_mapping_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(request): Json<SeriesMappingPreviewRequest>,
+    body: Bytes,
 ) -> Result<Json<SeriesMappingPreviewResponse>, PreviewError> {
-    validate_request(&request)?;
+    let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
     let plan = catalog_commit::build_plan_for_commit(
         &connection,
@@ -351,25 +306,28 @@ mod tests {
 
     #[test]
     fn default_scope_mode_matches_python_default() {
-        let request: SeriesMappingPreviewRequest = serde_json::from_value(serde_json::json!({
-            "origin_issue_id": 42,
-            "provider": "comicvine",
-            "provider_series_external_id": "4050-1",
-        }))
+        let request = parse_request(
+            br#"{"origin_issue_id": 42, "provider": "comicvine", "provider_series_external_id": "4050-1"}"#,
+        )
         .expect("valid body");
         assert_eq!(request.scope_mode, SCOPE_MODE_CONFIRMED_ORIGIN);
-        assert!(validate_request(&request).is_ok());
     }
 
     #[test]
-    fn rejects_python_invalid_values_with_422_detail_list() {
-        let mut request = valid_request();
-        request.origin_issue_id = 0;
-        request.provider = "other".to_string();
-        request.provider_series_external_id = String::new();
-        request.scope_mode = "nonsense".to_string();
-        let response = validate_request(&request).expect_err("invalid request must be rejected");
-        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    fn every_invalid_body_is_the_production_validation_failed_422() {
+        for body in [
+            &br#"{"origin_issue_id": 0, "provider": "comicvine", "provider_series_external_id": "x"}"#[..],
+            br#"{"origin_issue_id": 1, "provider": "other", "provider_series_external_id": "x"}"#,
+            br#"{"origin_issue_id": 1, "provider": "", "provider_series_external_id": "x"}"#,
+            br#"{"origin_issue_id": 1, "provider": "comicvine", "provider_series_external_id": ""}"#,
+            br#"{"origin_issue_id": 1, "provider": "comicvine", "provider_series_external_id": "x", "scope_mode": "nonsense"}"#,
+            br#"{"origin_issue_id": 1, "provider": "comicvine", "provider_series_external_id": "x", "scope_mode": 3}"#,
+            br#"{"provider": "comicvine", "provider_series_external_id": "x"}"#,
+            b"not json",
+        ] {
+            let error = parse_request(body).expect_err("invalid body must be rejected");
+            assert_eq!(error.detail(), "Validation failed");
+        }
     }
 
     /// Database-backed exercise of the mounted read-only preview (write-guard
@@ -384,12 +342,9 @@ mod tests {
         let result = preview_series_mapping_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Json(SeriesMappingPreviewRequest {
-                origin_issue_id: 9_001_001,
-                provider: "comicvine".to_string(),
-                provider_series_external_id: "missing-series".to_string(),
-                scope_mode: default_scope_mode(),
-            }),
+            Bytes::from_static(
+                br#"{"origin_issue_id": 9001001, "provider": "comicvine", "provider_series_external_id": "missing-series"}"#,
+            ),
         )
         .await;
         let response = result.expect("preview returns a 200 body");

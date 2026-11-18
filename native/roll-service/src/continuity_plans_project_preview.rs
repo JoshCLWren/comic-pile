@@ -5,9 +5,15 @@
 //! plus `preview_to_response`. The preview is recomputed from persisted plan
 //! JSON on every call and never mutates the plan or reading order.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    preview_validation::{parse_body_object, parse_path_int, required_int, validation_failed},
+    ApiError, AppState,
+};
 use axum::{
-    extract::{Path, State},
+    body::Bytes,
+    extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -53,6 +59,17 @@ impl IntoResponse for PreviewError {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ReadingOrderProjectionRequest {
     pub reading_order_id: i64,
+}
+
+/// Parse the body like `ReadingOrderProjectionRequest` (`reading_order_id: int > 0`).
+/// Any rejection is the production `{"detail": "Validation failed"}` 422.
+fn parse_request(body: &[u8]) -> Result<ReadingOrderProjectionRequest, ApiError> {
+    let map = parse_body_object(body)?;
+    let reading_order_id = required_int(&map, "reading_order_id")?;
+    if reading_order_id < 1 {
+        return Err(validation_failed());
+    }
+    Ok(ReadingOrderProjectionRequest { reading_order_id })
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -234,7 +251,7 @@ fn flatten(
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Plan or reading order not found"),
         (status = 409, description = "Malformed plan"),
-        (status = 422, description = "Invalid request body"),
+        (status = 422, description = "Validation failed"),
     ),
     security(("HTTPBearer" = []))
 )]
@@ -244,23 +261,11 @@ pub fn documentation() {}
 pub async fn preview_plan_projection_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(plan_id): Path<i64>,
-    Json(request): Json<ReadingOrderProjectionRequest>,
+    plan_id: Result<Path<String>, PathRejection>,
+    body: Bytes,
 ) -> Result<Json<ReadingOrderProjectionPreview>, PreviewError> {
-    if request.reading_order_id < 1 {
-        return Err(PreviewError::Json(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            serde_json::json!({
-                "detail": [{
-                    "type": "greater_than",
-                    "loc": ["body", "reading_order_id"],
-                    "msg": "Input should be greater than 0",
-                    "input": 0,
-                    "ctx": { "gt": 0 }
-                }]
-            }),
-        ));
-    }
+    let plan_id = parse_path_int(plan_id)?;
+    let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
 
     // `continuity_plans.id` and `reading_orders.id` are `integer` columns, so the
@@ -322,7 +327,7 @@ pub async fn preview_plan_projection_handler(
             .await
             .map_err(db::query_error)?;
         for row in rows {
-            thread_titles.insert(row.get(0), row.get(1));
+            thread_titles.insert(i64::from(row.get::<_, i32>(0)), row.get(1));
         }
     }
 
@@ -335,7 +340,10 @@ pub async fn preview_plan_projection_handler(
         .map_err(db::query_error)?;
     let mut existing_positions: HashMap<i64, i64> = HashMap::new();
     for row in &existing_rows {
-        existing_positions.insert(row.get(0), row.get(1));
+        existing_positions.insert(
+            i64::from(row.get::<_, i32>(0)),
+            i64::from(row.get::<_, i32>(1)),
+        );
     }
 
     let mut conflicts = Vec::new();
@@ -434,13 +442,22 @@ mod tests {
 
     #[test]
     fn request_requires_positive_reading_order_id() {
-        let ok: ReadingOrderProjectionRequest =
-            serde_json::from_value(serde_json::json!({ "reading_order_id": 3 })).expect("valid");
-        assert_eq!(ok.reading_order_id, 3);
-        let bad: ReadingOrderProjectionRequest =
-            serde_json::from_value(serde_json::json!({ "reading_order_id": 0 }))
-                .expect("deserializes; validation happens in the handler");
-        assert!(bad.reading_order_id < 1);
+        assert_eq!(
+            parse_request(br#"{"reading_order_id": 3}"#)
+                .expect("valid")
+                .reading_order_id,
+            3
+        );
+        for body in [
+            &br#"{"reading_order_id": 0}"#[..],
+            br#"{}"#,
+            br#"{"reading_order_id": "x"}"#,
+            b"[]",
+            b"",
+        ] {
+            let error = parse_request(body).expect_err("invalid");
+            assert_eq!(error.detail(), "Validation failed");
+        }
     }
 
     #[test]
@@ -484,10 +501,8 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Path(9_001_001),
-            Json(ReadingOrderProjectionRequest {
-                reading_order_id: 9_001_001,
-            }),
+            Ok(Path("9001001".to_string())),
+            Bytes::from_static(br#"{"reading_order_id": 9001001}"#),
         )
         .await
         .expect_err("missing plan is a 404");
@@ -507,10 +522,8 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state.clone()),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Path(beyond_int4),
-            Json(ReadingOrderProjectionRequest {
-                reading_order_id: beyond_int4,
-            }),
+            Ok(Path(beyond_int4.to_string())),
+            Bytes::from(format!(r#"{{"reading_order_id": {beyond_int4}}}"#)),
         )
         .await
         .expect_err("out-of-range plan is a 404");
@@ -521,10 +534,8 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Path(9_001_001),
-            Json(ReadingOrderProjectionRequest {
-                reading_order_id: beyond_int4,
-            }),
+            Ok(Path("9001001".to_string())),
+            Bytes::from(format!(r#"{{"reading_order_id": {beyond_int4}}}"#)),
         )
         .await
         .expect_err("out-of-range reading order is a 404");
