@@ -49,7 +49,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use tokio_postgres::Transaction;
+use tokio_postgres::{GenericClient, Transaction};
 
 const MAX_GROUP_NAME_CHARS: usize = 120;
 const MAX_RANGE_SIZE: i32 = 250;
@@ -354,7 +354,7 @@ fn crossover_progress(
     let progress = if total_issues == 0 {
         "0%".to_string()
     } else {
-        format!("{read_issues * 100 / total_issues}%")
+        format!("{}%", read_issues * 100 / total_issues)
     };
     (read_issues as i32, total_issues, progress)
 }
@@ -458,8 +458,8 @@ async fn load_issue_progress(
     Ok(issues)
 }
 
-async fn owned_group(
-    connection: &deadpool_postgres::Object,
+async fn owned_group<T: GenericClient>(
+    connection: &T,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -474,8 +474,8 @@ async fn owned_group(
     }))
 }
 
-async fn owned_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_thread_id<T: GenericClient>(
+    connection: &T,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -486,8 +486,8 @@ async fn owned_thread_id(
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn owned_issue_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_issue_thread_id<T: GenericClient>(
+    connection: &T,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
