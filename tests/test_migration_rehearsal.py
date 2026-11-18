@@ -141,14 +141,15 @@ def test_run_migration_rehearsal_applies_fixture_between_upgrade_and_downgrade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The fixture loads onto the disposable engine between upgrade and rollback."""
-    engines: list[Engine] = []
+    engines: list[_FakeEngine] = []
 
-    def _fake_create_engine(url: str) -> Engine:
+    def _fake_create_engine(url: str) -> _FakeEngine:
         engine = _FakeEngine()
         engines.append(engine)
         return engine
 
-    def _fake_apply(engine: Engine) -> None:
+    def _fake_apply(engine: object) -> None:
+        assert isinstance(engine, _FakeEngine)
         engine.fixture_applied.append(engine)
 
     monkeypatch.setattr(rehearsal_module, "create_engine", _fake_create_engine)
@@ -203,7 +204,7 @@ def test_run_migration_rehearsal_fails_closed_and_stops_after_first_failure(
 def test_main_returns_zero_when_rehearsal_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     """The CLI exits zero and reports the final revision on success."""
 
-    def _fake_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
+    def _fake_run(*args: object, **kwargs: object) -> MigrationRehearsalResult:
         return MigrationRehearsalResult(
             final_revision="c85900000001",
             steps=(RehearsalStepResult(step="upgrade_head", duration_ms=1.0),),
@@ -221,7 +222,7 @@ def test_main_returns_one_when_rehearsal_fails(
 ) -> None:
     """The CLI exits one and reports the failure when the rehearsal fails closed."""
 
-    def _failing_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
+    def _failing_run(*args: object, **kwargs: object) -> MigrationRehearsalResult:
         raise MigrationRehearsalError("migration rehearsal step 'upgrade_head' failed: boom")
 
     monkeypatch.setattr(rehearsal_module, "run_migration_rehearsal", _failing_run)
