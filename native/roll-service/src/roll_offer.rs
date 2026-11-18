@@ -107,6 +107,8 @@ struct OfferMetadata {
     queue_position: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
+    next_unread_issue_id: Option<i32>,
+    next_unread_issue_number: Option<String>,
 }
 
 /// Load the retained thread projection only. Issue identity always comes from
