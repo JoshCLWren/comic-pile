@@ -212,9 +212,10 @@ async def test_sync_endpoint_only_touches_the_calling_user(
     assert result["created_issues"] == 0
     assert stranger_thread.user_id == stranger.id
 
-    issues = await auth_client.get(f"/api/v1/threads/{stranger_thread.id}/issues/")
-    if issues.status_code == 200:
-        assert issues.json() == []
+    adopted = (
+        await async_db.execute(select(Issue).where(Issue.thread_id == stranger_thread.id))
+    ).scalars().all()
+    assert adopted == []
 
 
 @pytest.mark.asyncio

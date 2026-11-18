@@ -158,8 +158,8 @@ def mount_subrouters() -> None:
     router.include_router(dependency_group.router)
     router.include_router(dependency_group_batch.router)
     # project-preview is intentionally left on Python (out of scope for #4838).
-    # The confirm/project operation is served by native Rust; the duplicate
-    # Python confirm route here is shadowed by the deployed route fragment.
+    # The confirm/project operation is served by native Rust; its shadowed
+    # Python handler has been removed from reading_order_projection.router.
     router.include_router(reading_order_projection.router)
     router.include_router(collection_exclusions.router)
     router.include_router(cbl_catalog.router)
