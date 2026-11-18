@@ -10625,6 +10625,24 @@
         "title": "IssueBulkMarkUnreadRequest",
         "type": "object"
       },
+      "IssueBulkRequest": {
+        "description": "Request body for the bulk read-state operations.",
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
       "IssueCard": {
         "properties": {
           "comicvine_issue_id": {
@@ -14056,6 +14074,24 @@
         ],
         "type": "object"
       },
+      "NativeIssueMoveRequest": {
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "properties": {
+          "after_issue_id": {
+            "description": "Move after this issue. `null` moves the issue to position 1.",
+            "format": "int32",
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "after_issue_id"
+        ],
+        "type": "object"
+      },
       "NativeOverlapDecisionItem": {
         "properties": {
           "continuing_volume_id": {
@@ -14181,6 +14217,404 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "NativeReaderContextCrossover": {
+        "description": "Python `ReaderContextCrossover`.",
+        "properties": {
+          "applies_to_current_issue": {
+            "type": "boolean"
+          },
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "membership_kind": {
+            "description": "`issue` or `thread`.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_member": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeReaderContextCrossoverNextMember"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "membership_kind",
+          "ratings_count",
+          "read_count"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverMembership": {
+        "description": "Python `ReaderContextCrossoverMembership`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverNextMember": {
+        "description": "Python `ReaderContextCrossoverNextMember`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextEdge": {
+        "description": "Python `ReaderContextEdge`.",
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "`dependency` or `continuity`.",
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalChain": {
+        "description": "Python `ReaderContextLocalChain`.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextEdge"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextLocalIssue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues",
+          "edges"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalIssue": {
+        "description": "Python `ReaderContextLocalIssue`.",
+        "properties": {
+          "crossover_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossoverMembership"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "relation": {
+            "description": "`previous`, `current`, `next` or `future`.",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation",
+          "crossover_memberships"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextPreviousIssue": {
+        "description": "Python `ReaderContextPreviousIssue`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextRecentRating": {
+        "description": "Python `ReaderContextRecentRating`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextResponse": {
+        "description": "Python `ReaderContextResponse`.",
+        "properties": {
+          "crossovers": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossover"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/NativeReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/NativeReaderContextSeries"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series",
+          "crossovers",
+          "local_chain"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextSeries": {
+        "description": "Python `ReaderContextSeries`.",
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "identity_source": {
+            "description": "`comicvine` or `unavailable`.",
+            "type": "string"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "previous_issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "recent_ratings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextRecentRating"
+            },
+            "type": "array"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identity_source",
+          "ratings_count",
+          "recent_ratings"
+        ],
         "type": "object"
       },
       "NativeReadingGraphBlocker": {
@@ -28853,15 +29287,15 @@
     },
     "/api/v1/issues/{issue_id}/reader-context": {
       "get": {
-        "description": "Return bounded reading analytics and local neighborhood for an owned issue.\n\nThe response is decorative context for the Roll experience and must never\nbe a prerequisite for rating. It is computed with bounded, user-scoped\nqueries that do not traverse the full library or hydrate ComicVine.\n\nArgs:\n    issue_id: ComicPile issue identifier.\n    current_user: Authenticated owner of the requested issue.\n    db: Async database session.\n\nReturns:\n    Bounded reader-context payload for the requested issue.\n\nRaises:\n    HTTPException: If the issue does not belong to the user.",
-        "operationId": "get_issue_reader_context_api_v1_issues__issue_id__reader_context_get",
+        "operationId": "issue_read_state_reader_context",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -28871,21 +29305,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
+                  "$ref": "#/components/schemas/NativeReaderContextResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Bounded reader context"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28893,41 +29329,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Issue Reader Context",
+        "summary": "Documentation-only operation for reader context.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markRead": {
       "post": {
-        "description": "Mark an issue as read and update thread's next_unread_issue_id.\n\nArgs:\n    issue_id: The issue ID to mark as read.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already read.",
-        "operationId": "mark_issue_read_api_v1_issues__issue_id__markRead_post",
+        "operationId": "issue_read_state_mark_read",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28935,41 +29375,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Read",
+        "summary": "Documentation-only operation for `:markRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markUnread": {
       "post": {
-        "description": "Mark an issue as unread and update thread's next_unread_issue_id.\n\nReactivates thread if it was completed.\n\nArgs:\n    issue_id: The issue ID to mark as unread.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already unread.",
-        "operationId": "mark_issue_unread_api_v1_issues__issue_id__markUnread_post",
+        "operationId": "issue_read_state_mark_unread",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28977,24 +29421,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Unread",
+        "summary": "Documentation-only operation for `:markUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:move": {
       "post": {
-        "description": "Move a single issue within its thread.\n\nArgs:\n    issue_id: The issue ID to move.\n    request: Move request containing the issue that should come before it.\n    current_user: The authenticated user making the move request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the issue or requested target issue is not found.",
-        "operationId": "move_issue_api_v1_issues__issue_id__move_post",
+        "operationId": "issue_read_state_move",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -29003,7 +29446,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
+                "$ref": "#/components/schemas/NativeIssueMoveRequest"
               }
             }
           },
@@ -29011,17 +29454,19 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -29029,22 +29474,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Move Issue",
+        "summary": "Documentation-only operation for `:move`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkRead": {
       "post": {
-        "description": "Bulk mark issues as read.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already read.",
-        "operationId": "bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post",
+        "operationId": "issue_read_state_bulk_mark_read",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkReadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -29052,17 +29495,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -29070,22 +29518,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Read",
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkUnread": {
       "post": {
-        "description": "Bulk mark issues as unread.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already unread.",
-        "operationId": "bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post",
+        "operationId": "issue_read_state_bulk_mark_unread",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkUnreadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -29093,17 +29539,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -29111,9 +29562,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Unread",
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }

@@ -6,7 +6,6 @@ on:
   workflow_run:
     workflows:
       - CI
-      - Route Fragment Guard
       - PR-Agent Advisory Review
       - Local Ollama Review
       - Fixed Model PR Repair Guard

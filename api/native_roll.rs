@@ -397,6 +397,13 @@ fn app() -> Router {
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkRead", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkUnread", post(native_dispatch))
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(native_dispatch),
+        )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -716,6 +723,41 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric issue ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v1_issue_read_state_ingress_preserves_same_path_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v1/issues/7/reader-context"),
+            ("POST", "/api/v1/issues/7:markRead"),
+            ("POST", "/api/v1/issues/7:markUnread"),
+            ("POST", "/api/v1/issues/7:move"),
+            ("POST", "/api/v1/issues:bulkMarkRead"),
+            ("POST", "/api/v1/issues:bulkMarkUnread"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
             );
         }
     }
