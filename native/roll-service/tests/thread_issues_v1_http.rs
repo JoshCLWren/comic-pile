@@ -152,6 +152,27 @@ async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status:
     .get(0)
 }
 
+/// Seed several issues in one set-based insert (no SQL inside loops),
+/// returning their ids ordered by position.
+async fn seed_issues(conn: &Conn, thread_id: i32, numbers: &[&str], status: &str) -> Vec<i32> {
+    let positions: Vec<i32> = (1..=numbers.len() as i32).collect();
+    let mut rows: Vec<(i32, i32)> = conn
+        .query(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+             SELECT $1, new.number, $2, NOW(), new.position \
+             FROM unnest($3::text[], $4::int[]) AS new(number, position) \
+             RETURNING id, position",
+            &[&thread_id, &status, &numbers, &positions],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    rows.sort_by_key(|(_, position)| *position);
+    rows.into_iter().map(|(id, _)| id).collect()
+}
+
 async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
     conn.execute(
         "UPDATE threads SET next_unread_issue_id = $2 WHERE id = $1",
@@ -464,10 +485,7 @@ async fn reorder_rewrites_positions_and_validates() {
         register_extra_user(&state, "tiss-reorder-other").await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "Reorder", 3, 1).await;
-    let mut ids = Vec::new();
-    for (n, number) in ["1", "2", "3"].iter().enumerate() {
-        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
-    }
+    let ids = seed_issues(&conn, thread, &["1", "2", "3"], "unread").await;
     frontier(&conn, thread, ids[0]).await;
     let path = format!("/api/v1/threads/{thread}/issues:reorder");
 
@@ -891,10 +909,7 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
         register_extra_user(&state, "tiss-current-other").await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "Current", 4, 1).await;
-    let mut ids = Vec::new();
-    for (n, number) in ["1", "2", "3", "4"].iter().enumerate() {
-        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
-    }
+    let ids = seed_issues(&conn, thread, &["1", "2", "3", "4"], "unread").await;
     frontier(&conn, thread, ids[0]).await;
     conn.execute(
         "UPDATE threads SET total_issues = 4, reading_progress = 'not_started' WHERE id = $1",
@@ -1066,10 +1081,7 @@ async fn set_current_issue_option_e_exercises_manual_pick_and_rollback() {
     let _env = OptionEEnv::enable();
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "OptE", 4, 1).await;
-    let mut ids = Vec::new();
-    for (n, number) in ["1", "2", "3", "4"].iter().enumerate() {
-        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
-    }
+    let ids = seed_issues(&conn, thread, &["1", "2", "3", "4"], "unread").await;
     conn.execute(
         "UPDATE threads SET total_issues = 4, reading_progress = 'not_started' WHERE id = $1",
         &[&thread],
@@ -1282,6 +1294,20 @@ async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
     .get(0)
 }
 
+/// Block until at least `expected` sessions wait on the queue lock. This spins
+/// on `yield_now` rather than sleeping: PostgreSQL records a lock wait the
+/// moment the request issues its lock statement, so the condition is
+/// guaranteed to become true and no elapsed-time window is involved.
+async fn wait_for_queue_lock_waiters(conn: &Conn, user_id: i32, expected: i64) {
+    for _ in 0..1_000_000 {
+        if queue_lock_waiters(conn, user_id).await >= expected {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("expected {expected} queue-lock waiters");
+}
+
 /// Two writers on the same thread (reorder + setCurrentIssue) must serialize
 /// on the per-reader queue advisory lock instead of deadlocking on the thread
 /// row lock (rust-write-lock-order rule). The interleaving is forced: a
@@ -1292,10 +1318,7 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
     let mut holder = state.pool.get().await.unwrap();
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "Race", 4, 1).await;
-    let mut ids = Vec::new();
-    for (n, number) in ["1", "2", "3", "4"].iter().enumerate() {
-        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
-    }
+    let ids = seed_issues(&conn, thread, &["1", "2", "3", "4"], "unread").await;
     conn.execute(
         "UPDATE threads SET total_issues = 4, reading_progress = 'not_started' WHERE id = $1",
         &[&thread],
@@ -1330,13 +1353,7 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
         })
     };
     // Wait until the reorder writer is parked on the queue lock.
-    for _ in 0..200 {
-        if queue_lock_waiters(&conn, user_id).await >= 1 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    assert!(queue_lock_waiters(&conn, user_id).await >= 1);
+    wait_for_queue_lock_waiters(&conn, user_id, 1).await;
     let set_current = {
         let state = state.clone();
         let token = token.clone();
@@ -1354,18 +1371,34 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
             .await
         })
     };
-    for _ in 0..200 {
-        if queue_lock_waiters(&conn, user_id).await >= 2 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    assert!(queue_lock_waiters(&conn, user_id).await >= 2);
+    // The issue-update writer (markRead via issue_service::persist) takes the
+    // queue lock before the single-key dice lock; setCurrentIssue must use the
+    // same order or the two can deadlock (queue held by one, dice by the other).
+    let mark_read = {
+        let state = state.clone();
+        let token = token.clone();
+        let csrf = csrf.clone();
+        let issue_id = ids[3];
+        tokio::spawn(async move {
+            send(
+                &state,
+                post(
+                    &format!("/api/v1/issues/{issue_id}:markRead"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, user_id, 3).await;
     hold.commit().await.unwrap();
 
-    let (r, s) = tokio::join!(reorder, set_current);
+    let (r, s, m) = tokio::join!(reorder, set_current, mark_read);
     let (r_status, r_body) = r.expect("reorder task");
     let (s_status, s_body) = s.expect("setCurrentIssue task");
+    let (m_status, m_body) = m.expect("markRead task");
     assert_eq!(
         r_status,
         StatusCode::NO_CONTENT,
@@ -1375,6 +1408,11 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
         s_status,
         StatusCode::OK,
         "setCurrentIssue deadlocked or errored: {s_status} {s_body:?}"
+    );
+    assert_eq!(
+        m_status,
+        StatusCode::NO_CONTENT,
+        "markRead deadlocked or errored: {m_status} {m_body:?}"
     );
     assert_eq!(s_body["issue_id"], ids[1]);
 }

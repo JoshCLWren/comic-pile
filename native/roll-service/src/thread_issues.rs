@@ -1429,6 +1429,10 @@ pub(crate) async fn set_current_issue(
 
     let mut connection = db::checkout(state).await?;
     let tx = begin(&mut connection).await?;
+    // One global lock order with every other writer (issue_service::persist):
+    // queue advisory lock first, then the single-key dice lock, then row locks.
+    // `lock_owned_thread` re-acquires the queue lock as a no-op.
+    queue::lock_queue(&tx, user.id()).await?;
     tx.query_one(
         "SELECT pg_advisory_xact_lock($1::bigint)",
         &[&(user.id() as i64)],
