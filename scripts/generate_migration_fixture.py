@@ -18,6 +18,12 @@ migration rehearsal runs ``alembic upgrade head``.
 Every inserted row satisfies the live PostgreSQL CHECK / NOT NULL constraints
 so the rehearsal fixture itself cannot fail for fixture-shape reasons before
 exercising the migrations under test.
+
+Rows are additionally limited to the columns that exist at the revision being
+rehearsed. Deploy rehearsals load the fixture at the production base revision
+and then apply the pending migrations, so a column introduced by a pending
+migration is absent at load time; omitting it keeps the ``INSERT`` valid and
+makes the migration itself responsible for backfilling or defaulting it.
 """
 
 from __future__ import annotations
