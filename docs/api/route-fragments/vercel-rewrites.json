@@ -18,7 +18,6 @@
     "metrics",
     "preferences",
     "reading-mode",
-    "reading-order-groups",
     "reading-orders",
     "reading-plan-sync",
     "releases",
@@ -482,72 +481,6 @@
       "src": "^/api/v1/reading\\-mode/suggest$",
       "methods": [
         "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/$",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "DELETE"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/issue\\-ranges$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/members/[^/]+$",
-      "methods": [
-        "DELETE"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/order$",
-      "methods": [
-        "PUT"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/plans$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
-      "methods": [
-        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
