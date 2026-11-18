@@ -390,6 +390,9 @@ def test_checkpoint_cursor_pagination_recovers_101_refs_and_targeted_run(
         }}}}
 
     monkeypatch.setattr(handoff, "api", graphql)
+    monkeypatch.setattr(handoff, "verified_run", lambda _repo, _run: {
+        "display_title": "Factory 46 · fixed-model entry",
+    })
     first = handoff.checkpoint_refs(REPO)
     assert len(first) == 101 and first[-1]["ref"] == "refs/heads/" + BRANCH
     assert requests == [(None, None), (None, "100")]
@@ -436,3 +439,20 @@ def test_checkpoint_malformed_graphql_result_never_publishes(
     ]})
     with pytest.raises(RuntimeError, match="GraphQL ref query failed"):
         handoff.checkpoint_refs(REPO)
+
+
+def test_merged_checkpoint_requires_actual_incorporated_bytes(
+    harness: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness["drafts"] = [{**harness["pr"], "state": "closed",
+                          "merged": True, "merge_commit_sha": "d" * 40}]
+    monkeypatch.setattr(handoff, "incorporated", lambda *_: False)
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert result["saved"] and result["work_pr"] == 5152
+    assert result["published"] is False and "merged" not in result
+    monkeypatch.setattr(handoff, "incorporated", lambda *_: True)
+    # Keep retention safe while checking independently verified merge credit.
+    monkeypatch.setattr(handoff, "retire", lambda *_args, **_kwargs: {"retired": True})
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert result["merged"] is True and result["merge_sha"] == "d" * 40
+    assert result["published"] is True
