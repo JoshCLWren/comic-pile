@@ -4,9 +4,9 @@
 //! with wire-contract preservation.
 
 use axum::extract::{Path, State};
-use serde_json::{json, Value};
-use std::sync::Arc;
 use deadpool_postgres::Pool;
+use serde_json::Value;
+use std::sync::Arc;
 use tokio::sqlx;
 use crate::{AppState, ApiError};
 
@@ -22,14 +22,14 @@ pub struct ThreadGroupBatchRequest {
 pub async fn list_thread_groups_batch(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ThreadGroupBatchRequest>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Value, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
     })?;
 
     if req.thread_ids.is_empty() {
-        return Ok(Json(json!({"groups_by_thread": {}})));
+        return Ok(json!({"groups_by_thread": {}}));
     }
 
     let rows: Vec<(i32, String, i32)> = sqlx::query_as(
@@ -51,16 +51,16 @@ pub async fn list_thread_groups_batch(
             if let Some(arr) = obj.get(&thread_key.to_string()).and_then(|v| v.as_array_mut()) {
                 arr.push(group_entry);
             } else {
-                let mut new_arr: Value = Value::Array(Vec::new());
-                new_arr.as_array_mut().unwrap().push(group_entry);
-                let mut map = obj.clone();
-                map.insert(thread_key.to_string(), new_arr);
-                *obj = json!({groups_by_thread: map});
+                let mut new_arr = Vec::new();
+                new_arr.push(group_entry);
+                let mut map = groups_by_thread.as_object().unwrap().clone();
+                map.insert(thread_key.to_string(), Value::Array(new_arr));
+                groups_by_thread = json!({groups_by_thread: map});
             }
         }
     }
 
-    Ok(Json(groups_by_thread))
+    Ok(groups_by_thread)
 }
 
 /// Query parameters for excluded threads list
@@ -85,7 +85,7 @@ fn default_page_size() -> usize { 50 }
 pub async fn list_excluded_threads(
     State(state): State<Arc<AppState>>,
     query: ExcludedThreadsQuery,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Value, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -133,9 +133,8 @@ pub async fn list_excluded_threads(
         ApiError::Internal(e.to_string())
     })?;
 
-    let threads: Vec<Value> = rows
-        .into_iter()
-        .map(|(id, title, format, status, queue_position, is_excluded, last_activity_at, read_issues, total_issues)| {
+    let threads: Value = json!({
+        "threads": rows.into_iter().map(|(id, title, format, status, queue_position, is_excluded, last_activity_at, read_issues, total_issues)| {
             json!({
                 "id": id,
                 "title": title,
@@ -147,20 +146,18 @@ pub async fn list_excluded_threads(
                 "read_issues": read_issues,
                 "total_issues": total_issues
             })
-        })
-        .collect();
-
-    Ok(Json(json!({
-        "threads": threads,
+        }).collect(),
         "next_page_token": None
-    })))
+    });
+
+    Ok(threads)
 }
 
 /// Get connected threads for a thread ID.
 pub async fn get_thread_connected(
     State(state): State<Arc<AppState>>,
     Path(thread_id): Path<i32>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Value, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -183,21 +180,20 @@ pub async fn get_thread_connected(
         ApiError::Internal(e.to_string())
     })?;
 
-    let threads: Vec<Value> = rows
-        .into_iter()
-        .map(|(id, title, format)| {
+    let threads: Value = json!({
+        "threads": rows.into_iter().map(|(id, title, format)| {
             json!({"id": id, "title": title, "format": format})
-        })
-        .collect();
+        }).collect()
+    });
 
-    Ok(Json(json!({"threads": threads})))
+    Ok(threads)
 }
 
 /// Get issue creators for a thread ID.
 pub async fn get_thread_issue_creators(
     State(state): State<Arc<AppState>>,
     Path(thread_id): Path<i32>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Value, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -218,14 +214,13 @@ pub async fn get_thread_issue_creators(
         ApiError::Internal(e.to_string())
     })?;
 
-    let creators: Vec<Value> = rows
-        .into_iter()
-        .map(|(id, username, display_name)| {
+    let creators: Value = json!({
+        "creators": rows.into_iter().map(|(id, username, display_name)| {
             json!({"id": id, "username": username, "display_name": display_name})
-        })
-        .collect();
+        }).collect()
+    });
 
-    Ok(Json(json!({"creators": creators})))
+    Ok(creators)
 }
 
 /// Normalize a queue search string (case-insensitive, trimmed)
