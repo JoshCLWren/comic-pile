@@ -828,10 +828,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapActiveThread"
               },
               {
-                "$ref": "#/components/schemas/BootstrapActiveThread"
+                "type": "null"
               }
             ]
           },
@@ -841,10 +841,10 @@
           "last_read": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapLastRead"
               },
               {
-                "$ref": "#/components/schemas/BootstrapLastRead"
+                "type": "null"
               }
             ]
           },
@@ -868,10 +868,10 @@
           "roll_recovery": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapRollRecovery"
               },
               {
-                "$ref": "#/components/schemas/BootstrapRollRecovery"
+                "type": "null"
               }
             ]
           },
@@ -1351,10 +1351,10 @@
           "diagnostics": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BugReportDiagnostics"
               },
               {
-                "$ref": "#/components/schemas/BugReportDiagnostics"
+                "type": "null"
               }
             ]
           },
@@ -9071,10 +9071,10 @@
           "updated_item": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/IdentityInboxItem"
               },
               {
-                "$ref": "#/components/schemas/IdentityInboxItem"
+                "type": "null"
               }
             ]
           }
@@ -11278,10 +11278,10 @@
           "issue": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeComicVineResolvedIssue"
               },
               {
-                "$ref": "#/components/schemas/NativeComicVineResolvedIssue"
+                "type": "null"
               }
             ]
           },
@@ -11303,10 +11303,10 @@
           "volume": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeComicVineSeriesResult"
               },
               {
-                "$ref": "#/components/schemas/NativeComicVineSeriesResult"
+                "type": "null"
               }
             ]
           }
@@ -12659,10 +12659,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -12695,10 +12695,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -12786,10 +12786,10 @@
           "explanation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
               },
               {
-                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+                "type": "null"
               }
             ]
           },
@@ -12976,43 +12976,6 @@
         },
         "required": [
           "reading_order_id"
-        ],
-        "type": "object"
-      },
-      "NativeReadingOrderProjectionResult": {
-        "properties": {
-          "added_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "kept_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "plan_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "reading_order_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "total_positions": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "updated_count": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "plan_id",
-          "reading_order_id",
-          "added_count",
-          "updated_count",
-          "kept_count",
-          "total_positions"
         ],
         "type": "object"
       },
@@ -15310,10 +15273,10 @@
           "next": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
               },
               {
-                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
+                "type": "null"
               }
             ]
           },
@@ -17724,10 +17687,10 @@
           "release": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
               },
               {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
+                "type": "null"
               }
             ]
           }
@@ -17916,11 +17879,11 @@
           "last_roll": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/RollLastRoll",
                 "description": "The most recent recorded roll, when the reader has rolled."
+              },
+              {
+                "type": "null"
               }
             ]
           }
@@ -19015,20 +18978,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeSessionBandwidthState"
               },
               {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+                "type": "null"
               }
             ]
           },
@@ -19053,10 +19016,10 @@
           "intent": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeSessionIntentState"
               },
               {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
+                "type": "null"
               }
             ]
           },
@@ -19609,10 +19572,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
@@ -21403,10 +21366,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeComicVineMappingHealth"
               },
               {
-                "$ref": "#/components/schemas/NativeComicVineMappingHealth"
+                "type": "null"
               }
             ]
           },
@@ -21453,10 +21416,10 @@
           "series_metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeQueueSeriesMetadata"
               },
               {
-                "$ref": "#/components/schemas/NativeQueueSeriesMetadata"
+                "type": "null"
               }
             ]
           },
@@ -21963,20 +21926,20 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionActiveThread"
               },
               {
-                "$ref": "#/components/schemas/SessionActiveThread"
+                "type": "null"
               }
             ]
           },
           "bandwidth": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeSessionBandwidthState"
               },
               {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+                "type": "null"
               }
             ]
           },
@@ -22000,10 +21963,10 @@
           "intent": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NativeSessionIntentState"
               },
               {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
+                "type": "null"
               }
             ]
           },
@@ -22549,10 +22512,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   },
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   }
                 ]
               }
@@ -23872,8 +23835,7 @@
                   "type": "array"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -23905,8 +23867,7 @@
                   "$ref": "#/components/schemas/ContinuityPlanResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -23940,8 +23901,7 @@
                   "$ref": "#/components/schemas/ContinuityPlanResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -23975,8 +23935,7 @@
                   "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24004,9 +23963,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -24048,8 +24005,7 @@
                   "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24077,9 +24033,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -24111,8 +24065,7 @@
                   "$ref": "#/components/schemas/ContinuityPlanResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24155,8 +24108,7 @@
                   "$ref": "#/components/schemas/ContinuityPlanResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24193,9 +24145,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -24246,8 +24196,7 @@
                   "$ref": "#/components/schemas/ReadingPlanDependencyLink"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24282,8 +24231,7 @@
                   "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24328,8 +24276,7 @@
                   "$ref": "#/components/schemas/ReadingOrderProjectionResult"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24427,8 +24374,7 @@
                   "type": "array"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24466,8 +24412,7 @@
                   "type": "array"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24494,8 +24439,7 @@
                   "type": "array"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24527,8 +24471,7 @@
                   "$ref": "#/components/schemas/ContinuityRuleResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24556,9 +24499,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -24590,8 +24531,7 @@
                   "$ref": "#/components/schemas/ContinuityRuleResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -24634,8 +24574,7 @@
                   "$ref": "#/components/schemas/ContinuityRuleResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "security": [
@@ -26658,8 +26597,7 @@
                   "$ref": "#/components/schemas/NativeCBLCatalogBrowseResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "400": {
             "content": {
@@ -26668,8 +26606,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "404": {
             "content": {
@@ -26678,8 +26615,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "422": {
             "content": {
@@ -26688,8 +26624,7 @@
                   "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "503": {
             "content": {
@@ -26698,8 +26633,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "summary": "`GET /api/v1/issue-identity/cbl-sources/browse`",
@@ -26870,8 +26804,7 @@
                   "$ref": "#/components/schemas/NativeCBLFolderListingResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "400": {
             "content": {
@@ -26880,8 +26813,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "404": {
             "content": {
@@ -26890,8 +26822,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "422": {
             "content": {
@@ -26900,8 +26831,7 @@
                   "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "503": {
             "content": {
@@ -26910,8 +26840,7 @@
                   "$ref": "#/components/schemas/NativeCBLErrorResponse"
                 }
               }
-            },
-            "description": ""
+            }
           }
         },
         "summary": "`GET /api/v1/issue-identity/cbl-sources/folders`",
@@ -27294,10 +27223,10 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/IssueIntelligence"
                     },
                     {
-                      "$ref": "#/components/schemas/IssueIntelligence"
+                      "type": "null"
                     }
                   ]
                 }
@@ -28708,8 +28637,7 @@
                   "$ref": "#/components/schemas/ReleaseListResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "422": {
             "description": "Invalid pagination"
@@ -28751,8 +28679,7 @@
                   "$ref": "#/components/schemas/ReleaseResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "401": {
             "description": "Invalid release writer credential"
@@ -28820,8 +28747,7 @@
                   "$ref": "#/components/schemas/ReleaseSourceResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "401": {
             "description": "Invalid release writer credential"
@@ -28864,8 +28790,7 @@
                   "$ref": "#/components/schemas/PublicReleaseResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "404": {
             "description": "Release not found"
@@ -28908,8 +28833,7 @@
                   "$ref": "#/components/schemas/ReleaseResponse"
                 }
               }
-            },
-            "description": ""
+            }
           },
           "401": {
             "description": "Invalid release writer credential"
@@ -32044,10 +31968,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   },
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   }
                 ]
               }
@@ -33244,10 +33168,10 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/IssueIntelligence"
                     },
                     {
-                      "$ref": "#/components/schemas/IssueIntelligence"
+                      "type": "null"
                     }
                   ]
                 }
