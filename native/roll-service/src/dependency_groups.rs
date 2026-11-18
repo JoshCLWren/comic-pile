@@ -458,8 +458,8 @@ async fn load_issue_progress(
     Ok(issues)
 }
 
-async fn owned_group(
-    connection: &dyn GenericClient,
+async fn owned_group<T: GenericClient>(
+    connection: &T,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -474,8 +474,8 @@ async fn owned_group(
     }))
 }
 
-async fn owned_thread_id(
-    connection: &dyn GenericClient,
+async fn owned_thread_id<T: GenericClient>(
+    connection: &T,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -486,8 +486,8 @@ async fn owned_thread_id(
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn owned_issue_thread_id(
-    connection: &dyn GenericClient,
+async fn owned_issue_thread_id<T: GenericClient>(
+    connection: &T,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -889,7 +889,7 @@ pub async fn get_group(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let memberships = memberships(&connection, group_id).await?;
@@ -904,7 +904,7 @@ pub async fn get_group_detail(
     Path(group_id): Path<i32>,
 ) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let memberships = memberships(&connection, group_id).await?;
@@ -1476,7 +1476,7 @@ pub async fn list_crossover_plans(
     Path(group_id): Path<i32>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
     let connection = db::checkout(&state).await?;
-    let group = owned_group(&connection, group_id, user.id())
+    let group = owned_group(&*connection, group_id, user.id())
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let _ = group;
