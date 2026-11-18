@@ -251,6 +251,23 @@ def _issue_rows() -> list[dict[str, Any]]:
             "catalog_issue_id": None,
         },
     ]
+    for thread_offset in range(FIXTURE_FILLER_THREADS):
+        for issue_offset in range(FIXTURE_ISSUES_PER_FILLER_THREAD):
+            rows.append(
+                {
+                    "id": 920005
+                    + thread_offset * FIXTURE_ISSUES_PER_FILLER_THREAD
+                    + issue_offset,
+                    "thread_id": 910004 + thread_offset,
+                    "issue_number": str(issue_offset + 1),
+                    "position": issue_offset + 1,
+                    "status": "unread",
+                    "read_at": None,
+                    "created_at": now,
+                    "catalog_issue_id": None,
+                }
+            )
+    return rows
 
 
 def _dependency_rows() -> list[dict[str, Any]]:
@@ -546,8 +563,64 @@ def build_fixture() -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _rehearsal_column_names(connection: Connection, table_name: str) -> set[str]:
+    """Return the columns present at the database revision being rehearsed.
+
+    Args:
+        connection: Open connection to the disposable rehearsal database.
+        table_name: Physical table name to inspect.
+
+    Returns:
+        Column names currently present in PostgreSQL, or an empty set for a
+        table that does not exist at the base revision.
+    """
+    return {column["name"] for column in inspect(connection).get_columns(table_name)}
+
+
+def _rows_for_columns(
+    rows: list[dict[str, Any]], columns: set[str]
+) -> list[dict[str, Any]]:
+    """Remove values for columns that do not exist at the rehearsed revision.
+
+    Args:
+        rows: Current-head synthetic fixture rows.
+        columns: Columns available in the disposable database.
+
+    Returns:
+        Rows containing only values accepted by the rehearsed base schema.
+    """
+    return [
+        {name: value for name, value in row.items() if name in columns} for row in rows
+    ]
+
+
+def _rehearsal_table(model_table: Table, columns: set[str]) -> Table:
+    """Build an insert table containing only columns present at this revision.
+
+    Retaining Python defaults for retained columns preserves the head fixture
+    behavior. Excluding every absent head-model column also prevents its
+    Python default from reintroducing that column into a base-schema INSERT.
+
+    Args:
+        model_table: Current-head SQLAlchemy model table.
+        columns: Columns that exist at the rehearsed revision.
+
+    Returns:
+        A standalone SQLAlchemy table safe for base-schema fixture inserts.
+    """
+    return Table(
+        model_table.name,
+        MetaData(),
+        *(
+            Column(column.name, column.type, default=column.default)
+            for column in model_table.columns
+            if column.name in columns
+        ),
+    )
+
+
 def apply_fixture(engine: Engine) -> None:
-    """Apply the prod-shaped synthetic fixture through bulk inserts.
+    """Apply synthetic fixture rows through base-schema-compatible inserts.
 
     Args:
         engine: Sync SQLAlchemy engine bound to the disposable rehearsal DB.
@@ -560,5 +633,9 @@ def apply_fixture(engine: Engine) -> None:
         for table_name, rows in fixture.items():
             if not rows:
                 continue
-            table = _TABLES[table_name]
-            connection.execute(insert(table).values(rows))
+            columns = _rehearsal_column_names(connection, table_name)
+            filtered = _rows_for_columns(rows, columns)
+            if not filtered or not filtered[0]:
+                continue
+            table = _rehearsal_table(_TABLES[table_name], columns)
+            connection.execute(insert(table).values(filtered))
