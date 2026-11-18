@@ -33,7 +33,6 @@ DEFERRED_ROUTER_MODULES = (
     "app.api.roll",
     "app.api.thread",
     "app.api.session",
-    "app.api.continuity_plan",
     "app.api.continuity_rule",
     "app.api.roll_recovery_switch",
 )

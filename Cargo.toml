@@ -26,6 +26,9 @@ vercel_runtime = { version = "2.4", features = ["axum"] }
 [dev-dependencies]
 tokio-postgres = "0.7.18"
 
+[build-dependencies]
+sha2 = "0.10"
+
 [[bin]]
 name = "native_roll"
 path = "api/native_roll.rs"
