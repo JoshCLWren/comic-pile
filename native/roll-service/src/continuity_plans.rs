@@ -146,7 +146,7 @@ pub struct ContinuityPlanListItem {
     pub lane_count: i32,
     #[serde(rename = "step_count")]
     pub step_count: i32,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub source_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub source_names: serde_json::Value,
@@ -4184,6 +4184,38 @@ mod tests {
         assert_eq!(
             error.structured_detail().expect("structured detail")["code"],
             "plan_version_conflict"
+        );
+    }
+
+    #[test]
+    fn list_item_always_serializes_empty_source_fields() {
+        // The plans list page reads `plan.source_paths[0]` and
+        // `plan.source_paths.map(...)`, and the TypeScript contract declares
+        // `source_paths: string[]` as required. The retired Python handler
+        // emitted both source fields even when empty (Pydantic
+        // `default_factory`). A prior Rust cutover omitted them via
+        // `skip_serializing_if`, which crashed the list page for any plan
+        // without CBL sources. Regression for issue #5394.
+        let item = ContinuityPlanListItem {
+            id: 1,
+            name: "Plan A".to_string(),
+            ordering_mode: "informational".to_string(),
+            lane_count: 1,
+            step_count: 5,
+            source_paths: Vec::new(),
+            source_names: serde_json::json!({}),
+            updated_at: "2026-11-17T00:00:00Z".to_string(),
+        };
+        let value = serde_json::to_value(&item).expect("serialize list item");
+        assert_eq!(
+            value["source_paths"],
+            serde_json::json!([]),
+            "source_paths must always be present, including when empty"
+        );
+        assert_eq!(
+            value["source_names"],
+            serde_json::json!({}),
+            "source_names must always be present, including when empty"
         );
     }
 
