@@ -94,9 +94,9 @@ def test_evidence_sql_classifies_old_delivered_timeout_as_failed_execution() -> 
             assert "detail->>'outcome_class'='success'" in query
             assert "'no_work','unconfigured'" in query
             assert "event_type='worker_completed'" in query
-            return {field: 0 for field in (
+            return dict.fromkeys((
                 "terminal_runs", "successful_runs", "failed_runs",
                 "checkpoint_runs", "linked_prs", "merged_prs",
-            )}
+            ), 0)
 
     assert asyncio.run(runtime._delivery_evidence(Conn(), "owner/repo"))["failed_runs"] == 0
