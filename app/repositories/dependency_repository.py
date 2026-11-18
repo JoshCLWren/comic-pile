@@ -7,13 +7,10 @@ return ORM models or plain values; callers (services) own transactions.
 
 from dataclasses import dataclass
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
-
-#: Provenance recorded for edges a reader authors through the Dependency Builder.
-READER_AUTHORED_PROVENANCE = "Reader-authored through the Dependency Builder"
 
 
 @dataclass(frozen=True)
@@ -32,19 +29,6 @@ class ReaderDependencyGraph:
 
     edges: tuple[tuple[int, int], ...]
     issues: tuple[tuple[int, int, int, str], ...]
-
-
-async def get_dependency(db: AsyncSession, dependency_id: int) -> Dependency | None:
-    """Return a dependency by primary key.
-
-    Args:
-        db: Database session.
-        dependency_id: Primary key of the dependency.
-
-    Returns:
-        The dependency, or None when it does not exist.
-    """
-    return await db.get(Dependency, dependency_id)
 
 
 async def get_thread_dependencies(
@@ -221,87 +205,6 @@ async def get_reader_dependency_graph(
     return ReaderDependencyGraph(edges=tuple(edges), issues=issues)
 
 
-async def get_dependency_by_ids(
-    db: AsyncSession, source_issue_id: int, target_issue_id: int
-) -> Dependency | None:
-    """Get a dependency by source and target issue IDs.
-
-    Args:
-        db: Database session.
-        source_issue_id: Source issue ID.
-        target_issue_id: Target issue ID.
-
-    Returns:
-        The dependency, or None when it does not exist.
-    """
-    result = await db.execute(
-        select(Dependency).where(
-            Dependency.source_issue_id == source_issue_id,
-            Dependency.target_issue_id == target_issue_id,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def create_dependency(
-    db: AsyncSession, source_issue_id: int, target_issue_id: int
-) -> Dependency:
-    """Create an explicit reader-authored dependency.
-
-    The edge is stored with the reviewed reader-intent classification and an
-    explicit provenance record, so every consumer can name the authoring
-    surface instead of rendering an unknown classification.
-
-    Args:
-        db: Database session.
-        source_issue_id: Source issue ID.
-        target_issue_id: Target issue ID.
-
-    Returns:
-        The created dependency.
-    """
-    dependency = Dependency(
-        source_issue_id=source_issue_id,
-        target_issue_id=target_issue_id,
-        origin="reader",
-        classification="A",
-        provenance=READER_AUTHORED_PROVENANCE,
-    )
-    db.add(dependency)
-    return dependency
-
-
-async def update_dependency_note(
-    db: AsyncSession, dependency_id: int, note: str | None
-) -> Dependency:
-    """Update the note on a dependency.
-
-    Args:
-        db: Database session.
-        dependency_id: Dependency ID to update.
-        note: New note value.
-
-    Returns:
-        The updated dependency.
-    """
-    result = await db.execute(
-        select(Dependency).where(Dependency.id == dependency_id)
-    )
-    dependency = result.scalar_one()
-    dependency.note = note
-    return dependency
-
-
-async def delete_dependency(db: AsyncSession, dependency_id: int) -> None:
-    """Delete a dependency.
-
-    Args:
-        db: Database session.
-        dependency_id: Dependency ID to delete.
-    """
-    await db.execute(delete(Dependency).where(Dependency.id == dependency_id))
-
-
 async def get_issue_dependencies_batch(
     db: AsyncSession, issue_ids: list[int]
 ) -> list[Dependency]:
@@ -329,25 +232,3 @@ async def get_issue_dependencies_batch(
     return list(result.scalars())
 
 
-async def is_dependency_owned_by_user(
-    dependency: Dependency, user_id: int, db: AsyncSession
-) -> bool:
-    """Return whether a dependency belongs to the given user.
-
-    Args:
-        dependency: Dependency row to validate ownership for.
-        user_id: Authenticated user ID to compare against.
-        db: Database session used for related Issue lookups.
-
-    Returns:
-        True when the dependency belongs to the user; otherwise False.
-        Ownership is checked through source_issue_id -> thread.user_id.
-    """
-    if dependency.source_issue_id is not None:
-        from app.repositories import issue_repository
-        source_issue = await issue_repository.get_issue(db, dependency.source_issue_id)
-        if not source_issue:
-            return False
-        source_thread = await db.get(Thread, source_issue.thread_id)
-        return bool(source_thread and source_thread.user_id == user_id)
-    return False
