@@ -229,7 +229,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "compare_creators_endpoint"
+    "name": "compare_creators_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/team-chemistry",
@@ -237,7 +238,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_team_chemistry_endpoint"
+    "name": "get_creator_team_chemistry_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/discoveries",
@@ -245,7 +247,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_discoveries_endpoint"
+    "name": "get_creator_discoveries_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
@@ -253,7 +256,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_series_issues_endpoint"
+    "name": "get_creator_series_issues_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}",
@@ -261,7 +265,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_detail_endpoint"
+    "name": "get_creator_detail_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
@@ -269,7 +274,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_metric_drilldown_endpoint"
+    "name": "get_creator_metric_drilldown_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
@@ -277,7 +283,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_rating_distribution_drilldown_endpoint"
+    "name": "get_creator_rating_distribution_drilldown_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
@@ -285,7 +292,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_role_drilldown_endpoint"
+    "name": "get_creator_role_drilldown_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
@@ -293,7 +301,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_series_drilldown_endpoint"
+    "name": "get_creator_series_drilldown_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
