@@ -666,6 +666,25 @@ async fn linked_plans(
     Ok(plans)
 }
 
+async fn issue_parent_threads(
+    connection: &deadpool_postgres::Object,
+    issue_ids: &BTreeSet<i32>,
+) -> Result<BTreeMap<i32, i32>, ApiError> {
+    let mut result = BTreeMap::new();
+    if issue_ids.is_empty() {
+        return Ok(result);
+    }
+    let ids: Vec<i32> = issue_ids.iter().copied().collect();
+    let rows = connection
+        .query("SELECT id, thread_id FROM issues WHERE id = ANY($1)", &[&ids])
+        .await
+        .map_err(db::query_error)?;
+    for row in rows {
+        result.insert(row.get(0), row.get(1));
+    }
+    Ok(result)
+}
+
 async fn group_response(
     connection: &deadpool_postgres::Object,
     group: &GroupRecord,
@@ -1147,7 +1166,7 @@ async fn add_issue_range_tx(
         }
         return Err(unprocessable(format!(
             "Issue range contains missing positions: {}",
-            missing.join(", ")
+            missing.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", ")
         )));
     }
     let issue_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
