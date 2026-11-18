@@ -401,6 +401,31 @@ pub async fn offer(
         die = mutation.die_after;
         excluded.insert(previous);
         snoozed_thread_id = Some(previous);
+
+        // Persist the snoozed thread in the session so it can be restored on unsnooze.
+        // Read current snoozed_thread_ids, append the new one, and write back.
+        let snoozed_raw: Option<String> = tx
+            .query_one(
+                "SELECT snoozed_thread_ids::text FROM sessions WHERE id = $1 AND user_id = $2",
+                &[&active.session.id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
+        let mut snoozed_ids: Vec<i32> = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+        if !snoozed_ids.contains(&previous) {
+            snoozed_ids.push(previous);
+            tx.execute(
+                "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
+                &[
+                    &serde_json::to_string(&snoozed_ids).map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+                    &active.session.id,
+                    &user.id(),
+                ],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
     }
 
     let eligible_threads: HashSet<i32> = candidate_ids.iter().copied().collect();
