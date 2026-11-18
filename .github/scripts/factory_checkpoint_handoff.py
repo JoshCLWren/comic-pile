@@ -93,6 +93,8 @@ def checkpoint_refs(repo: str, run_id: str | None = None) -> list[dict]:
             raise RuntimeError("Checkpoint repository was not available")
         connection = repository.get("refs")
         if connection is None:
+            if cursor is not None:
+                raise RuntimeError("Missing checkpoint connection mid-pagination; retaining work")
             return result
         if not isinstance(connection, dict):
             raise RuntimeError("Malformed checkpoint refs response")
@@ -173,6 +175,7 @@ def checkpoint(repo: str, run_id: str) -> dict | None:
         raise RuntimeError("Origin metadata search exceeded bound; retaining work")
     metadata = dict(re.findall(r"(?m)^([A-Za-z-]+): (.+)$", cursor.get("message", "")))
     common = {"head": head, "tree": tip["tree"]["sha"],
+              "origin_tree": cursor["tree"]["sha"],
               "branch": refs[0]["ref"].removeprefix("refs/heads/"),
               "mode": match[3], "number": int(match[4]), "worker": match[1],
               "issue": metadata.get("Issue", ""), "model": metadata.get("Model", ""),
@@ -443,17 +446,34 @@ def handoff_comment(repo: str, pr: dict, saved: dict, run: dict, run_id: str) ->
 
 
 def merged_checkpoint_receipt(repo: str, saved: dict, pr: dict) -> dict:
-    """Credit merge only after the real GitHub merge contains checkpoint bytes."""
+    """Credit the original source snapshot only when merged into main.
+
+    A resumed tracking ref may point at another worker's changes. Verify the
+    immutable source-run origin tree, not the current mutable branch tip.
+    The latter is still required independently by retire() before cleanup.
+    """
     if pr.get("state") != "closed":
         return {}
-    # List-pull-request responses lack the authoritative merged boolean.
-    # Fetch the canonical PR before attributing any merged delivery.
     canonical = obj(f"repos/{repo}/pulls/{pr['number']}")
     merge_sha = str(canonical.get("merge_commit_sha") or "")
-    if (canonical.get("merged") is True and SHA.fullmatch(merge_sha)
-            and incorporated(repo, saved, merge_sha)):
+    if (canonical.get("base", {}).get("ref") != "main"
+            or canonical.get("merged") is not True or not SHA.fullmatch(merge_sha)):
+        return {}
+    origin_head = saved.get("origin_head", saved["head"])
+    origin_tree = saved.get("origin_tree")
+    if not origin_tree and saved.get("resumed"):
+        raise ValueError("Resumed checkpoint lacks immutable source snapshot")
+    source = {**saved, "head": origin_head,
+              "tree": origin_tree or saved["tree"]}
+    if incorporated(repo, source, merge_sha):
         return {"merged": True, "merge_sha": merge_sha}
     return {}
+
+
+def saved_receipt(saved: dict, result: dict) -> dict:
+    """Attach verified source-run identity without a second Actions API read."""
+    return {**result, "worker": saved["worker"],
+            "checkpoint_sha": saved.get("origin_head") or saved["head"]}
 
 
 def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool = False) -> dict:
@@ -484,12 +504,12 @@ def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool
             pr = obj(f"repos/{repo}/pulls/{branches[0]['number']}")
             merge = merged_checkpoint_receipt(repo, saved, pr)
             if cleanup and merge:
-                retired = retire(repo, run_id, saved, [pr], pr["merge_commit_sha"])
-                return {**retired, **merge, "saved": True, "published": True,
-                        "checkpoint_sha": saved["head"], "work_pr": pr["number"]}
-            return {"saved": True, "published": bool(merge), "validated": False,
-                    "checkpoint_sha": saved["head"], "work_pr": pr["number"],
-                    **merge, "detail": "closed issue work retained"}
+                retired = retire(repo, run_id, saved, [pr], merge["merge_sha"])
+                return saved_receipt(saved, {**retired, **merge, "saved": True, "published": True,
+                        "checkpoint_sha": saved.get("origin_head") or saved["head"], "work_pr": pr["number"]})
+            return saved_receipt(saved, {"saved": True, "published": bool(merge), "validated": False,
+                    "checkpoint_sha": saved.get("origin_head") or saved["head"], "work_pr": pr["number"],
+                    **merge, "detail": "closed issue work retained"})
         else:
             if run.get("status") != "completed" and not check_write(
                     repo, run_id, saved["mode"], saved["number"], saved["worker"]):
@@ -503,11 +523,11 @@ def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool
         merge = merged_checkpoint_receipt(repo, saved, pr)
         if cleanup and original and merge:
             retired = retire(repo, run_id, saved, branches, merge["merge_sha"])
-            return {**retired, **merge, "saved": True, "published": True,
-                    "checkpoint_sha": saved["head"], "work_pr": pr["number"]}
-        return {"saved": True, "published": bool(merge), "validated": False,
-                "checkpoint_sha": saved["head"], "work_pr": pr["number"],
-                **merge, "detail": "closed work retained"}
+            return saved_receipt(saved, {**retired, **merge, "saved": True, "published": True,
+                    "checkpoint_sha": saved.get("origin_head") or saved["head"], "work_pr": pr["number"]})
+        return saved_receipt(saved, {"saved": True, "published": bool(merge), "validated": False,
+                "checkpoint_sha": saved.get("origin_head") or saved["head"], "work_pr": pr["number"],
+                **merge, "detail": "closed work retained"})
     generated = pr.get("title", "").startswith("Recovery:") or pr.get("draft")
     if generated:
         api(f"repos/{repo}/pulls/{pr['number']}", "PATCH", title=issue["title"],
@@ -522,14 +542,14 @@ def publish(repo: str, run_id: str, *, cleanup: bool = False, source_ended: bool
     record_producer(repo, pr, saved)
     handoff_comment(repo, pr, saved, run, run_id)
     result = {"saved": True, "published": True, "validated": complete,
-              "checkpoint_sha": saved["head"], "work_pr": pr["number"],
+              "checkpoint_sha": saved.get("origin_head") or saved["head"], "work_pr": pr["number"],
               "recovery_pr": pr["number"], "work_branch": pr["head"]["ref"],
               "checkpoint_branch": saved["branch"], "stage": stage}
     if cleanup and original and saved["branch"] != pr["head"]["ref"]:
         if incorporated(repo, saved, pr["head"]["sha"]):
             retired = retire(repo, run_id, saved, branches, pr["head"]["sha"])
             result["tracking_retired"] = retired.get("retired", False)
-    return result
+    return saved_receipt(saved, result)
 
 
 def retire(repo: str, run_id: str, saved: dict, prs: list[dict], destination: str) -> dict:
@@ -569,10 +589,10 @@ def record_delivery(repo: str, run_id: str, saved: dict, delivered_pr: int) -> d
     tag = validation_marker(run_id, pr["head"]["sha"])
     if not validated_head(repo, pr, run_id):
         api(f"repos/{repo}/issues/{pr['number']}/comments", "POST", body=tag)
-    return {"saved": True, "published": True, "validated": True,
+    return saved_receipt(saved, {"saved": True, "published": True, "validated": True,
             "work_pr": pr["number"], "recovery_pr": pr["number"],
-            "work_branch": pr["head"]["ref"], "checkpoint_sha": saved["head"],
-            "checkpoint_branch": saved["branch"]}
+            "work_branch": pr["head"]["ref"],
+            "checkpoint_branch": saved["branch"]})
 
 
 def enrich_outcome(path: Path, result: dict) -> None:
@@ -628,8 +648,6 @@ def main() -> int:
                 if saved:
                     result = record_delivery(args.repo, run_id, saved, args.delivered_pr)
             result["run_id"] = run_id
-            if result.get("saved"):
-                result["worker"] = source_worker(verified_run(args.repo, run_id))
             results.append(result)
             if args.state_file:
                 args.state_file.write_text(json.dumps(result) + "\n")
