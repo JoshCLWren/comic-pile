@@ -47,23 +47,38 @@ jobs:
           TARGET_RUN: ${{ github.event.workflow_run.id || inputs.run_id || '' }}
         run: |
           set -Eeuo pipefail
-          args=(--repo "$GITHUB_REPOSITORY" --cleanup)
+          args=(--repo "$GITHUB_REPOSITORY")
           if [[ -n "$TARGET_RUN" ]]; then
             [[ "$TARGET_RUN" =~ ^[1-9][0-9]*$ ]] || exit 1
             args+=(--run-id "$TARGET_RUN")
           else
             args+=(--sweep)
           fi
-          python3 .github/scripts/factory_checkpoint_handoff.py "${args[@]}" \
-            | tee "$RUNNER_TEMP/factory-checkpoint-result.json"
-          # The remote-ref and merged-byte checks above are independent of the
-          # agent outcome. Idempotent Neon receipts never change worker status.
+          # Publish first, without deleting any tracking refs. Even a partial
+          # sweep emits a JSON array containing successes and failures.
+          result_file="$RUNNER_TEMP/factory-checkpoint-result.json"
+          handoff_status=0
+          python3 .github/scripts/factory_checkpoint_handoff.py "${args[@]}" > "$result_file" || handoff_status=$?
+          jq -e 'type == "array" and all(.[]; type == "object" and has("run_id"))' "$result_file" > /dev/null || {
+            echo "::error::Checkpoint publication did not produce a complete JSON result"
+            exit 1
+          }
+          # Receipts MUST be committed to Neon before ref retirement. No DSN
+          # is a hard error here, not a false "recorded 0" success.
           python3 .github/scripts/factory_state_ledger.py checkpoint-receipts \
             --repo "$GITHUB_REPOSITORY" --run-id "${TARGET_RUN:-0}" \
-            --file "$RUNNER_TEMP/factory-checkpoint-result.json"
+            --file "$result_file"
+          if (( handoff_status == 0 )); then
+            # Cleanup is now a separate, retriable post-receipt pass. Only the
+            # verified, unclaimed refs the controller proves incorporated can
+            # be retired. A failed cleanup does not erase the durable receipt.
+            python3 .github/scripts/factory_checkpoint_handoff.py "${args[@]}" --cleanup \
+              > "$RUNNER_TEMP/factory-checkpoint-cleanup.json" || handoff_status=$?
+          fi
           {
             echo '### Checkpoint recovery'
             echo '```json'
-            cat "$RUNNER_TEMP/factory-checkpoint-result.json"
+            cat "$result_file"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$handoff_status"
