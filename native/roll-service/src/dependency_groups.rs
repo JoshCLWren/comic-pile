@@ -457,8 +457,8 @@ async fn load_issue_progress(
     Ok(issues)
 }
 
-async fn owned_group(
-    connection: &deadpool_postgres::Object,
+async fn owned_group<C: GenericClient + Sync + ?Sized>(
+    connection: &C,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -473,8 +473,8 @@ async fn owned_group(
     }))
 }
 
-async fn owned_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_thread_id<C: GenericClient + Sync + ?Sized>(
+    connection: &C,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -485,8 +485,8 @@ async fn owned_thread_id(
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn owned_issue_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_issue_thread_id<C: GenericClient + Sync + ?Sized>(
+    connection: &C,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -497,8 +497,8 @@ async fn owned_issue_thread_id(
     Ok(row.map(|row| row.get(1)))
 }
 
-async fn memberships(
-    connection: &deadpool_postgres::Object,
+async fn memberships<C: GenericClient + Sync + ?Sized>(
+    connection: &C,
     group_id: i32,
 ) -> Result<Vec<GroupMemberInput>, ApiError> {
     let rows = connection
@@ -932,7 +932,7 @@ pub async fn get_group_detail(
             blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             (series_title, issue_number)
         } else if let Some(issue_id) = member.issue_id {
-            issue = issues.get(issue_id).and_then(|i| i.as_ref());
+            issue = issues.get(&issue_id).and_then(|i| i.as_ref());
             let thread_id = issue.map(|i| i.thread_id).unwrap_or_default();
             thread = threads.get(&thread_id).and_then(|t| t.as_ref());
             let series_title = thread.map(|t| t.title.clone());
