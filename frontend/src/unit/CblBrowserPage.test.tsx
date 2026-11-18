@@ -380,8 +380,11 @@ describe('CblBrowserPage catalog', () => {
         scope: 'search',
         query: 'ultimate',
         items: [source],
-        total: 1,
-        total_pages: 1,
+        page: 2,
+        total: 120,
+        total_pages: 3,
+        has_next: true,
+        has_previous: true,
       }),
     )
     mockPreview.mockResolvedValue(preview())
@@ -519,6 +522,37 @@ describe('CblBrowserPage catalog', () => {
     expect(await screen.findByText('No sources on page 9 of 3.')).toBeInTheDocument()
     expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
+  })
+
+  it('adopts the server-clamped page so Previous steps from the page shown', async () => {
+    const user = userEvent.setup()
+    mockBrowse.mockImplementation(({ page: requested }: { page: number }) => {
+      const served = Math.min(requested, 3)
+      return Promise.resolve(
+        browsePage({
+          page: served,
+          total: 137,
+          total_pages: 3,
+          has_next: served < 3,
+          has_previous: served > 1,
+        }),
+      )
+    })
+    renderPage('/cbl-sources?page=5')
+    expect(await screen.findByText('Page 3 of 3')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?page=3')
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(await screen.findByText('Page 2 of 3')).toBeInTheDocument()
+    expect(mockBrowse).toHaveBeenLastCalledWith({
+      folder: '',
+      query: '',
+      page: 2,
+      pageSize: 50,
+    })
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?page=2')
   })
 
   it('ignores a malformed page parameter and browses the first page', async () => {
