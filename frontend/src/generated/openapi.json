@@ -856,7 +856,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "snoozed_thread_ids": {
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "snoozed_threads": {
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set.",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
             },
@@ -882,6 +891,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -28361,34 +28371,6 @@
         ]
       }
     },
-    "/api/v1/sessions/current/": {
-      "get": {
-        "description": "Get current active session with deadlock retry handling.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with current session details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
-        "operationId": "get_current_session_api_v1_sessions_current__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Current Session",
-        "tags": [
-          "session",
-          "sessions"
-        ]
-      }
-    },
     "/api/v1/sessions/{session_id}": {
       "get": {
         "operationId": "get_session_v1_documentation",
@@ -28479,55 +28461,6 @@
         ],
         "summary": "Documentation-only operation for the versioned details.",
         "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-      "post": {
-        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    session_service: Session service for business logic.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
-        "operationId": "restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Restore Reading Session Start",
-        "tags": [
-          "session",
           "sessions"
         ]
       }
