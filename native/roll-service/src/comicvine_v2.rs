@@ -456,7 +456,7 @@ async fn owned_issue(
 }
 
 const CREATED_AT_SQL: &str =
-    "to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
+    "to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
 
 /// Read the full identity state for one owned issue. The caller has already
 /// verified ownership; this helper still keeps the issue predicate explicit.
@@ -524,15 +524,13 @@ async fn corrections_list(
     owned_issue(tx, user, issue_id).await?;
     let rows = tx
         .query(
-            &format!(
-                "SELECT c.id, c.field_name, c.provider_value, c.canonical_value, \
-                        c.provenance, c.created_by, {CREATED_AT_SQL} \
+            "SELECT c.id, c.field_name, c.provider_value, c.canonical_value, \
+                        c.provenance, c.created_by, to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') \
                  FROM issue_metadata_corrections c \
                  JOIN issues i ON i.id = c.issue_id \
                  JOIN threads t ON t.id = i.thread_id \
                  WHERE c.issue_id = $1 AND t.user_id = $2 AND c.reverted_at IS NULL \
-                 ORDER BY c.created_at ASC, c.id ASC"
-            ),
+                 ORDER BY c.created_at ASC, c.id ASC",
             &[&issue_id, &user],
         )
         .await
