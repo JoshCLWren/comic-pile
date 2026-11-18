@@ -704,6 +704,59 @@ async fn group_response(
 // Handlers: reads.
 // ---------------------------------------------------------------------------
 
+/// `POST /api/v1/reading-order-groups/`
+pub async fn create_group(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<DependencyGroupCreateRequest>,
+) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    let name = normalize_group_name(&request.name)?;
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    let result = create_group_tx(&tx, &user.id(), &name).await;
+    match result {
+        Ok(group) => {
+            tx.commit().await.map_err(db::query_error)?;
+            let memberships = memberships(&connection, group.id).await?;
+            let response = group_response(&connection, &group, &memberships).await?;
+            Ok((StatusCode::CREATED, Json(response)))
+        }
+        Err(error) => {
+            let _ = tx.rollback().await;
+            Err(error)
+        }
+    }
+}
+
+async fn create_group_tx(
+    tx: &Transaction<'_>,
+    user_id: &i32,
+    name: &str,
+) -> Result<GroupRecord, ApiError> {
+    let row = tx
+        .query_one(
+            "INSERT INTO dependency_groups (user_id, name) VALUES ($1, $2) RETURNING id, name, created_at",
+            &[user_id, name],
+        )
+        .await
+        .map_err(|error| {
+            if error.is_unique_violation() {
+                return conflict("A group with this name already exists");
+            }
+            db::query_error(error)
+        })?;
+    Ok(GroupRecord {
+        id: row.get(0),
+        name: row.get(1),
+        created_at: row.get(2),
+    })
+}
+
 /// `GET /api/v1/reading-order-groups/`
 pub async fn list_groups(
     State(state): State<Arc<AppState>>,
