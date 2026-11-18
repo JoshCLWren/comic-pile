@@ -1172,12 +1172,24 @@ health AS (
     ) state ON state.thread_id = p.id
     WHERE p.total_issues IS NOT NULL
 ),
--- One representative cover per page thread, computed set-based in a single
--- statement: the exact provider CDN URL of the thread's next unread confirmed
--- issue, falling back to the first confirmed issue (by position) with a cover.
+-- One representative cover per page thread, computed set-based in one
+-- statement. Each issue first takes the same mapping the issue card uses
+-- (confirmed only, then confidence, updated_at and mapping id), so issue
+-- actions and Queue never disagree. The thread then takes the next unread
+-- issue's cover, falling back to the first covered issue by position.
 -- Only ComicVine confirmed mappings expose covers, matching issue_service.rs.
-series_cover AS (
-    SELECT DISTINCT ON (p.id) p.id AS thread_id, cov.cover_url
+issue_cover AS (
+    SELECT DISTINCT ON (i.id)
+           i.id AS issue_id, i.thread_id, i.position,
+           COALESCE(
+               NULLIF(BTRIM(ei.metadata_json->>'image_url'), ''),
+               NULLIF(BTRIM(ei.metadata_json->>'primary_image'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,original_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
+           ) AS cover_url
     FROM page p
     JOIN issues i ON i.thread_id = p.id
     JOIN issue_external_identity_mappings m
@@ -1186,22 +1198,17 @@ series_cover AS (
         ON ei.id = m.external_identity_id
        AND ei.entity_type = 'issue'
        AND lower(ei.provider) IN ('comicvine', 'comic_vine')
-    CROSS JOIN LATERAL (
-        SELECT COALESCE(
-            NULLIF(BTRIM(ei.metadata_json->>'image_url'), ''),
-            NULLIF(BTRIM(ei.metadata_json->>'primary_image'), ''),
-            NULLIF(BTRIM(ei.metadata_json#>>'{image,original_url}'), ''),
-            NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
-            NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
-            NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
-            NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
-        ) AS cover_url
-    ) cov
-    WHERE cov.cover_url IS NOT NULL
-    ORDER BY p.id,
-             COALESCE(i.id = p.next_unread_issue_id, false) DESC,
-             i.position,
-             i.id
+    ORDER BY i.id, m.confidence DESC NULLS LAST, m.updated_at DESC, m.id DESC
+),
+series_cover AS (
+    SELECT DISTINCT ON (ic.thread_id) ic.thread_id, ic.cover_url
+    FROM issue_cover ic
+    JOIN page p ON p.id = ic.thread_id
+    WHERE ic.cover_url IS NOT NULL
+    ORDER BY ic.thread_id,
+             COALESCE(ic.issue_id = p.next_unread_issue_id, false) DESC,
+             ic.position,
+             ic.issue_id
 )
 SELECT json_build_object(
     'auth', (SELECT json_build_object(

@@ -240,21 +240,24 @@ fn thread_cover(body: &Value, title: &str) -> Option<String> {
 async fn series_cover_prefers_next_unread_confirmed_issue() {
     let ctx = setup("sc-next").await;
     let thread_id = seed_thread(&ctx, ctx.user_id, "Next Wins", "active", 1).await;
-    let next_issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
-    let _other = seed_issue(&ctx, thread_id, "2", 2, "unread").await;
+    // An earlier-positioned covered issue that is already read must lose to the
+    // later-positioned next unread issue, so the next-unread priority is what
+    // the assertion exercises.
+    let read_covered = seed_issue(&ctx, thread_id, "1", 1, "read").await;
+    let next_issue = seed_issue(&ctx, thread_id, "2", 2, "unread").await;
     set_frontier(&ctx, thread_id, Some(next_issue)).await;
+    seed_confirmed_cover(
+        &ctx,
+        read_covered,
+        "read-cover-id",
+        Some("https://cv.example/read.jpg"),
+    )
+    .await;
     seed_confirmed_cover(
         &ctx,
         next_issue,
         "next-cover-id",
         Some("https://cv.example/next.jpg"),
-    )
-    .await;
-    seed_confirmed_cover(
-        &ctx,
-        _other,
-        "other-cover-id",
-        Some("https://cv.example/other.jpg"),
     )
     .await;
 
@@ -272,9 +275,18 @@ async fn series_cover_falls_back_to_first_confirmed_issue() {
     let thread_id = seed_thread(&ctx, ctx.user_id, "Fallback Wins", "active", 1).await;
     let next_issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
     let first_issue = seed_issue(&ctx, thread_id, "2", 2, "unread").await;
+    let later_issue = seed_issue(&ctx, thread_id, "3", 3, "unread").await;
     set_frontier(&ctx, thread_id, Some(next_issue)).await;
-    // Next unread has no cover image; first confirmed issue does.
+    // Next unread has no cover image. Two covered issues are inserted out of
+    // position order, so only the position ordering can pick the second one.
     seed_confirmed_cover(&ctx, next_issue, "next-no-cover-id", None).await;
+    seed_confirmed_cover(
+        &ctx,
+        later_issue,
+        "later-cover-id",
+        Some("https://cv.example/later.jpg"),
+    )
+    .await;
     seed_confirmed_cover(
         &ctx,
         first_issue,
@@ -288,6 +300,50 @@ async fn series_cover_falls_back_to_first_confirmed_issue() {
     assert_eq!(
         thread_cover(&body, "Fallback Wins"),
         Some("https://cv.example/first.jpg".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn series_cover_uses_the_issue_card_mapping_preference() {
+    // Two confirmed ComicVine mappings on one issue, both carrying covers. The
+    // issue card picks the higher-confidence mapping, so the series cover must
+    // pick the same one even though it was inserted second.
+    let ctx = setup("sc-confidence").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Confidence Wins", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    let client = ctx.state.pool.get().await.unwrap();
+    for (external_id, cover, confidence) in [
+        ("low-confidence-id", "https://cv.example/low.jpg", 0.4_f64),
+        ("high-confidence-id", "https://cv.example/high.jpg", 0.9_f64),
+    ] {
+        let metadata = json!({"image": {"original_url": cover}});
+        let identity: i32 = client
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+                 created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+                &[&external_id, &metadata],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        client
+            .execute(
+                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+                 confidence, created_at, updated_at, evidence_json) \
+                 VALUES ($1, $2, 'confirmed', $3, NOW(), NOW(), '{}'::json)",
+                &[&issue, &identity, &confidence],
+            )
+            .await
+            .unwrap();
+    }
+    drop(client);
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Confidence Wins"),
+        Some("https://cv.example/high.jpg".to_owned())
     );
 }
 
