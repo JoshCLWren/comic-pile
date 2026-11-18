@@ -14,6 +14,7 @@ import CreatorDetailPage from '../pages/CreatorDetailPage'
 import CreatorComparisonPage from '../pages/CreatorComparisonPage'
 import CblBrowserPage from '../pages/CblBrowserPage'
 import api from '../services/api'
+import { issueCardsApi } from '../services/issueCardsApi'
 import type { CrossoverApiDeps } from '../hooks/useCrossovers'
 import { useCreatorsList, CREATOR_LIST_PAGE_SIZE } from '../hooks/useCreatorsList'
 import type { CreatorListParams, CreatorListResponse } from '../services/api-creators'
@@ -252,8 +253,15 @@ describe('crossovers request budget', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // The mocked crossover deps never reach the transport, so the shared
+    // issue-card batch (#4443) stays inert instead of firing a real request.
+    vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
     groupsApi.list.mockResolvedValue([annihilation])
     threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   function renderCrossovers(entry: string) {
