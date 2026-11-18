@@ -18,6 +18,7 @@ pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
 pub mod creators;
 pub mod cron_auth;
+pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -36,6 +37,7 @@ pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
 pub mod reading_blocker_projection;
@@ -246,19 +248,6 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
-    /// Explicit status with a structured JSON `detail` object.
-    ///
-    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
-    /// conflicts and validation errors. The scalar variants above cannot
-    /// represent that shape (their detail is a JSON string), so cutover
-    /// handlers that must preserve a structured wire contract use this
-    /// variant. The payload is serialized JSON text and parsed on response.
-    StructuredDetail {
-        /// HTTP status to emit.
-        status: StatusCode,
-        /// Serialized JSON object used as the `detail` value.
-        detail: String,
-    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -267,6 +256,17 @@ pub enum ApiError {
         status: StatusCode,
         /// Wire detail message.
         detail: String,
+    },
+    /// A FastAPI-style `HTTPException(detail=<object>)` response. Some clients
+    /// decode `detail.code` / `detail.path` / `detail.issue_ids`, so the object
+    /// must be emitted under `detail` rather than stringified into a message.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Text form used for `Display` and secret-free classification.
+        message: String,
+        /// Structured detail emitted verbatim as the `detail` value.
+        detail: serde_json::Value,
     },
 }
 
@@ -285,6 +285,23 @@ impl ApiError {
         }
     }
 
+    /// Structured JSON detail emitted as `{"detail": <value>}`.
+    ///
+    /// The text form is taken from `detail.message` when present so logging and
+    /// `Display` stay meaningful without leaking the whole payload.
+    pub fn structured(status: StatusCode, detail: serde_json::Value) -> Self {
+        let message = detail
+            .get("message")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("Structured validation error")
+            .to_string();
+        Self::StructuredDetail {
+            status,
+            message,
+            detail,
+        }
+    }
+
     /// HTTP status for this error. Branches on the variant, never the message.
     pub fn status(&self) -> StatusCode {
         match self {
@@ -300,9 +317,8 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
-            ApiError::Detail { status, .. } => *status,
+            ApiError::Detail { status, .. } | ApiError::StructuredDetail { status, .. } => *status,
         }
     }
 
@@ -322,9 +338,17 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
-            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
+            ApiError::StructuredDetail { message, .. } => message.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
+        }
+    }
+
+    /// Structured detail payload for FastAPI-style object errors, if any.
+    pub fn structured_detail(&self) -> Option<&serde_json::Value> {
+        match self {
+            ApiError::StructuredDetail { detail, .. } => Some(detail),
+            _ => None,
         }
     }
 
@@ -380,26 +404,21 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
-        if let ApiError::StructuredDetail { detail, .. } = &self {
-            let value: serde_json::Value = serde_json::from_str(detail)
-                .unwrap_or_else(|_| serde_json::Value::String(detail.clone()));
-            let mut response = (status, Json(serde_json::json!({"detail": value}))).into_response();
-            if status == StatusCode::UNAUTHORIZED {
-                response.headers_mut().insert(
-                    axum::http::header::WWW_AUTHENTICATE,
-                    axum::http::HeaderValue::from_static("Bearer"),
-                );
+        let mut response = match self {
+            ApiError::StructuredDetail { detail, .. } => {
+                (status, Json(serde_json::json!({ "detail": detail }))).into_response()
             }
-            return response;
-        }
-        let detail_owned = self.detail().to_string();
-        let mut response = (
-            status,
-            Json(ErrorBody {
-                detail: &detail_owned,
-            }),
-        )
-            .into_response();
+            other => {
+                let detail_owned = other.detail().to_string();
+                (
+                    status,
+                    Json(ErrorBody {
+                        detail: &detail_owned,
+                    }),
+                )
+                    .into_response()
+            }
+        };
         if status == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,
@@ -511,6 +530,11 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
+    use custom_cbl::{
+        apply_custom_cbl, create_custom_cbl, delete_overlap_decision, export_custom_cbl,
+        get_custom_cbl, get_overlap_decisions, list_custom_cbls, read_custom_cbl,
+        save_overlap_decision, search_custom_cbl_issues, update_custom_cbl,
+    };
     Router::new()
         .route(
             "/health",
@@ -732,6 +756,39 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
+        )
+        // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
+        .route("/api/v1/custom-cbls", get(list_custom_cbls))
+        .route("/api/v1/custom-cbls", post(create_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/issue-search",
+            get(search_custom_cbl_issues),
+        )
+        .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
+        .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/export",
+            get(export_custom_cbl),
+        )
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
+        // Axum (matchit) forbids a parameter sharing a segment with a literal,
+        // so the colon-action wire suffix is captured whole and parsed inside
+        // the handler; the public path stays exactly `{plan_id}:apply`.
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            post(apply_custom_cbl),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(get_overlap_decisions),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(save_overlap_decision),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(delete_overlap_decision),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",

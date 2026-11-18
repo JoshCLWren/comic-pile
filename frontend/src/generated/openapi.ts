@@ -1313,17 +1313,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Custom Cbl Lists
-         * @description List the authenticated user's editable custom CBLs.
-         */
-        get: operations["list_custom_cbl_lists_api_v1_custom_cbls_get"];
+        /** Documentation-only operation for the custom CBL list. */
+        get: operations["list_custom_cbls_documentation"];
         put?: never;
-        /**
-         * Create Custom Cbl
-         * @description Create an editable CBL from real issues without creating synthetic threads.
-         */
-        post: operations["create_custom_cbl_api_v1_custom_cbls_post"];
+        /** Documentation-only operation for custom CBL creation. */
+        post: operations["create_custom_cbl_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1337,11 +1331,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Search Custom Cbl Issues
-         * @description Search only the user's canonical issue library for custom-list membership.
-         */
-        get: operations["search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get"];
+        /** Documentation-only operation for custom CBL issue search. */
+        get: operations["search_custom_cbl_issues_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1357,16 +1348,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Custom Cbl
-         * @description Return one owned custom CBL.
-         */
-        get: operations["get_custom_cbl_api_v1_custom_cbls__list_id__get"];
-        /**
-         * Update Custom Cbl
-         * @description Replace custom CBL metadata and exact ordered membership atomically.
-         */
-        put: operations["update_custom_cbl_api_v1_custom_cbls__list_id__put"];
+        /** Documentation-only operation for one custom CBL. */
+        get: operations["get_custom_cbl_documentation"];
+        /** Documentation-only operation for custom CBL replacement. */
+        put: operations["update_custom_cbl_documentation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1381,11 +1366,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Export Custom Cbl
-         * @description Export one custom list as a portable .cbl XML document.
-         */
-        get: operations["export_custom_cbl_api_v1_custom_cbls__list_id__export_get"];
+        /** Documentation-only operation for custom CBL export. */
+        get: operations["export_custom_cbl_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1401,41 +1383,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read Custom Cbl Overlap Decisions
-         * @description Return one owned Reading List's overlap decisions and version token.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to read.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         The list's saved overlap decisions, the current version token, and
-         *         the reader's selectable volume candidates for new decisions.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when the reader does not own the list.
-         */
-        get: operations["read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get"];
-        /**
-         * Save Custom Cbl Overlap Decision
-         * @description Save one reader-approved overlap choice inside an owned Reading List.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to update.
-         *         payload: The overlap choice to save, naming two exact Comic Vine volumes.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         The list's updated decision set and version token.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 for a foreign list, 409 for a stale
-         *             version token, and 422 for an unusable or cyclic choice.
-         */
-        put: operations["save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put"];
+        /** Documentation-only operation for overlap decisions read. */
+        get: operations["get_overlap_decisions_documentation"];
+        /** Documentation-only operation for overlap decision save. */
+        put: operations["save_overlap_decision_documentation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1453,27 +1404,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete Custom Cbl Overlap Decision
-         * @description Remove one reader-approved overlap choice from an owned Reading List.
-         *
-         *     Args:
-         *         list_id: Identifier of the Reading List to update.
-         *         decision_id: Identifier of the overlap decision to remove.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *         expected_updated_at: Decision version token the client last read. None
-         *             skips the concurrency check.
-         *
-         *     Returns:
-         *         The list's updated decision set and version token.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 for a foreign list or unknown decision,
-         *             409 for a stale version token, and 422 when removing the choice
-         *             would make the reader's constraint graph cyclic.
-         */
-        delete: operations["delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete"];
+        /** Documentation-only operation for overlap decision removal. */
+        delete: operations["delete_overlap_decision_documentation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1486,11 +1418,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read Custom Cbl
-         * @description Explain the complete current list using the same authority as Roll.
-         */
-        get: operations["read_custom_cbl_api_v1_custom_cbls__list_id__reader_get"];
+        /** Documentation-only operation for the custom CBL reader. */
+        get: operations["read_custom_cbl_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1508,11 +1437,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Apply Custom Cbl
-         * @description Explicitly merge one custom CBL into an existing canonical Reading Plan.
-         */
-        post: operations["apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post"];
+        /** Documentation-only operation for Reading Plan application. */
+        post: operations["apply_custom_cbl_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8491,6 +8417,10 @@ export interface components {
             /** User Id */
             user_id: number;
         };
+        CustomCBLEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
         /**
          * CustomCBLEntryResponse
          * @description One resolved custom CBL entry.
@@ -8569,6 +8499,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        CustomCBLPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
         };
         /**
          * CustomCBLResponse
@@ -9912,6 +9851,90 @@ export interface components {
             /** Format: int64 */
             upcoming_count: number;
         };
+        NativeCustomCBLApplyRequest: {
+            expected_updated_at?: string | null;
+            lane_id?: string | null;
+        };
+        NativeCustomCBLApplyResponse: {
+            added_issue_ids: number[];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: unknown[];
+            name: string;
+            nodes: unknown[];
+            ordering_mode: string;
+            skipped_existing_issue_ids: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        NativeCustomCBLEntryResponse: {
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeCustomCBLIssueSearchResult: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        NativeCustomCBLListItem: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+        };
+        NativeCustomCBLResponse: {
+            created_at: string;
+            description?: string | null;
+            entries: components["schemas"]["NativeCustomCBLEntryResponse"][];
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            predecessor_changes?: components["schemas"]["CustomCBLPredecessorChange"][];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+            warnings?: string[];
+        };
+        NativeCustomCBLWrite: {
+            checkpoint_issue_ids?: number[] | null;
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            confirmed_predecessor_changes?: unknown;
+            description?: string | null;
+            entry_intents?: {
+                [key: string]: components["schemas"]["CustomCBLEntryIntent"];
+            } | null;
+            issue_ids?: number[];
+            mode?: string | null;
+            name: string;
+        };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
@@ -9919,6 +9942,34 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+        };
+        NativeOverlapDecisionItem: {
+            continuing_volume_id: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+            waiting_volume_id: string;
+        };
+        NativeOverlapDecisionSetResponse: {
+            candidate_volumes?: components["schemas"]["NativeOverlapVolumeCandidate"][];
+            decisions?: components["schemas"]["NativeOverlapDecisionItem"][];
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+        };
+        NativeOverlapDecisionWrite: {
+            continuing_volume_id: string;
+            expected_updated_at?: string | null;
+            waiting_volume_id: string;
+        };
+        NativeOverlapVolumeCandidate: {
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_id: string;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -15517,7 +15568,7 @@ export interface operations {
             };
         };
     };
-    list_custom_cbl_lists_api_v1_custom_cbls_get: {
+    list_custom_cbls_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15526,18 +15577,32 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Editable custom CBL lists owned by the reader */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLListItem"][];
+                    "application/json": components["schemas"]["NativeCustomCBLListItem"][];
                 };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    create_custom_cbl_api_v1_custom_cbls_post: {
+    create_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15546,34 +15611,48 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLWrite"];
+                "application/json": components["schemas"]["NativeCustomCBLWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Custom CBL created from real issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get: {
+    search_custom_cbl_issues_documentation: {
         parameters: {
             query?: {
+                /** @description Case-insensitive title or issue-number filter, max 200 characters */
                 q?: string;
+                /** @description Maximum results, 1-100 (default 30) */
                 limit?: number;
             };
             header?: never;
@@ -15582,287 +15661,457 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Matching owned issues */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLIssueSearchResult"][];
+                    "application/json": components["schemas"]["NativeCustomCBLIssueSearchResult"][];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    get_custom_cbl_api_v1_custom_cbls__list_id__get: {
+    get_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description The owned custom CBL */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    update_custom_cbl_api_v1_custom_cbls__list_id__put: {
+    update_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLWrite"];
+                "application/json": components["schemas"]["NativeCustomCBLWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description The updated custom CBL */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request body failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    export_custom_cbl_api_v1_custom_cbls__list_id__export_get: {
+    export_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Portable .cbl XML document */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/xml": string;
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    read_custom_cbl_overlap_decisions_api_v1_custom_cbls__list_id__overlap_decisions_get: {
+    get_overlap_decisions_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Saved overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    save_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions_put: {
+    save_overlap_decision_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OverlapDecisionWrite"];
+                "application/json": components["schemas"]["NativeOverlapDecisionWrite"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Updated overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unusable or cyclic choice */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    delete_custom_cbl_overlap_decision_api_v1_custom_cbls__list_id__overlap_decisions__decision_id__delete: {
+    delete_overlap_decision_documentation: {
         parameters: {
             query?: {
-                expected_updated_at?: string | null;
+                /** @description Decision version token the client last read */
+                expected_updated_at?: string;
             };
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
+                /** @description Overlap decision identifier */
                 decision_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Updated overlap decisions and version token */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cycle conflict */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    read_custom_cbl_api_v1_custom_cbls__list_id__reader_get: {
+    read_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Reader with canonical availability */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingListReaderResponse"];
+                    "application/json": components["schemas"]["ReadingListReader"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
-    apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post: {
+    apply_custom_cbl_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned custom CBL identifier */
                 list_id: number;
+                /** @description Continuity plan identifier */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CustomCBLApplyRequest"];
+                "application/json": components["schemas"]["NativeCustomCBLApplyRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Reading Plan updated with the custom CBL merged into one lane */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomCBLApplyResponse"];
+                    "application/json": components["schemas"]["NativeCustomCBLApplyResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale plan version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty list, unknown lane, or cycle conflict */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
