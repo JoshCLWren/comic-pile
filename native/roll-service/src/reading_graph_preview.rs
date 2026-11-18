@@ -151,7 +151,7 @@ pub struct ReadingGraphPreview {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
-struct ValidationErrorItem {
+pub struct ValidationErrorItem {
     #[serde(rename = "type")]
     error_type: String,
     loc: Vec<String>,
@@ -162,7 +162,7 @@ struct ValidationErrorItem {
 }
 
 #[derive(Debug, Serialize)]
-struct ValidationErrorResponse {
+pub struct ValidationErrorResponse {
     detail: Vec<ValidationErrorItem>,
 }
 
