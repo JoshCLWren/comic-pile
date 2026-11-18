@@ -3,8 +3,8 @@
 The generator in ``scripts/generate_route_burndown.py`` derives one checked-in
 inventory (``docs/api/v2-route-inventory.json``) and one compact generated
 ``AGENTS.md`` runtime section from deployed ingress in ``vercel.json``. These
-tests pin the current burndown (41 live operations: 40 Native Rust + the one
-transitional Python operation) and the ``--check`` determinism contract.
+tests pin the current burndown (all live v2 operations are Native Rust) and
+the ``--check`` determinism contract.
 """
 
 from __future__ import annotations
@@ -288,18 +288,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert not any(item.get("path") == "/api/v1/reading-mode" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/reading-mode/dismiss-suggestion" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/reading-mode/suggest" for item in v1_ops)
+    # Thread lifecycle operations cut over to same-path native Rust (#4832);
+    # the Python handler stays mounted until its separate removal PR.
     assert any(
         item.get("method") == "POST"
         and item.get("path") == "/api/v1/threads/groups:batch"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/sessions/current/"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
+        and item.get("burndown_status") == "native Rust"
         for item in v1_ops
     )
     assert all(
@@ -432,6 +426,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "demo",
         "dependencies",
         "issue-identity-cbl-catalog",
+        "issue-identity",
         "issues",
         "metrics",
         "preferences",
@@ -466,12 +461,41 @@ def _fragment_named(name: str) -> RouteFragment:
     raise AssertionError(f"missing fragment {name}")
 
 
-def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None:
-    """The creators pilot owns all of its v1 route declarations."""
+def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> None:
+    """The creators pilot owns its native v2 routes plus creator-adjacent v1 metadata."""
     fragment = _fragment_named("creators")
     paths = {operation["path"] for operation in fragment.operations}
-    assert "/api/v1/creators" in paths
+    assert "/api/v2/creators" in paths
+    assert "/api/v2/creators/{creator_key}" in paths
+    assert "/api/v2/creators/{creator_key}/series/{series_key}/issues" in paths
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
+
+
+def test_creator_v2_operations_are_native_rust_in_source_fragment() -> None:
+    """Issue #4836: every creator browser operation is declared Rust-served on v2.
+
+    Generated ``vercel.json`` and the inventory are bot-owned and regenerated
+    post-merge from fragments, so the source fragment is the reviewable proof
+    that each ``/api/v2/creators`` operation serves the native ingress with the
+    native-rust runtime, target status and owning issue (overriding the
+    family's python-fastapi/transitional/null defaults). The legacy v1 creator
+    declarations are retained here and retired by a later change.
+    """
+    fragment = _fragment_named("creators")
+    v2_operations = [
+        operation
+        for operation in fragment.operations
+        if str(operation.get("path", "")).startswith("/api/v2/creators")
+    ]
+    assert len(v2_operations) == 11
+    assert len({(op["method"], op["path"]) for op in v2_operations}) == 11
+    for operation in v2_operations:
+        assert operation["bucket"] == "operations", operation
+        assert operation["method"] == "GET", operation
+        assert operation["dest"] == "/api/native_roll.rs", operation
+        assert operation["runtime"] == "native-rust", operation
+        assert operation["status"] == "target", operation
+        assert operation["owning_issue"] == 4836, operation
 
 
 def test_dependency_fragment_covers_native_and_python_metadata() -> None:
@@ -522,9 +546,9 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     """The sessions and undo fragments cut the supported cutover ops to Rust.
 
     The owner's 2026-11-17 correction on #4839 retired the current-session and
-    restore-session-start twins under #4343 instead of porting them: those
-    legacy lifecycle paths remain on Python and gain no compatibility handler
-    or extra lifecycle semantics. Only the read-only list/details/history and
+    restore-session-start twins under #4343 instead of porting them: both
+    routes and their Python handlers are deleted and have no fragment entry
+    (see ``tests/test_retired_session_lifecycle_4343.py``). Only the read-only list/details/history and
     undo operations are cut over to native Rust. Unversioned paths have no
     TypeScript client or FastAPI registry operation; they stay in the fragment
     only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
@@ -544,8 +568,6 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     }
     python_ops = {
         ("GET", "/api/v1/sessions/correction-examples"),
-        ("GET", "/api/v1/sessions/current/"),
-        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
     }
     declared = {
         (operation["method"], operation["path"]): operation
@@ -683,14 +705,15 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
     ) -> set[tuple[str, str]]:
         full = merged["full_surface"]
         assert isinstance(full, dict)
-        v1 = full["v1_operations"]
-        assert isinstance(v1, list)
         found: set[tuple[str, str]] = set()
-        for operation in v1:
-            assert isinstance(operation, dict)
-            key = (str(operation["method"]), str(operation["path"]))
-            if key in keys:
-                found.add(key)
+        for bucket in ("operations", "v1_operations", "unversioned_operations"):
+            operations = full[bucket]
+            assert isinstance(operations, list)
+            for operation in operations:
+                assert isinstance(operation, dict)
+                key = (str(operation["method"]), str(operation["path"]))
+                if key in keys:
+                    found.add(key)
         return found
 
     creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations if not op.get("exclude_from_inventory")}

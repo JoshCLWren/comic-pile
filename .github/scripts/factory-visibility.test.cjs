@@ -1557,3 +1557,123 @@ test('each retry attempt is recorded, including the failed request', async () =>
   assert.equal(log[1].status, 200);
   assert.equal(log[1].limited, false);
 });
+
+test('unlabeled PR event preserves ready parked under a live local lease', async () => {
+  // Regression for PR #5393: the reconciler reverted factory:ready +
+  // factory:local to factory:review + factory:unowned within seconds.
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:local', 'factory:ready'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_target', {
+      action: 'unlabeled',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        body: 'Part of #4853',
+        head: {
+          ref: 'factory/work-checkpoints/issue-4853/hy4-flash-free/44224727998',
+          sha: 'c'.repeat(40),
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:local' }, { name: 'factory:ready' }],
+        number: 5393,
+      },
+    }),
+  });
+  assert.deepEqual(calls, [], 'ready+local must not be rewritten by a label event');
+});
+
+test('PR synchronize still invalidates ready but keeps the local owner', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:local', 'factory:ready'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_target', {
+      action: 'synchronize',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        body: 'Part of #4853',
+        head: {
+          ref: 'factory/work-checkpoints/issue-4853/hy4-flash-free/44224727998',
+          sha: 'd'.repeat(40),
+          repo: { full_name: 'JoshCLWren/comic-pile' },
+        },
+        labels: [{ name: 'factory' }, { name: 'factory:local' }, { name: 'factory:ready' }],
+        number: 5393,
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:local'));
+  assert.ok(calls[0].labels.includes('factory:review'));
+  assert.ok(!calls[0].labels.includes('factory:ready'), 'a new head invalidates ready');
+  assert.ok(!calls[0].labels.includes('factory:unowned'));
+});
+
+test('off-roster review-claim marker cannot strip a live local lease or ready stage', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:local', 'factory:ready'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 5393, pull_request: { url: 'https://api.github.test/pulls/5393' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-review-claim-v3:pr-5393:opencode-free-model-factory-74:123 -->',
+      },
+    }),
+  });
+  assert.deepEqual(calls, [], 'the marker must not replace the live local owner');
+});
+
+test('explicit trusted release by the local worker still hands off to unowned', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:local', 'factory:review'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 5393, pull_request: { url: 'https://api.github.test/pulls/5393' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-claim-released-v3:pr-5393:local:123 -->',
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:unowned'));
+  assert.ok(!calls[0].labels.includes('factory:local'));
+});
+
+test('release marker from another worker does not strip the local lease', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:local', 'factory:review'],
+    setLabels: async input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 5393, pull_request: { url: 'https://api.github.test/pulls/5393' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-claim-released-v3:pr-5393:opencode-free-model-factory-75:123 -->',
+      },
+    }),
+  });
+  assert.deepEqual(calls, [], 'a foreign release marker must not replace factory:local');
+});

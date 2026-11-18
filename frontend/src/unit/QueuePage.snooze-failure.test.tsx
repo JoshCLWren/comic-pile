@@ -6,7 +6,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
@@ -42,7 +42,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
@@ -82,7 +82,7 @@ vi.mock('../contexts/useToast', () => ({
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
-const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 
@@ -143,11 +143,11 @@ it('does not refresh session or threads when native reroll snooze fails', async 
     isLoading: false,
     refetch: refetchThreads,
   })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: refetchSession,
   })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: refetchSession,
   })
@@ -185,7 +185,7 @@ it('keeps snooze disabled before session data has loaded', async () => {
     isLoading: false,
     refetch: refetchThreads,
   })
-  mockedUseSession.mockReturnValue({
+  mockedUseRollBootstrap.mockReturnValue({
     data: undefined,
     refetch: refetchSession,
   })

@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import create_access_token
 from app.constants import INTENT_SOURCE_VALUES, INTENT_VALUES, Intent, IntentSource
 from app.models import Event, ReadingSession, Snapshot, Thread
 from app.schemas.session import SessionListItem, build_session_intent_state
@@ -213,44 +212,6 @@ async def test_database_check_constraints_reject_invalid_intent_rows(
     await async_db.flush()
     assert valid_boundary.intent_confidence == 0.0
     assert valid_boundary.active_intent == "random"
-
-
-@pytest.mark.asyncio
-async def test_current_session_endpoint_exposes_intent_state(
-    client: AsyncClient, async_db: AsyncSession, default_user
-) -> None:
-    """Active-session reads expose stored active/predicted intent independently."""
-    from app.models import User as UserModel
-
-    result = await async_db.execute(select(UserModel).where(UserModel.id == default_user.id))
-    user = result.scalar_one()
-
-    session = ReadingSession(
-        start_die=6,
-        user_id=user.id,
-        started_at=datetime.now(UTC),
-        active_intent="explore",
-        predicted_intent="explore",
-        intent_source="inferred",
-        intent_confidence=0.7,
-        intent_version="intent-v1",
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    token = create_access_token(data={"sub": user.username, "jti": "test"})
-    response = await client.get(
-        "/api/v1/sessions/current/", headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == session.id
-    assert data["intent"] is not None
-    assert data["intent"]["active_intent"] == "explore"
-    assert data["intent"]["predicted_intent"] == "explore"
-    assert data["intent"]["confidence"] == 0.7
-    assert data["intent"]["source"] == "inferred"
-    assert data["intent"]["mode_version"] == "intent-v1"
 
 
 @pytest.mark.asyncio
