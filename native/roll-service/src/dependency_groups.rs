@@ -1448,3 +1448,108 @@ pub async fn list_crossover_plans(
     let plans = linked_plans(&connection, group_id, user.id()).await?;
     Ok(Json(plans))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn member(id: i32, thread_id: Option<i32>, issue_id: Option<i32>) -> GroupMemberInput {
+        GroupMemberInput {
+            id,
+            group_id: 1,
+            thread_id,
+            issue_id,
+            sequence_order: None,
+        }
+    }
+
+    #[test]
+    fn normalize_group_name_rejects_blank_and_trims() {
+        assert_eq!(normalize_group_name("  Avengers  ").unwrap(), "Avengers");
+        assert_eq!(
+            normalize_group_name("   ").unwrap_err().status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        assert_eq!(
+            normalize_group_name("").unwrap_err().status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+
+    #[test]
+    fn crossover_progress_counts_thread_and_issue_members_once() {
+        // Thread membership counts the whole migrated series; issue membership
+        // inside the same series is not double-counted.
+        let memberships = vec![
+            member(1, Some(100), None), // thread target
+            member(2, Some(200), None), // thread target
+            member(3, None, Some(500)), // issue target in a different series
+        ];
+        let threads = BTreeMap::from([
+            (100, Some(10)), // total 10 issues
+            (200, Some(4)),  // total 4 issues
+        ]);
+        let issues = BTreeMap::from([(500, (100, "read".to_string()))]);
+        // Thread 100 has 2 unread -> 8 read; thread 200 has 1 unread -> 3 read.
+        let unread_counts = BTreeMap::from([(100, 2), (200, 1)]);
+        let (read, total, progress) = crossover_progress(&memberships, &threads, &issues, &unread_counts);
+        assert_eq!(total, 10 + 4 + 1);
+        assert_eq!(read, 8 + 3 + 1);
+        assert_eq!(progress, "92%"); // 12 / 13
+    }
+
+    #[test]
+    fn crossover_progress_ignores_legacy_threads_without_total() {
+        let memberships = vec![member(1, Some(100), None)];
+        let threads = BTreeMap::from([(100, None)]); // legacy thread: no total_issues
+        let issues = BTreeMap::new();
+        let unread_counts = BTreeMap::new();
+        let (read, total, progress) = crossover_progress(&memberships, &threads, &issues, &unread_counts);
+        assert_eq!((read, total), (0, 0));
+        assert_eq!(progress, "0%");
+    }
+
+    #[test]
+    fn crossover_progress_issue_not_in_thread_series_counts_separately() {
+        let memberships = vec![member(1, None, Some(500))];
+        let threads = BTreeMap::new();
+        let issues = BTreeMap::from([(500, (200, "unread".to_string()))]);
+        let unread_counts = BTreeMap::new();
+        let (read, total, progress) = crossover_progress(&memberships, &threads, &issues, &unread_counts);
+        assert_eq!((read, total), (0, 1));
+        assert_eq!(progress, "0%");
+    }
+
+    #[test]
+    fn build_member_responses_uses_thread_title_for_thread_members() {
+        let memberships = vec![member(1, Some(100), None)];
+        let thread_titles = BTreeMap::from([(100, "X-Men".to_string())]);
+        let issue_metadata = BTreeMap::new();
+        let responses = build_member_responses(&memberships, &thread_titles, &issue_metadata);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].series_title, Some("X-Men".to_string()));
+        assert_eq!(responses[0].issue_number, None);
+    }
+
+    #[test]
+    fn build_member_responses_uses_issue_metadata_for_issue_members() {
+        let memberships = vec![member(1, None, Some(500))];
+        let thread_titles = BTreeMap::new();
+        let issue_metadata = BTreeMap::from([(500, (Some("12".to_string()), Some("X-Men".to_string())))]);
+        let responses = build_member_responses(&memberships, &thread_titles, &issue_metadata);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].series_title, Some("X-Men".to_string()));
+        assert_eq!(responses[0].issue_number, Some("12".to_string()));
+    }
+
+    #[test]
+    fn build_member_resolves_missing_targets_to_none() {
+        let memberships = vec![member(1, Some(999), None)];
+        let thread_titles = BTreeMap::new();
+        let issue_metadata = BTreeMap::new();
+        let responses = build_member_responses(&memberships, &thread_titles, &issue_metadata);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].series_title, None);
+        assert_eq!(responses[0].issue_number, None);
+    }
+}
