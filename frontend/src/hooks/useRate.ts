@@ -82,7 +82,7 @@ export function useRate(deps: RateDeps = {}) {
     const request: Promise<RateMutationOutcome> = (async () => {
       try {
         const result = await protectedRollApi.rate(data)
-        await applyCache(client, result)
+        await applyCache(client, result, { refetchRollBootstrap: false })
 
         // Write the temporary snooze before refetching bootstrap so the
         // published pool already excludes the just-rated below-threshold
@@ -112,7 +112,7 @@ export function useRate(deps: RateDeps = {}) {
               protectedRollApi,
             )
             if (recovery.status === 'retried') {
-              await applyCache(client, recovery.value)
+              await applyCache(client, recovery.value, { refetchRollBootstrap: false })
               if (shouldSnoozeAfterRating(data, recovery.value?.issues_remaining)) {
                 addRollSnooze(data.thread_id)
               }

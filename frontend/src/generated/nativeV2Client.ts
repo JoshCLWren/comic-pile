@@ -46,6 +46,14 @@ export interface CommitRequest {
 
 export type CommitResponse = components['schemas']['CommitResponse']
 
+export interface CompareRequest {
+  query?: {
+    keys?: string
+  }
+}
+
+export type CompareResponse = components['schemas']['NativeCreatorComparisonResponse']
+
 export interface ConfirmRequest {
   path: {
     mapping_id: number
@@ -119,7 +127,7 @@ export interface ContinuityPlansProjectToReadingOrderRequest {
   body: components['schemas']['NativeReadingOrderProjectionRequest']
 }
 
-export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['NativeReadingOrderProjectionResult']
+export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['ReadingOrderProjectionResult']
 
 export interface ContinuityPlansUnlinkDependencyRequest {
   path: {
@@ -205,6 +213,18 @@ export interface CreateReadingListRequest {
 
 export type CreateReadingListResponse = components['schemas']['ReadingList']
 
+export interface CreatorsListRequest {
+  query?: {
+    search?: string
+    sort?: string
+    limit?: number
+    offset?: number
+    min_ratings?: number
+  }
+}
+
+export type CreatorsListResponse = components['schemas']['CreatorListResponse']
+
 export type CsrfResponse = components['schemas']['CsrfResponse']
 
 export interface DeferRequest {
@@ -247,7 +267,21 @@ export interface DeleteReadingListRequest {
 
 export type DeleteReadingListResponse = void
 
+export interface DetailRequest {
+  path: {
+    creator_key: string
+  }
+  query?: {
+    limit?: number
+    offset?: number
+  }
+}
+
+export type DetailResponse = components['schemas']['NativeCreatorDetailResponse']
+
 export type DieStateResponse = components['schemas']['RollDieStateResponse']
+
+export type DiscoveriesResponse = components['schemas']['NativeCreatorDiscoveryResponse']
 
 export interface EligibleIssueIdsRequest {
   query?: {
@@ -353,7 +387,7 @@ export interface IssueIntelligenceDocsRequest {
   }
 }
 
-export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
+export type IssueIntelligenceDocsResponse = components['schemas']['IssueIntelligence'] | null
 
 export interface IssueOrderRequest {
   path: {
@@ -436,6 +470,22 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['UserResponse']
 
+export interface MetricRequest {
+  path: {
+    creator_key: string
+    metric_type: string
+  }
+  query?: {
+    role?: string
+    rating_value?: string
+    series_key?: string
+    page?: number
+    page_size?: number
+  }
+}
+
+export type MetricResponse = components['schemas']['NativeCreatorMetricDrilldown']
+
 export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
 export interface OfferRequest {
@@ -451,6 +501,19 @@ export interface PreviewRequest {
 }
 
 export type PreviewResponse = components['schemas']['PlanRecoveryPreview']
+
+export interface RatingDistributionRequest {
+  path: {
+    creator_key: string
+    rating_value: string
+  }
+  query?: {
+    page?: number
+    page_size?: number
+  }
+}
+
+export type RatingDistributionResponse = components['schemas']['NativeCreatorMetricDrilldown']
 
 export interface ReadRequest {
   path: {
@@ -471,7 +534,7 @@ export interface ReadReadingListRequest {
 export type ReadReadingListResponse = components['schemas']['ReadingListReader']
 
 export interface ReadingBoundaryBatchRequest {
-  body: components['schemas']['NativeReadingBoundaryBatchRequest']
+  body: components['schemas']['ReadingBoundaryBatchRequest']
 }
 
 export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
@@ -479,7 +542,7 @@ export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundar
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
 export interface RefreshRequest {
-  body?: null | components['schemas']['RefreshTokenRequest']
+  body?: components['schemas']['RefreshTokenRequest'] | null
 }
 
 export type RefreshResponse = components['schemas']['TokenResponse']
@@ -640,6 +703,7 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
 
+<<<<<<< HEAD
 export interface ResolveInputRequest {
   query: {
     input: string
@@ -668,6 +732,35 @@ export interface SearchSeriesRequest {
 }
 
 export type SearchSeriesResponse = components['schemas']['NativeComicVineSeriesSearchResponse']
+=======
+export interface RoleRequest {
+  path: {
+    creator_key: string
+    role: string
+  }
+  query?: {
+    page?: number
+    page_size?: number
+  }
+}
+
+export type RoleResponse = components['schemas']['NativeCreatorMetricDrilldown']
+
+export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
+
+export interface SeriesRequest {
+  path: {
+    creator_key: string
+    series_key: string
+  }
+  query?: {
+    page?: number
+    page_size?: number
+  }
+}
+
+export type SeriesResponse = components['schemas']['NativeCreatorMetricDrilldown']
+>>>>>>> origin/main
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -677,6 +770,7 @@ export interface SeriesImportStatusRequest {
 
 export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
+<<<<<<< HEAD
 export interface SeriesImportStatusV2Request {
   path: {
     comicvine_volume_id: number
@@ -695,6 +789,20 @@ export interface SeriesIssuesRequest {
 }
 
 export type SeriesIssuesResponse = components['schemas']['NativeComicVineSeriesIssuesResponse']
+=======
+export interface SeriesIssuesRequest {
+  path: {
+    creator_key: string
+    series_key: string
+  }
+  query?: {
+    limit?: number
+    offset?: number
+  }
+}
+
+export type SeriesIssuesResponse = components['schemas']['NativeCreatorSeriesIssueListResponse']
+>>>>>>> origin/main
 
 export interface SkipRequest {
   path: {
@@ -703,6 +811,16 @@ export interface SkipRequest {
 }
 
 export type SkipResponse = components['schemas']['IdentityInboxActionResponse']
+
+export interface SummariesRequest {
+  query?: {
+    keys?: string
+  }
+}
+
+export type SummariesResponse = components['schemas']['CreatorSummariesResponse']
+
+export type TeamChemistryResponse = components['schemas']['NativeCreatorTeamChemistryResponse']
 
 export interface UpdateLegacyDependencyRequest {
   path: {
@@ -735,6 +853,7 @@ export interface NativeV2Client {
   applyCorrection(args: ApplyCorrectionRequest): Promise<ApplyCorrectionResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
+  compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
   confirmIdentity(args: ConfirmIdentityRequest): Promise<ConfirmIdentityResponse>
   continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
@@ -757,13 +876,16 @@ export interface NativeV2Client {
   createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
+  creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
+  detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
+  discoveries(): Promise<DiscoveriesResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
@@ -793,9 +915,11 @@ export interface NativeV2Client {
   logout(): Promise<LogoutResponse>
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
   me(): Promise<MeResponse>
+  metric(args: MetricRequest): Promise<MetricResponse>
   metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
+  ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
   readDemoRoll(): Promise<ReadDemoRollResponse>
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
@@ -821,14 +945,23 @@ export interface NativeV2Client {
   replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
+<<<<<<< HEAD
   resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
   revertCorrection(args: RevertCorrectionRequest): Promise<RevertCorrectionResponse>
   search(): Promise<SearchResponse>
   searchSeries(args: SearchSeriesRequest): Promise<SearchSeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   seriesImportStatusV2(args: SeriesImportStatusV2Request): Promise<SeriesImportStatusV2Response>
+=======
+  role(args: RoleRequest): Promise<RoleResponse>
+  search(): Promise<SearchResponse>
+  series(args: SeriesRequest): Promise<SeriesResponse>
+  seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
+>>>>>>> origin/main
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
+  summaries(args?: SummariesRequest): Promise<SummariesResponse>
+  teamChemistry(): Promise<TeamChemistryResponse>
   updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
@@ -852,6 +985,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<CommitResponse, CommitRequest['body']>(
         "/v1/catalog/series-mappings/commit",
         args.body,
+      )
+    },
+    compare(args: CompareRequest = {}) {
+      return client.get<CompareResponse>(
+        "/v2/creators/compare",
+        { params: compactQuery(args.query) },
       )
     },
     confirm(args: ConfirmRequest) {
@@ -974,6 +1113,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    creatorsList(args: CreatorsListRequest = {}) {
+      return client.get<CreatorsListResponse>(
+        "/v2/creators",
+        { params: compactQuery(args.query) },
+      )
+    },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
@@ -1000,8 +1145,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
       )
     },
+    detail(args: DetailRequest) {
+      return client.get<DetailResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}`,
+        { params: compactQuery(args.query) },
+      )
+    },
     dieState() {
       return client.get<DieStateResponse>("/v2/roll/die-state")
+    },
+    discoveries() {
+      return client.get<DiscoveriesResponse>("/v2/creators/discoveries")
     },
     eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
       return client.get<EligibleIssueIdsResponse>(
@@ -1147,6 +1301,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     me() {
       return client.get<MeResponse>("/v2/auth/me")
     },
+    metric(args: MetricRequest) {
+      return client.get<MetricResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/${encodeURIComponent(String(args.path.metric_type))}`,
+        { params: compactQuery(args.query) },
+      )
+    },
     metrics() {
       return client.get<MetricsResponse>("/v2/analytics/metrics")
     },
@@ -1159,6 +1319,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     preview(args: PreviewRequest) {
       return client.get<PreviewResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+      )
+    },
+    ratingDistribution(args: RatingDistributionRequest) {
+      return client.get<RatingDistributionResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/rating-distribution/${encodeURIComponent(String(args.path.rating_value))}`,
+        { params: compactQuery(args.query) },
       )
     },
     read(args: ReadRequest) {
@@ -1297,6 +1463,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+<<<<<<< HEAD
     resolveInput(args: ResolveInputRequest) {
       return client.get<ResolveInputResponse>(
         "/v2/comicvine/resolve",
@@ -1315,6 +1482,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     searchSeries(args: SearchSeriesRequest) {
       return client.get<SearchSeriesResponse>(
         "/v2/comicvine/search/series",
+=======
+    role(args: RoleRequest) {
+      return client.get<RoleResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/role-stats/${encodeURIComponent(String(args.path.role))}`,
+        { params: compactQuery(args.query) },
+      )
+    },
+    search() {
+      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+    },
+    series(args: SeriesRequest) {
+      return client.get<SeriesResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/series-stats/${encodeURIComponent(String(args.path.series_key))}`,
+>>>>>>> origin/main
         { params: compactQuery(args.query) },
       )
     },
@@ -1323,6 +1504,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
       )
     },
+<<<<<<< HEAD
     seriesImportStatusV2(args: SeriesImportStatusV2Request) {
       return client.get<SeriesImportStatusV2Response>(
         `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
@@ -1331,11 +1513,25 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     seriesIssues(args: SeriesIssuesRequest) {
       return client.get<SeriesIssuesResponse>(
         `/v2/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/issues`,
+=======
+    seriesIssues(args: SeriesIssuesRequest) {
+      return client.get<SeriesIssuesResponse>(
+        `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/series/${encodeURIComponent(String(args.path.series_key))}/issues`,
+>>>>>>> origin/main
         { params: compactQuery(args.query) },
       )
     },
     skip(args: SkipRequest) {
       return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+    },
+    summaries(args: SummariesRequest = {}) {
+      return client.get<SummariesResponse>(
+        "/v2/creators/summaries",
+        { params: compactQuery(args.query) },
+      )
+    },
+    teamChemistry() {
+      return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
     },
     updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
       return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(

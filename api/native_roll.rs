@@ -250,12 +250,29 @@ fn app() -> Router {
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/sessions/", get(native_dispatch))
         .route("/api/sessions/{session_id}", get(native_dispatch))
         .route("/api/v1/sessions/{session_id}", get(native_dispatch))
         .route("/api/sessions/{session_id}/snapshots", get(native_dispatch))
         .route(
             "/api/v1/sessions/{session_id}/snapshots",
             get(native_dispatch),
+        )
+        .route("/api/v1/sessions/", get(native_dispatch))
+        .route("/api/sessions/{session_id}/details", get(native_dispatch))
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(native_dispatch),
+        )
+        .route("/api/undo/{session_id}/snapshots", get(native_dispatch))
+        .route("/api/v1/undo/{session_id}/snapshots", get(native_dispatch))
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route(
@@ -281,9 +298,41 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", post(native_dispatch))
+        .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/dependency-order-check",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:validateOrder",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/reading-orders",
+            get(native_dispatch),
+        )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
+        .route("/api/v1/threads/", post(native_dispatch))
+        .route("/api/v1/threads/check-duplicates", post(native_dispatch))
+        .route("/api/v1/threads/excluded/threads", get(native_dispatch))
+        .route("/api/v1/threads/groups:batch", post(native_dispatch))
+        .route("/api/v1/threads/reactivate", post(native_dispatch))
+        .route("/api/v1/threads/stale", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", put(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", delete(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/set-pending",
+            post(native_dispatch),
+        )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -332,6 +381,13 @@ fn app() -> Router {
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkRead", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkUnread", post(native_dispatch))
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(native_dispatch),
+        )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -545,6 +601,33 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v2/creators", get(native_dispatch))
+        .route("/api/v2/creators/", get(native_dispatch))
+        .route("/api/v2/creators/summaries", get(native_dispatch))
+        .route("/api/v2/creators/compare", get(native_dispatch))
+        .route("/api/v2/creators/discoveries", get(native_dispatch))
+        .route("/api/v2/creators/team-chemistry", get(native_dispatch))
+        .route("/api/v2/creators/{creator_key}", get(native_dispatch))
+        .route(
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(native_dispatch),
+        )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
@@ -665,6 +748,41 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric issue ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v1_issue_read_state_ingress_preserves_same_path_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v1/issues/7/reader-context"),
+            ("POST", "/api/v1/issues/7:markRead"),
+            ("POST", "/api/v1/issues/7:markUnread"),
+            ("POST", "/api/v1/issues/7:move"),
+            ("POST", "/api/v1/issues:bulkMarkRead"),
+            ("POST", "/api/v1/issues:bulkMarkUnread"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
             );
         }
     }

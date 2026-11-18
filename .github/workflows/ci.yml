@@ -106,6 +106,43 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  route-fragment-guard:
+    name: Fragment-only guard (no generated files)
+    # Part of the required CI Summary gate. Runs on every pull_request event
+    # (no path filters, independent of factory-only scoping) and fails PRs that
+    # commit bot-owned route outputs: vercel.json, docs/api/v2-route-inventory.json,
+    # docs/api/route-fragments/vercel-rewrites.json, or AGENTS.md route-burndown
+    # marker edits. regenerate-routes.yml regenerates them post-merge.
+    # On non-PR events (push, dispatch) the steps are skipped so the job still
+    # succeeds and CI Summary can require strict success.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      - name: Fetch PR base and head revisions
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+      - name: Reject committed bot-owned route outputs in ordinary PRs
+        if: ${{ github.event_name == 'pull_request' && !(startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository) }}
+        run: >-
+          python3 scripts/check_route_fragment_guard.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
+      - name: Enforce generated-only scope on regeneration PRs
+        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: >-
+          python3 scripts/check_route_fragment_guard.py
+          --allow-generated
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
+
   factory-pr-auth:
     name: Factory PR authentication
     runs-on: ubuntu-latest
@@ -282,10 +319,62 @@ jobs:
       - name: Run ty check
         run: ty check --error-on-warning
 
+  changes:
+    name: Detect factory-only changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    if: github.event_name == 'pull_request'
+    outputs:
+      factory_only: ${{ steps.classify.outputs.factory_only }}
+    steps:
+      - name: Classify changed files against the factory allowlist
+        id: classify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -Eeuo pipefail
+          changed_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --paginate --jq '.[].filename')"
+          if [ -z "$changed_json" ]; then
+            echo "factory_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mapfile -t changed_files <<< "$changed_json"
+          factory_only=true
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              .github/scripts/factory*|\
+              .github/scripts/test_factory_*|\
+              .github/scripts/*.test.cjs|\
+              .github/workflows/factory*|\
+              .github/workflows/fixed-model*|\
+              .github/workflows/free-model-factory*|\
+              .github/actions/factory-syntax/*|\
+              docs/FACTORY*.md|\
+              docs/AUTONOMOUS_FACTORY_POLICY.md|\
+              tests/test_factory*.py|\
+              scripts/*factory*)
+                ;;
+              *)
+                factory_only=false
+                break
+                ;;
+            esac
+          done
+          echo "factory_only=${factory_only}" >> "$GITHUB_OUTPUT"
+          echo "Classified ${#changed_files[@]} changed file(s): factory_only=${factory_only}"
+
   factory-complete-tests:
     name: Factory Tests (complete)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.factory_only == 'true' }}
     permissions:
       contents: read
     steps:
@@ -541,7 +630,7 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, factory-pr-auth, factory-complete-tests, factory-actionlint, factory-shellcheck, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [build, build-fork, node-auth, rust-ingress, route-fragment-guard, factory-pr-auth, factory-complete-tests, factory-actionlint, factory-shellcheck, changes, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -550,8 +639,10 @@ jobs:
           echo "Fork build: ${{ needs.build-fork.result }}"
           echo "TypeScript auth: ${{ needs.node-auth.result }}"
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
+          echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
           echo "Factory PR authentication: ${{ needs.factory-pr-auth.result }}"
           echo "Factory tests: ${{ needs.factory-complete-tests.result }}"
+          echo "Changed-files classification: ${{ needs.changes.result }}"
           echo "Workflow syntax: ${{ needs.factory-actionlint.result }}"
           echo "Shell scripts: ${{ needs.factory-shellcheck.result }}"
           echo "Frontend Lint + Typecheck: ${{ needs.frontend-typecheck.result }}"
@@ -564,8 +655,10 @@ jobs:
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
              [ "${{ needs.node-auth.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
+             [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
              [ "${{ needs.factory-pr-auth.result }}" != "success" ] || \
-             [ "${{ needs.factory-complete-tests.result }}" != "success" ] || \
+             { [ "${{ needs.factory-complete-tests.result }}" != "success" ] && [ "${{ needs.factory-complete-tests.result }}" != "skipped" ]; } || \
+             { [ "${{ needs.changes.result }}" != "success" ] && [ "${{ needs.changes.result }}" != "skipped" ]; } || \
              [ "${{ needs.factory-actionlint.result }}" != "success" ] || \
              [ "${{ needs.factory-shellcheck.result }}" != "success" ] || \
              [ "${{ needs.frontend-typecheck.result }}" != "success" ] || \

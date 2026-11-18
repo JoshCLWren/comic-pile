@@ -512,6 +512,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/cbl/[^/]+/adoption\\-commit$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/cbl/[^/]+/reading\\-plans/[^/]+/adoption\\-commit$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET"
@@ -714,6 +728,27 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-plan$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
       "methods": [
         "GET"
@@ -721,7 +756,28 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/reading\\-lists/[0-9]+/cbl\\-candidates$",
       "methods": [
         "GET"
       ],
@@ -745,6 +801,48 @@
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+/reader\\-context$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:markRead$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:markUnread$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues/[^/]+:move$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues:bulkMarkRead$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issues:bulkMarkUnread$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -978,6 +1076,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/[0-9]+$",
       "methods": [
         "GET"
@@ -988,6 +1093,35 @@
       "src": "^/api/v1/threads/[0-9]+/dependencies$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+$",
+      "methods": [
+        "PUT",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/connected$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/exclude$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -1006,9 +1140,86 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/reading\\-orders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/restore$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/set\\-pending$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/check\\-duplicates$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/completed/threads$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/excluded/threads$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/groups:batch$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/reactivate$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/stale$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads:getBlockingInfo$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -1050,6 +1261,83 @@
     },
     {
       "src": "^/api/v2/activity$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/[^/]+/metrics/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/[^/]+/metrics/rating\\-distribution/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/[^/]+/metrics/role\\-stats/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/[^/]+/metrics/series\\-stats/[^/]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/[^/]+/series/[^/]+/issues$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/compare$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/discoveries$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/summaries$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/creators/team\\-chemistry$",
       "methods": [
         "GET"
       ],
@@ -1321,71 +1609,7 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/issues/[^/]+/reader\\-context$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:markRead$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:markUnread$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+:move$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues:bulkMarkRead$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues:bulkMarkUnread$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/sessions/correction\\-examples$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/current/$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1395,47 +1619,6 @@
     {
       "src": "^/api/v1/taste/discoveries$",
       "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+$",
-      "methods": [
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/connected$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/exclude$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1465,49 +1648,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/reading\\-orders$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/restore$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/set\\-pending$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
       "methods": [
         "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1537,135 +1680,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/check\\-duplicates$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/excluded/threads$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/groups:batch$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/reactivate$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/stale$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads:getBlockingInfo$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/bootstrap\\-alias\\-metrics$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/cbl/[^/]+/adoption\\-commit$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/cbl/[^/]+/reading\\-plans/[^/]+/adoption\\-commit$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/collection\\-exclusions$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/collection\\-exclusions/[^/]+$",
-      "methods": [
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-plan$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issue\\-identity/cbl/[^/]+/adoption\\-preview$",
       "methods": [
         "GET",
@@ -1677,30 +1691,6 @@
       "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/reading\\-lists/[^/]+/cbl\\-candidates$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-boundaries$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-boundaries/[^/]+$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1774,14 +1764,6 @@
     },
     {
       "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/traffic\\-metrics$",
       "methods": [
         "GET",
         "OPTIONS"
