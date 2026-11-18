@@ -843,6 +843,45 @@ mod tests {
         assert_eq!(wire["metadata_status"], "complete");
     }
     #[test]
+    fn related_issue_projects_its_own_provider_cover() {
+        let mapped = Mapped {
+            external_id: "300".into(),
+            external_url: None,
+            metadata: json!({
+                "name": "Current issue",
+                "image": {"original_url": "https://images.example/current-300.jpg"}
+            }),
+        };
+        let wire = serde_json::to_value(response(
+            mapped,
+            None,
+            vec![ArcReference {
+                id: 100,
+                reference: json!({"name": "Knightfall"}),
+                total: 1,
+            }],
+            vec![Related {
+                arc_id: 100,
+                external_id: "301".into(),
+                external_url: None,
+                metadata: json!({
+                    "issue_number": "126",
+                    "volume": {"name": "Batman"},
+                    "image": {"small_url": "https://images.example/related-301.jpg"}
+                }),
+                comicpile_matches: vec![],
+            }],
+        ))
+        .unwrap();
+
+        assert_eq!(wire["image_url"], "https://images.example/current-300.jpg");
+        assert_eq!(
+            wire["story_arcs"][0]["related_issues"][0]["image_url"],
+            "https://images.example/related-301.jpg"
+        );
+    }
+
+    #[test]
     fn render_the_existing_issue_intelligence_shape() {
         let mapped = Mapped {
             external_id: "29319".into(),

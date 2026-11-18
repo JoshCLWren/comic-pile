@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import Modal from './Modal'
 import CblComparisonList from './CblComparisonList'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards } from '../hooks/useIssueCards'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import {
   useCblComicvineIssueOccurrences,
   useCblIssueIdentity,
