@@ -271,3 +271,101 @@ def test_run_migration_rehearsal_fails_when_over_budget(monkeypatch: pytest.Monk
 
     with pytest.raises(MigrationRehearsalError, match="safety budget"):
         run_migration_rehearsal("postgresql://u:p@127.0.0.1:1/db", budget_seconds=5.0)
+
+
+def test_run_migration_rehearsal_upgrade_only_mode_skips_downgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Upgrade-only mode upgrades to base, loads fixture, upgrades to head."""
+    calls: list[tuple[str, str]] = []
+
+    def _fake_upgrade(config: object, revision: str) -> None:
+        calls.append(("upgrade", revision))
+
+    def _fake_downgrade(config: object, revision: str) -> None:
+        calls.append(("downgrade", revision))
+
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", _fake_upgrade)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", _fake_downgrade)
+    monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
+
+    engines: list[_FakeEngine] = []
+
+    def _fake_create_engine(url: str) -> _FakeEngine:
+        engine = _FakeEngine()
+        engines.append(engine)
+        return engine
+
+    def _fake_apply(engine: object) -> None:
+        assert isinstance(engine, _FakeEngine)
+        engine.fixture_applied.append(engine)
+
+    monkeypatch.setattr(rehearsal_module, "create_engine", _fake_create_engine)
+
+    result = run_migration_rehearsal(
+        "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
+        alembic_config_path=Path("alembic.ini"),
+        fixture_applier=_fake_apply,
+        base_revision="c44050000002",
+        mode="upgrade-only",
+    )
+
+    assert tuple(step.step for step in result.steps) == (
+        "upgrade_head",
+        "apply_fixture",
+        "upgrade_head",
+    )
+    assert [call[1] for call in calls if call[0] == "upgrade"] == [
+        "c44050000002",
+        "head",
+    ]
+    assert not any(call[0] == "downgrade" for call in calls)
+    assert len(engines[0].fixture_applied) == 1
+    assert engines[0].disposed is True
+
+
+def test_run_migration_rehearsal_upgrade_only_flag_and_skip_downgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """upgrade_only and skip_downgrade both disable the downgrade step."""
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
+
+    result = run_migration_rehearsal(
+        "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
+        alembic_config_path=Path("alembic.ini"),
+        upgrade_only=True,
+    )
+    assert "downgrade_base" not in tuple(step.step for step in result.steps)
+
+    result2 = run_migration_rehearsal(
+        "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test",
+        alembic_config_path=Path("alembic.ini"),
+        skip_downgrade=True,
+    )
+    assert "downgrade_base" not in tuple(step.step for step in result2.steps)
+
+
+def test_main_mode_upgrade_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CLI accepts --mode upgrade-only and --upgrade-only."""
+
+    def _fake_run(*args: object, **kwargs: object) -> MigrationRehearsalResult:
+        assert kwargs.get("mode") == "upgrade-only" or kwargs.get("upgrade_only") is True
+        return MigrationRehearsalResult(
+            final_revision="c85900000001",
+            steps=(RehearsalStepResult(step="upgrade_head", duration_ms=1.0),),
+        )
+
+    monkeypatch.setattr(rehearsal_module, "run_migration_rehearsal", _fake_run)
+    exit_code = rehearsal_module.main(
+        ["--database-url", "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test", "--mode", "upgrade-only"]
+    )
+    assert exit_code == 0
+
+    exit_code2 = rehearsal_module.main(
+        ["--database-url", "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test", "--upgrade-only"]
+    )
+    assert exit_code2 == 0

@@ -36,13 +36,26 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-#: Ordered rehearsal steps executed against the disposable database.
+#: Ordered rehearsal steps executed against the disposable database (full cycle).
 REHEARSAL_STEPS: tuple[str, ...] = (
     "upgrade_head",
     "apply_fixture",
     "downgrade_base",
     "upgrade_head",
 )
+
+#: Ordered rehearsal steps for the upgrade-only mode used by production deploys:
+#: bring the disposable database to the base (production) revision, load the
+#: prod-shaped fixture, then apply the pending migrations up to head. No
+#: downgrade is attempted, because history-preserving migrations are
+#: deliberately irreversible.
+UPGRADE_ONLY_STEPS: tuple[str, ...] = (
+    "upgrade_head",
+    "apply_fixture",
+    "upgrade_head",
+)
+UPGRADE_ONLY_REHEARSAL_STEPS = UPGRADE_ONLY_STEPS
+REHEARSAL_STEPS_UPGRADE_ONLY = UPGRADE_ONLY_STEPS
 
 ALEMBIC_CONFIG_PATH = Path("alembic.ini")
 # Default rollback target: one revision down. A full ``base`` downgrade is not
@@ -135,6 +148,14 @@ def _run_step(step: str, action: Callable[[], object]) -> RehearsalStepResult:
     return RehearsalStepResult(step=step, duration_ms=round(duration_ms, 3), error=error)
 
 
+def _normalize_mode(mode: str) -> str:
+    """Normalize a rehearsal mode name to its canonical form."""
+    normalized = mode.strip().lower().replace("_", "-").replace(" ", "-")
+    if normalized in ("upgradeonly", "upgrade"):
+        normalized = "upgrade-only"
+    return normalized
+
+
 def run_migration_rehearsal(
     database_url: str,
     *,
@@ -142,6 +163,9 @@ def run_migration_rehearsal(
     fixture_applier: Callable[[Engine], None] | None = None,
     base_revision: str = BASE_REVISION,
     budget_seconds: float | None = None,
+    mode: str = "full",
+    upgrade_only: bool = False,
+    skip_downgrade: bool = False,
 ) -> MigrationRehearsalResult:
     """Run the disposable-Postgres migration rehearsal cycle.
 
@@ -155,6 +179,10 @@ def run_migration_rehearsal(
             revision of the migration set under rehearsal, or ``-1``).
         budget_seconds: Optional migration safety budget. When the summed step
             duration exceeds it the rehearsal fails closed.
+        mode: Rehearsal mode (``full`` or ``upgrade-only``).
+        upgrade_only: Alias for ``upgrade-only`` mode.
+        skip_downgrade: Skip the downgrade step (make downgrade-to-base not
+            required).
 
     Returns:
         The per-step results and the final revision reached by the cycle.
@@ -162,6 +190,12 @@ def run_migration_rehearsal(
     Raises:
         MigrationRehearsalError: When any rehearsal step fails.
     """
+    if upgrade_only or skip_downgrade:
+        mode = "upgrade-only"
+    mode = _normalize_mode(mode)
+    if mode not in ("full", "upgrade-only"):
+        raise ValueError(f"unknown migration rehearsal mode: {mode!r}")
+
     steps: list[RehearsalStepResult] = []
     final_revision: str | None = None
     sync_url = _sync_database_url(database_url)
@@ -173,6 +207,12 @@ def run_migration_rehearsal(
         command.upgrade(config, "head")
         final_revision = ScriptDirectory.from_config(config).get_current_head()
 
+    def _upgrade_base() -> None:
+        nonlocal final_revision
+        config = _alembic_config(database_url, alembic_config_path)
+        command.upgrade(config, base_revision)
+        final_revision = ScriptDirectory.from_config(config).get_current_head()
+
     def _downgrade_base() -> None:
         command.downgrade(_alembic_config(database_url, alembic_config_path), base_revision)
 
@@ -182,11 +222,18 @@ def run_migration_rehearsal(
     previous_database_url = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = sync_url
     try:
-        steps.append(_run_step("upgrade_head", _upgrade_head))
-        if fixture_applier is not None and engine is not None:
-            steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
-        steps.append(_run_step("downgrade_base", _downgrade_base))
-        steps.append(_run_step("upgrade_head", _upgrade_head))
+        if mode == "upgrade-only":
+            steps.append(_run_step("upgrade_head", _upgrade_base))
+            if fixture_applier is not None and engine is not None:
+                steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
+            steps.append(_run_step("upgrade_head", _upgrade_head))
+        else:
+            steps.append(_run_step("upgrade_head", _upgrade_head))
+            if fixture_applier is not None and engine is not None:
+                steps.append(_run_step("apply_fixture", lambda: fixture_applier(engine)))
+            if not skip_downgrade:
+                steps.append(_run_step("downgrade_base", _downgrade_base))
+            steps.append(_run_step("upgrade_head", _upgrade_head))
     finally:
         if previous_database_url is None:
             os.environ.pop("DATABASE_URL", None)
@@ -228,6 +275,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Migration revision the rollback step targets (default: -1)",
     )
     parser.add_argument(
+        "--mode",
+        choices=("full", "upgrade-only"),
+        default="full",
+        help="Rehearsal mode: full upgrade/fixture/downgrade/upgrade cycle, or upgrade-only",
+    )
+    parser.add_argument(
+        "--upgrade-only",
+        action="store_true",
+        dest="upgrade_only",
+        help="Alias for --mode upgrade-only",
+    )
+    parser.add_argument(
+        "--skip-downgrade",
+        action="store_true",
+        dest="skip_downgrade",
+        help="Skip the downgrade step (make downgrade-to-base not required)",
+    )
+    parser.add_argument(
         "--budget-seconds",
         type=float,
         default=None,
@@ -262,6 +327,9 @@ def main(argv: list[str] | None = None) -> int:
             fixture_applier=fixture_applier,
             base_revision=args.base_revision,
             budget_seconds=args.budget_seconds,
+            mode=args.mode,
+            upgrade_only=args.upgrade_only,
+            skip_downgrade=args.skip_downgrade,
         )
     except MigrationRehearsalError as error:
         print(f"MIGRATION REHEARSAL FAILED: {error}")
