@@ -129,13 +129,7 @@
     "SeriesMappingPreviewScope"
   ],
   "frontend/src/services/api-tags.ts": [
-    "BulkAssignResponse",
-    "CreateTagResponse",
-    "EffectiveTag",
     "EffectiveTagsResponse",
-    "InheritanceSource",
-    "NearMatch",
-    "Tag",
     "TagListResponse",
     "ThreadIssuesEffectiveTagsResponse"
   ],
@@ -178,7 +172,6 @@
     "ReaderContextResponse",
     "ReaderContextSeries",
     "RollResponse",
-    "SessionSnapshotsResponse",
     "SetCurrentIssueResponse",
     "SnoozeCorrectionInfo"
   ]

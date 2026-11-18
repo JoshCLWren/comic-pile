@@ -39,16 +39,12 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues/creators",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+/issues/creators$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts"
-      ]
+      "exclude_from_inventory": true,
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "operations",

@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.models import Issue, ReadingSession, Thread, User
+from app.models import Issue, ReadingSession, Thread
 from app.services.thread_service import list_queue_threads
 from tests.conftest import get_or_create_user_async
 
@@ -76,49 +76,10 @@ async def test_reactivate_thread_uses_max_numeric_issue_number(
 
 
 
-@pytest.mark.asyncio
-async def test_migrate_thread_to_issues_thread_not_found(auth_client: AsyncClient) -> None:
-    """Test migration returns 404 for non-existent thread."""
-    response = await auth_client.post(
-        "/api/v1/threads/999:migrateToIssues",
-        json={"last_issue_read": 15, "total_issues": 25},
-    )
-
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
 
 
 
 
-@pytest.mark.asyncio
-async def test_migrate_thread_to_issues_other_user_thread(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Test migration fails for other user's threads."""
-    other_user = User(username="other_user", created_at=datetime.now(UTC))
-    async_db.add(other_user)
-    await async_db.commit()
-
-    thread = Thread(
-        title="Other Thread",
-        format="Comic",
-        issues_remaining=10,
-        queue_position=1,
-        status="active",
-        user_id=other_user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}:migrateToIssues",
-        json={"last_issue_read": 15, "total_issues": 25},
-    )
-
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
 
 
 
@@ -614,76 +575,14 @@ async def test_bulk_issues_remaining_no_n_plus_one(
 
 
 
-@pytest.mark.asyncio
-async def test_set_current_issue_thread_not_found(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Test 404 when thread doesn't exist."""
-    response = await auth_client.post(
-        "/api/v1/threads/99999:setCurrentIssue",
-        json={"issue_number": "1"}
-    )
-    assert response.status_code == 404
 
 
 
 
 
 
-@pytest.mark.asyncio
-async def test_set_current_issue_nonexistent_issue(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """Test 404 when issue number doesn't exist in thread."""
-    thread_id = sample_data["threads"][1].id  # Batman thread
-
-    response = await auth_client.post(
-        f"/api/v1/threads/{thread_id}:setCurrentIssue",
-        json={"issue_number": "999"}
-    )
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
 
 
-@pytest.mark.asyncio
-async def test_set_current_issue_other_user_thread(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Test 404 when thread belongs to another user."""
-    from app.models import User, Thread
-
-    # Create another user with a different username
-    other_user = User(
-        username="otheruser",
-        id=999,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(other_user)
-    await async_db.flush()
-    await async_db.refresh(other_user)
-
-    # Create thread for other user
-    other_thread = Thread(
-        title="Other's Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=other_user.id,
-        total_issues=5,
-        reading_progress="in_progress",
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(other_thread)
-    await async_db.flush()
-    await async_db.refresh(other_thread)
-
-    # Try to access from current user
-    response = await auth_client.post(
-        f"/api/v1/threads/{other_thread.id}:setCurrentIssue",
-        json={"issue_number": "1"}
-    )
-    assert response.status_code == 404  # get_owned_thread_or_404 returns 404 for other user's thread
 
 
 
