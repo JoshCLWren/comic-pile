@@ -89,10 +89,10 @@ pub enum ReportType {
 /// Screen diagnostic information (`pixelRatio` alias on the wire).
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticScreen {
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub width: i32,
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub height: i32,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub width: i128,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub height: i128,
     #[serde(rename = "pixelRatio", deserialize_with = "deserialize_lax_f64")]
     pub pixel_ratio: f64,
 }
@@ -100,19 +100,19 @@ pub struct DiagnosticScreen {
 /// Viewport diagnostic information.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticViewport {
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub width: i32,
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub height: i32,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub width: i128,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub height: i128,
 }
 
 /// Scroll position diagnostic information.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticScroll {
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub x: i32,
-    #[serde(deserialize_with = "deserialize_lax_i32")]
-    pub y: i32,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub x: i128,
+    #[serde(deserialize_with = "deserialize_lax_i128")]
+    pub y: i128,
 }
 
 /// Performance timing diagnostic information (both fields optional).
@@ -352,51 +352,126 @@ fn json_error_pos(err: &serde_json::Error) -> usize {
     }
 }
 
-/// Coerce a wire value the way Pydantic v2 lax mode coerces into an `int`
-/// field (`width: int` in the retired schema). Returns the canonical `i32`
-/// value, or `None` when Pydantic would reject the input.
+/// Coerce a wire value the way Pydantic v2 (2.12.5) lax mode coerces into an
+/// `int` field (`width: int` in the retired schema). Returns the canonical
+/// `i128` value, or `None` when Pydantic would reject the input.
 ///
-/// Lax-mode ints accept: booleans (1/0), JSON integers, integral JSON floats,
-/// and decimal strings (optionally signed/whitespace-padded/integer-valued
-/// floats such as `"5.0"`). This is the single source of truth shared by the
-/// 422 validator and the serde deserializer so accepted values can never be
-/// rejected later by `from_value` with a fabricated `value_error`.
-fn pydantic_lax_int(value: &serde_json::Value) -> Option<i32> {
+/// Golden rules verified with the frozen `BugReportCreate` schema + FastAPI
+/// `TestClient` (see the `pydantic_lax_*_golden_table` test):
+///
+/// * booleans -> `1`/`0`; JSON integers -> exact signed/unsigned values;
+///   integral JSON floats -> their integer value.
+/// * decimal strings: an optional sign, ASCII digits (single underscores
+///   allowed between integer digits only), and an optional `.<zeros>` suffix.
+///   Exponents (`"1e3"`), trailing/leading dots (`"5."`, `".5"`), non-zero
+///   fractions (`"5.1"`, `"5.0000000000000001"`) and misplaced underscores
+///   (`"_5"`, `"5_"`, `"1__0"`, `"1.0_0"`) are `int_parsing` errors.
+/// * Python `int` is arbitrary precision; `i128` covers every realistic
+///   diagnostic value (including the `> i32::MAX` cases Pydantic accepts).
+///
+/// This is the single source of truth shared by the 422 validator and the
+/// serde deserializer so accepted values can never be rejected later by
+/// `from_value` with a fabricated `value_error`.
+fn pydantic_lax_int(value: &serde_json::Value) -> Option<i128> {
     if let Some(flag) = value.as_bool() {
-        return Some(i32::from(flag));
+        return Some(i128::from(flag));
     }
     if let Some(number) = value.as_i64() {
-        return i32::try_from(number).ok();
+        return Some(i128::from(number));
+    }
+    if let Some(number) = value.as_u64() {
+        return Some(i128::from(number));
     }
     if let Some(number) = value.as_f64() {
-        return integral_f64_to_i32(number);
+        return integral_f64_to_i128(number);
     }
     if let Some(text) = value.as_str() {
-        let trimmed = text.trim();
-        if let Ok(number) = trimmed.parse::<i64>() {
-            return i32::try_from(number).ok();
-        }
-        if let Ok(number) = trimmed.parse::<f64>() {
-            return integral_f64_to_i32(number);
-        }
+        return parse_pydantic_int_string(text.trim());
     }
     None
 }
 
-fn integral_f64_to_i32(number: f64) -> Option<i32> {
+/// Parse an int string with Pydantic 2.12.5 lax-int rules: optional sign,
+/// digits with underscores only between integer digits, optional all-zero
+/// fractional part. No exponent, hex, or trailing/leading dot.
+fn parse_pydantic_int_string(text: &str) -> Option<i128> {
+    let (sign, rest) = match text.as_bytes().first() {
+        Some(b'+') => (1i128, &text[1..]),
+        Some(b'-') => (-1i128, &text[1..]),
+        _ => (1i128, text),
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let (integer_part, fractional_part) = match rest.split_once('.') {
+        Some((integer, fraction)) => (integer, Some(fraction)),
+        None => (rest, None),
+    };
+    if !digits_with_underscores(integer_part) {
+        return None;
+    }
+    if let Some(fraction) = fractional_part {
+        // Pydantic allows a `.0`/`.00` suffix but no underscores there and no
+        // non-zero digit (so `"5.0000000000000001"` is int_parsing, unlike the
+        // float coercion of the same text).
+        if fraction.is_empty() || !fraction.bytes().all(|byte| byte == b'0') {
+            return None;
+        }
+    }
+    let digits: String = integer_part.chars().filter(|c| *c != '_').collect();
+    Some(sign * digits.parse::<i128>().ok()?)
+}
+
+/// `true` for a non-empty run of ASCII digits whose only separators are single
+/// underscores, each flanked by digits (Pydantic's int underscore rule).
+fn digits_with_underscores(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    if bytes.is_empty() {
+        return false;
+    }
+    let mut previous_was_digit = false;
+    for (index, &byte) in bytes.iter().enumerate() {
+        if byte.is_ascii_digit() {
+            previous_was_digit = true;
+        } else if byte == b'_' {
+            if !previous_was_digit || index + 1 >= bytes.len() || !bytes[index + 1].is_ascii_digit()
+            {
+                return false;
+            }
+            previous_was_digit = false;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+fn integral_f64_to_i128(number: f64) -> Option<i128> {
     if number.is_finite()
         && number.fract() == 0.0
-        && number >= f64::from(i32::MIN)
-        && number <= f64::from(i32::MAX)
+        && number >= i128::MIN as f64
+        && number <= i128::MAX as f64
     {
-        Some(number as i32)
+        Some(number as i128)
     } else {
         None
     }
 }
 
-/// Coerce a wire value the way Pydantic v2 lax mode coerces into a `float`
-/// field (`pixelRatio: float`, `domContentLoaded: float | None`, ...).
+/// Remove underscores from a float string the way Pydantic 2.12.5 does: a
+/// leading `_`, trailing `_`, or consecutive `__` is `float_parsing`, but an
+/// underscore next to `.`, `e`, `+` or `-` is removed (`"1_.0"` -> `1.0`,
+/// `"1e1_0"` -> `1e10`). Compare [`digits_with_underscores`] for int fields.
+fn strip_float_underscores(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    if bytes.first() == Some(&b'_') || bytes.last() == Some(&b'_') || text.contains("__") {
+        return None;
+    }
+    Some(text.replace('_', ""))
+}
+
+/// Coerce a wire value the way Pydantic v2 (2.12.5) lax mode coerces into a
+/// `float` field (`pixelRatio: float`, `domContentLoaded: float | None`, ...).
 fn pydantic_lax_float(value: &serde_json::Value) -> Option<f64> {
     if let Some(flag) = value.as_bool() {
         return Some(if flag { 1.0 } else { 0.0 });
@@ -405,12 +480,13 @@ fn pydantic_lax_float(value: &serde_json::Value) -> Option<f64> {
         return Some(number);
     }
     if let Some(text) = value.as_str() {
-        return text.trim().parse::<f64>().ok();
+        let cleaned = strip_float_underscores(text.trim())?;
+        return cleaned.parse::<f64>().ok();
     }
     None
 }
 
-fn deserialize_lax_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+fn deserialize_lax_i128<'de, D>(deserializer: D) -> Result<i128, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -1728,6 +1804,152 @@ mod tests {
             !types.contains(&"value_error"),
             "no fabricated fallback: {detail}"
         );
+    }
+
+    /// Golden table captured empirically from the retired Pydantic 2.12.5
+    /// `BugReportCreate` schema (commit f0d6b24e6) with the frozen FastAPI
+    /// `create_bug_report` handler signature and `TestClient`. These are the
+    /// exact accept/reject + coercion + 422 `type` diagnostics that production
+    /// returned for diagnostic numeric fields; the native port must match.
+    #[test]
+    fn pydantic_numeric_coercion_golden_table() {
+        fn int_outcome(raw: serde_json::Value) -> Result<i128, String> {
+            let body = serde_json::json!({
+                "title": "Bug", "description": "Details",
+                "diagnostics": {
+                    "timestamp": "t", "url": "u", "userAgent": "a",
+                    "screen": {"width": raw, "height": 1, "pixelRatio": 1.0},
+                    "viewport": {"width": 1, "height": 2},
+                    "scroll": {"x": 0, "y": 1},
+                    "performance": {}, "errors": []
+                }
+            });
+            let bytes = serde_json::to_vec(&body).expect("body");
+            match parse_request(&bytes) {
+                Ok(request) => Ok(request.diagnostics.expect("diagnostics").screen.width),
+                Err(error) => {
+                    assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+                    let detail = error.detail_json();
+                    assert_eq!(
+                        detail["detail"][0]["loc"],
+                        serde_json::json!(["body", "diagnostics", "screen", "width"])
+                    );
+                    Err(detail["detail"][0]["type"]
+                        .as_str()
+                        .expect("type")
+                        .to_string())
+                }
+            }
+        }
+
+        fn float_outcome(raw: serde_json::Value) -> Result<f64, String> {
+            let body = serde_json::json!({
+                "title": "Bug", "description": "Details",
+                "diagnostics": {
+                    "timestamp": "t", "url": "u", "userAgent": "a",
+                    "screen": {"width": 1, "height": 1, "pixelRatio": raw},
+                    "viewport": {"width": 1, "height": 2},
+                    "scroll": {"x": 0, "y": 1},
+                    "performance": {}, "errors": []
+                }
+            });
+            let bytes = serde_json::to_vec(&body).expect("body");
+            match parse_request(&bytes) {
+                Ok(request) => Ok(request.diagnostics.expect("diagnostics").screen.pixel_ratio),
+                Err(error) => {
+                    assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+                    let detail = error.detail_json();
+                    assert_eq!(
+                        detail["detail"][0]["loc"],
+                        serde_json::json!(["body", "diagnostics", "screen", "pixelRatio"])
+                    );
+                    Err(detail["detail"][0]["type"]
+                        .as_str()
+                        .expect("type")
+                        .to_string())
+                }
+            }
+        }
+
+        // (raw wire value, Pydantic outcome). `Ok` is the exact coerced value;
+        // `Err` is the exact 422 `type` Pydantic emitted.
+        let int_cases: Vec<(serde_json::Value, Result<i128, &str>)> = vec![
+            // Previously over-accepted by Rust `parse::<f64>()`: Pydantic -> int_parsing.
+            (serde_json::json!("1e3"), Err("int_parsing")),
+            (serde_json::json!("1E3"), Err("int_parsing")),
+            (serde_json::json!("1e0"), Err("int_parsing")),
+            (serde_json::json!("5."), Err("int_parsing")),
+            (serde_json::json!("5.0000000000000001"), Err("int_parsing")),
+            (serde_json::json!("1e-3"), Err("int_parsing")),
+            // Integral decimal strings are accepted by Pydantic int.
+            (serde_json::json!("5.0"), Ok(5)),
+            (serde_json::json!("5.00"), Ok(5)),
+            (serde_json::json!("-5.0"), Ok(-5)),
+            (serde_json::json!("+5.0"), Ok(5)),
+            // Underscores accepted only between integer digits.
+            (serde_json::json!("1_000"), Ok(1000)),
+            (serde_json::json!("1_0.0"), Ok(10)),
+            (serde_json::json!("+1_0"), Ok(10)),
+            (serde_json::json!("-1_0"), Ok(-10)),
+            (serde_json::json!("  1_000  "), Ok(1000)),
+            (serde_json::json!("_5"), Err("int_parsing")),
+            (serde_json::json!("5_"), Err("int_parsing")),
+            (serde_json::json!("1__0"), Err("int_parsing")),
+            (serde_json::json!("1_.0"), Err("int_parsing")),
+            (serde_json::json!("1._0"), Err("int_parsing")),
+            (serde_json::json!("1.0_0"), Err("int_parsing")),
+            // Beyond i32: Python int is arbitrary precision.
+            (serde_json::json!(2147483648i64), Ok(2147483648)),
+            (serde_json::json!(10000000000i64), Ok(10000000000)),
+            (serde_json::json!(9007199254740993i64), Ok(9007199254740993)),
+            (
+                serde_json::json!("9223372036854775808"),
+                Ok(9223372036854775808),
+            ),
+            (
+                serde_json::json!("1000000000000000000000000000000"),
+                Ok(1000000000000000000000000000000),
+            ),
+            // Booleans, JSON integral floats and fractional floats.
+            (serde_json::json!(true), Ok(1)),
+            (serde_json::json!(false), Ok(0)),
+            (serde_json::json!(5.0), Ok(5)),
+            (serde_json::json!(5.5), Err("int_from_float")),
+        ];
+        for (raw, expected) in int_cases {
+            let actual = int_outcome(raw.clone());
+            assert_eq!(actual, expected.map_err(str::to_string), "int raw={raw}");
+        }
+
+        let float_cases: Vec<(serde_json::Value, Result<f64, &str>)> = vec![
+            // Previously rejected by Rust: Pydantic float accepts all of these.
+            (serde_json::json!("1e3"), Ok(1000.0)),
+            (serde_json::json!("1E3"), Ok(1000.0)),
+            (serde_json::json!("5."), Ok(5.0)),
+            (serde_json::json!("  2.5  "), Ok(2.5)),
+            (serde_json::json!("1_000"), Ok(1000.0)),
+            (serde_json::json!("1_0.0"), Ok(10.0)),
+            (serde_json::json!("1_000.5"), Ok(1000.5)),
+            (serde_json::json!("1_.0"), Ok(1.0)),
+            (serde_json::json!("1e1_0"), Ok(10_000_000_000.0)),
+            (serde_json::json!("inf"), Ok(f64::INFINITY)),
+            (serde_json::json!("nan"), Ok(f64::NAN)),
+            // Misplaced underscores remain float_parsing.
+            (serde_json::json!("_5"), Err("float_parsing")),
+            (serde_json::json!("5_"), Err("float_parsing")),
+            (serde_json::json!("1__0"), Err("float_parsing")),
+            (serde_json::json!("0x10"), Err("float_parsing")),
+        ];
+        for (raw, expected) in float_cases {
+            let actual = float_outcome(raw.clone());
+            match expected {
+                Ok(want) if want.is_nan() => {
+                    assert!(actual.expect("nan").is_nan(), "float raw={raw}");
+                }
+                Ok(want) => assert_eq!(actual, Ok(want), "float raw={raw}"),
+                Err(kind) => assert_eq!(actual, Err(kind.to_string()), "float raw={raw}"),
+            }
+        }
     }
 
     #[test]

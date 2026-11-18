@@ -8862,25 +8862,19 @@ export interface components {
         };
         /** @description Screen diagnostic information (`pixelRatio` alias on the wire). */
         DiagnosticScreen: {
-            /** Format: int32 */
             height: number;
             /** Format: double */
             pixelRatio: number;
-            /** Format: int32 */
             width: number;
         };
         /** @description Scroll position diagnostic information. */
         DiagnosticScroll: {
-            /** Format: int32 */
             x: number;
-            /** Format: int32 */
             y: number;
         };
         /** @description Viewport diagnostic information. */
         DiagnosticViewport: {
-            /** Format: int32 */
             height: number;
-            /** Format: int32 */
             width: number;
         };
         DiceCommandReceipt: {
