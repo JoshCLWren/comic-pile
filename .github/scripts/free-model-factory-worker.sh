@@ -956,9 +956,20 @@ acceptance_policy="$(dirname "$TRUSTED_REVIEW_CONTROLLER")/factory_issue_accepta
 acceptance_mission="$(factory_issue_acceptance_mission "$NUMBER" "$EXPECTED_HEAD")"
 if [[ "$verdict" == 'approve' ]] \
   && ! factory_has_acceptance_report "$sanitized_review_log" "$acceptance_policy" "$acceptance_mission"; then
-  log "review returned READY without a parseable acceptance report; requesting bounded evidence recovery"
-  # A bare READY cannot be submitted to the controller if recovery times out.
-  verdict=''
+  # PR #5385 reproduced a full 16-item report with "met"/"partial" evidence
+  # and a contradictory READY. That is an actionable review rejection, not
+  # missing output: route it to repair instead of burning another review lane.
+  incomplete_acceptance="$(factory_incomplete_acceptance_report \
+    "$sanitized_review_log" "$acceptance_policy" "$acceptance_mission" || true)"
+  if [[ -n "$incomplete_acceptance" ]]; then
+    log "semantic_review_blocked: $incomplete_acceptance"
+    append_wrapper_gate_reason "$incomplete_acceptance"
+    verdict='repair'
+  else
+    log "review returned READY without a parseable acceptance report; requesting bounded evidence recovery"
+    # A bare READY cannot be submitted to the controller if recovery times out.
+    verdict=''
+  fi
 fi
 recovery_attempted=0
 recovery_status=0
