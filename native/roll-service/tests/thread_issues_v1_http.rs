@@ -712,6 +712,10 @@ async fn migrate_to_issues_creates_issues_and_reports_thread() {
         json!({"last_issue_read": 1, "total_issues": 0}),
         json!({"last_issue_read": 1}),
         json!({}),
+        // Bounded before generate_series: an uncapped total would insert
+        // billions of rows.
+        json!({"last_issue_read": 1, "total_issues": 10001}),
+        json!({"last_issue_read": 0, "total_issues": 2147483647}),
     ] {
         let (status, body) = send(&state, post(&fresh_path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -829,6 +833,21 @@ async fn migrate_to_issues_simple_infers_total_and_marks_earlier_read() {
         .unwrap()
         .get(0);
     assert_eq!(total, None);
+
+    // The inferred total is capped before generate_series runs.
+    let (status, body) = send(
+        &state,
+        post(
+            &other_path,
+            &token,
+            &csrf,
+            Some(json!({"issue_number": "99999999999999999999"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["detail"], "Total issues would exceed maximum of 10000");
+    assert!(positions(&conn, other).await.is_empty());
 
     for bad in [
         json!({"issue_number": ""}),
@@ -1217,6 +1236,147 @@ async fn set_current_issue_rejects_inactive_and_untracked_threads() {
         .unwrap()
         .get(0);
     assert_eq!(sessions, 0);
+}
+
+/// Queue advisory-lock namespace mirrored from `queue::QUEUE_LOCK_NAMESPACE`
+/// (pub(crate)); used to hold the queue lock while racing two writers.
+const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+
+async fn setup_user_pool8(
+    prefix: &str,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
+    let url = comicpile_roll_service::test_support::database_url().await;
+    let state = Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
+                "RUST_ROLL_POOL_SIZE" => Some("8".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    (state, token, csrf, user_id, guard)
+}
+
+async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM pg_locks \
+         WHERE locktype = 'advisory' AND NOT granted \
+           AND classid::int = $1 AND objid::int = $2",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+/// Two writers on the same thread (reorder + setCurrentIssue) must serialize
+/// on the per-reader queue advisory lock instead of deadlocking on the thread
+/// row lock (rust-write-lock-order rule). The interleaving is forced: a
+/// holder keeps the queue lock while both requests queue on it.
+#[tokio::test]
+async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
+    let (state, token, csrf, user_id, _guard) = setup_user_pool8("tiss-race").await;
+    let mut holder = state.pool.get().await.unwrap();
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "Race", 4, 1).await;
+    let mut ids = Vec::new();
+    for (n, number) in ["1", "2", "3", "4"].iter().enumerate() {
+        ids.push(issue(&conn, thread, number, n as i32 + 1, "unread").await);
+    }
+    conn.execute(
+        "UPDATE threads SET total_issues = 4, reading_progress = 'not_started' WHERE id = $1",
+        &[&thread],
+    )
+    .await
+    .unwrap();
+
+    let hold = holder.transaction().await.unwrap();
+    hold.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .unwrap();
+
+    let reorder = {
+        let state = state.clone();
+        let token = token.clone();
+        let csrf = csrf.clone();
+        let reversed: Vec<i32> = ids.iter().rev().copied().collect();
+        tokio::spawn(async move {
+            send(
+                &state,
+                post(
+                    &format!("/api/v1/threads/{thread}/issues:reorder"),
+                    &token,
+                    &csrf,
+                    Some(json!({"issue_ids": reversed})),
+                ),
+            )
+            .await
+        })
+    };
+    // Wait until the reorder writer is parked on the queue lock.
+    for _ in 0..200 {
+        if queue_lock_waiters(&conn, user_id).await >= 1 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(queue_lock_waiters(&conn, user_id).await >= 1);
+    let set_current = {
+        let state = state.clone();
+        let token = token.clone();
+        let csrf = csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                post(
+                    &format!("/api/v1/threads/{thread}:setCurrentIssue"),
+                    &token,
+                    &csrf,
+                    Some(json!({"issue_number": "2"})),
+                ),
+            )
+            .await
+        })
+    };
+    for _ in 0..200 {
+        if queue_lock_waiters(&conn, user_id).await >= 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(queue_lock_waiters(&conn, user_id).await >= 2);
+    hold.commit().await.unwrap();
+
+    let (r, s) = tokio::join!(reorder, set_current);
+    let (r_status, r_body) = r.expect("reorder task");
+    let (s_status, s_body) = s.expect("setCurrentIssue task");
+    assert_eq!(
+        r_status,
+        StatusCode::NO_CONTENT,
+        "reorder deadlocked or errored: {r_status} {r_body:?}"
+    );
+    assert_eq!(
+        s_status,
+        StatusCode::OK,
+        "setCurrentIssue deadlocked or errored: {s_status} {s_body:?}"
+    );
+    assert_eq!(s_body["issue_id"], ids[1]);
 }
 
 #[tokio::test]

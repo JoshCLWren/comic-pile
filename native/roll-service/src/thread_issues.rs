@@ -279,6 +279,11 @@ fn parse_migrate_body(body: &[u8]) -> Result<(i32, i32), ApiError> {
     if last < 0 || total < 1 {
         return Err(validation_failed());
     }
+    // Bound the request-supplied count before it reaches generate_series:
+    // an uncapped total would ask PostgreSQL to insert billions of rows.
+    if total > MAX_ISSUES as i32 {
+        return Err(validation_failed());
+    }
     Ok((last, total))
 }
 
@@ -548,6 +553,12 @@ async fn lock_owned_thread(
     user_id: i32,
     thread_id: i32,
 ) -> Result<LockedThread, ApiError> {
+    // Writer lock order: the per-reader queue advisory lock is always taken
+    // BEFORE any thread/issue row lock, so sibling writers serialize on it
+    // instead of deadlocking on row locks (rust-write-lock-order rule).
+    // Re-acquiring it in the same transaction (e.g. after
+    // `renormalize_queue_positions`) is a no-op.
+    queue::lock_queue(tx, user_id).await?;
     let row = tx
         .query_opt(
             "SELECT status, queue_position, total_issues, issues_remaining, next_unread_issue_id \
@@ -1238,12 +1249,23 @@ pub(crate) async fn migrate_to_issues(
     .await
     .map_err(insert_error)?;
     if last_read < total {
-        let next_number = (last_read + 1).to_string();
+        // `total` is capped at MAX_ISSUES by parse_migrate_body and
+        // last_read <= total, so both stay small; checked arithmetic keeps
+        // that invariant explicit instead of relying on it.
+        let next = last_read
+            .checked_add(1)
+            .and_then(|next| {
+                total
+                    .checked_sub(last_read)
+                    .map(|remaining| (next, remaining))
+            })
+            .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
+        let (next_read, remaining) = next;
         tx.execute(
             "UPDATE threads SET total_issues = $2, reading_progress = 'in_progress', \
              next_unread_issue_id = (SELECT id FROM issues WHERE thread_id = $1 AND issue_number = $3), \
              issues_remaining = $4 WHERE id = $1",
-            &[&thread_id, &total, &next_number, &(total - last_read)],
+            &[&thread_id, &total, &next_read.to_string(), &remaining],
         )
         .await
         .map_err(db::query_error)?;
@@ -1299,13 +1321,21 @@ pub(crate) async fn migrate_to_issues_simple(
                  Please add it via Edit Thread first."
             )));
         };
-        let total = number + i128::from((thread.issues_remaining - 1).max(0));
-        if total > i128::from(i32::MAX) {
-            return Err(ApiError::Internal("Internal Server Error".to_string()));
+        // Checked arithmetic on the arbitrary-precision issue number, then a
+        // practical cap before the total reaches generate_series.
+        let total = number
+            .checked_add(i128::from((thread.issues_remaining - 1).max(0)))
+            .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
+        if total > MAX_ISSUES as i128 {
+            return Err(ApiError::BadRequest(format!(
+                "Total issues would exceed maximum of {MAX_ISSUES}"
+            )));
         }
         if total >= 1 {
-            let total = total as i32;
-            let read_below = i32::try_from(number).unwrap_or(i32::MAX);
+            let total = i32::try_from(total)
+                .map_err(|_| ApiError::Internal("Internal Server Error".to_string()))?;
+            let read_below = i32::try_from(number)
+                .map_err(|_| ApiError::Internal("Internal Server Error".to_string()))?;
             tx.execute(
                 "INSERT INTO issues (thread_id, issue_number, status, read_at, created_at, position) \
                  SELECT $1, n::text, CASE WHEN n < $2 THEN 'read' ELSE 'unread' END, \
