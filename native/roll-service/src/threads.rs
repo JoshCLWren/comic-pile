@@ -165,7 +165,7 @@ fn normalize_search(search: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-fn option_e_enabled() -> bool {
+pub(crate) fn option_e_enabled() -> bool {
     let enabled = std::env::var("OPTION_E_ENABLED")
         .map(|value| {
             matches!(
@@ -178,6 +178,53 @@ fn option_e_enabled() -> bool {
         && std::env::var("OPTION_E_APPROVED_PREVIEW")
             .map(|value| !value.trim().is_empty())
             .unwrap_or(false)
+}
+
+/// Canonical SQL expression that groups blocked rows last in display order.
+///
+/// The Queue list, the single-thread detail and the pending Roll offer all use
+/// this expression, so the owner-approved Option E preview (evaluated reading
+/// eligibility) cannot drift from the stored `is_blocked` grouping. `bool_param`
+/// and `ids_param` are the calling statement's bind placeholders for the
+/// Option E flag and the sorted eligible-thread id array.
+pub(crate) fn blocked_order_expr(bool_param: &str, ids_param: &str) -> String {
+    format!(
+        "(CASE WHEN {bool_param}::boolean THEN NOT (t.id = ANY({ids_param}::int[])) ELSE t.is_blocked END)"
+    )
+}
+
+/// Canonical 1-based display position for one thread as an SQL scalar expression.
+///
+/// This is the same dense `row_number()` ranking the Queue list uses over the
+/// caller's active queue. It yields SQL NULL when `thread_expr` is not in that
+/// queue (for example a completed thread), so callers must fall back to the
+/// stored `queue_position` instead of reading NULL into an integer.
+pub(crate) fn display_position_expr(
+    user_expr: &str,
+    thread_expr: &str,
+    bool_param: &str,
+    ids_param: &str,
+) -> String {
+    let blocked = blocked_order_expr(bool_param, ids_param);
+    format!(
+        "(SELECT ranked.display_position FROM (
+             SELECT t.id,
+                    row_number() OVER (ORDER BY {blocked}, t.queue_position, t.id)::int AS display_position
+             FROM threads t
+             WHERE t.user_id = {user_expr} AND t.status = 'active'
+         ) ranked WHERE ranked.id = {thread_expr})"
+    )
+}
+
+/// Sorted Option E eligible thread ids for the canonical block-grouping
+/// expression, built from the same projection the Queue list uses.
+pub(crate) fn eligible_candidate_ids(
+    validated: &crate::reading_constraints::ValidatedReadingInputs,
+) -> Result<Vec<i32>, ApiError> {
+    let projection = OptionEProjection::build(validated)?;
+    let mut ids: Vec<i32> = projection.candidates.into_iter().collect();
+    ids.sort_unstable();
+    Ok(ids)
 }
 
 fn encode_cursor(cursor: &QueueCursor) -> String {
@@ -397,41 +444,49 @@ pub async fn get_thread_detail(
     claims: VerifiedAccessClaims,
     axum::extract::Path(thread_id): axum::extract::Path<i32>,
 ) -> Result<Json<ThreadDetailResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-    let row = connection
-        .query_opt(
-            "WITH auth AS (
+    // The detail must rank by the same blocked expression as the Queue list,
+    // otherwise a stored `is_blocked` flag that disagrees with the Option E
+    // evaluation gives the two views different positions for the same thread.
+    let option_e = option_e_enabled();
+    let mut candidates: Vec<i32> = Vec::new();
+    if option_e {
+        let user = crate::auth::authenticate_claims(&state, &claims).await?;
+        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+        candidates = eligible_candidate_ids(&validated)?;
+    }
+    let position = display_position_expr("(SELECT user_id FROM auth)", "$4", "$5", "$6");
+    let sql = format!(
+        "WITH auth AS (
                  SELECT u.id AS user_id
                  FROM users u
                  WHERE u.username = $1
                    AND COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) <= $3
                    AND NOT EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2)
-             ),
-             queue_disp AS (
-                 SELECT t.id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS display_position
-                 FROM threads t
-                 WHERE t.user_id = (SELECT user_id FROM auth)
-                   AND t.status = 'active'
-                   AND t.queue_position >= 1
-             )
-             SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
-                    t.status, t.last_rating,
-                    to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
-                    t.notes, t.is_test, t.is_blocked,
-                    to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
-                    t.total_issues, t.reading_progress,
-                    t.next_unread_issue_id, t.manual_creator_credits::text,
-                    (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id),
-                    qd.display_position AS computed_position
-             FROM threads t
-             JOIN auth ON auth.user_id = t.user_id
-             LEFT JOIN queue_disp qd ON qd.id = t.id
-             WHERE t.id = $4",
+         )
+         SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                t.status, t.last_rating,
+                to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                t.notes, t.is_test, t.is_blocked,
+                to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                t.total_issues, t.reading_progress,
+                t.next_unread_issue_id, t.manual_creator_credits::text,
+                (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id),
+                {position} AS computed_position
+         FROM threads t
+         JOIN auth ON auth.user_id = t.user_id
+         WHERE t.id = $4",
+    );
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            &sql,
             &[
                 &claims.username(),
                 &claims.jti(),
                 &claims.expected_epoch()?,
                 &thread_id,
+                &option_e,
+                &candidates,
             ],
         )
         .await
@@ -441,14 +496,19 @@ pub async fn get_thread_detail(
         "Thread not found".to_string(),
     ))?;
 
-    let computed_position: i32 = row.get(18);
+    // The canonical ranking is NULL for completed / non-queued threads, which
+    // are reached through the owning read but are not in the active queue.
+    // Keep their stored position rather than panicking on a NULL -> i32 read.
+    let computed_position: Option<i32> = row.get(17);
+    let stored_position: i32 = row.get(4);
+    let queue_position = computed_position.unwrap_or(stored_position);
 
     Ok(Json(ThreadDetailResponse {
         id: row.get(0),
         title: row.get(1),
         format: normalize_format(row.get(2)),
         issues_remaining: row.get(3),
-        queue_position: computed_position,
+        queue_position,
         status: row.get(5),
         last_rating: row.get(6),
         last_activity_at: row.get(7),
@@ -1118,7 +1178,7 @@ async fn query_page(
 ) -> Result<(Option<AuthRow>, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
-    let blocked = "(CASE WHEN $7::boolean THEN NOT (t.id = ANY($8::int[])) ELSE t.is_blocked END)";
+    let blocked = blocked_order_expr("$7", "$8");
     let order = match sort {
         "title" => "t.title, t.id".to_string(),
         "created" => "t.created_at DESC, t.id DESC".to_string(),
@@ -1137,7 +1197,7 @@ async fn query_page(
         )
         .replace("{order}", &order)
         .replace("{cursor}", &cursor_sql)
-        .replace("{blocked}", blocked)
+        .replace("{blocked}", &blocked)
         .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
         .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
         .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
