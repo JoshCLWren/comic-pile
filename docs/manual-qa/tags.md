@@ -1,5 +1,7 @@
 # Tags
 
+**Owner ruling (2026-11-18, [#5436](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994216025)):** Tags page and ComicVine-derived tags are kept.
+
 Tags can be private or global. They can be assigned to supported threads, issues, and reading plans; effective issue tags include allowed inherited assignments.
 
 ## MQA-TAG-001: Create with one of 32 colors
@@ -40,7 +42,7 @@ Tags can be private or global. They can be assigned to supported threads, issues
 
 ## MQA-TAG-006: Dedicated tag management page
 
-**Status:** Contract unchanged. No `/tags` route exists on main as of 2026-11-18 and the owner has not decided to drop it: [#5437](https://github.com/JoshCLWren/comic-pile/issues/5437) says "Add a Tags page ... or record why the dialogs are enough". Until the owner records that decision this ID stays active (not retired).
+**Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994216025)):** Tags page and ComicVine-derived tags are kept; nothing is deleted under #5436 or #5437. All MQA-TAG IDs are current (not retired). No `/tags` route exists on main as of 2026-11-18, so this expectation is currently unmet (see the report BUG list).
 
 **Test:** Once built, visit `/tags`, search the library's tags, create/edit/delete a permitted tag, then use an inline tag editor.
 
