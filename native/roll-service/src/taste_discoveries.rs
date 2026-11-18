@@ -906,7 +906,7 @@ mod tests {
                 token_type: "access",
                 pc: 0,
             },
-            &EncodingKey::from_secret(b"synthetic-secret"),
+            &EncodingKey::from_secret(b"synthetic-secret").unwrap(),
         )
         .unwrap();
 
