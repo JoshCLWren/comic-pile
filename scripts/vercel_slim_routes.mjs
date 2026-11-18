@@ -38,7 +38,8 @@ export function parseSegments(src) {
       for (let i = 0; i < part.length; i++) {
         const ch = part[i];
         if (ch === '\\') {
-          if (i + 1 >= part.length) return null;
+          // Only escaped punctuation is a plain literal; `\d`, `\w`, ... are classes.
+          if (i + 1 >= part.length || /[A-Za-z0-9_]/.test(part[i + 1])) return null;
           literal += part[++i];
         } else if (REGEX_META.has(ch)) {
           return null;

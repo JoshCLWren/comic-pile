@@ -544,7 +544,8 @@ def _parse_segments(src: str) -> list[Segment] | None:
             while i < len(part):
                 ch = part[i]
                 if ch == "\\":
-                    if i + 1 >= len(part):
+                    # Only escaped punctuation is a plain literal; \d, \w, ... are classes.
+                    if i + 1 >= len(part) or re.fullmatch(r"[A-Za-z0-9_]", part[i + 1]):
                         return None
                     i += 1
                     literal += part[i]

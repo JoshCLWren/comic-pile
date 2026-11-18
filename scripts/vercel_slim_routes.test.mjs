@@ -104,3 +104,12 @@ test('segment unifier proves disjointness and treats unknown shapes as overlappi
   assert.equal(parseSegments('^/api/v1/identity\\-inbox/[^/]+$').length, 5);
   assert.equal(routesMayOverlap(route('^/api/a$', ['GET']), route('^/api/a$', ['POST'])), false);
 });
+
+test('character-class escapes are unknown shapes, so the roll route is kept', () => {
+  const roll = {src: '^/api/a/\\d$', methods: ['GET'], dest: ROLL};
+  const python = {src: '^/api/a/5$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
+  assert.equal(parseSegments(roll.src), null);
+  assert.equal(routesMayOverlap(roll, python), true);
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  assert.deepEqual(slimNativeRollRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
+});
