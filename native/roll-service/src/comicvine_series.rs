@@ -310,9 +310,8 @@ async fn persist_positions_and_issues(
         .query(
             "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
              SELECT $1, v.issue_number, v.position, 'unread', now() \
-             FROM jsonb_to_recordset($2::jsonb) WITH ORDINALITY \
-                  AS v(issue_number text, position integer, ordinal bigint) \
-             ORDER BY v.ordinal \
+             FROM jsonb_to_recordset($2::jsonb) \
+                  AS v(issue_number text, position integer) \
              RETURNING id, issue_number",
             &[&thread_id, &input],
         )
