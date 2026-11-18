@@ -559,14 +559,13 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
+    await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests[0]?.url).toBe('GET /api/v1/reading-order-groups/')
-    expect(ledger.requests[1]?.url).toBe('GET /api/v2/issues/cards')
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(3))
-    expect(ledger.requests[2]?.url).toBe('GET /api/v2/threads?page_size=100')
+    await waitFor(() => expect(ledger.requests).toHaveLength(2))
+    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
   })
 })
