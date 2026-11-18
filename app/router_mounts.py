@@ -122,13 +122,6 @@ def _register_comicvine_resolution(app: FastAPI) -> None:
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
 
 
-def _register_creators(app: FastAPI) -> None:
-    """Register creator routers (absolute ``/api/v1`` paths)."""
-    from app.api import creators
-
-    app.include_router(creators.router, tags=["creators"])
-
-
 def _register_taste(app: FastAPI) -> None:
     """Register taste-discovery routers."""
     from app.api import taste
@@ -206,7 +199,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         frozenset({"comicvine"}),
         _register_comicvine_resolution,
     ),
-    RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount(
         "reading-orders",

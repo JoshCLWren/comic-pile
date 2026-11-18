@@ -224,6 +224,87 @@
     "name": "get_creator_summaries_endpoint"
   },
   {
+    "path": "/api/v1/creators/compare",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "compare_creators_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/team-chemistry",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_team_chemistry_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/discoveries",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_discoveries_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_issues_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_detail_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_metric_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_rating_distribution_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_role_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
+    "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_series_drilldown_endpoint",
+    "same_path_replacement": false
+  },
+  {
     "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
     "methods": [
       "POST"
