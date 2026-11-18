@@ -80,35 +80,55 @@ pub enum ReportType {
     Feature,
 }
 
+// Numeric fields use lax deserializers (see `pydantic_lax_int` /
+// `pydantic_lax_float`) so the values Pydantic v2 accepts for `int`/`float`
+// (e.g. `"5"`, `true`, `5.0`, `" 1.5 "`) are coerced into the declared Rust
+// types instead of being rejected by serde *after* validation already accepted
+// them. Serialization and `ToSchema` are unchanged: a plain `//` comment keeps
+// the generated OpenAPI description identical to the retired Python handler.
 /// Screen diagnostic information (`pixelRatio` alias on the wire).
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticScreen {
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub width: i32,
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub height: i32,
-    #[serde(rename = "pixelRatio")]
+    #[serde(rename = "pixelRatio", deserialize_with = "deserialize_lax_f64")]
     pub pixel_ratio: f64,
 }
 
 /// Viewport diagnostic information.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticViewport {
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub width: i32,
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub height: i32,
 }
 
 /// Scroll position diagnostic information.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticScroll {
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub x: i32,
+    #[serde(deserialize_with = "deserialize_lax_i32")]
     pub y: i32,
 }
 
 /// Performance timing diagnostic information (both fields optional).
 #[derive(Debug, Clone, Default, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DiagnosticPerformance {
-    #[serde(rename = "domContentLoaded", default)]
+    #[serde(
+        rename = "domContentLoaded",
+        default,
+        deserialize_with = "deserialize_lax_opt_f64"
+    )]
     pub dom_content_loaded: Option<f64>,
-    #[serde(rename = "loadComplete", default)]
+    #[serde(
+        rename = "loadComplete",
+        default,
+        deserialize_with = "deserialize_lax_opt_f64"
+    )]
     pub load_complete: Option<f64>,
 }
 
@@ -332,17 +352,95 @@ fn json_error_pos(err: &serde_json::Error) -> usize {
     }
 }
 
-fn validate_int_field(loc: &[&str], value: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
-    let ok = if value.is_boolean() || value.is_i64() {
-        true
-    } else if let Some(f) = value.as_f64() {
-        f.fract() == 0.0
-    } else if let Some(s) = value.as_str() {
-        s.parse::<i64>().is_ok()
+/// Coerce a wire value the way Pydantic v2 lax mode coerces into an `int`
+/// field (`width: int` in the retired schema). Returns the canonical `i32`
+/// value, or `None` when Pydantic would reject the input.
+///
+/// Lax-mode ints accept: booleans (1/0), JSON integers, integral JSON floats,
+/// and decimal strings (optionally signed/whitespace-padded/integer-valued
+/// floats such as `"5.0"`). This is the single source of truth shared by the
+/// 422 validator and the serde deserializer so accepted values can never be
+/// rejected later by `from_value` with a fabricated `value_error`.
+fn pydantic_lax_int(value: &serde_json::Value) -> Option<i32> {
+    if let Some(flag) = value.as_bool() {
+        return Some(i32::from(flag));
+    }
+    if let Some(number) = value.as_i64() {
+        return i32::try_from(number).ok();
+    }
+    if let Some(number) = value.as_f64() {
+        return integral_f64_to_i32(number);
+    }
+    if let Some(text) = value.as_str() {
+        let trimmed = text.trim();
+        if let Ok(number) = trimmed.parse::<i64>() {
+            return i32::try_from(number).ok();
+        }
+        if let Ok(number) = trimmed.parse::<f64>() {
+            return integral_f64_to_i32(number);
+        }
+    }
+    None
+}
+
+fn integral_f64_to_i32(number: f64) -> Option<i32> {
+    if number.is_finite()
+        && number.fract() == 0.0
+        && number >= f64::from(i32::MIN)
+        && number <= f64::from(i32::MAX)
+    {
+        Some(number as i32)
     } else {
-        false
-    };
-    if ok {
+        None
+    }
+}
+
+/// Coerce a wire value the way Pydantic v2 lax mode coerces into a `float`
+/// field (`pixelRatio: float`, `domContentLoaded: float | None`, ...).
+fn pydantic_lax_float(value: &serde_json::Value) -> Option<f64> {
+    if let Some(flag) = value.as_bool() {
+        return Some(if flag { 1.0 } else { 0.0 });
+    }
+    if let Some(number) = value.as_f64() {
+        return Some(number);
+    }
+    if let Some(text) = value.as_str() {
+        return text.trim().parse::<f64>().ok();
+    }
+    None
+}
+
+fn deserialize_lax_i32<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    pydantic_lax_int(&value).ok_or_else(|| serde::de::Error::custom("invalid integer"))
+}
+
+fn deserialize_lax_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    pydantic_lax_float(&value).ok_or_else(|| serde::de::Error::custom("invalid number"))
+}
+
+fn deserialize_lax_opt_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    pydantic_lax_float(&value)
+        .map(Some)
+        .ok_or_else(|| serde::de::Error::custom("invalid number"))
+}
+
+fn validate_int_field(loc: &[&str], value: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
+    if pydantic_lax_int(value).is_some() {
         return;
     }
     let (typ, msg) = if value.is_null() {
@@ -373,15 +471,11 @@ fn validate_float_field(
     value: &serde_json::Value,
     items: &mut Vec<serde_json::Value>,
 ) {
-    let ok = if value.is_boolean() || value.is_i64() || value.is_f64() {
-        true
-    } else if let Some(s) = value.as_str() {
-        s.parse::<f64>().is_ok()
-    } else {
-        false
-    };
-    if ok || value.is_null() {
-        // null is allowed (Optional)
+    if value.is_null() {
+        // Optional field: null is always allowed.
+        return;
+    }
+    if pydantic_lax_float(value).is_some() {
         return;
     }
     let (typ, msg) = if value.is_string() {
@@ -620,6 +714,16 @@ fn validate_diagnostics(diag: &serde_json::Value, items: &mut Vec<serde_json::Va
 }
 
 fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
+    // FastAPI treats a zero-length request body as a missing body parameter,
+    // not as malformed JSON: `{"type":"missing","loc":["body"],
+    // "msg":"Field required","input":null}`. A non-empty but invalid body
+    // still goes through the JSON decoder below.
+    if body.is_empty() {
+        return Err(BugReportError::Validation(vec![validation_missing(
+            &["body"],
+            &serde_json::Value::Null,
+        )]));
+    }
     let err = match serde_json::from_slice::<serde_json::Value>(body) {
         Ok(v) => v,
         Err(e) => {
@@ -682,6 +786,10 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
         return Err(BugReportError::Validation(items));
     }
 
+    // Every field that could make serde reject a validated body is now
+    // deserialized through the same Pydantic-lax coercion the validators above
+    // use, so this fallback is a defensive invariant and is unreachable for
+    // bodies that passed validation (no fabricated `value_error` 422).
     serde_json::from_value(value).map_err(|error| {
         BugReportError::Validation(vec![serde_json::json!({
             "type": "value_error",
@@ -1407,6 +1515,16 @@ mod tests {
     fn parse_request_preserves_pydantic_validation_error_shapes() {
         let cases: Vec<(&str, Vec<u8>, serde_json::Value)> = vec![
             (
+                "empty body is a missing body, not malformed JSON",
+                Vec::new(),
+                serde_json::json!([{
+                    "type": "missing",
+                    "loc": ["body"],
+                    "msg": "Field required",
+                    "input": null
+                }]),
+            ),
+            (
                 "malformed JSON",
                 b"{not json".to_vec(),
                 serde_json::json!([{
@@ -1512,6 +1630,104 @@ mod tests {
         assert_eq!(request.report_type, ReportType::Bug);
         assert_eq!(request.title, "Bug");
         assert!(request.diagnostics.is_some());
+    }
+
+    /// Pydantic v2 lax mode coerces these numeric forms into `int`/`float`
+    /// fields and the retired Python handler filed the issue. The native port
+    /// must accept the same values (no fabricated `value_error` 422) and store
+    /// the coerced values that the GitHub issue body renders.
+    #[test]
+    fn parse_request_accepts_pydantic_lax_numeric_diagnostics() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u","userAgent":"a",
+                "screen":{"width":"5","height":true,"pixelRatio":"2.5"},
+                "viewport":{"width":3.0,"height":"4"},
+                "scroll":{"x":"0","y":5.0},
+                "performance":{"domContentLoaded":"2","loadComplete":true},
+                "errors":[]
+            }
+        }"#;
+        let request = parse_request(body).expect("lax numeric diagnostics must be accepted");
+        let diag = request.diagnostics.expect("diagnostics");
+        assert_eq!(diag.screen.width, 5);
+        assert_eq!(diag.screen.height, 1);
+        assert_eq!(diag.screen.pixel_ratio, 2.5);
+        assert_eq!(diag.viewport.width, 3);
+        assert_eq!(diag.viewport.height, 4);
+        assert_eq!(diag.scroll.x, 0);
+        assert_eq!(diag.scroll.y, 5);
+        assert_eq!(diag.performance.dom_content_loaded, Some(2.0));
+        assert_eq!(diag.performance.load_complete, Some(1.0));
+
+        // The coerced values flow into the byte-identical Python issue body.
+        let issue = build_github_issue_body("reporter", ReportType::Bug, "Details", Some(&diag));
+        assert!(issue.contains("**Screen:** 5×1 @2.5x"));
+        assert!(issue.contains("**Viewport:** 3×4"));
+        assert!(issue.contains("**Scroll:** (0, 5)"));
+        assert!(issue.contains("**Performance:** DOMContentLoaded: 2ms, Load: 1ms"));
+    }
+
+    /// Wider lax-mode matrix: signed/whitespace-padded strings,
+    /// integer-valued float strings, negative integers and booleans all mirror
+    /// Pydantic v2 lax coercion for the declared `int`/`float` field types.
+    #[test]
+    fn parse_request_accepts_every_pydantic_lax_numeric_form() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u","userAgent":"a",
+                "screen":{"width":" 6 ","height":"7.0","pixelRatio":" 3.5 "},
+                "viewport":{"width":"+8","height":-9},
+                "scroll":{"x":"10.0","y":false},
+                "performance":{"domContentLoaded":"11.5","loadComplete":"12"},
+                "errors":[]
+            }
+        }"#;
+        let request = parse_request(body).expect("all lax numeric forms must be accepted");
+        let diag = request.diagnostics.expect("diagnostics");
+        assert_eq!(diag.screen.width, 6);
+        assert_eq!(diag.screen.height, 7);
+        assert_eq!(diag.screen.pixel_ratio, 3.5);
+        assert_eq!(diag.viewport.width, 8);
+        assert_eq!(diag.viewport.height, -9);
+        assert_eq!(diag.scroll.x, 10);
+        assert_eq!(diag.scroll.y, 0);
+        assert_eq!(diag.performance.dom_content_loaded, Some(11.5));
+        assert_eq!(diag.performance.load_complete, Some(12.0));
+    }
+
+    /// Invalid numeric diagnostics still produce real Pydantic-shaped 422
+    /// items (and never the fabricated `value_error` fallback), proving the
+    /// lax coercion did not weaken validation.
+    #[test]
+    fn parse_request_rejects_invalid_numeric_diagnostics_with_pydantic_shapes() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u","userAgent":"a",
+                "screen":{"width":5.5,"height":"abc","pixelRatio":true},
+                "viewport":{"width":1,"height":2},
+                "scroll":{"x":0,"y":1},
+                "performance":{},"errors":[]
+            }
+        }"#;
+        let error =
+            parse_request(body).expect_err("fractional int and unparseable string must fail");
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let detail = error.detail_json();
+        let items = detail["detail"].as_array().expect("detail array");
+        let types: Vec<&str> = items
+            .iter()
+            .map(|item| item["type"].as_str().expect("string type"))
+            .collect();
+        assert!(types.contains(&"int_from_float"), "{detail}");
+        assert!(types.contains(&"int_parsing"), "{detail}");
+        assert!(
+            !types.contains(&"value_error"),
+            "no fabricated fallback: {detail}"
+        );
     }
 
     #[test]
@@ -1711,6 +1927,46 @@ mod tests {
         assert_eq!(
             consumed, 0,
             "a failed issuer must not consume the rolling-hour allowance"
+        );
+    }
+
+    /// Pydantic-lax numeric diagnostics must pass request validation at the
+    /// real handler boundary so the issue is filed (reaches the issuer) just
+    /// like Python, instead of being stopped by a fabricated `value_error` 422.
+    /// The synthetic issuer fails, so success here is a 502 after validation —
+    /// a 422 would mean the lax values were still rejected.
+    #[tokio::test]
+    async fn lax_numeric_diagnostics_reach_the_issuer_in_disposable_postgres() {
+        use crate::{db, test_support};
+
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username, is_admin) VALUES (1102, 'bug-reports-lax-test', false);",
+            )
+            .await
+            .expect("seed lax bug reports user");
+        drop(connection);
+
+        let _env = TempGitHubEnv::install();
+        let error = create(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1102),
+            Bytes::from(
+                br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":"5","height":true,"pixelRatio":"2.5"},"viewport":{"width":3.0,"height":"4"},"scroll":{"x":"0","y":5.0},"performance":{"domContentLoaded":"2","loadComplete":true},"errors":[]}}"#
+                    .to_vec(),
+            ),
+        )
+        .await
+        .expect_err("synthetic issuer must fail so the request reaches filing");
+        assert_eq!(
+            error.status(),
+            StatusCode::BAD_GATEWAY,
+            "lax diagnostics must clear Pydantic validation and reach the issuer, not return a fabricated 422"
         );
     }
 
