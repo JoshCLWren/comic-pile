@@ -132,10 +132,12 @@ export function useRollModals({
   }, [
     clearRestoreAction,
     isActionSheetOpen,
+    isDirectIssueOpen,
     isOverrideOpen,
     isShuffleOpen,
     selectedThread,
     setIsActionSheetOpen,
+    setIsDirectIssueOpen,
     setIsOverrideOpen,
     setIsShuffleOpen,
     setRestoreAction,
@@ -177,5 +179,12 @@ export function useRollModals({
     setOverrideErrorMessage('')
   }
 
-  return { overrideThreads, handleOverrideSubmit, openOverrideModal, closeOverrideModal }
+  return {
+    overrideThreads,
+    handleOverrideSubmit,
+    openOverrideModal,
+    closeOverrideModal,
+    openDirectIssueModal: () => setIsDirectIssueOpen(true),
+    closeDirectIssueModal: () => setIsDirectIssueOpen(false),
+  }
 }

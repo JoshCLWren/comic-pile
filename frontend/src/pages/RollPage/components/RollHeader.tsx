@@ -23,6 +23,7 @@ interface RollHeaderProps {
   setDiePending: boolean
   onSetDie: (die: number) => Promise<boolean> | boolean
   onOpenOverride: () => void
+  onOpenDirectIssue: () => void
   onOpenDieModal: () => void
   onBackToQueue?: () => void
   dieState?: DieStateResponse | null
@@ -61,6 +62,7 @@ export function RollHeader({
   setDiePending,
   onSetDie,
   onOpenOverride,
+  onOpenDirectIssue,
   onOpenDieModal,
   onBackToQueue,
   dieState,
@@ -227,6 +229,17 @@ export function RollHeader({
               </div>
             </div>
             <ReadingModeControl mode={sessionMode} />
+            <Tooltip content="Read or rate one exact issue without changing the Roll or Queue.">
+              <button
+                type="button"
+                onClick={onOpenDirectIssue}
+                data-roll-primary-action="read-issue-manually"
+                aria-haspopup="dialog"
+                className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] transition-colors hover:border-[var(--theme-comic-accent)]/40 hover:text-[var(--theme-comic-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
+              >
+                Read an issue
+              </button>
+            </Tooltip>
             <Tooltip content="Pick a specific series for the next result.">
               <button
                 type="button"
