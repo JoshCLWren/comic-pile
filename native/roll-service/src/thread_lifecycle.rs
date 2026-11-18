@@ -70,6 +70,10 @@ const MAX_MANUAL_CREATOR_CREDITS: usize = 50;
 const MAX_CREATOR_NAME_LENGTH: usize = 200;
 const MAX_MANUAL_ROLES_PER_CREDIT: usize = 12;
 const MAX_MANUAL_ROLE_LENGTH: usize = 60;
+/// Coordinator-approved hardening for `POST /api/v1/threads/reactivate`: Python
+/// accepts any positive count, but the native set-based insert must never let a
+/// single request scale an unbounded insert. Counts above this are HTTP 422.
+const MAX_ISSUES_TO_ADD: i64 = 10_000;
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -1420,20 +1424,23 @@ async fn reactivate_once(
                 })
                 .max()
                 .unwrap_or(0);
-            let numbers: Vec<i64> =
-                ((max_numeric + 1)..=(max_numeric + i64::from(issues_to_add))).collect();
-            let positions: Vec<i32> =
-                ((max_position + 1)..=(max_position + issues_to_add)).collect();
+            // Derive the new issue numbers and ordinals in SQL. No app-side
+            // collection scales with `issues_to_add` (Greptile P1 security).
             let first_new: Option<i32> = tx
                 .query_opt(
                     "WITH inserted AS (
                          INSERT INTO issues (thread_id, issue_number, status, position, created_at)
-                         SELECT $1, n::text, 'unread', p, NOW()
-                         FROM unnest($2::bigint[], $3::int[]) AS t(n, p)
+                         SELECT $1, ($3::bigint + s)::text, 'unread', ($4::bigint + s)::int, NOW()
+                         FROM generate_series(1, $2::bigint) AS s
                          RETURNING id, position
                      )
                      SELECT id FROM inserted ORDER BY position LIMIT 1",
-                    &[&thread.id, &numbers, &positions],
+                    &[
+                        &thread.id,
+                        &i64::from(issues_to_add),
+                        &max_numeric,
+                        &i64::from(max_position),
+                    ],
                 )
                 .await
                 .map_err(db::tx_error)?
@@ -1492,7 +1499,8 @@ pub async fn reactivate_thread(
         &["body", "issues_to_add"],
         map.get("issues_to_add"),
         Bounds {
-            gt: Some(0),
+            gt: Some(0),                 // Python's gt=0 check is mirrored for counts <= 0.
+            le: Some(MAX_ISSUES_TO_ADD), // Coordinator-approved hardening cap.
             ..Bounds::default()
         },
         false,

@@ -1275,6 +1275,141 @@ async fn reactivate_rejects_bad_requests_and_foreign_threads() {
     assert_eq!(thread_row(&ctx, theirs).await.unwrap().0, "completed");
 }
 
+/// `generate_series` must produce exactly the requested rows, numbered and
+/// positioned from 1 when the tracked thread has no prior issues.
+#[tokio::test]
+async fn reactivate_generates_exactly_three_numbered_rows_in_sql() {
+    let ctx = setup("lcreactseries").await;
+    let tracked = seed_thread(&ctx, ctx.user_id, "Tracked", "completed", 0, 0).await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET total_issues = 0, issues_remaining = 0,
+                    next_unread_issue_id = NULL, reading_progress = 'completed'
+             WHERE id = $1",
+            &[&tracked],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v1/threads/reactivate",
+        Some(json!({"thread_id": tracked, "issues_to_add": 3})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["total_issues"], 3);
+    assert_eq!(body["issues_remaining"], 3);
+    assert_eq!(body["next_unread_issue_number"], "1");
+
+    let rows: Vec<(String, i32, String)> = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query(
+            "SELECT issue_number, position, status FROM issues
+             WHERE thread_id = $1 ORDER BY position",
+            &[&tracked],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            ("1".into(), 1, "unread".into()),
+            ("2".into(), 2, "unread".into()),
+            ("3".into(), 3, "unread".into()),
+        ],
+        "generate_series must materialize exactly three correctly numbered rows"
+    );
+}
+
+/// Counts above the coordinator-approved 10_000 cap are rejected by validation
+/// before the handler runs: no issue rows, no queue bump, no thread mutation.
+#[tokio::test]
+async fn reactivate_rejects_issue_count_above_cap_without_side_effects() {
+    let ctx = setup("lcreactcap").await;
+    let active = seed_thread(&ctx, ctx.user_id, "Active", "active", 1, 2).await;
+    let tracked = seed_thread(&ctx, ctx.user_id, "Tracked", "completed", 0, 0).await;
+    track(&ctx, tracked, &["read", "unread"]).await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET status = 'completed', queue_position = 0, issues_remaining = 0,
+                    next_unread_issue_id = NULL, reading_progress = 'completed' WHERE id = $1",
+            &[&tracked],
+        )
+        .await
+        .unwrap();
+
+    let tracked_before = thread_row(&ctx, tracked).await.unwrap();
+    let active_before = thread_row(&ctx, active).await.unwrap();
+    let positions_before = active_positions(&ctx, ctx.user_id).await;
+    let issues_before: Vec<(String, i32, String)> = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query(
+            "SELECT issue_number, position, status FROM issues
+             WHERE thread_id = $1 ORDER BY position",
+            &[&tracked],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v1/threads/reactivate",
+        Some(json!({"thread_id": tracked, "issues_to_add": 10001})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+    assert_eq!(body["detail"], "Validation failed");
+
+    assert_eq!(thread_row(&ctx, tracked).await.unwrap(), tracked_before);
+    assert_eq!(thread_row(&ctx, active).await.unwrap(), active_before);
+    assert_eq!(active_positions(&ctx, ctx.user_id).await, positions_before);
+    let issues_after: Vec<(String, i32, String)> = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query(
+            "SELECT issue_number, position, status FROM issues
+             WHERE thread_id = $1 ORDER BY position",
+            &[&tracked],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    assert_eq!(
+        issues_after, issues_before,
+        "capped request must not insert rows"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // set-pending
 // ---------------------------------------------------------------------------
