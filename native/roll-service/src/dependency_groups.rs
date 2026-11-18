@@ -1086,7 +1086,7 @@ pub async fn add_issue_range(
     let result = add_issue_range_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok(response) => {
-            issue_service::refresh_blocked_threads(&tx, user_id).await?;
+            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             Ok((StatusCode::OK, Json(response)))
         }
