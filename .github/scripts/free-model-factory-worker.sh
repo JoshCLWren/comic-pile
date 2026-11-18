@@ -548,9 +548,45 @@ fi
 ORIGINAL_SOURCE="$SOURCE"
 attempted_pairs=()
 blocked_providers=()
-ACCOUNT_REFUSAL_RE='insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package|(does|do)(n.t| not) have enough credits'
+# Do not infer a credential-wide outage from ordinary model output or issue
+# text containing "payment required". Only the provider-branded error envelope
+# immediately following OpenCode's direct build header qualifies. A generic
+# quota classification remains model-local.
 account_wide_failure() {
-  grep -Eqi "$ACCOUNT_REFUSAL_RE" "/tmp/opencode-factory-$WORKER.log"
+  python3 - "/tmp/opencode-factory-$WORKER.log" "$MODEL" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+log = Path(sys.argv[1])
+model = sys.argv[2]
+if not log.is_file():
+    raise SystemExit(1)
+clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", log.read_text(errors="replace"))
+header = f"> build · {model}"
+lines = clean.splitlines()
+for index, line in enumerate(lines):
+    if line.strip() != header:
+        continue
+    # Only the first nonempty output after the direct runtime build header.
+    # This envelope is emitted before any model turn or repository content.
+    for next_line in lines[index + 1:index + 5]:
+        message = next_line.strip()
+        if not message:
+            continue
+        if (message.startswith("The account behind this API key doesn't have enough credits. Please [top up](<https://enter.pollinations.ai/top-up?")
+                and "agent_low_balance_topup" in message):
+            raise SystemExit(0)
+        if re.fullmatch(
+            r"(?:Error: )?(?:Insufficient balance or no resource package|"
+            r"Your API key budget limit exceeded|Account balance exhausted|"
+            r"Billing API budget exhausted)(?:[.!].*)?",
+            message, re.IGNORECASE,
+        ):
+            raise SystemExit(0)
+        break
+raise SystemExit(1)
+PY
 }
 # OpenCode prints some provider account refusals (Pollinations "doesn't have
 # enough credits") and still exits 0. A fast, edit-free zero exit whose log
