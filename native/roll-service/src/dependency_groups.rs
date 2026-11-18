@@ -2444,9 +2444,9 @@ mod tests {
         let unread_member = detail.memberships.get(1).expect("unread enriched member");
         let unread_thread = unread_member.thread.as_ref().expect("unread thread");
         let unread_issue = unread_member.issue.as_ref().expect("unread issue");
-        assert_eq!(unread_thread.last_activity_at, None);
+        assert!(unread_thread.last_activity_at.is_none());
         assert_eq!(unread_thread.created_at, "2026-11-17T12:34:56Z");
-        assert_eq!(unread_issue.read_at, None);
+        assert!(unread_issue.read_at.is_none());
         assert_eq!(unread_issue.created_at, "2026-11-17T12:34:56.123456Z");
 
         let Json(plans) =
