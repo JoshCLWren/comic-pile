@@ -211,7 +211,7 @@ fn require_compilable(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
     Ok(())
 }
 
-async fn lock_graph(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+pub(crate) async fn lock_graph(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
     tx.execute(
         "SELECT pg_advisory_xact_lock($1, $2)",
         &[&CONTINUITY_LOCK_NAMESPACE, &user_id],
