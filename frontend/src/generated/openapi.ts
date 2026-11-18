@@ -3087,6 +3087,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for connected threads. */
+        get: operations["thread_ordering_connected_threads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}/dependencies": {
         parameters: {
             query?: never;
@@ -3099,6 +3116,23 @@ export interface paths {
          * @description List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.
          */
         get: operations["get_thread_dependencies_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/dependency-order-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the dependency order check. */
+        get: operations["thread_ordering_dependency_order_check"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3266,22 +3300,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Validate Issue Order
-         * @description Report dependency edges that disagree with canonical issue positions.
-         *
-         *     Args:
-         *         thread_id: The thread ID whose in-thread ordering should be validated.
-         *         current_user: The authenticated user requesting the validation report.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         IssueOrderValidationResponse containing human-readable ordering warnings.
-         *
-         *     Raises:
-         *         HTTPException: If the thread does not exist or is not owned by the user.
-         */
-        get: operations["validate_issue_order_api_v1_threads__thread_id__issues_validateOrder_get"];
+        /** Documentation-only operation for issue order validation. */
+        get: operations["thread_ordering_validate_order"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3297,11 +3317,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Thread Reading Orders
-         * @description Get reading orders that contain this thread.
-         */
-        get: operations["get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get"];
+        /** Documentation-only operation for reading orders containing a thread. */
+        get: operations["thread_ordering_reading_orders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3385,6 +3402,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}:getBlockingInfo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the single-thread blocking explanation. */
+        post: operations["thread_ordering_get_blocking_info"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}:migrateToIssues": {
         parameters: {
             query?: never;
@@ -3457,6 +3491,23 @@ export interface paths {
          *         HTTPException: 404 if thread or issue not found, 400 for validation errors.
          */
         post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads:getBlockingInfo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the batch blocking explanation. */
+        post: operations["thread_ordering_get_threads_blocking_info"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4506,6 +4557,14 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        };
+        /** @description Python `BatchBlockingExplanationRequest` (documentation schema). */
+        BatchBlockingExplanationRequest: {
+            thread_ids: number[];
+        };
+        /** @description Python `BatchBlockingExplanationResponse`. */
+        BatchBlockingExplanationResponse: {
+            threads: components["schemas"]["OrderedExplanations"];
         };
         /** @enum {string} */
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
@@ -6367,6 +6426,17 @@ export interface components {
              * @description ComicVine issue ID to confirm
              */
             comicvine_issue_id: number;
+        };
+        /** @description Python `ConnectedThreadInfo`. */
+        ConnectedThreadInfo: {
+            connection_type: string;
+            /** Format: int32 */
+            dependency_id: number;
+            is_circular: boolean;
+            issue_number?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
         };
         /**
          * ContinuityPlanLane
@@ -8666,6 +8736,24 @@ export interface components {
         DependencyNoteUpdate: {
             note?: string | null;
         };
+        /** @description Python `DependencyOrderConflict`. */
+        DependencyOrderConflict: {
+            conflict: string;
+            dependency_requires_before: components["schemas"]["DependencyOrderRequirement"][];
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+        };
+        /** @description Python `DependencyOrderRequirement`. */
+        DependencyOrderRequirement: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+        };
         /**
          * @description Issue-level dependency response mirroring the Python `DependencyResponse`
          *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
@@ -9487,6 +9575,22 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
+        /** @description One blocking issue (Python `BlockingDependency`). */
+        NativeBlockingDependency: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            label: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
+        NativeBlockingExplanation: {
+            blocking_dependencies: components["schemas"]["NativeBlockingDependency"][];
+            blocking_reasons: string[];
+            is_blocked: boolean;
+        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -9754,6 +9858,10 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
+        /** @description Python `IssueOrderValidationResponse`. */
+        NativeIssueOrderValidationResponse: {
+            warnings: string[];
+        };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
             created_at: string;
@@ -9835,6 +9943,16 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description Python `ReadingOrderItemResponse`. */
+        NativeReadingOrderItemResponse: {
+            is_read: boolean;
+            issue_number?: string | null;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         NativeReadingOrderProjectionConflict: {
             code: string;
             existing_positions: number[];
@@ -9869,6 +9987,18 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
+        };
+        /** @description Python `ReadingOrderResponse`. */
+        NativeReadingOrderResponse: {
+            /** Format: int64 */
+            completed_items: number;
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            items: components["schemas"]["NativeReadingOrderItemResponse"][];
+            name: string;
+            /** Format: int64 */
+            total_items: number;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -10002,6 +10132,10 @@ export interface components {
             discoveries: components["schemas"]["NativeTasteDiscovery"][];
             generated_at: string;
         };
+        /** @description Python `ThreadReadingOrdersResponse`. */
+        NativeThreadReadingOrdersResponse: {
+            reading_orders: components["schemas"]["NativeReadingOrderResponse"][];
+        };
         NearMatch: {
             color: string;
             /** Format: int32 */
@@ -10009,6 +10143,10 @@ export interface components {
             name: string;
             normalized_name: string;
             scope: string;
+        };
+        /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
+        OrderedExplanations: {
+            [key: string]: components["schemas"]["NativeBlockingExplanation"];
         };
         /**
          * OverlapDecisionItem
@@ -12778,6 +12916,12 @@ export interface components {
         TasteVerdictRequest: {
             verdict: string;
         };
+        /** @description Python `ThreadConnectedResponse`. */
+        ThreadConnectedResponse: {
+            connected_threads: components["schemas"]["ConnectedThreadInfo"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
         /**
          * ThreadCreate
          * @description Schema for creating a new thread.
@@ -12813,6 +12957,12 @@ export interface components {
         ThreadDependenciesResponse: {
             blocked_by: components["schemas"]["DependencyResponse"][];
             blocking: components["schemas"]["DependencyResponse"][];
+        };
+        /** @description Python `ThreadDependencyOrderCheckResponse`. */
+        ThreadDependencyOrderCheckResponse: {
+            conflicts: components["schemas"]["DependencyOrderConflict"][];
+            /** Format: int32 */
+            thread_id: number;
         };
         /** @description The legacy single-thread response retained for the v1 and bare aliases. */
         ThreadDetailResponse: {
@@ -18829,6 +18979,57 @@ export interface operations {
             };
         };
     };
+    thread_ordering_connected_threads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Threads connected through dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadConnectedResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_thread_dependencies_documentation: {
         parameters: {
             query?: never;
@@ -18859,6 +19060,57 @@ export interface operations {
             };
             /** @description Thread not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_dependency_order_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency edges that disagree with issue positions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDependencyOrderCheckResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19112,65 +19364,98 @@ export interface operations {
             };
         };
     };
-    validate_issue_order_api_v1_threads__thread_id__issues_validateOrder_get: {
+    thread_ordering_validate_order: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Human-readable ordering warnings */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueOrderValidationResponse"];
+                    "application/json": components["schemas"]["NativeIssueOrderValidationResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    get_thread_reading_orders_api_v1_threads__thread_id__reading_orders_get: {
+    thread_ordering_reading_orders: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Owned reading orders containing the thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                    "application/json": components["schemas"]["NativeThreadReadingOrdersResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19271,6 +19556,57 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    thread_ordering_get_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked status and reasons */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeBlockingExplanation"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19376,6 +19712,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    thread_ordering_get_threads_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Blocking explanations keyed by thread id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more threads not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

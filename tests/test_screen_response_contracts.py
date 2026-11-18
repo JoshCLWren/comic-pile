@@ -295,10 +295,11 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
         assert _response_schema("/api/v1/sessions/") == {
             "$ref": "#/components/schemas/SessionHistoryListResponse"
         }
-    if "get" in schema_paths.get("/api/v1/sessions/current/", {}):
-        assert _response_schema("/api/v1/sessions/current/") == {
-            "$ref": "#/components/schemas/SessionResponse"
-        }
+    # GET /api/v1/sessions/current/ remains a live Python route until the
+    # #4343 retirement; its screen response contract stays mandatory here.
+    assert _response_schema("/api/v1/sessions/current/") == {
+        "$ref": "#/components/schemas/SessionResponse"
+    }
     if "get" in schema_paths.get("/api/v1/threads/{thread_id}/dependencies", {}):
         assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
             "$ref": "#/components/schemas/ThreadDependenciesResponse"

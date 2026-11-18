@@ -90,7 +90,11 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
-        .merge_from(crate::custom_cbl::CustomCblApi::openapi());
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        // The browser still calls these v1 thread dependency URLs, which now
+        // run in Rust. Publishing their contract here keeps the generated TS
+        // client types after the shadowed Python handlers retire (#5440).
+        .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.
@@ -173,6 +177,38 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    /// The thread dependency operations moved to native Rust but their browser
+    /// URLs stay on v1. Their response component schemas must stay in the
+    /// same-path document so retiring the Python handlers does not erase the
+    /// `components['schemas'][...]` aliases in the generated TS client (#5440).
+    #[test]
+    fn same_path_contract_documents_thread_dependency_schemas() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let schemas = document["components"]["schemas"].as_object().expect("schemas");
+        for name in [
+            "BatchBlockingExplanationResponse",
+            "ConnectedThreadInfo",
+            "ThreadConnectedResponse",
+        ] {
+            assert!(
+                schemas[name].is_object(),
+                "missing {name} in same-path contract schemas"
+            );
+        }
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method) in [
+            ("/api/v1/threads/{thread_id}:getBlockingInfo", "post"),
+            ("/api/v1/threads:getBlockingInfo", "post"),
+            ("/api/v1/threads/{thread_id}/dependency-order-check", "get"),
+            ("/api/v1/threads/{thread_id}/connected", "get"),
+        ] {
+            assert!(
+                paths[path][method]["responses"]["200"].is_object(),
+                "missing native 200 response for {method} {path}"
+            );
+        }
     }
 
     /// Every issue-identity / CBL-adoption operation routed to native Rust
