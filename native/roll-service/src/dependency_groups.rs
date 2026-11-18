@@ -943,7 +943,6 @@ pub async fn get_group_detail(
             let title = thread.as_ref().map(|t| t.title.clone());
             let number = issue.as_ref().map(|i| i.issue_number.clone());
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
             (title, number)
         } else {
             (None, None)
