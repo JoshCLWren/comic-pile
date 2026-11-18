@@ -8,7 +8,7 @@
 
 **Test:** Drag/reorder one and move another to front, then reload Queue and each thread page.
 
-**Expected:** Displayed positions agree everywhere, persist, and do not duplicate or lose rows.
+**Expected:** Displayed positions agree everywhere (Queue list, Thread page and pending Roll label), persist, and do not duplicate or lose rows. Regression history: #5263, fixed by #5429.
 
 ## MQA-QUEUE-002: Move to front affects the bounded pool
 
@@ -22,7 +22,7 @@
 
 **Test:** Snooze a QA series, inspect its queue/roll state, then unsnooze or satisfy the relevant backoff rule.
 
-**Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible.
+**Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible. Temporary snoozes are browser-scoped reroll exclusions that expire at local midnight or on Reset Dice ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405); UPDATE 2026-11-18). Durable exclusion is Remove from Queue, which is non-destructive and restorable from the excluded section.
 
 ## MQA-QUEUE-004: Blocked differs from out-of-pool
 
@@ -79,3 +79,11 @@
 **Expected:** Confirmed title and active/completed state refresh promptly across affected views, including Queue position. Targeted cache invalidation prevents stale data from reappearing; failed operations never falsely show committed changes or lose persisted state. No unrelated Thread is affected.
 
 **Tracking:** Approved Queue/dialog work [#3558](https://github.com/JoshCLWren/comic-pile/issues/3558); related QA regression [#3771](https://github.com/JoshCLWren/comic-pile/issues/3771). Keep separately tracked functional Queue bugs independent of this usability contract.
+
+## MQA-QUEUE-011: Finished series stay listed
+
+**Setup:** QA account with at least one completed series.
+
+**Test:** Open Queue, expand Finished Series, reload and navigate away and back.
+
+**Expected:** Completed series remain listed (read from the completed collection, not the active-only Queue rows). Source: #5171, fixed by #5297.

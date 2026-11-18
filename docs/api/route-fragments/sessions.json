@@ -58,13 +58,6 @@
     {
       "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v1/sessions/correction-examples",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/sessions/correction\\-examples$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
       "path": "/api/v1/sessions/{session_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/sessions/[0-9]+$",
