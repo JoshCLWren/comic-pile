@@ -1343,6 +1343,17 @@ pub async fn import_series(
             .get(0)
         }
     };
+    let prior_thread = tx
+        .query_one(
+            "SELECT total_issues, next_unread_issue_id, status FROM threads \
+             WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let prior_total_issues: Option<i32> = prior_thread.get(0);
+    let prior_next_unread: Option<i32> = prior_thread.get(1);
+    let prior_status: String = prior_thread.get(2);
 
     let series_identity_row = tx
         .query_one(
