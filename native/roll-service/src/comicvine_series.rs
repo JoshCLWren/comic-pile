@@ -6,7 +6,7 @@
 
 use crate::{
     auth::AuthenticatedUser,
-    comicvine_repair::{normalize_roster_issue_metadata, provider_response, ProviderFailure},
+    comicvine_repair::{normalize_roster_issue_metadata, provider_response},
     comicvine_v2::{
         fetch_provider_roster, insert_into_reading_order, owned_reading_order, provider_failure,
         provider_key, resolve_anchored_position, series_import_error, volume_name,
@@ -650,9 +650,14 @@ pub(crate) async fn import_series(
                 (locator, "reused", None)
             }
         } else {
-            let existing_labels: Vec<String> = planned
-                .iter()
-                .map(|planned_issue| planned_issue.issue_number.clone())
+            let mut canonical_indices: Vec<usize> = (0..planned.len()).collect();
+            canonical_indices.sort_by_key(|planned_index| {
+                let planned_issue = &planned[*planned_index];
+                (planned_issue.position, planned_issue.id)
+            });
+            let existing_labels: Vec<String> = canonical_indices
+                .into_iter()
+                .map(|planned_index| planned[planned_index].issue_number.clone())
                 .collect();
             let order = natural_issue_order(&existing_labels, &issue.issue_number);
             let next_position = planned
@@ -891,8 +896,8 @@ mod tests {
             ),
             Some(vec![
                 "1".to_owned(),
-                "2".to_owned(),
                 "Annual 1".to_owned(),
+                "2".to_owned(),
                 "3".to_owned(),
             ])
         );
