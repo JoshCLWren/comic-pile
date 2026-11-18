@@ -258,7 +258,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
             {
                 "collection-exclusions",
                 "continuity-plans",
-                "continuity-rules",
                 "custom-cbls",
                 "dependencies",
                 "issue-identity",
