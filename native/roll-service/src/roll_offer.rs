@@ -478,6 +478,205 @@ pub async fn offer(
     )))
 }
 
+/// Request body for unsnoozing a thread.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UnsnoozeRequest {
+    /// The thread ID to unsnooze. Must be the most recently snoozed thread.
+    pub thread_id: i32,
+}
+
+/// Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct UnsnoozeResponse {
+    pub thread_id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub die_size: i32,
+    pub result: i32,
+    pub offset: i32,
+    pub snoozed_count: i32,
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub next_issue_id: Option<i32>,
+    pub next_issue_number: Option<String>,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub explanation: Option<String>,
+    pub last_rolled_result: Option<i32>,
+    pub unsnoozed_thread_id: Option<i32>,
+}
+
+/// Unsnooze the most recently snoozed thread, restoring it as the pending roll
+/// and reverting the die to its pre-snooze size.
+pub async fn unsnooze(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<UnsnoozeRequest>,
+) -> Result<Json<UnsnoozeResponse>, ApiError> {
+    let active = reading_session::bootstrap(
+        &state,
+        user,
+        None,
+        SessionPolicy::default(),
+    )
+    .await?;
+
+    let mut pending = crate::dice_api::Pending::new(db::checkout(&state).await?);
+    let tx = pending
+        .connection()
+        .build_transaction()
+        .isolation_level(IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Per-reader advisory lock, same as offer.
+    tx.query_one(
+        "SELECT pg_advisory_xact_lock($1::bigint)",
+        &[&(user.id() as i64)],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Read the session's current snoozed_thread_ids and pending thread.
+    let row = tx
+        .query_one(
+            "SELECT pending_thread_id, snoozed_thread_ids::text FROM sessions WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&active.session.id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let current_pending: Option<i32> = row.try_get(0).map_err(db::query_error)?;
+    let snoozed_raw: Option<String> = row.try_get(1).map_err(db::query_error)?;
+    let mut snoozed_ids: Vec<i32> = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
+
+    // The thread to unsnooze must be the most recently snoozed one (last in the array).
+    let Some(&last_snoozed) = snoozed_ids.last() else {
+        return Err(ApiError::BadRequest("No snoozed thread to restore".to_string()));
+    };
+    if last_snoozed != request.thread_id {
+        return Err(ApiError::Conflict(
+            "Only the most recently snoozed thread can be unsnoozed".to_string(),
+        ));
+    }
+
+    // Find the last snooze event to get the die_before for reversion.
+    let snooze_event = tx
+        .query_opt(
+            "SELECT die, die_after, thread_id FROM events
+             WHERE user_id = $1 AND type = 'snooze' AND thread_id = $2
+             ORDER BY timestamp DESC, id DESC LIMIT 1",
+            &[&user.id(), &request.thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let Some(snooze_row) = snooze_event else {
+        return Err(ApiError::Internal("Snooze event not found".to_string()));
+    };
+    let die_before: i32 = snooze_row.try_get(0).map_err(db::query_error)?;
+    let _die_after: i32 = snooze_row.try_get(1).map_err(db::query_error)?;
+    let snoozed_thread: i32 = snooze_row.try_get(2).map_err(db::query_error)?;
+
+    // Remove the thread from snoozed_thread_ids.
+    snoozed_ids.pop();
+    tx.execute(
+        "UPDATE sessions SET snoozed_thread_ids = $1::text::json WHERE id = $2 AND user_id = $3",
+        &[
+            &serde_json::to_string(&snoozed_ids).map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+            &active.session.id,
+            &user.id(),
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Restore the snoozed thread as the pending roll.
+    let updated = tx
+        .execute(
+            "UPDATE sessions
+             SET pending_thread_id=$1, pending_issue_id=NULL, pending_thread_updated_at=NOW()
+             WHERE id=$2 AND user_id=$3",
+        &[&snoozed_thread, &active.session.id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated != 1 {
+        return Err(ApiError::Conflict("Reading session changed; try again".to_string()));
+    }
+
+    // Record an unsnooze event with the reverted die.
+    let unsnooze_key = format!("{}-unsnooze", uuid::Uuid::new_v4());
+    let context = json!({
+        "dice_command_key": unsnooze_key,
+        "dice_command": { "kind": "unsnooze", "thread_id": snoozed_thread },
+    });
+    tx.execute(
+        "INSERT INTO events
+           (user_id, type, timestamp, die, die_after, thread_id, context)
+         VALUES ($1, 'unsnooze', clock_timestamp(), $2, $3, $4, $5::text::json)",
+        &[&user.id(), &die_before, &die_before, &snoozed_thread, &context.to_string()],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Fetch metadata for the restored thread.
+    let metadata = offer_metadata(&*pending.connection(), user, snoozed_thread).await?;
+    pending.release();
+
+    // Get the issue for the restored thread.
+    let issue_number = active
+        .session
+        .pending_issue_id
+        .and_then(|_| None); // We don't have the issue_id here, but the metadata has it via next_unread_issue_id
+
+    Ok(Json(UnsnoozeResponse {
+        thread_id: metadata.thread_id,
+        title: metadata.title,
+        format: metadata.format,
+        issues_remaining: metadata.issues_remaining,
+        queue_position: metadata.queue_position,
+        die_size: die_before,
+        result: 0, // No roll result for unsnooze
+        offset: 0,
+        snoozed_count: snoozed_ids.len() as i32,
+        issue_id: metadata.issue_id,
+        issue_number: metadata.issue_number,
+        next_issue_id: metadata.next_issue_id,
+        next_issue_number: metadata.next_issue_number,
+        total_issues: metadata.total_issues,
+        reading_progress: metadata.reading_progress,
+        explanation: None,
+        last_rolled_result: None,
+        unsnoozed_thread_id: Some(snoozed_thread),
+    }))
+}
+
+/// Documentation-only operation for the mounted v2 Roll unsnooze command.
+#[utoipa::path(
+    post,
+    path = "/api/v2/roll/unsnooze",
+    tag = "roll",
+    request_body = UnsnoozeRequest,
+    responses(
+        (status = 200, description = "Restored the previously snoozed roll", body = UnsnoozeResponse),
+        (status = 400, description = "No snoozed thread to restore or invalid thread"),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "Reading session changed or thread not the most recent snooze"),
+        (status = 500, description = "Unsnooze projection unavailable"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn unsnooze_documentation() {}
+
 /// Documentation-only operation for the mounted v2 Roll offer command.
 #[utoipa::path(
     post,
