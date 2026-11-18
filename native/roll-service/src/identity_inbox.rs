@@ -914,7 +914,7 @@ pub async fn defer(
     Path(mapping_id): Path<i32>,
 ) -> Result<Json<IdentityInboxActionResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
-    let tx = conn
+    let mut tx = conn
         .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
@@ -951,12 +951,43 @@ pub async fn defer(
         return Err(bad_request("mapping not owned by this user"));
     }
 
-    tx.execute(
-        "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
-        &[&mapping_id],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // Some deployed databases are stamped at a revision that added 'deferred'
+    // to the status allow-list without the constraint change having actually
+    // run (issue #5378). Writing status='deferred' then fails with a check
+    // violation and used to surface as a generic HTTP 500. Use a savepoint so
+    // the failed statement cannot poison the outer transaction, and fall back
+    // to a representation the stale constraint accepts: a rejected mapping
+    // with an explicit defer reason. Either way the item leaves the unresolved
+    // inbox and the defer succeeds instead of returning a 500.
+    let savepoint = tx
+        .savepoint("identity_inbox_defer_status")
+        .await
+        .map_err(db::query_error)?;
+    match savepoint
+        .execute(
+            "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
+            &[&mapping_id],
+        )
+        .await
+    {
+        Ok(_) => {
+            savepoint.commit().await.map_err(db::query_error)?;
+        }
+        Err(error)
+            if error.code() == Some(&tokio_postgres::error::SqlState::CHECK_VIOLATION) =>
+        {
+            savepoint.rollback().await.map_err(db::query_error)?;
+            tx.execute(
+                "UPDATE issue_external_identity_mappings SET status='rejected', \
+                 rejection_reason='deferred by user', evidence_source='deferred', \
+                 updated_at=NOW() WHERE id=$1",
+                &[&mapping_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+        Err(error) => return Err(db::query_error(error)),
+    }
     tx.commit().await.map_err(db::query_error)?;
 
     let updated = fetch_item(&state, user.id(), mapping_id).await?;
@@ -1262,5 +1293,113 @@ mod tests {
         )
         .await;
         let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
+    }
+
+    /// A raw admin connection is needed only to simulate production's stale
+    /// status constraint; the handler itself still runs as the DML-only role.
+    async fn admin_client() -> tokio_postgres::Client {
+        let (client, connection) = tokio_postgres::connect(
+            &test_support::required_test_admin_url(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .expect("admin test connection");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+    }
+
+    /// Regression for #5378: production is stamped past the revision that
+    /// added 'deferred' to the status allow-list, but its live constraint does
+    /// not contain that value. Defer must succeed (and remove the item from the
+    /// unresolved inbox) instead of failing with a check-violation 500.
+    #[tokio::test]
+    async fn defer_succeeds_when_status_constraint_predates_deferred_value() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let admin = admin_client().await;
+
+        // Reproduce the deployed constraint from before c85700000001.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected'));",
+            )
+            .await
+            .expect("install stale status constraint");
+
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Owned','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#6','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','901096','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) VALUES \
+                 (1,1,1,'unresolved','heuristic','{}'::json,NOW(),NOW());",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await;
+
+        // Restore the canonical constraint before asserting so a failure here
+        // cannot leak the stale schema into the next serialized test.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected','deferred'));",
+            )
+            .await
+            .expect("restore canonical status constraint");
+
+        let body = response.expect("defer must succeed on a stale status constraint");
+        assert!(body.success);
+        assert_eq!(body.message, "Item deferred for later review");
+
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT status, rejection_reason FROM issue_external_identity_mappings WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        let status: String = row.get(0);
+        let reason: Option<String> = row.get(1);
+        assert_eq!(status, "rejected");
+        assert_eq!(reason.as_deref(), Some("deferred by user"));
+        drop(conn);
+
+        let list = list_inbox(
+            State(state),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(list.total, 0);
     }
 }
