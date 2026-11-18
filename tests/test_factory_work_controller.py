@@ -1912,7 +1912,9 @@ def test_reconcile_skips_manual_only_history_reads(
 ) -> None:
     """Manual-only holds never consume comment history calls or label writes."""
     now = 2_000_000_000
-    held_issue = _local_lease_item(3129, now - 7200, "factory:building")
+    held_issue = _local_lease_item(
+        3129, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
+    )
     held_issue["body"] = "<!-- factory-execution:manual-only -->\n"
     ordinary_issue = _local_lease_item(
         4684, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
@@ -1974,7 +1976,9 @@ def test_reconcile_uses_latest_trusted_marker_when_more_recent_than_update(
 ) -> None:
     """A fresh trusted progress record protects a legitimately active lease."""
     now = 2_000_000_000
-    item = _local_lease_item(4625, now - 7200, "factory:building")
+    item = _local_lease_item(
+        4625, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
+    )
     writes = _lease_reconcile_setup(
         controller, monkeypatch, [item], markers={4625: now - 120}
     )
@@ -2012,7 +2016,9 @@ def test_reconcile_does_not_steal_a_refreshed_or_reassigned_lease(
 ) -> None:
     """Recheck GitHub after snapshot selection, before the label write."""
     now = 2_000_000_000
-    item = _local_lease_item(4684, now - 7200, "factory:building")
+    item = _local_lease_item(
+        4684, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
+    )
     live = {
         4684: {
             "number": 4684,
@@ -2073,7 +2079,9 @@ def test_reconcile_does_not_guess_when_github_update_time_is_missing(
 ) -> None:
     """An absent updatedAt must not be replaced with ancient issue creation."""
     now = 2_000_000_000
-    item = _local_lease_item(4549, now - 7200, "factory:building")
+    item = _local_lease_item(
+        4549, now - controller.LOCAL_LEASE_TTL_SECONDS - 1, "factory:building"
+    )
     item.pop("updatedAt")
     item["createdAt"] = _lease_timestamp(now - 365 * 86400)
     writes = _lease_reconcile_setup(controller, monkeypatch, [item])
@@ -2089,8 +2097,16 @@ def test_canonical_pr_and_issue_share_local_lease_activity(
 ) -> None:
     """A local PR repair stays owned when progress appears on either side."""
     now = 2_000_000_000
-    issue_updated = now - 90 if fresh_side == "issue" else now - 7200
-    pr_updated = now - 90 if fresh_side == "pr" else now - 7200
+    issue_updated = (
+        now - 90
+        if fresh_side == "issue"
+        else now - controller.LOCAL_LEASE_TTL_SECONDS - 1
+    )
+    pr_updated = (
+        now - 90
+        if fresh_side == "pr"
+        else now - controller.LOCAL_LEASE_TTL_SECONDS - 1
+    )
     issue_row = _local_lease_item(4615, issue_updated, "factory:building")
     pr_row = _local_lease_item(4709, pr_updated, "factory:building")
     pr_row["body"] = "Closes #4615"
