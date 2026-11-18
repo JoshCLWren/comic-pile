@@ -594,7 +594,7 @@ async fn upsert_issue_identity(
         .query_one(
             "INSERT INTO external_identities \
                 (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
-             VALUES ('comicvine', 'issue', $1, $2, $3::jsonb, now(), now()) \
+             VALUES ('comicvine', 'issue', $1, $2, $3::json, now(), now()) \
              ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
              DO UPDATE SET external_url = EXCLUDED.external_url, updated_at = now() \
              RETURNING id",
