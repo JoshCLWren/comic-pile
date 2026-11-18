@@ -242,6 +242,39 @@ jobs:
             echo "Pending migrations: production=${current:-<none>} application=$expected"
           fi
 
+      # Rehearse pending migrations against a throwaway local Postgres container
+      # (never Neon, never production credentials) before the production
+      # mutation below. Fail closed: a failing or over-budget rehearsal aborts
+      # the deploy before production is touched. Skipped when nothing is pending.
+      - name: Rehearse pending migrations on disposable Postgres
+        if: steps.migrations.outputs.pending == 'true'
+        env:
+          PROD_REVISION: ${{ steps.migrations.outputs.current }}
+        run: |
+          set -euo pipefail
+          container="migration-rehearsal-${GITHUB_RUN_ID}"
+          docker run -d --rm --name "$container" \
+            -e POSTGRES_PASSWORD=rehearsal -e POSTGRES_DB=rehearsal \
+            -p 127.0.0.1:55432:5432 postgres:16 >/dev/null
+          trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          base_revision="${PROD_REVISION:--1}"
+          # DATABASE_URL is deliberately unset: the rehearsal pins its own disposable URL.
+          env -u DATABASE_URL .venv/bin/python scripts/migration_rehearsal.py \
+            --database-url "postgresql://postgres:rehearsal@127.0.0.1:55432/rehearsal" \
+            --apply-fixture \
+            --base-revision "$base_revision" \
+            --budget-seconds 300 | tee rehearsal.log
+          {
+            echo "### Migration rehearsal (disposable Postgres)"
+            echo '```'
+            grep '^migration-rehearsal\|^Migration rehearsal' rehearsal.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Migrate production database before deploy
         if: steps.migrations.outputs.pending == 'true'
         env:

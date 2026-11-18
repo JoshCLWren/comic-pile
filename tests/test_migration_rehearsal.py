@@ -1,10 +1,10 @@
 """Unit coverage for the disposable-Postgres migration rehearsal runner (issue #3554)."""
 
+import os
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.engine import Engine
 
 from scripts import migration_rehearsal as rehearsal_module
 from scripts.migration_rehearsal import (
@@ -39,7 +39,7 @@ class _FakeScriptDirectory:
         self.head = head
 
     @classmethod
-    def from_config(cls, config: object) -> "_FakeScriptDirectory":
+    def from_config(cls, config: object) -> _FakeScriptDirectory:
         """Return a directory bound to the fake head."""
         return cls("c85900000001")
 
@@ -48,12 +48,12 @@ class _FakeScriptDirectory:
         return self.head
 
 
-class _FakeEngine(Engine):
+class _FakeEngine:
     """Minimal engine double that records fixture use without opening a pool."""
 
     def __init__(self) -> None:
         """Initialize without a live pool."""
-        self.fixture_applied: list[Engine] = []
+        self.fixture_applied: list[_FakeEngine] = []
         self.disposed = False
 
     def dispose(self) -> None:
@@ -64,7 +64,7 @@ class _FakeEngine(Engine):
 def test_rehearsal_cycle_steps_are_canonical() -> None:
     """The canonical rehearsal cycle is upgrade -> fixture -> downgrade -> upgrade."""
     assert REHEARSAL_STEPS == ("upgrade_head", "apply_fixture", "downgrade_base", "upgrade_head")
-    assert BASE_REVISION == "base"
+    assert BASE_REVISION == "-1"
 
 
 def test_sync_database_url_rewrites_async_and_postgres_drivers_to_psycopg() -> None:
@@ -143,14 +143,15 @@ def test_run_migration_rehearsal_applies_fixture_between_upgrade_and_downgrade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The fixture loads onto the disposable engine between upgrade and rollback."""
-    engines: list[Engine] = []
+    engines: list[_FakeEngine] = []
 
-    def _fake_create_engine(url: str) -> Engine:
+    def _fake_create_engine(url: str) -> _FakeEngine:
         engine = _FakeEngine()
         engines.append(engine)
         return engine
 
-    def _fake_apply(engine: Engine) -> None:
+    def _fake_apply(engine: object) -> None:
+        assert isinstance(engine, _FakeEngine)
         engine.fixture_applied.append(engine)
 
     monkeypatch.setattr(rehearsal_module, "create_engine", _fake_create_engine)
@@ -205,7 +206,7 @@ def test_run_migration_rehearsal_fails_closed_and_stops_after_first_failure(
 def test_main_returns_zero_when_rehearsal_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     """The CLI exits zero and reports the final revision on success."""
 
-    def _fake_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
+    def _fake_run(*args: object, **kwargs: object) -> MigrationRehearsalResult:
         return MigrationRehearsalResult(
             final_revision="c85900000001",
             steps=(RehearsalStepResult(step="upgrade_head", duration_ms=1.0),),
@@ -223,7 +224,7 @@ def test_main_returns_one_when_rehearsal_fails(
 ) -> None:
     """The CLI exits one and reports the failure when the rehearsal fails closed."""
 
-    def _failing_run(*args: Any, **kwargs: Any) -> MigrationRehearsalResult:
+    def _failing_run(*args: object, **kwargs: object) -> MigrationRehearsalResult:
         raise MigrationRehearsalError("migration rehearsal step 'upgrade_head' failed: boom")
 
     monkeypatch.setattr(rehearsal_module, "run_migration_rehearsal", _failing_run)
@@ -232,3 +233,41 @@ def test_main_returns_one_when_rehearsal_fails(
     )
     assert exit_code == 1
     assert "MIGRATION REHEARSAL FAILED" in capsys.readouterr().out
+
+
+def test_run_migration_rehearsal_pins_database_url_and_restores_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """alembic/env.py prefers DATABASE_URL, so the rehearsal must pin it to the disposable DB."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql://prod-user:secret@prod.example.invalid/neondb")
+    seen: list[str | None] = []
+
+    def _fake_upgrade(config: object, revision: str) -> None:
+        seen.append(os.environ.get("DATABASE_URL"))
+
+    def _fake_downgrade(config: object, revision: str) -> None:
+        seen.append(os.environ.get("DATABASE_URL"))
+
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", _fake_upgrade)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", _fake_downgrade)
+    monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
+
+    disposable = "postgresql://postgres:postgres@127.0.0.1:55432/comic_pile_test"
+    run_migration_rehearsal(disposable)
+
+    assert seen == ["postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test"] * 3
+    assert os.environ["DATABASE_URL"] == "postgresql://prod-user:secret@prod.example.invalid/neondb"
+
+
+def test_run_migration_rehearsal_fails_when_over_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rehearsal slower than the migration safety budget fails closed."""
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
+    ticks = iter(float(n) for n in range(0, 100, 10))
+    monkeypatch.setattr(rehearsal_module, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
+
+    with pytest.raises(MigrationRehearsalError, match="safety budget"):
+        run_migration_rehearsal("postgresql://u:p@127.0.0.1:1/db", budget_seconds=5.0)

@@ -1,0 +1,97 @@
+name: Migration Rehearsal
+
+# Pull-request-only rehearsal of Alembic migrations against a throwaway
+# Postgres service container loaded with synthetic prod-shaped fixtures
+# (issue #3554). It never runs on push to main and only triggers for changes
+# that can affect the schema or the rehearsal tooling itself. It touches no
+# Neon branch and holds no production credentials.
+
+on:
+  pull_request:
+    paths:
+      - "alembic/**"
+      - "alembic.ini"
+      - "app/models/**"
+      - "scripts/migration_rehearsal.py"
+      - "scripts/generate_migration_fixture.py"
+      - "tests/test_migration_rehearsal.py"
+      - "docs/MIGRATION_REHEARSAL.md"
+      - ".github/workflows/migration-rehearsal.yml"
+
+concurrency:
+  group: migration-rehearsal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migration-rehearsal:
+    name: Migration Rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
+      # Placeholder only so `alembic heads` can import app settings; the
+      # rehearsal pins its own disposable database URL.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/comic_pile_rehearsal
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_rehearsal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Resolve the base Alembic revision of this pull request
+        id: base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          merge_base="$(git merge-base "$BASE_SHA" HEAD)"
+          git worktree add --detach "$RUNNER_TEMP/base-tree" "$merge_base"
+          base_rev="$(cd "$RUNNER_TEMP/base-tree" && "$GITHUB_WORKSPACE/.venv/bin/alembic" heads | awk 'NR==1 {print $1}')"
+          if [[ -z "$base_rev" ]]; then
+            echo "Could not resolve the base Alembic head at $merge_base" >&2
+            exit 1
+          fi
+          echo "revision=$base_rev" >> "$GITHUB_OUTPUT"
+          echo "Base Alembic revision: $base_rev (merge base $merge_base)"
+
+      - name: Rehearse upgrade, fixture load, rollback and re-upgrade
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/migration_rehearsal.py \
+            --database-url "postgresql://postgres:postgres@localhost:5432/comic_pile_rehearsal" \
+            --apply-fixture \
+            --base-revision "${{ steps.base.outputs.revision }}" \
+            --budget-seconds 300 | tee "$RUNNER_TEMP/rehearsal.log"
+          {
+            echo "### Migration rehearsal"
+            echo '```'
+            grep '^migration-rehearsal\|^Migration rehearsal' "$RUNNER_TEMP/rehearsal.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
