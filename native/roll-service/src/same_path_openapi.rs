@@ -174,4 +174,51 @@ mod tests {
             Some("reading_plan_sync_status")
         );
     }
+
+    #[test]
+    fn same_path_contract_covers_all_dependency_group_operations() {
+        let document = same_path_openapi();
+        let operations = [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            (
+                "GET",
+                "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            ),
+            ("GET", "/api/v1/reading-order-groups/{group_id}"),
+            ("PATCH", "/api/v1/reading-order-groups/{group_id}"),
+            ("DELETE", "/api/v1/reading-order-groups/{group_id}"),
+            ("GET", "/api/v1/reading-order-groups/{group_id}/detail"),
+            (
+                "POST",
+                "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            ),
+            ("POST", "/api/v1/reading-order-groups/{group_id}/members"),
+            (
+                "DELETE",
+                "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            ),
+            ("PUT", "/api/v1/reading-order-groups/{group_id}/order"),
+            ("GET", "/api/v1/reading-order-groups/{group_id}/plans"),
+        ];
+        for (method, path) in operations {
+            let item = document
+                .paths
+                .paths
+                .get(path)
+                .unwrap_or_else(|| panic!("missing native path {path}"));
+            let operation = match method {
+                "GET" => &item.get,
+                "POST" => &item.post,
+                "PATCH" => &item.patch,
+                "PUT" => &item.put,
+                "DELETE" => &item.delete,
+                _ => unreachable!("test method is registered"),
+            };
+            assert!(
+                operation.is_some(),
+                "missing native operation {method} {path}"
+            );
+        }
+    }
 }
