@@ -7561,7 +7561,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "CanonicalCorrection": {
         "type": "object",
         "required": [
@@ -7585,7 +7584,22 @@
           },
           "field_name": {
             "type": "string"
-=======
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "provider_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CblAdoptionCommitRequest": {
         "type": "object",
         "required": [
@@ -7656,18 +7670,11 @@
               "type": "integer",
               "format": "int32"
             }
->>>>>>> origin/main
           },
           "id": {
             "type": "integer",
             "format": "int32"
           },
-<<<<<<< HEAD
-          "provenance": {
-            "type": "string"
-          },
-          "provider_value": {
-=======
           "lanes": {
             "type": "object"
           },
@@ -7755,13 +7762,10 @@
             }
           },
           "collection_exclusion_reason": {
->>>>>>> origin/main
             "type": [
               "string",
               "null"
             ]
-<<<<<<< HEAD
-=======
           },
           "comicvine_issue_id": {
             "type": [
@@ -8526,7 +8530,6 @@
           },
           "source_repository": {
             "type": "string"
->>>>>>> origin/main
           }
         }
       },
@@ -8645,7 +8648,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ComicVineResolveResponse": {
         "type": "object",
         "required": [
@@ -8660,10 +8662,10 @@
           "issue": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineResolvedIssue"
               },
               {
-                "$ref": "#/components/schemas/ComicVineResolvedIssue"
+                "type": "null"
               }
             ]
           },
@@ -8685,10 +8687,10 @@
           "volume": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineSeriesResult"
               },
               {
-                "$ref": "#/components/schemas/ComicVineSeriesResult"
+                "type": "null"
               }
             ]
           }
@@ -8774,25 +8776,10 @@
             }
           },
           "series_name": {
-=======
-      "CommitEntryOverride": {
-        "type": "object",
-        "required": [
-          "cbl_position",
-          "decision"
-        ],
-        "properties": {
-          "cbl_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "decision": {
->>>>>>> origin/main
             "type": "string"
           }
         }
       },
-<<<<<<< HEAD
       "ComicVineSeriesResult": {
         "type": "object",
         "required": [
@@ -8887,8 +8874,22 @@
           }
         }
       },
-=======
->>>>>>> origin/main
+      "CommitEntryOverride": {
+        "type": "object",
+        "required": [
+          "cbl_position",
+          "decision"
+        ],
+        "properties": {
+          "cbl_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "decision": {
+            "type": "string"
+          }
+        }
+      },
       "CommitRequest": {
         "type": "object",
         "required": [
