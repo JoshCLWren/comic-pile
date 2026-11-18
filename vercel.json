@@ -407,20 +407,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/creators$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/creators/summaries$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "/api/v2/dependencies/",
       "methods": [
         "POST"

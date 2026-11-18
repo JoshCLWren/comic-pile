@@ -13,7 +13,6 @@
   "app/api/continuity_plan.py",
   "app/api/continuity_rule.py",
   "app/api/continuity_template.py",
-  "app/api/creators.py",
   "app/api/cron.py",
   "app/api/custom_cbl.py",
   "app/api/debug.py",
