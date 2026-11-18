@@ -614,7 +614,7 @@ fn crossover_progress(
         }
         let remaining = unread_counts.get(thread_id).copied().unwrap_or(0);
         total_issues += i64::from(*total);
-        read_issues += i64::from(*total) - remaining;
+        read_issues += (i64::from(*total) - remaining).max(0);
     }
     for member in memberships {
         let Some(issue_id) = member.issue_id else {
