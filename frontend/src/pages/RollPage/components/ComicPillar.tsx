@@ -11,14 +11,12 @@ import { ComicIdentity } from './ComicIdentity'
 import { TagSection } from '../../../components/Tags/TagSection'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { useComicIssueMapping } from '../../../hooks/useComicIssueMapping'
-import { queryClient } from '../../../query/queryClient'
-import { invalidateRollBootstrap } from '../../../query/cacheEffects'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
   /** Die size the current roll used, so the winning face can be named on the card (issue #3126). */
   currentDie?: number
-  onRefreshThread: () => void
+  onRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void> | void
 }
 
 // A non-breaking space before the separator glues it to the item it follows, so
@@ -254,12 +252,10 @@ export function ComicPillar({
           totalIssues={activeRatingThread.total_issues}
           threadTitle={activeRatingThread.title}
           onClose={() => setIsCorrectionDialogOpen(false)}
-          onSuccess={() => {
+          onSuccess={(options) => {
             setIsCorrectionDialogOpen(false)
-            void (async () => {
-              await invalidateRollBootstrap(queryClient)
-              await onRefreshThread()
-            })()
+            if (options?.alreadyRefreshed) return
+            void onRefreshThread({ forceRefresh: true })
           }}
         />
       ) : null}
