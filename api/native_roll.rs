@@ -535,7 +535,10 @@ fn app() -> Router {
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             get(native_dispatch),
         )
-        .route("/api/v1/reading-order-groups/{group_id}", get(native_dispatch))
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(native_dispatch),
+        )
         .route(
             "/api/v1/reading-order-groups/{group_id}",
             patch(native_dispatch),
