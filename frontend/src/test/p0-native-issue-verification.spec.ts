@@ -264,7 +264,10 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     const editor = card.getByTestId('comic-issue-rating-editor')
     await expect(editor).toBeVisible({ timeout: 15000 })
-    await editor.locator('input[name="rating"]').fill('5')
+    // The rating input is type="range" (max 5.0): drive it with the keyboard
+    // — End selects the maximum, 5 — instead of fill(), which is not
+    // supported for range inputs.
+    await editor.locator('input[name="rating"]').press('End')
 
     const rateResponse2 = page.waitForResponse(
       (resp) => resp.url().includes(`/api/v2/issues/${issueId}`) && resp.request().method() === 'PATCH',
