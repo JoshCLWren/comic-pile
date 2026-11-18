@@ -1160,7 +1160,11 @@ async fn add_issue_range_tx(
         }
         return Err(unprocessable(format!(
             "Issue range contains missing positions: {}",
-            missing.join(", ")
+            missing
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
         )));
     }
     let issue_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
