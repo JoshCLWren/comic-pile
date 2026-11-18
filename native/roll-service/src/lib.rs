@@ -11,6 +11,7 @@ pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
+pub mod comicvine_series;
 pub mod comicvine_v2;
 pub mod config;
 pub mod continuity_plans;
