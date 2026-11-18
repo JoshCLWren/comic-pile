@@ -28,6 +28,11 @@ fn assert_local_server(url: &str) {
         })
         .collect();
     for pair in query.split('&') {
+        // The driver percent-decodes keys; refuse encoded keys outright.
+        assert!(
+            !pair.split('=').next().unwrap_or("").contains('%'),
+            "REFUSING to run destructive migration tests: percent-encoded URL query keys are not allowed"
+        );
         if let Some((key, value)) = pair.split_once('=') {
             if key == "host" || key == "hostaddr" {
                 hosts = value.split(',').map(str::to_string).collect();

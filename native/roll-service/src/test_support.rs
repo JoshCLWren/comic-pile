@@ -244,7 +244,8 @@ fn parse_target(url: &str) -> Result<(Vec<String>, String), String> {
     let mut database = percent_decode(path);
     for pair in query.split('&').filter(|p| !p.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-        match key {
+        // The driver percent-decodes keys, so `%64bname=` is `dbname=`.
+        match percent_decode(key).as_str() {
             "host" | "hostaddr" => {
                 hosts = value.split(',').map(percent_decode).collect::<Vec<_>>();
             }
@@ -574,6 +575,8 @@ mod tests {
             "postgresql://u:p@localhost,example.neon.tech/native_test",
             "postgresql://u:p@evil.example/x@127.0.0.1/native_test",
             "postgresql:///native_test",
+            "postgresql://u:p@localhost/native_test?%64bname=production",
+            "postgresql://u:p@localhost/native_test?%68ost=example.neon.tech",
             "host=example.neon.tech dbname=native_test",
             "",
         ] {

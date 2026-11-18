@@ -435,6 +435,12 @@ def assert_safe_test_database_url(database_url: str) -> None:
                 f"Refusing to run destructive test setup: host {host!r} is not a local "
                 "disposable database."
             )
+    overrides = {"database", "dbname"} & {str(key).lower() for key in url.query}
+    if overrides:
+        raise RuntimeError(
+            "Refusing to run destructive test setup: query database override "
+            f"{sorted(overrides)!r} is not allowed; put the name in the URL path."
+        )
     if "test" not in (url.database or "").lower():
         raise RuntimeError(
             "Refusing to run destructive test setup: database "

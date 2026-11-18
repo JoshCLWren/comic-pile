@@ -25,6 +25,8 @@ def test_guard_accepts_local_test_databases(url: str) -> None:
         "postgresql+asyncpg://u:p@example.neon.tech/comic_pile_test",
         "postgresql+asyncpg://u:p@127.0.0.1/neondb",
         "postgresql+asyncpg://u:p@localhost/dev",
+        "postgresql+asyncpg://u:p@localhost/native_test?database=production",
+        "postgresql+asyncpg://u:p@localhost/native_test?dbname=production",
     ],
 )
 def test_guard_refuses_remote_or_non_test_databases(url: str) -> None:
