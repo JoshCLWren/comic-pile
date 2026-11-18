@@ -10500,24 +10500,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
-        NativeTasteDiscovery: {
-            display_name: string;
-            /** Format: int32 */
-            distinct_thread_count: number;
-            /** Format: int32 */
-            evidence_count: number;
-            external_key: string;
-            /** Format: int32 */
-            id: number;
-            prompt: string;
-            signal_type: string;
-        };
-        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
-        NativeTasteDiscoveryListResponse: {
-            discoveries: components["schemas"]["NativeTasteDiscovery"][];
-            generated_at: string;
-        };
         NearMatch: {
             color: string;
             /** Format: int32 */
@@ -13130,37 +13112,22 @@ export interface components {
             /** Format: int64 */
             total_assignments: number;
         };
-        /**
-         * TasteDiscovery
-         * @description One prompt-eligible inferred taste pattern shown on Roll.
-         */
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
         TasteDiscovery: {
-            /** Display Name */
             display_name: string;
-            /** Distinct Thread Count */
+            /** Format: int32 */
             distinct_thread_count: number;
-            /** Evidence Count */
+            /** Format: int32 */
             evidence_count: number;
-            /** External Key */
             external_key: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Prompt */
             prompt: string;
-            /** Signal Type */
             signal_type: string;
         };
-        /**
-         * TasteDiscoveryListResponse
-         * @description Ranked prompt-eligible discoveries for the authenticated user.
-         */
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
         TasteDiscoveryListResponse: {
-            /** Discoveries */
             discoveries: components["schemas"]["TasteDiscovery"][];
-            /**
-             * Generated At
-             * Format: date-time
-             */
             generated_at: string;
         };
         /** @description Wire parity with Python `{"dismissed": True}`. */
@@ -18772,7 +18739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeTasteDiscoveryListResponse"];
+                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
                 };
             };
             /** @description Not authenticated */
