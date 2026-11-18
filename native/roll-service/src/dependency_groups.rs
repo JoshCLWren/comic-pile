@@ -113,42 +113,110 @@ const UPDATE_GROUP_ORDER_SQL: &str = "UPDATE dependency_group_memberships AS mem
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupCreate)]
 pub struct DependencyGroupCreateRequest {
+    #[schema(min_length = 1, max_length = 120)]
     pub name: String,
 }
 
 /// Wire request mirroring the Python `DependencyGroupUpdate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupUpdate)]
 pub struct DependencyGroupUpdateRequest {
+    #[schema(min_length = 1, max_length = 120)]
     pub name: String,
+}
+
+#[derive(Deserialize)]
+struct DependencyGroupMemberCreateFields {
+    thread_id: Option<i32>,
+    issue_id: Option<i32>,
+    sequence_order: Option<i32>,
 }
 
 /// Wire request mirroring the Python `DependencyGroupMemberCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(try_from = "serde_json::Value")]
+#[schema(as = DependencyGroupMemberCreate)]
 pub struct DependencyGroupMemberCreateRequest {
+    #[schema(exclusive_minimum = 0)]
     pub thread_id: Option<i32>,
+    #[schema(exclusive_minimum = 0)]
     pub issue_id: Option<i32>,
+    #[schema(minimum = 1)]
     pub sequence_order: Option<i32>,
+    #[serde(skip)]
+    #[schema(ignore)]
+    validation_input: serde_json::Value,
+}
+
+impl TryFrom<serde_json::Value> for DependencyGroupMemberCreateRequest {
+    type Error = String;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        let fields = DependencyGroupMemberCreateFields::deserialize(&value)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            thread_id: fields.thread_id,
+            issue_id: fields.issue_id,
+            sequence_order: fields.sequence_order,
+            validation_input: value,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct DependencyGroupIssueRangeCreateFields {
+    thread_id: i32,
+    start_position: i32,
+    end_position: i32,
 }
 
 /// Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[serde(try_from = "serde_json::Value")]
+#[schema(as = DependencyGroupIssueRangeCreate)]
 pub struct DependencyGroupIssueRangeCreateRequest {
+    #[schema(exclusive_minimum = 0)]
     pub thread_id: i32,
+    #[schema(exclusive_minimum = 0)]
     pub start_position: i32,
+    #[schema(exclusive_minimum = 0)]
     pub end_position: i32,
+    #[serde(skip)]
+    #[schema(ignore)]
+    validation_input: serde_json::Value,
+}
+
+impl TryFrom<serde_json::Value> for DependencyGroupIssueRangeCreateRequest {
+    type Error = String;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        let fields = DependencyGroupIssueRangeCreateFields::deserialize(&value)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            thread_id: fields.thread_id,
+            start_position: fields.start_position,
+            end_position: fields.end_position,
+            validation_input: value,
+        })
+    }
 }
 
 /// Wire request mirroring the Python `DependencyGroupOrderUpdate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[schema(as = DependencyGroupOrderUpdate)]
 pub struct DependencyGroupOrderUpdateRequest {
+    #[schema(min_items = 1, max_items = 1000)]
     pub items: Vec<DependencyGroupOrderItem>,
 }
 
 /// Wire request item mirroring the Python `DependencyGroupOrderItem` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct DependencyGroupOrderItem {
+    #[schema(exclusive_minimum = 0)]
     pub issue_id: i32,
+    #[schema(exclusive_minimum = 0)]
     pub sequence_order: i32,
 }
 
