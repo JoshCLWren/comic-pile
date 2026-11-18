@@ -430,7 +430,7 @@ fn crossover_progress(
         }
         let remaining = unread_counts.get(thread_id).copied().unwrap_or(0);
         total_issues += i64::from(*total);
-        read_issues += i64::from(*total) - remaining;
+        read_issues += (i64::from(*total) - remaining).max(0);
     }
     for member in memberships {
         let Some(issue_id) = member.issue_id else {
@@ -717,6 +717,10 @@ async fn other_crossovers(
     Ok(result)
 }
 
+fn linked_plan_containment(group_id: i32) -> serde_json::Value {
+    serde_json::json!([{ "node_type": "crossover", "ref_id": group_id }])
+}
+
 async fn linked_plans(
     connection: &deadpool_postgres::Object,
     group_id: i32,
@@ -725,7 +729,7 @@ async fn linked_plans(
     let rows = connection
         .query(
             LINKED_PLANS_SQL,
-            &[&user_id, &serde_json::json!({ "node_type": "crossover", "ref_id": group_id })],
+            &[&user_id, &linked_plan_containment(group_id)],
         )
         .await
         .map_err(db::query_error)?;
@@ -1163,6 +1167,7 @@ pub async fn add_issue_range(
     Path(group_id): Path<i32>,
     Json(request): Json<DependencyGroupIssueRangeCreateRequest>,
 ) -> Result<(StatusCode, Json<DependencyGroupIssueRangeResponse>), ApiError> {
+    validate_issue_range_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
