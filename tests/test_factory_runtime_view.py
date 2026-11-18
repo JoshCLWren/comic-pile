@@ -82,3 +82,21 @@ def test_delivery_evidence_uses_distinct_runs_and_prs_without_conflating_failure
         "checkpoint_runs": 18, "linked_prs": 6, "merged_prs": 2,
     }
     assert evidence["failed_runs"] > evidence["successful_runs"]
+
+
+
+def test_evidence_sql_classifies_old_delivered_timeout_as_failed_execution() -> None:
+    """Legacy worker_completed rows with agent_timeout are not successes."""
+    import asyncio
+
+    class Conn:
+        async def fetchrow(self, query: str, *_args: object) -> dict:
+            assert "detail->>'outcome_class'='success'" in query
+            assert "'no_work','unconfigured'" in query
+            assert "event_type='worker_completed'" in query
+            return {field: 0 for field in (
+                "terminal_runs", "successful_runs", "failed_runs",
+                "checkpoint_runs", "linked_prs", "merged_prs",
+            )}
+
+    assert asyncio.run(runtime._delivery_evidence(Conn(), "owner/repo"))["failed_runs"] == 0
