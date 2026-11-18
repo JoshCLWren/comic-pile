@@ -295,11 +295,6 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
         assert _response_schema("/api/v1/sessions/") == {
             "$ref": "#/components/schemas/SessionHistoryListResponse"
         }
-    # GET /api/v1/sessions/current/ remains a live Python route until the
-    # #4343 retirement; its screen response contract stays mandatory here.
-    assert _response_schema("/api/v1/sessions/current/") == {
-        "$ref": "#/components/schemas/SessionResponse"
-    }
     if "get" in schema_paths.get("/api/v1/threads/{thread_id}/dependencies", {}):
         assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
             "$ref": "#/components/schemas/ThreadDependenciesResponse"
@@ -307,20 +302,14 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
 
 
 def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
-    """Reject removed collection endpoints while allowing Option E exclusions."""
+    """Reject collection endpoints and schemas after the exclusion API retirement."""
     schema = app.openapi()
     collection_paths = {path for path in schema["paths"] if "collection" in path.lower()}
-    assert collection_paths == {
-        "/api/v1/collection-exclusions",
-        "/api/v1/collection-exclusions/{exclusion_id}",
-    }
+    assert collection_paths == set()
     collection_schemas = {
         name for name in schema["components"]["schemas"] if "collection" in name.lower()
     }
-    assert collection_schemas == {
-        "CollectionExclusionCreate",
-        "CollectionExclusionResponse",
-    }
+    assert collection_schemas == set()
 
 
 def test_component_schemas_expose_exact_screen_contracts() -> None:

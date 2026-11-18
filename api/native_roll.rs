@@ -250,12 +250,29 @@ fn app() -> Router {
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/sessions/", get(native_dispatch))
         .route("/api/sessions/{session_id}", get(native_dispatch))
         .route("/api/v1/sessions/{session_id}", get(native_dispatch))
         .route("/api/sessions/{session_id}/snapshots", get(native_dispatch))
         .route(
             "/api/v1/sessions/{session_id}/snapshots",
             get(native_dispatch),
+        )
+        .route("/api/v1/sessions/", get(native_dispatch))
+        .route("/api/sessions/{session_id}/details", get(native_dispatch))
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(native_dispatch),
+        )
+        .route("/api/undo/{session_id}/snapshots", get(native_dispatch))
+        .route("/api/v1/undo/{session_id}/snapshots", get(native_dispatch))
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route(
@@ -302,6 +319,20 @@ fn app() -> Router {
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
+        .route("/api/v1/threads/", post(native_dispatch))
+        .route("/api/v1/threads/check-duplicates", post(native_dispatch))
+        .route("/api/v1/threads/excluded/threads", get(native_dispatch))
+        .route("/api/v1/threads/groups:batch", post(native_dispatch))
+        .route("/api/v1/threads/reactivate", post(native_dispatch))
+        .route("/api/v1/threads/stale", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", put(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", delete(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/set-pending",
+            post(native_dispatch),
+        )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -522,6 +553,33 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v2/creators", get(native_dispatch))
+        .route("/api/v2/creators/", get(native_dispatch))
+        .route("/api/v2/creators/summaries", get(native_dispatch))
+        .route("/api/v2/creators/compare", get(native_dispatch))
+        .route("/api/v2/creators/discoveries", get(native_dispatch))
+        .route("/api/v2/creators/team-chemistry", get(native_dispatch))
+        .route("/api/v2/creators/{creator_key}", get(native_dispatch))
+        .route(
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(native_dispatch),
+        )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",

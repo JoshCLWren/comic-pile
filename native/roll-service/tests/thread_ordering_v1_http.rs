@@ -645,3 +645,438 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[tokio::test]
+async fn thread_detail_queue_position_matches_queue_list_position() {
+    // Regression test for issue #5263: position numbers should agree across
+    // Queue list, Thread Detail page, and pending Roll label.
+    //
+    // The display position is computed as row_number() over:
+    //   ORDER BY is_blocked ASC, queue_position ASC, id ASC
+    // Only threads with status='active' and queue_position >= 1 are in the queue.
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-pos").await;
+    let conn = state.pool.get().await.unwrap();
+
+    // Create threads with non-sequential stored queue_position values. All are
+    // unblocked here, so display order is queue_position then id: Beta (stored
+    // 2) ranks first, Gamma (stored 3) second and Alpha (stored 5) third. The
+    // sparse stored values prove detail reads the computed display position.
+    let alpha = thread(&conn, user_id, "Alpha").await;
+    let beta = thread(&conn, user_id, "Beta").await;
+    let gamma = thread(&conn, user_id, "Gamma").await;
+
+    // Set non-sequential stored queue positions.
+    conn.execute(
+        "UPDATE threads SET queue_position = 5 WHERE id = $1",
+        &[&alpha],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads SET queue_position = 2 WHERE id = $1",
+        &[&beta],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE threads SET queue_position = 3 WHERE id = $1",
+        &[&gamma],
+    )
+    .await
+    .unwrap();
+
+    // Fetch queue list (v2) to see the expected display positions.
+    let (list_status, list_body) = send(&state, get("/api/v2/threads", &token, &csrf)).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+
+    // Display order is is_blocked ASC, queue_position ASC, id ASC. With every
+    // thread unblocked and every queue_position distinct, queue_position alone
+    // decides: Beta (2) -> 1, Gamma (3) -> 2, Alpha (5) -> 3.
+    let threads = list_body["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), 3, "{list_body:?}");
+
+    let beta_list_pos = threads
+        .iter()
+        .find(|t| t["id"].as_i64().unwrap() == beta as i64)
+        .unwrap();
+    let gamma_list_pos = threads
+        .iter()
+        .find(|t| t["id"].as_i64().unwrap() == gamma as i64)
+        .unwrap();
+    let alpha_list_pos = threads
+        .iter()
+        .find(|t| t["id"].as_i64().unwrap() == alpha as i64)
+        .unwrap();
+
+    let beta_display_pos = beta_list_pos["queue_position"].as_i64().unwrap();
+    let gamma_display_pos = gamma_list_pos["queue_position"].as_i64().unwrap();
+    let alpha_display_pos = alpha_list_pos["queue_position"].as_i64().unwrap();
+
+    // Verify order: Beta (pos 1), Gamma (pos 2), Alpha (pos 3)
+    assert_eq!(
+        beta_display_pos, 1,
+        "Beta should be position 1 in queue list"
+    );
+    assert_eq!(
+        gamma_display_pos, 2,
+        "Gamma should be position 2 in queue list"
+    );
+    assert_eq!(
+        alpha_display_pos, 3,
+        "Alpha should be position 3 in queue list"
+    );
+
+    // Now fetch each thread's detail and verify the queue_position matches.
+    for (thread_id, expected_position) in [(beta, 1i64), (gamma, 2i64), (alpha, 3i64)] {
+        let (detail_status, detail_body) = send(
+            &state,
+            get(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+        )
+        .await;
+        assert_eq!(
+            detail_status,
+            StatusCode::OK,
+            "detail body: {detail_body:?}"
+        );
+        let actual_position = detail_body["queue_position"].as_i64().unwrap();
+        assert_eq!(
+            actual_position, expected_position,
+            "Thread {thread_id} detail queue_position should be {expected_position}, was {actual_position}. Detail body: {detail_body:?}"
+        );
+    }
+}
+
+/// Restore the Option E switches after a test that enables the preview.
+struct OptionEEnv(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
+
+impl OptionEEnv {
+    fn enable() -> Self {
+        let enabled = std::env::var_os("OPTION_E_ENABLED");
+        let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
+        std::env::set_var("OPTION_E_ENABLED", "true");
+        std::env::set_var("OPTION_E_APPROVED_PREVIEW", "regression-5263");
+        Self(enabled, approval)
+    }
+}
+
+impl Drop for OptionEEnv {
+    fn drop(&mut self) {
+        match self.0.take() {
+            Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
+            None => std::env::remove_var("OPTION_E_ENABLED"),
+        }
+        match self.1.take() {
+            Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
+            None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn thread_detail_completed_thread_keeps_stored_position() {
+    // A completed thread is outside the active queue, so the canonical
+    // display-position subquery yields NULL. Detail must fall back to the
+    // stored position instead of panicking on a NULL -> i32 read.
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-done").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let queued = thread(&conn, user_id, "Queued").await;
+    conn.execute(
+        "UPDATE threads SET queue_position = 4 WHERE id = $1",
+        &[&queued],
+    )
+    .await
+    .unwrap();
+    let completed = thread(&conn, user_id, "Completed").await;
+    conn.execute(
+        "UPDATE threads SET queue_position = 7, status = 'completed' WHERE id = $1",
+        &[&completed],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{completed}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["queue_position"].as_i64().unwrap(), 7, "{body:?}");
+
+    // An active queued thread still receives its computed display position.
+    let (status, body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{queued}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["queue_position"].as_i64().unwrap(), 1, "{body:?}");
+}
+
+#[tokio::test]
+async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
+    // With the Option E preview active the Queue list groups by evaluated
+    // eligibility, not the stored is_blocked flag. Thread Detail must use that
+    // same expression or the two views disagree for the same thread.
+    // Take the global DB lock first so the temporary env change cannot leak
+    // into another test in this binary while it waits for the lock.
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-blk").await;
+    let _option_e = OptionEEnv::enable();
+    let conn = state.pool.get().await.unwrap();
+
+    // Stored blocked, but actually eligible (has an unread issue).
+    let eligible_low = thread(&conn, user_id, "EligibleLow").await;
+    let low_issue = issue(&conn, eligible_low, "1", 1, "unread").await;
+    frontier(&conn, eligible_low, low_issue).await;
+    conn.execute(
+        "UPDATE threads SET queue_position = 5, is_blocked = true, issues_remaining = 1 WHERE id = $1",
+        &[&eligible_low],
+    )
+    .await
+    .unwrap();
+
+    // Stored unblocked and actually eligible, with a higher queue position.
+    let eligible_high = thread(&conn, user_id, "EligibleHigh").await;
+    let high_issue = issue(&conn, eligible_high, "1", 1, "unread").await;
+    frontier(&conn, eligible_high, high_issue).await;
+    conn.execute(
+        "UPDATE threads SET queue_position = 9, issues_remaining = 1 WHERE id = $1",
+        &[&eligible_high],
+    )
+    .await
+    .unwrap();
+
+    // Stored unblocked but no unread issue, so not an Option E candidate.
+    let no_unread = thread(&conn, user_id, "NoUnread").await;
+    conn.execute(
+        "UPDATE threads SET queue_position = 1 WHERE id = $1",
+        &[&no_unread],
+    )
+    .await
+    .unwrap();
+
+    let (list_status, list_body) = send(&state, get("/api/v2/threads", &token, &csrf)).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+    let threads = list_body["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), 3, "{list_body:?}");
+    let list_position = |id: i32| {
+        threads
+            .iter()
+            .find(|row| row["id"].as_i64() == Some(id as i64))
+            .unwrap()["queue_position"]
+            .as_i64()
+            .unwrap()
+    };
+
+    // Both eligible threads are unblocked under Option E despite the stored
+    // flag; NoUnread is grouped last despite its lower stored position.
+    assert_eq!(list_position(eligible_low), 1, "{list_body:?}");
+    assert_eq!(list_position(eligible_high), 2, "{list_body:?}");
+    assert_eq!(list_position(no_unread), 3, "{list_body:?}");
+
+    for (id, expected) in [(eligible_low, 1i64), (eligible_high, 2), (no_unread, 3)] {
+        let (status, body) =
+            send(&state, get(&format!("/api/v1/threads/{id}"), &token, &csrf)).await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(
+            body["queue_position"].as_i64().unwrap(),
+            expected,
+            "{body:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn roll_offer_queue_position_matches_queue_and_detail() {
+    // The pending Roll offer must forward the canonical display position, not
+    // the raw stored queue_position (issue #5263, Roll surface).
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-offer").await;
+    let conn = state.pool.get().await.unwrap();
+    // The Roll offer bootstraps the reader's active session first.
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    let early = thread(&conn, user_id, "Early").await;
+    let pick = thread(&conn, user_id, "Pick").await;
+    let late = thread(&conn, user_id, "Late").await;
+    for (id, position) in [(early, 10i32), (pick, 20), (late, 30)] {
+        conn.execute(
+            "UPDATE threads SET queue_position = $1 WHERE id = $2",
+            &[&position, &id],
+        )
+        .await
+        .unwrap();
+    }
+    // Only "Pick" has an unread issue, so the offer pool contains just it and
+    // the selected thread is deterministic.
+    let issue_id = issue(&conn, pick, "1", 1, "unread").await;
+    frontier(&conn, pick, issue_id).await;
+    conn.execute(
+        "UPDATE threads SET issues_remaining = 1 WHERE id = $1",
+        &[&pick],
+    )
+    .await
+    .unwrap();
+
+    let (list_status, list_body) = send(&state, get("/api/v2/threads", &token, &csrf)).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+    let threads = list_body["threads"].as_array().unwrap();
+    let pick_list_pos = threads
+        .iter()
+        .find(|row| row["id"].as_i64() == Some(pick as i64))
+        .unwrap()["queue_position"]
+        .as_i64()
+        .unwrap();
+
+    let (detail_status, detail_body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
+    let pick_detail_pos = detail_body["queue_position"].as_i64().unwrap();
+
+    let (offer_status, offer_body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-offer-canonical-001",
+                "snoozed_thread_ids": []
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+    assert_eq!(
+        offer_body["thread_id"].as_i64().unwrap(),
+        pick as i64,
+        "{offer_body:?}"
+    );
+    let pick_offer_pos = offer_body["queue_position"].as_i64().unwrap();
+
+    assert_eq!(
+        pick_detail_pos, pick_list_pos,
+        "detail must match queue list"
+    );
+    assert_eq!(
+        pick_offer_pos, pick_list_pos,
+        "roll offer must match queue list"
+    );
+    assert_ne!(
+        pick_list_pos, 20,
+        "position must be canonical, not the stored 20"
+    );
+}
+
+#[tokio::test]
+async fn bootstrap_reload_pending_offer_queue_position_matches_queue_and_detail() {
+    // Reloading a pending Roll through bootstrap must return the same canonical
+    // display position as the Queue list and Thread Detail, not the raw stored
+    // queue_position (issue #5263, bootstrap/reload surface).
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-boot").await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    let early = thread(&conn, user_id, "Early").await;
+    let pick = thread(&conn, user_id, "Pick").await;
+    let late = thread(&conn, user_id, "Late").await;
+    for (id, position) in [(early, 10i32), (pick, 20), (late, 30)] {
+        conn.execute(
+            "UPDATE threads SET queue_position = $1 WHERE id = $2",
+            &[&position, &id],
+        )
+        .await
+        .unwrap();
+    }
+    let issue_id = issue(&conn, pick, "1", 1, "unread").await;
+    frontier(&conn, pick, issue_id).await;
+    conn.execute(
+        "UPDATE threads SET issues_remaining = 1 WHERE id = $1",
+        &[&pick],
+    )
+    .await
+    .unwrap();
+
+    let (list_status, list_body) = send(&state, get("/api/v2/threads", &token, &csrf)).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body:?}");
+    let threads = list_body["threads"].as_array().unwrap();
+    let pick_list_pos = threads
+        .iter()
+        .find(|row| row["id"].as_i64() == Some(pick as i64))
+        .unwrap()["queue_position"]
+        .as_i64()
+        .unwrap();
+
+    let (detail_status, detail_body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
+    let pick_detail_pos = detail_body["queue_position"].as_i64().unwrap();
+
+    let (offer_status, offer_body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-offer-bootstrap-001",
+                "snoozed_thread_ids": []
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+    assert_eq!(
+        offer_body["thread_id"].as_i64().unwrap(),
+        pick as i64,
+        "{offer_body:?}"
+    );
+    let pick_offer_pos = offer_body["queue_position"].as_i64().unwrap();
+
+    let (bootstrap_status, bootstrap_body) =
+        send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(bootstrap_status, StatusCode::OK, "{bootstrap_body:?}");
+    let active = bootstrap_body["active_thread"]
+        .as_object()
+        .expect("bootstrap should report the pending offer as active_thread");
+    assert_eq!(
+        active["id"].as_i64().unwrap(),
+        pick as i64,
+        "{bootstrap_body:?}"
+    );
+    let pick_bootstrap_pos = active["queue_position"].as_i64().unwrap();
+
+    assert_eq!(
+        pick_detail_pos, pick_list_pos,
+        "detail must match queue list"
+    );
+    assert_eq!(
+        pick_offer_pos, pick_list_pos,
+        "roll offer must match queue list"
+    );
+    assert_eq!(
+        pick_bootstrap_pos, pick_list_pos,
+        "bootstrap reload must match queue list"
+    );
+    assert_ne!(
+        pick_bootstrap_pos, 20,
+        "bootstrap position must be canonical, not the stored 20"
+    );
+}

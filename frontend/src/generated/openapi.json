@@ -588,55 +588,6 @@
         ],
         "type": "object"
       },
-      "BootstrapAliasCounterSchema": {
-        "description": "One aggregated bootstrap alias tally.",
-        "properties": {
-          "alias": {
-            "description": "Bootstrap alias: legacy, v1, or v2.",
-            "title": "Alias",
-            "type": "string"
-          },
-          "count": {
-            "description": "Number of observed hits.",
-            "minimum": 0.0,
-            "title": "Count",
-            "type": "integer"
-          },
-          "status_class": {
-            "description": "Response status class, e.g. 2xx.",
-            "title": "Status Class",
-            "type": "string"
-          },
-          "web_origin": {
-            "description": "True if request looked like a browser client.",
-            "title": "Web Origin",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "alias",
-          "web_origin",
-          "status_class",
-          "count"
-        ],
-        "title": "BootstrapAliasCounterSchema",
-        "type": "object"
-      },
-      "BootstrapAliasSnapshotSchema": {
-        "description": "Process-local bootstrap alias counters.",
-        "properties": {
-          "counters": {
-            "description": "Aggregated counts per (alias, web_origin, status class).",
-            "items": {
-              "$ref": "#/components/schemas/BootstrapAliasCounterSchema"
-            },
-            "title": "Counters",
-            "type": "array"
-          }
-        },
-        "title": "BootstrapAliasSnapshotSchema",
-        "type": "object"
-      },
       "BootstrapBandwidth": {
         "description": "Compact bandwidth block retained for existing Roll consumers.",
         "properties": {
@@ -899,7 +850,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "snoozed_thread_ids": {
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "snoozed_threads": {
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set.",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
             },
@@ -925,6 +885,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -1173,113 +1134,78 @@
         "type": "object"
       },
       "BoundaryEditorTarget": {
-        "description": "Where the reader can change the rule that produced a boundary.\n\nThe target is a descriptor, not a URL: the client owns routing so a\nrenamed surface never breaks a stored deep link.",
         "properties": {
           "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "kind": {
-            "enum": [
-              "reading_list",
-              "prerequisite",
-              "issue"
-            ],
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
-            "title": "Label",
             "type": "string"
           },
           "list_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "List Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "prerequisite_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prerequisite Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
           "kind",
           "label"
         ],
-        "title": "BoundaryEditorTarget",
         "type": "object"
       },
       "BoundaryIssue": {
-        "description": "One named Issue, labeled with its Comic Vine volume when known.",
         "properties": {
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "label": {
-            "title": "Label",
             "type": "string"
           },
           "reading_lists": {
             "items": {
               "$ref": "#/components/schemas/BoundaryReadingList"
             },
-            "title": "Reading Lists",
             "type": "array"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_title": {
-            "title": "Thread Title",
             "type": "string"
           },
           "volume_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Volume Label"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1287,9 +1213,9 @@
           "thread_id",
           "thread_title",
           "issue_number",
-          "label"
+          "label",
+          "reading_lists"
         ],
-        "title": "BoundaryIssue",
         "type": "object"
       },
       "BoundaryListMode": {
@@ -1300,22 +1226,15 @@
         "type": "string"
       },
       "BoundaryReadingList": {
-        "description": "One owned Reading List that places an Issue.",
         "properties": {
           "list_id": {
-            "title": "List Id",
+            "format": "int32",
             "type": "integer"
           },
           "mode": {
-            "enum": [
-              "strict",
-              "loose"
-            ],
-            "title": "Mode",
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
-            "title": "Name",
             "type": "string"
           }
         },
@@ -1324,7 +1243,6 @@
           "name",
           "mode"
         ],
-        "title": "BoundaryReadingList",
         "type": "object"
       },
       "BoundaryState": {
@@ -4153,136 +4071,6 @@
         "title": "CheckPotentialDuplicatesResponse",
         "type": "object"
       },
-      "CollectionExclusionCreate": {
-        "description": "Exactly one target: external volume identity, Thread or Issue.",
-        "properties": {
-          "external_volume_id": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Volume Id"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          }
-        },
-        "title": "CollectionExclusionCreate",
-        "type": "object"
-      },
-      "CollectionExclusionResponse": {
-        "description": "Stored exclusion, with an ID for explicit removal.",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "external_volume_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Volume Id"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "user_id",
-          "provider",
-          "external_volume_id",
-          "thread_id",
-          "issue_id",
-          "created_at"
-        ],
-        "title": "CollectionExclusionResponse",
-        "type": "object"
-      },
       "ComicPileMatch": {
         "description": "Owner-scoped local representations of a related ComicVine issue.",
         "properties": {
@@ -5074,6 +4862,8 @@
           "ordering_mode",
           "lane_count",
           "step_count",
+          "source_paths",
+          "source_names",
           "updated_at"
         ],
         "type": "object"
@@ -5335,6 +5125,8 @@
           "user_id",
           "name",
           "ordering_mode",
+          "lanes",
+          "nodes",
           "created_at",
           "updated_at"
         ],
@@ -7129,6 +6921,35 @@
           "status"
         ],
         "title": "CreatorMetricIssue",
+        "type": "object"
+      },
+      "CreatorMetricPagination": {
+        "properties": {
+          "next_page_token": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_pages": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "page_size",
+          "total_pages"
+        ],
         "type": "object"
       },
       "CreatorRatingBucket": {
@@ -11773,111 +11594,6 @@
         ],
         "type": "object"
       },
-      "NativeBoundaryEditorTarget": {
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/EditorKind"
-          },
-          "label": {
-            "type": "string"
-          },
-          "list_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "prerequisite_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "kind",
-          "label"
-        ],
-        "type": "object"
-      },
-      "NativeBoundaryIssue": {
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "reading_lists": {
-            "items": {
-              "$ref": "#/components/schemas/NativeBoundaryReadingList"
-            },
-            "type": "array"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "volume_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "label",
-          "reading_lists"
-        ],
-        "type": "object"
-      },
-      "NativeBoundaryReadingList": {
-        "properties": {
-          "list_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoundaryListMode"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "list_id",
-          "name",
-          "mode"
-        ],
-        "type": "object"
-      },
       "NativeCBLBreadcrumb": {
         "properties": {
           "name": {
@@ -12300,7 +12016,1337 @@
           "node_type",
           "ref_id",
           "lane_id",
-          "position"
+          "position",
+          "label",
+          "source_role",
+          "source_confidence",
+          "source_explanation",
+          "source_paths",
+          "source_cbl_placements",
+          "source_story_arc_ids",
+          "source_target_story_arc_id",
+          "reader_role",
+          "reader_optional",
+          "convergence_gate"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "upcoming_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonIssueRef": {
+        "properties": {
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonItem": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "insufficient_data": {
+            "type": "boolean"
+          },
+          "max_issue_refs_per_group": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "min_rated_issues_per_series": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "normalized_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rating_distribution": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
+            },
+            "type": "array"
+          },
+          "role_stats": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonRoleStat"
+            },
+            "type": "array"
+          },
+          "strongest_series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonSeriesAggregate"
+            },
+            "type": "array"
+          },
+          "top_rating_rate": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unread_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
+            },
+            "type": "array"
+          },
+          "unread_upcoming_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "rating_distribution",
+          "role_stats",
+          "strongest_series",
+          "min_rated_issues_per_series",
+          "unread_upcoming_count",
+          "read_unrated_count",
+          "unread_issue_refs",
+          "read_unrated_issue_refs",
+          "max_issue_refs_per_group",
+          "insufficient_data"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonResponse": {
+        "properties": {
+          "comparisons": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonItem"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorComparisonCoverage"
+          },
+          "insufficient_data_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "comparisons",
+          "coverage",
+          "insufficient_data_keys"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonRoleStat": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonSeriesAggregate": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_count",
+          "rated_issue_count",
+          "average_rating"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDetailResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorSummaryCoverage"
+          },
+          "headline_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "insights": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorInsights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "rated_population_scope": {
+            "type": "string"
+          },
+          "rating_distribution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorRatingDistribution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read_unrated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "role_stats": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorRoleStat"
+            },
+            "type": "array"
+          },
+          "series_groups": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorSeriesGroup"
+            },
+            "type": "array"
+          },
+          "series_groups_complete": {
+            "type": "boolean"
+          },
+          "series_groups_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NativeCreatorSummaryItem"
+          },
+          "upcoming_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "summary",
+          "coverage",
+          "role_stats",
+          "series_groups",
+          "series_groups_total",
+          "series_groups_complete",
+          "rated_issues",
+          "rated_population_scope",
+          "headline_roles",
+          "read_unrated_issues",
+          "upcoming_issues"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryEntry": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "min_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "normalized_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rating_spread": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rating_stddev": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "read_unrated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryReason"
+            },
+            "type": "array"
+          },
+          "recent_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_rating_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "top_rating_rate": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "trend_delta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "trend_direction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trend_sample_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "rated_issue_count",
+          "top_rating_count",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "trend_sample_count",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryReason": {
+        "properties": {
+          "comparison": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "threshold": {
+            "format": "double",
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorDiscoveryCoverage"
+          },
+          "max_entries_per_view": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minimum_reliable_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "views",
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryView": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryEntry"
+            },
+            "type": "array"
+          },
+          "max_entries": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "min_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorInsights": {
+        "properties": {
+          "excluded_incomplete_series_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "highest_rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
+            },
+            "type": "array"
+          },
+          "individual_issue_limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "individual_issues_combined": {
+            "type": "boolean"
+          },
+          "lowest_rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
+            },
+            "type": "array"
+          },
+          "min_series_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "most_rated_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_sample_met": {
+            "type": "boolean"
+          },
+          "strongest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weakest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "min_series_sample",
+          "series_sample_met",
+          "excluded_incomplete_series_count",
+          "individual_issue_limit",
+          "individual_issues_combined",
+          "highest_rated_issues",
+          "lowest_rated_issues"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorIssueInsight": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "effective_rating",
+          "roles",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorIssueRow": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "roles",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricCalculation": {
+        "properties": {
+          "denominator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formula": {
+            "type": "string"
+          },
+          "numerator": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "formula",
+          "numerator"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricDrilldown": {
+        "properties": {
+          "bucket_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "bucket_percentage": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/NativeCreatorMetricCalculation"
+          },
+          "creator_key": {
+            "type": "string"
+          },
+          "excluded_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
+            },
+            "type": "array"
+          },
+          "included_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
+            },
+            "type": "array"
+          },
+          "metric_type": {
+            "type": "string"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/CreatorMetricPagination"
+          },
+          "rating_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "role_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "role_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "series_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "metric_type",
+          "creator_key",
+          "calculation",
+          "total_count",
+          "included_issues",
+          "excluded_issues",
+          "pagination"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricIssue": {
+        "properties": {
+          "creator_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "effective_rating_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "missing_rating_cause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "creator_roles"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRatingBucket": {
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "rating",
+          "count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRatingDistribution": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorRatingBucket"
+            },
+            "type": "array"
+          },
+          "max_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "mean_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "median_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "min_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "sample_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "buckets",
+          "sample_count",
+          "mean_rating",
+          "median_rating",
+          "min_rating",
+          "max_rating"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRoleStat": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesGroup": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "unread_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "roles",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "metadata_complete",
+          "sort_key",
+          "population_scope"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesInsight": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
+          "roles",
+          "metadata_complete",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesIssueListResponse": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "roles",
+          "rated_issue_count",
+          "metadata_complete",
+          "population_scope",
+          "issues",
+          "total",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -12394,6 +13440,225 @@
           "ratings_count",
           "read_unrated_count",
           "upcoming_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamChemistryResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorTeamCoverage"
+          },
+          "max_ranked_pairs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "min_shared_team_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamPair"
+            },
+            "type": "array"
+          },
+          "pairs_total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pairs",
+          "pairs_total",
+          "min_shared_team_sample",
+          "max_ranked_pairs",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamIssueRef": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamMember": {
+        "properties": {
+          "baseline_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "baseline_rated_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamPair": {
+        "properties": {
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamMember"
+            },
+            "type": "array"
+          },
+          "max_shared_issue_refs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pair_key": {
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "shared_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamIssueRef"
+            },
+            "type": "array"
+          },
+          "shared_median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "shared_rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "shared_rating_distribution": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "shared_series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamSeriesRef"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count",
+          "shared_rating_distribution",
+          "shared_series",
+          "shared_issue_refs",
+          "max_shared_issue_refs"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamSeriesRef": {
+        "properties": {
+          "shared_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
         ],
         "type": "object"
       },
@@ -12901,78 +14166,6 @@
             ]
           }
         },
-        "type": "object"
-      },
-      "NativeReadingBoundaryBatchRequest": {
-        "properties": {
-          "thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "thread_ids"
-        ],
-        "type": "object"
-      },
-      "NativeReadingBoundaryBlocker": {
-        "properties": {
-          "editor": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BlockerKind"
-          },
-          "origin": {
-            "$ref": "#/components/schemas/BlockerOrigin"
-          },
-          "reason": {
-            "type": "string"
-          },
-          "waiting_on": {
-            "items": {
-              "$ref": "#/components/schemas/NativeBoundaryIssue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "kind",
-          "origin",
-          "reason",
-          "waiting_on"
-        ],
-        "type": "object"
-      },
-      "NativeReadingBoundaryNext": {
-        "properties": {
-          "editor": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "issue": {
-            "$ref": "#/components/schemas/NativeBoundaryIssue"
-          }
-        },
-        "required": [
-          "issue"
-        ],
         "type": "object"
       },
       "NativeReadingListEntryIntent": {
@@ -15447,39 +16640,18 @@
         "type": "object"
       },
       "ReadingBoundaryBatchRequest": {
-        "description": "Owned series IDs to explain in one request.",
         "properties": {
           "thread_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "maxItems": 200,
-            "minItems": 1,
-            "title": "Thread Ids",
             "type": "array"
           }
         },
         "required": [
           "thread_ids"
         ],
-        "title": "ReadingBoundaryBatchRequest",
-        "type": "object"
-      },
-      "ReadingBoundaryBatchResponse": {
-        "description": "Canonical explanations keyed by Thread ID.",
-        "properties": {
-          "threads": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ReadingBoundaryExplanation"
-            },
-            "title": "Threads",
-            "type": "object"
-          }
-        },
-        "required": [
-          "threads"
-        ],
-        "title": "ReadingBoundaryBatchResponse",
         "type": "object"
       },
       "ReadingBoundaryBatchResponseV2": {
@@ -15501,10 +16673,9 @@
         "type": "object"
       },
       "ReadingBoundaryBlocker": {
-        "description": "One live Option E requirement that currently blocks the next Issue.",
         "properties": {
           "editor": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
@@ -15514,109 +16685,41 @@
             ]
           },
           "kind": {
-            "enum": [
-              "strict_order",
-              "hold",
-              "after_previous",
-              "prerequisite"
-            ],
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "enum": [
-              "reading_list",
-              "reader_prerequisite"
-            ],
-            "title": "Origin",
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
-            "title": "Reason",
             "type": "string"
           },
           "waiting_on": {
             "items": {
               "$ref": "#/components/schemas/BoundaryIssue"
             },
-            "title": "Waiting On",
             "type": "array"
           }
         },
         "required": [
           "kind",
           "origin",
-          "reason"
+          "reason",
+          "waiting_on"
         ],
-        "title": "ReadingBoundaryBlocker",
-        "type": "object"
-      },
-      "ReadingBoundaryExplanation": {
-        "description": "Canonical explanation of one series' reading boundaries.",
-        "properties": {
-          "blockers": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
-            },
-            "title": "Blockers",
-            "type": "array"
-          },
-          "historical": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingBoundaryHistorical"
-            },
-            "title": "Historical",
-            "type": "array"
-          },
-          "next": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "state": {
-            "enum": [
-              "blocked",
-              "available",
-              "complete",
-              "unavailable"
-            ],
-            "title": "State",
-            "type": "string"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id",
-          "state",
-          "summary"
-        ],
-        "title": "ReadingBoundaryExplanation",
         "type": "object"
       },
       "ReadingBoundaryExplanationV2": {
         "properties": {
           "blockers": {
             "items": {
-              "$ref": "#/components/schemas/NativeReadingBoundaryBlocker"
+              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
             },
             "type": "array"
           },
           "next": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
               },
               {
                 "type": "null"
@@ -15642,50 +16745,10 @@
         ],
         "type": "object"
       },
-      "ReadingBoundaryHistorical": {
-        "description": "A reader-owned association that is not a live blocker.\n\nHistorical rows never gate execution. They are listed so the reader can\nsee an old association without it being presented as a live boundary.",
-        "properties": {
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "editor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kind": {
-            "enum": [
-              "converted_prerequisite",
-              "legacy_dependency",
-              "skipped_entry"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "label",
-          "detail"
-        ],
-        "title": "ReadingBoundaryHistorical",
-        "type": "object"
-      },
       "ReadingBoundaryNext": {
-        "description": "The Issue the reader may read now.",
         "properties": {
           "editor": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
@@ -15701,7 +16764,6 @@
         "required": [
           "issue"
         ],
-        "title": "ReadingBoundaryNext",
         "type": "object"
       },
       "ReadingGraphBlocker": {
@@ -18602,40 +19664,6 @@
           "snoozed_count"
         ],
         "title": "RollResponse",
-        "type": "object"
-      },
-      "RouteTrafficCounter": {
-        "description": "One aggregated (method, route template, status class) tally.",
-        "properties": {
-          "count": {
-            "description": "Requests observed since process start.",
-            "minimum": 1.0,
-            "title": "Count",
-            "type": "integer"
-          },
-          "method": {
-            "description": "HTTP method, e.g. GET.",
-            "title": "Method",
-            "type": "string"
-          },
-          "route": {
-            "description": "Routed path template, e.g. /api/v1/threads/{thread_id}.",
-            "title": "Route",
-            "type": "string"
-          },
-          "status_class": {
-            "description": "Response status class, e.g. 2xx or 4xx.",
-            "title": "Status Class",
-            "type": "string"
-          }
-        },
-        "required": [
-          "method",
-          "route",
-          "status_class",
-          "count"
-        ],
-        "title": "RouteTrafficCounter",
         "type": "object"
       },
       "SeriesDecision": {
@@ -22237,29 +23265,6 @@
         ],
         "type": "object"
       },
-      "TrafficMetricsSnapshot": {
-        "description": "Process-local traffic counters for one serverless instance.\n\nCounters are monotonic within a process lifetime, so a collector can\nreconstruct fleet-wide totals by keeping the maximum count per key across\npolls of the same ``instance_id``.",
-        "properties": {
-          "counters": {
-            "description": "Aggregated request tallies sorted deterministically.",
-            "items": {
-              "$ref": "#/components/schemas/RouteTrafficCounter"
-            },
-            "title": "Counters",
-            "type": "array"
-          },
-          "instance_id": {
-            "description": "Stable identifier for this process instance.",
-            "title": "Instance Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance_id"
-        ],
-        "title": "TrafficMetricsSnapshot",
-        "type": "object"
-      },
       "UndoApplyResponse": {
         "description": "Full session response matching Python SessionResponse.",
         "properties": {
@@ -22975,34 +23980,6 @@
         ]
       }
     },
-    "/api/v1/bootstrap-alias-metrics": {
-      "get": {
-        "description": "Return this instance's bootstrap alias counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
-        "operationId": "get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BootstrapAliasSnapshotSchema"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Bootstrap Alias Metrics",
-        "tags": [
-          "bootstrap-telemetry",
-          "bootstrap-telemetry"
-        ]
-      }
-    },
     "/api/v1/bug-reports/": {
       "post": {
         "operationId": "create_v1_documentation",
@@ -23268,129 +24245,6 @@
         "summary": "Documentation-only operation for targeted adoption into an existing plan.",
         "tags": [
           "issue-identity"
-        ]
-      }
-    },
-    "/api/v1/collection-exclusions": {
-      "get": {
-        "description": "Return exclusions explicitly entered by this reader.",
-        "operationId": "list_exclusions_api_v1_collection_exclusions_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CollectionExclusionResponse"
-                  },
-                  "title": "Response List Exclusions Api V1 Collection Exclusions Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Exclusions",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
-        ]
-      },
-      "post": {
-        "description": "Idempotently exclude one external volume, Thread or Issue.",
-        "operationId": "create_exclusion_api_v1_collection_exclusions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionExclusionCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionExclusionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Exclusion",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
-        ]
-      }
-    },
-    "/api/v1/collection-exclusions/{exclusion_id}": {
-      "delete": {
-        "description": "Remove one owned exclusion without changing the underlying comic.",
-        "operationId": "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "exclusion_id",
-            "required": true,
-            "schema": {
-              "title": "Exclusion Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Exclusion",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
         ]
       }
     },
@@ -27898,103 +28752,6 @@
         ]
       }
     },
-    "/api/v1/reading-boundaries": {
-      "post": {
-        "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
-        "operationId": "get_reading_boundary_batch_api_v1_reading_boundaries_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Reading Boundary Batch",
-        "tags": [
-          "reading-boundaries",
-          "reading-boundaries"
-        ]
-      }
-    },
-    "/api/v1/reading-boundaries/{thread_id}": {
-      "get": {
-        "description": "Explain one owned series through the canonical Option E result.\n\nArgs:\n    thread_id: Owned Thread to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Named waiting Issues, live blockers, history, and editor targets.\n\nRaises:\n    HTTPException: With status 404 when the Thread is absent or foreign.",
-        "operationId": "get_reading_boundary_api_v1_reading_boundaries__thread_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "title": "Thread Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryExplanation"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Reading Boundary",
-        "tags": [
-          "reading-boundaries",
-          "reading-boundaries"
-        ]
-      }
-    },
     "/api/v1/reading-mode": {
       "get": {
         "operationId": "get_reading_mode_documentation",
@@ -29231,34 +29988,6 @@
         ]
       }
     },
-    "/api/v1/sessions/current/": {
-      "get": {
-        "description": "Get current active session with deadlock retry handling.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with current session details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
-        "operationId": "get_current_session_api_v1_sessions_current__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Current Session",
-        "tags": [
-          "session",
-          "sessions"
-        ]
-      }
-    },
     "/api/v1/sessions/{session_id}": {
       "get": {
         "operationId": "get_session_v1_documentation",
@@ -29349,55 +30078,6 @@
         ],
         "summary": "Documentation-only operation for the versioned details.",
         "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-      "post": {
-        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    session_service: Session service for business logic.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
-        "operationId": "restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Restore Reading Session Start",
-        "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -31698,34 +32378,6 @@
         ]
       }
     },
-    "/api/v1/traffic-metrics": {
-      "get": {
-        "description": "Return this instance's per-route traffic counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
-        "operationId": "get_traffic_metrics_api_v1_traffic_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TrafficMetricsSnapshot"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Traffic Metrics",
-        "tags": [
-          "traffic",
-          "traffic"
-        ]
-      }
-    },
     "/api/v1/undo/{session_id}/snapshots": {
       "get": {
         "operationId": "list_undo_snapshots_v1_documentation",
@@ -32526,6 +33178,667 @@
         ]
       }
     },
+    "/api/v2/creators": {
+      "get": {
+        "operationId": "creators_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_ratings",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorListResponse"
+                }
+              }
+            },
+            "description": "Creator list"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid filters"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/compare": {
+      "get": {
+        "operationId": "compare_documentation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keys",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorComparisonResponse"
+                }
+              }
+            },
+            "description": "Creator comparison"
+          },
+          "400": {
+            "description": "Invalid creator keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/discoveries": {
+      "get": {
+        "operationId": "discoveries_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Creator discoveries"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/summaries": {
+      "get": {
+        "operationId": "summaries_documentation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keys",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorSummariesResponse"
+                }
+              }
+            },
+            "description": "Creator summaries"
+          },
+          "400": {
+            "description": "Invalid creator keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/team-chemistry": {
+      "get": {
+        "operationId": "team_chemistry_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorTeamChemistryResponse"
+                }
+              }
+            },
+            "description": "Creator team chemistry"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}": {
+      "get": {
+        "operationId": "detail_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorDetailResponse"
+                }
+              }
+            },
+            "description": "Creator detail"
+          },
+          "400": {
+            "description": "Invalid key"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Creator not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
+      "get": {
+        "operationId": "rating_distribution_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rating value",
+            "in": "path",
+            "name": "rating_value",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Rating distribution drilldown"
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/role-stats/{role}": {
+      "get": {
+        "operationId": "role_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Creator role",
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Role drilldown"
+          },
+          "400": {
+            "description": "Invalid role"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}": {
+      "get": {
+        "operationId": "series_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Series key",
+            "in": "path",
+            "name": "series_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Series drilldown"
+          },
+          "400": {
+            "description": "Invalid series"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/{metric_type}": {
+      "get": {
+        "operationId": "metric_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Metric type",
+            "in": "path",
+            "name": "metric_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating_value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "series_key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Creator metric drilldown"
+          },
+          "400": {
+            "description": "Invalid metric"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Metric not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/series/{series_key}/issues": {
+      "get": {
+        "operationId": "series_issues_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Series key",
+            "in": "path",
+            "name": "series_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorSeriesIssueListResponse"
+                }
+              }
+            },
+            "description": "Creator series issues"
+          },
+          "400": {
+            "description": "Invalid keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
     "/api/v2/demo-roll": {
       "get": {
         "operationId": "read_demo_roll_documentation",
@@ -32986,7 +34299,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeReadingBoundaryBatchRequest"
+                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
               }
             }
           },
