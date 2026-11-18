@@ -1,0 +1,64 @@
+name: Factory Historical Delivery Reconciliation
+
+# Independently recover trusted source-run receipts after the factory repair
+# reaches main. The worker execution result is immutable; this never approves,
+# merges, reassigns or deletes another worker's PR or lease.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/factory_historical_delivery.py'
+      - '.github/workflows/factory-historical-delivery.yml'
+  schedule:
+    - cron: '43 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Optional specific work PR number for verified backfill'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: factory-historical-delivery-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Configure restricted Neon factory event ledger
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+      - name: Backfill verified source-run receipts only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELECTED_PR: ${{ inputs.pr || '' }}
+        run: |
+          set -Eeuo pipefail
+          args=(--repo "$GITHUB_REPOSITORY" --days 3 --max-pages 3 --max-prs 12)
+          if [[ -n "$SELECTED_PR" ]]; then
+            [[ "$SELECTED_PR" =~ ^[1-9][0-9]*$ ]] || exit 1
+            args+=(--pr "$SELECTED_PR")
+          fi
+          python3 .github/scripts/factory_historical_delivery.py "${args[@]}" \
+            | tee "$RUNNER_TEMP/factory-historical-delivery.json"
+          {
+            echo '### Trusted historical delivery receipts'
+            echo '```json'
+            cat "$RUNNER_TEMP/factory-historical-delivery.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
