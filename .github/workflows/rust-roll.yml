@@ -77,6 +77,9 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_PARITY_DATABASE_URL: postgresql://roll_test_dml:roll-test-dml@127.0.0.1:5432/native_auth_test
+      # comicpile-migrate is now a workspace member, so the workspace-wide test
+      # step runs its database tests too; they create their own scratch databases.
+      MIGRATE_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/postgres
       # The workspace target directory is the repository root by default; keep
       # the release artifact at the path the parity runner and upload expect.
       CARGO_TARGET_DIR: ${{ github.workspace }}/native/roll-service/target
@@ -182,12 +185,21 @@ jobs:
           # include_str! dependency cannot pass full-checkout CI again.
           bundle="$(mktemp -d)"
           trap 'rm -rf "$bundle"' EXIT
-          mkdir -p "$bundle/api" "$bundle/native/roll-service"
+          mkdir -p "$bundle/api" "$bundle/native/roll-service" "$bundle/native/migrate"
           cp Cargo.toml Cargo.lock build.rs "$bundle/"
           cp api/native_roll.rs api/native_issue.rs "$bundle/api/"
           cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
           cp -R native/roll-service/src "$bundle/native/roll-service/src"
           test ! -e "$bundle/native/roll-service/tests"
+          # Cargo loads every declared workspace member's manifest (and needs
+          # its target sources) before building native_roll, so the migration
+          # crate must be present even though its binary is not built here.
+          # The real Vercel bundle also contains it; .vercelignore only drops
+          # tests/ and *.sql, which is why neither is copied above.
+          cp native/migrate/Cargo.toml "$bundle/native/migrate/"
+          cp -R native/migrate/src "$bundle/native/migrate/src"
+          test ! -e "$bundle/native/migrate/tests"
+          test ! -e "$bundle/native/migrate/migrations"
           (
             cd "$bundle"
             COMICPILE_BUILD_SHA="$GITHUB_SHA" \
