@@ -84,6 +84,22 @@ use utoipa::OpenApi;
         crate::continuity_rules::get_documentation,
         crate::continuity_rules::update_documentation,
         crate::continuity_rules::delete_documentation,
+        // Same-path v1 continuity-plans operations cut over to native Rust.
+        crate::continuity_plans::list_documentation,
+        crate::continuity_plans::create_documentation,
+        crate::continuity_plans::get_documentation,
+        crate::continuity_plans::update_documentation,
+        crate::continuity_plans::delete_documentation,
+        crate::continuity_plans::adopt_reading_order_documentation,
+        crate::continuity_plans::membership_documentation,
+        crate::continuity_plans::link_dependency_documentation,
+        crate::continuity_plans::unlink_dependency_documentation,
+        crate::continuity_plans::project_reading_order_documentation,
+        crate::continuity_plans::release_source_create_documentation,
+        crate::continuity_plans::release_source_list_documentation,
+        crate::continuity_plans::release_source_list_reader_documentation,
+        crate::continuity_plans::release_source_update_documentation,
+        crate::continuity_plans::release_source_delete_documentation,
         // All five same-path releases operations are documented in this
         // browser-facing native contract: the two public reads plus the
         // writer-authorized source/publish/retract operations, which carry
@@ -95,17 +111,6 @@ use utoipa::OpenApi;
         crate::releases::publish_documentation,
         crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
-        crate::creators_v2::list_documentation,
-        crate::creators_v2::summaries_documentation,
-        crate::creators_v2::compare_documentation,
-        crate::creators_v2::discoveries_documentation,
-        crate::creators_v2::team_chemistry_documentation,
-        crate::creators_v2::detail_documentation,
-        crate::creators_v2::series_issues_documentation,
-        crate::creators_v2::metric_documentation,
-        crate::creators_v2::rating_distribution_documentation,
-        crate::creators_v2::role_documentation,
-        crate::creators_v2::series_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -186,48 +191,34 @@ use utoipa::OpenApi;
         crate::continuity_rules::ContinuityRuleRequest,
         crate::continuity_rules::ContinuityRuleResponse,
         crate::continuity_rules::ConvergenceTarget,
+        crate::continuity_plans::ContinuityPlanLane,
+        crate::continuity_plans::ContinuityPlanNode,
+        crate::continuity_plans::ContinuityPlanWrite,
+        crate::continuity_plans::ContinuityPlanResponse,
+        crate::continuity_plans::ContinuityPlanListItem,
+        crate::continuity_plans::ReadingOrderProjectionRequest,
+        crate::continuity_plans::ReadingOrderProjectionEntry,
+        crate::continuity_plans::ReadingOrderProjectionConflict,
+        crate::continuity_plans::ReadingOrderProjectionPreview,
+        crate::continuity_plans::ReadingOrderProjectionResult,
+        crate::continuity_plans::ReadingOrderAdoptRequest,
+        crate::continuity_plans::ReleaseSourceCreate,
+        crate::continuity_plans::ReleaseSourceUpdate,
+        crate::continuity_plans::ReleaseSourceResponse,
+        crate::continuity_plans::ReadingPlanReleaseSourceStatus,
+        crate::continuity_plans::ReadingPlanMemberIssue,
+        crate::continuity_plans::ReadingPlanSourceSnapshot,
+        crate::continuity_plans::ReadingPlanSourcePlacementView,
+        crate::continuity_plans::ReadingPlanProgress,
+        crate::continuity_plans::ReadingPlanMembershipResponse,
+        crate::continuity_plans::ReadingPlanDependencyLink,
+        crate::continuity_plans::ReadingPlanDependencyLinkRequest,
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
-        crate::creators_v2::CreatorSummaryCoverage,
-        crate::creators_v2::CreatorSummaryItem,
-        crate::creators_v2::CreatorSummariesResponse,
-        crate::creators_v2::CreatorListItem,
-        crate::creators_v2::CreatorListResponse,
-        crate::creators_v2::CreatorRoleStat,
-        crate::creators_v2::CreatorIssueRow,
-        crate::creators_v2::CreatorRatingBucket,
-        crate::creators_v2::CreatorRatingDistribution,
-        crate::creators_v2::CreatorSeriesGroup,
-        crate::creators_v2::CreatorSeriesIssueListResponse,
-        crate::creators_v2::CreatorIssueInsight,
-        crate::creators_v2::CreatorSeriesInsight,
-        crate::creators_v2::CreatorInsights,
-        crate::creators_v2::CreatorDetailResponse,
-        crate::creators_v2::CreatorComparisonRoleStat,
-        crate::creators_v2::CreatorComparisonSeriesAggregate,
-        crate::creators_v2::CreatorComparisonIssueRef,
-        crate::creators_v2::CreatorComparisonItem,
-        crate::creators_v2::CreatorComparisonCoverage,
-        crate::creators_v2::CreatorComparisonResponse,
-        crate::creators_v2::CreatorDiscoveryReason,
-        crate::creators_v2::CreatorDiscoveryEntry,
-        crate::creators_v2::CreatorDiscoveryView,
-        crate::creators_v2::CreatorDiscoveryCoverage,
-        crate::creators_v2::CreatorDiscoveryResponse,
-        crate::creators_v2::CreatorTeamMember,
-        crate::creators_v2::CreatorTeamIssueRef,
-        crate::creators_v2::CreatorTeamSeriesRef,
-        crate::creators_v2::CreatorTeamPair,
-        crate::creators_v2::CreatorTeamCoverage,
-        crate::creators_v2::CreatorTeamChemistryResponse,
-        crate::creators_v2::CreatorMetricCalculation,
-        crate::creators_v2::CreatorMetricIssue,
-        crate::creators_v2::CreatorMetricPagination,
-        crate::creators_v2::CreatorMetricDrilldown,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -316,6 +307,55 @@ mod tests {
             );
         }
         assert!(document["components"]["securitySchemes"]["HTTPBearer"].is_object());
+    }
+
+    /// The same-path continuity-plans cutover must keep its v1 operations and
+    /// response schemas in the generated native contract (issue #4838).
+    #[test]
+    fn continuity_plans_same_path_operations_and_schemas_are_documented() {
+        let document = document();
+        for path in [
+            "/api/v1/continuity-plans/",
+            "/api/v1/continuity-plans/from-reading-order",
+            "/api/v1/continuity-plans/{plan_id}",
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            "/api/v1/continuity-plans/release-sources/",
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+        ] {
+            assert!(
+                document["paths"].get(path).is_some(),
+                "migrated v1 path missing from native contract: {path}"
+            );
+        }
+        for schema in [
+            "ContinuityPlanResponse",
+            "ContinuityPlanWrite",
+            "ContinuityPlanListItem",
+            "ReadingPlanDependencyLink",
+            "ReadingPlanMembershipResponse",
+            "ReleaseSourceCreate",
+            "ReleaseSourceUpdate",
+            "ContinuityReleaseSourceResponse",
+        ] {
+            assert!(
+                document["components"]["schemas"].get(schema).is_some(),
+                "migrated response schema missing from native contract: {schema}"
+            );
+        }
+        assert_fields(
+            &document,
+            "ContinuityReleaseSourceResponse",
+            &[
+                "id",
+                "plan_id",
+                "thread_id",
+                "provider_volume_id",
+                "enabled",
+            ],
+        );
     }
 
     #[test]
