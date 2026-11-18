@@ -4799,6 +4799,8 @@
           "ordering_mode",
           "lane_count",
           "step_count",
+          "source_paths",
+          "source_names",
           "updated_at"
         ],
         "properties": {
@@ -4839,7 +4841,18 @@
           "node_type",
           "ref_id",
           "lane_id",
-          "position"
+          "position",
+          "label",
+          "source_role",
+          "source_confidence",
+          "source_explanation",
+          "source_paths",
+          "source_cbl_placements",
+          "source_story_arc_ids",
+          "source_target_story_arc_id",
+          "reader_role",
+          "reader_optional",
+          "convergence_gate"
         ],
         "properties": {
           "checkpoint_target_ref_id": {
@@ -4957,6 +4970,8 @@
           "user_id",
           "name",
           "ordering_mode",
+          "lanes",
+          "nodes",
           "created_at",
           "updated_at"
         ],

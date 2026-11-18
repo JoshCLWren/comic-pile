@@ -6548,8 +6548,8 @@ export interface components {
             lane_count: number;
             name: string;
             ordering_mode: string;
-            source_names?: unknown;
-            source_paths?: string[];
+            source_names: unknown;
+            source_paths: string[];
             /** Format: int32 */
             step_count: number;
             updated_at: string;
@@ -6608,9 +6608,9 @@ export interface components {
             created_at: string;
             /** Format: int32 */
             id: number;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            lanes: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            nodes: components["schemas"]["NativeContinuityPlanNode"][];
             ordering_mode: string;
             updated_at: string;
             /** Format: int32 */
@@ -9833,25 +9833,25 @@ export interface components {
             /** Format: int32 */
             checkpoint_target_ref_id?: number | null;
             checkpoint_target_ref_ids?: number[];
-            convergence_gate?: unknown[];
+            convergence_gate: unknown[];
             id: string;
             is_checkpoint?: boolean;
-            label?: string | null;
+            label: string | null;
             lane_id: string;
             node_type: string;
             /** Format: int32 */
             position: number;
-            reader_optional?: boolean | null;
-            reader_role?: string | null;
+            reader_optional: boolean | null;
+            reader_role: string | null;
             /** Format: int32 */
             ref_id: number;
-            source_cbl_placements?: unknown[] | null;
-            source_confidence?: string | null;
-            source_explanation?: string | null;
-            source_paths?: string[] | null;
-            source_role?: string | null;
-            source_story_arc_ids?: string[] | null;
-            source_target_story_arc_id?: string | null;
+            source_cbl_placements: unknown[] | null;
+            source_confidence: string | null;
+            source_explanation: string | null;
+            source_paths: string[] | null;
+            source_role: string | null;
+            source_story_arc_ids: string[] | null;
+            source_target_story_arc_id: string | null;
         };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
