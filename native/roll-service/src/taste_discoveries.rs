@@ -1271,7 +1271,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/taste/discoveries?limit=1&limit=2")
+                    .uri("/api/v1/taste/discoveries?limit=1&limit=abc")
                     .header("authorization", format!("Bearer {token}"))
                     .body(Body::empty())
                     .unwrap(),
@@ -1280,11 +1280,12 @@ mod tests {
             .unwrap();
         let status = response.status();
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap_or(json!(null));
-        assert_ne!(
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
             status,
             StatusCode::UNPROCESSABLE_ENTITY,
-            "repeated limit must use last value (2), not reject as duplicate/invalid: {payload}"
+            "repeated limit must validate the last value (abc), not the valid first value"
         );
+        assert_eq!(payload, json!({"detail": "Validation failed"}));
     }
 }

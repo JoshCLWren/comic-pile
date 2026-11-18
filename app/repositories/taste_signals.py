@@ -7,8 +7,6 @@ standard. It returns ORM models only; response shaping lives in services.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

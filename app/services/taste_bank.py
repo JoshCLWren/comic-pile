@@ -19,7 +19,7 @@ Discovery never blocks rolling or rating: callers treat every failure here as
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
