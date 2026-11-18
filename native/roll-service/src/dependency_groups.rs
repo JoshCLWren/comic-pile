@@ -273,51 +273,8 @@ fn unprocessable(detail: impl Into<String>) -> ApiError {
     ApiError::Unprocessable(detail.into())
 }
 
-fn validation_failed(errors: Vec<serde_json::Value>) -> ApiError {
-    ApiError::structured(
-        StatusCode::UNPROCESSABLE_ENTITY,
-        serde_json::Value::Array(errors),
-    )
-}
-
-fn pydantic_error(
-    error_type: &str,
-    location: &[serde_json::Value],
-    message: impl Into<String>,
-    input: serde_json::Value,
-    context: serde_json::Value,
-) -> serde_json::Value {
-    let mut loc = Vec::with_capacity(location.len() + 1);
-    loc.push(serde_json::json!("body"));
-    loc.extend_from_slice(location);
-    serde_json::json!({
-        "type": error_type,
-        "loc": loc,
-        "msg": message.into(),
-        "input": input,
-        "ctx": context,
-        "url": format!("https://errors.pydantic.dev/2.12/v/{error_type}"),
-    })
-}
-
-fn greater_than_error(location: &[serde_json::Value], input: i32) -> serde_json::Value {
-    pydantic_error(
-        "greater_than",
-        location,
-        "Input should be greater than 0",
-        serde_json::json!(input),
-        serde_json::json!({"gt": 0}),
-    )
-}
-
-fn model_validation_error(message: &str, input: serde_json::Value) -> serde_json::Value {
-    pydantic_error(
-        "value_error",
-        &[],
-        format!("Value error, {message}"),
-        input,
-        serde_json::json!({"error": {}}),
-    )
+fn validation_failed() -> ApiError {
+    unprocessable("Validation failed")
 }
 
 fn conflict(detail: impl Into<String>) -> ApiError {
