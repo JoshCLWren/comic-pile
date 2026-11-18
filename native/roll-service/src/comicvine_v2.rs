@@ -1171,10 +1171,10 @@ pub async fn import_issue(
             request.anchor_after_thread_id,
             items.len(),
         );
-        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        let total_items = insert_into_reading_order(&tx, order_id, thread_id, target).await?;
         response.reading_order_id = Some(order_id);
         response.position = Some(target);
-        response.total_items = Some(items.len() as i32 + 1);
+        response.total_items = Some(total_items);
     }
     tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(response)))
@@ -1446,10 +1446,10 @@ pub async fn import_series(
             request.anchor_after_thread_id,
             items.len(),
         );
-        insert_into_reading_order(&tx, order_id, thread_id, target).await?;
+        let total_items = insert_into_reading_order(&tx, order_id, thread_id, target).await?;
         response.reading_order_id = Some(order_id);
         response.position = Some(target);
-        response.total_items = Some(items.len() as i32 + 1);
+        response.total_items = Some(total_items);
     }
     tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(response)))
