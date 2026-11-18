@@ -2,7 +2,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod activity;
-pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
@@ -955,7 +954,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/dependencies/{dependency_id}",
             delete(legacy_dependencies::delete),
         )
-        .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(

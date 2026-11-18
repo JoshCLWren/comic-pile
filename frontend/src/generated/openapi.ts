@@ -2909,23 +2909,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/analytics/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation used by the canonical Rust OpenAPI generator. */
-        get: operations["metrics_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/auth/csrf": {
         parameters: {
             query?: never;
@@ -3977,24 +3960,6 @@ export interface components {
             items: components["schemas"]["ActivityItem"][];
             next_cursor?: string | null;
             next_page_token?: string | null;
-        };
-        /** @description Reading metrics and analytics for the authenticated user. */
-        AnalyticsMetricsResponse: {
-            /** Format: int32 */
-            active_threads: number;
-            /** Format: double */
-            average_session_hours: number;
-            /** Format: int32 */
-            completed_threads: number;
-            /** Format: double */
-            completion_rate: number;
-            event_stats: {
-                [key: string]: number;
-            };
-            recent_sessions: components["schemas"]["RecentSession"][];
-            top_rated_threads: components["schemas"]["TopRatedThread"][];
-            /** Format: int32 */
-            total_threads: number;
         };
         AssignTagRequest: {
             /** Format: int32 */
@@ -9840,15 +9805,6 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
-        /** @description Summary of one recent reading session. */
-        RecentSession: {
-            ended_at?: string | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-        };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
             /** Format: int32 */
@@ -11423,15 +11379,6 @@ export interface components {
             access_token: string;
             refresh_token: string;
             token_type: string;
-        };
-        /** @description Summary of one highly rated thread. */
-        TopRatedThread: {
-            format: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: double */
-            rating: number;
-            title: string;
         };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
@@ -18104,33 +18051,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    metrics_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owner-scoped bounded reading metrics */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
-                };
-            };
-            /** @description Not authenticated, revoked token, or stale credential epoch */
             401: {
                 headers: {
                     [name: string]: unknown;

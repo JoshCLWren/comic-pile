@@ -440,8 +440,6 @@ export interface MetricRequest {
 
 export type MetricResponse = components['schemas']['CreatorMetricDrilldown']
 
-export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
-
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
 }
@@ -787,7 +785,6 @@ export interface NativeV2Client {
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
   me(): Promise<MeResponse>
   metric(args: MetricRequest): Promise<MetricResponse>
-  metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
@@ -1131,9 +1128,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/${encodeURIComponent(String(args.path.metric_type))}`,
         { params: compactQuery(args.query) },
       )
-    },
-    metrics() {
-      return client.get<MetricsResponse>("/v2/analytics/metrics")
     },
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(

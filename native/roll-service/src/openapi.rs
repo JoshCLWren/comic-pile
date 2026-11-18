@@ -5,7 +5,7 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`, `AnalyticsApi`) with the v2 auth, bootstrap, dice, offer, reset
+//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset
 //! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
@@ -17,7 +17,7 @@ use utoipa::OpenApi;
 /// The native `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
-/// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
+/// `QueueApi`, `ThreadsApi` and `IssueApi` already publish the
 /// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -298,7 +298,6 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
-        .merge_from(crate::analytics::AnalyticsApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
