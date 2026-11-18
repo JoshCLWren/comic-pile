@@ -322,13 +322,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
             "/api/sessions/{session_id}/snapshots",
         }
     )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/sessions/correction-examples"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
-        for item in v1_ops
-    )
     for item in v1_ops:
         if item.get("burndown_status") == "shadowed by Rust":
             assert item.get("runtime") == "python-fastapi"
@@ -432,6 +425,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "demo",
         "dependencies",
         "issue-identity-cbl-catalog",
+        "issue-identity",
         "issues",
         "metrics",
         "preferences",
@@ -527,8 +521,8 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     or extra lifecycle semantics. Only the read-only list/details/history and
     undo operations are cut over to native Rust. Unversioned paths have no
     TypeScript client or FastAPI registry operation; they stay in the fragment
-    only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
-    on Python because no browser caller exists.
+    only for the Vercel rewrite. The no-runtime-caller session examples
+    v1 endpoint is retired.
     """
     sessions = _fragment_named("sessions")
     undo = _fragment_named("undo")
@@ -543,7 +537,6 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
         ("POST", "/api/v1/undo/{session_id}/undo/{snapshot_id}"),
     }
     python_ops = {
-        ("GET", "/api/v1/sessions/correction-examples"),
         ("GET", "/api/v1/sessions/current/"),
         ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
     }

@@ -75,8 +75,6 @@ _EXPORT_MODULES: dict[str, str] = {
     "SessionMode": "app.schemas.session",
     "SessionBandwidthState": "app.schemas.session",
     "SessionIntentState": "app.schemas.session",
-    "CorrectionChoiceId": "app.schemas.session",
-    "CorrectionSheetExamplesResponse": "app.schemas.session",
     "SnapshotResponse": "app.schemas.snapshot",
     "SnapshotsListResponse": "app.schemas.snapshot",
     "RecommendationDiagnosticsResponse": "app.schemas.recommendation_diagnostics",
@@ -94,8 +92,6 @@ __all__ = [
     "ComicVineMappingHealth",
     "ComicVineMappingStatus",
     "ControlModeGroup",
-    "CorrectionChoiceId",
-    "CorrectionSheetExamplesResponse",
     "CoverageInfo",
     "DependencyResponse",
     "EffortBandOutcome",
@@ -226,8 +222,6 @@ if TYPE_CHECKING:
     )
     from app.schemas.session import (
         ActiveThreadInfo,
-        CorrectionChoiceId,
-        CorrectionSheetExamplesResponse,
         EventDetail,
         SessionBandwidthState,
         SessionDetailsResponse,

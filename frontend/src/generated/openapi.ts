@@ -2539,39 +2539,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/correction-examples": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Correction Sheet Examples
-         * @description Get personalized examples for the correction sheet steering choices.
-         *
-         *     Returns compact examples drawn from the user's own rated/read history for
-         *     each correction sheet option. Examples are explanatory only and do not
-         *     constrain the canonical recommendation behavior. Returns null for options
-         *     where no honest example exists.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         CorrectionSheetExamplesResponse with examples for each choice.
-         */
-        get: operations["get_correction_sheet_examples_api_v1_sessions_correction_examples_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/current/": {
         parameters: {
             query?: never;
@@ -3120,29 +3087,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{thread_id}/connected": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Thread Connected Threads
-         * @description Return threads connected to this one via dependencies.
-         *
-         *     When you are reading a thread, this tells you which other threads
-         *     are part of the same dependency web so you know there's a relationship.
-         */
-        get: operations["get_thread_connected_threads_api_v1_threads__thread_id__connected_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/{thread_id}/dependencies": {
         parameters: {
             query?: never;
@@ -3155,29 +3099,6 @@ export interface paths {
          * @description List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.
          */
         get: operations["get_thread_dependencies_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/threads/{thread_id}/dependency-order-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Check Thread Dependency Order
-         * @description Check for conflicts between dependency order and issue position order.
-         *
-         *     Returns a list of conflicts where dependencies imply issue X should come
-         *     before issue Y, but the current position order disagrees.
-         */
-        get: operations["check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3464,26 +3385,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{thread_id}:getBlockingInfo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Thread Blocking Info
-         * @description Return blocked status and human-readable blocking reasons for a thread.
-         */
-        post: operations["get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/{thread_id}:migrateToIssues": {
         parameters: {
             query?: never;
@@ -3556,26 +3457,6 @@ export interface paths {
          *         HTTPException: 404 if thread or issue not found, 400 for validation errors.
          */
         post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/threads:getBlockingInfo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Threads Blocking Info
-         * @description Return blocked status and human-readable blocking reasons for multiple threads.
-         */
-        post: operations["get_threads_blocking_info_api_v1_threads_getBlockingInfo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4625,24 +4506,6 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
-        };
-        /**
-         * BatchBlockingExplanationRequest
-         * @description Schema for batch blocking-info request.
-         */
-        BatchBlockingExplanationRequest: {
-            /** Thread Ids */
-            thread_ids: number[];
-        };
-        /**
-         * BatchBlockingExplanationResponse
-         * @description Schema for batch blocking-info response — keyed by thread ID.
-         */
-        BatchBlockingExplanationResponse: {
-            /** Threads */
-            threads: {
-                [key: string]: components["schemas"]["BlockingExplanation"];
-            };
         };
         /** @enum {string} */
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
@@ -6506,27 +6369,6 @@ export interface components {
             comicvine_issue_id: number;
         };
         /**
-         * ConnectedThreadInfo
-         * @description Lightweight info about a thread connected via dependencies.
-         */
-        ConnectedThreadInfo: {
-            /** Connection Type */
-            connection_type: string;
-            /** Dependency Id */
-            dependency_id: number;
-            /**
-             * Is Circular
-             * @default false
-             */
-            is_circular: boolean;
-            /** Issue Number */
-            issue_number?: string | null;
-            /** Thread Id */
-            thread_id: number;
-            /** Title */
-            title: string;
-        };
-        /**
          * ContinuityPlanLane
          * @description One visual lane in a continuity plan.
          */
@@ -6703,41 +6545,6 @@ export interface components {
             /** Format: int32 */
             id: number;
             type: string;
-        };
-        /**
-         * CorrectionSheetExamplesResponse
-         * @description Personalized examples for the correction sheet steering choices.
-         *
-         *     Each field corresponds to a correction choice and contains a compact
-         *     example drawn from the user's own rated/read history, or ``null`` when
-         *     no honest example exists for that option.
-         */
-        CorrectionSheetExamplesResponse: {
-            /**
-             * Even Easier
-             * @description Example for 'Give me something lighter' (lower-commitment read)
-             */
-            even_easier?: string | null;
-            /**
-             * Keep Level Different
-             * @description Example for 'Keep about the same effort' (same commitment, different comic)
-             */
-            keep_level_different?: string | null;
-            /**
-             * Pure Random
-             * @description Always null. 'Surprise me' disables similarity and effort steering, so no preference-derived example is shown.
-             */
-            pure_random?: string | null;
-            /**
-             * Something Different
-             * @description Example for 'Give me a change of pace' (different from recent/high-rated reads)
-             */
-            something_different?: string | null;
-            /**
-             * Something Familiar
-             * @description Example for 'Stay close to what I've liked' (similar to highly rated comics)
-             */
-            something_familiar?: string | null;
         };
         CreateIssuesRequest: {
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
@@ -8858,34 +8665,6 @@ export interface components {
         };
         DependencyNoteUpdate: {
             note?: string | null;
-        };
-        /**
-         * DependencyOrderConflict
-         * @description Schema for a position/dependency order conflict.
-         */
-        DependencyOrderConflict: {
-            /** Conflict */
-            conflict: string;
-            /** Dependency Requires Before */
-            dependency_requires_before: components["schemas"]["DependencyOrderRequirement"][];
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string;
-            /** Position */
-            position: number;
-        };
-        /**
-         * DependencyOrderRequirement
-         * @description Schema for a single dependency order requirement.
-         */
-        DependencyOrderRequirement: {
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string;
-            /** Position */
-            position: number;
         };
         /**
          * @description Issue-level dependency response mirroring the Python `DependencyResponse`
@@ -13000,16 +12779,6 @@ export interface components {
             verdict: string;
         };
         /**
-         * ThreadConnectedResponse
-         * @description Schema for thread dependency connectivity info.
-         */
-        ThreadConnectedResponse: {
-            /** Connected Threads */
-            connected_threads: components["schemas"]["ConnectedThreadInfo"][];
-            /** Thread Id */
-            thread_id: number;
-        };
-        /**
          * ThreadCreate
          * @description Schema for creating a new thread.
          */
@@ -13044,16 +12813,6 @@ export interface components {
         ThreadDependenciesResponse: {
             blocked_by: components["schemas"]["DependencyResponse"][];
             blocking: components["schemas"]["DependencyResponse"][];
-        };
-        /**
-         * ThreadDependencyOrderCheckResponse
-         * @description Schema for thread dependency order validation.
-         */
-        ThreadDependencyOrderCheckResponse: {
-            /** Conflicts */
-            conflicts: components["schemas"]["DependencyOrderConflict"][];
-            /** Thread Id */
-            thread_id: number;
         };
         /** @description The legacy single-thread response retained for the v1 and bare aliases. */
         ThreadDetailResponse: {
@@ -18112,26 +17871,6 @@ export interface operations {
             };
         };
     };
-    get_correction_sheet_examples_api_v1_sessions_correction_examples_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrectionSheetExamplesResponse"];
-                };
-            };
-        };
-    };
     get_current_session_api_v1_sessions_current__get: {
         parameters: {
             query?: never;
@@ -19090,37 +18829,6 @@ export interface operations {
             };
         };
     };
-    get_thread_connected_threads_api_v1_threads__thread_id__connected_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadConnectedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_thread_dependencies_documentation: {
         parameters: {
             query?: never;
@@ -19162,37 +18870,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    check_thread_dependency_order_api_v1_threads__thread_id__dependency_order_check_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadDependencyOrderCheckResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -19597,37 +19274,6 @@ export interface operations {
             };
         };
     };
-    get_thread_blocking_info_api_v1_threads__thread_id__getBlockingInfo_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BlockingExplanation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post: {
         parameters: {
             query?: never;
@@ -19720,39 +19366,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetCurrentIssueResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_threads_blocking_info_api_v1_threads_getBlockingInfo_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
                 };
             };
             /** @description Validation Error */
