@@ -248,10 +248,14 @@ pub struct DependencyGroupMemberResponse {
 pub struct DependencyGroupResponse {
     pub id: i32,
     pub name: String,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub memberships: Vec<DependencyGroupMemberResponse>,
+    #[schema(required = false, default = 0)]
     pub read_issues: i32,
+    #[schema(required = false, default = 0)]
     pub total_issues: i64,
+    #[schema(required = false, default = "0%")]
     pub reading_progress: String,
 }
 
