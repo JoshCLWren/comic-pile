@@ -3641,7 +3641,7 @@
         "tags": [
           "issue-identity"
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "summary": "Documentation-only operation for the CBL adoption plan.",
         "operationId": "cbl_adoption_plan_documentation",
         "parameters": [
           {
@@ -3685,6 +3685,60 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "operationId": "cbl_adoption_preview_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adoption preview for the active CBL list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Path failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -3889,6 +3943,289 @@
           },
           "404": {
             "description": "Issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}/reader-context": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for reader context.",
+        "operationId": "issue_read_state_reader_context",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded reader context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReaderContextResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:markRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markRead`.",
+        "operationId": "issue_read_state_mark_read",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:markUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:markUnread`.",
+        "operationId": "issue_read_state_mark_unread",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues/{issue_id}:move": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:move`.",
+        "operationId": "issue_read_state_move",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkRead": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
+        "operationId": "issue_read_state_bulk_mark_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issues:bulkMarkUnread": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
+        "operationId": "issue_read_state_bulk_mark_unread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -5616,6 +5953,365 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for issue creation.",
+        "operationId": "thread_issues_create",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCreateRange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Newly created issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueCreateListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or fully duplicate range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or anchor issue not found"
+          },
+          "409": {
+            "description": "Issue number already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/issues/creators": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the bulk creator read.",
+        "operationId": "thread_issues_creators",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored creator credits per mapped issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}/issues:reorder": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for issue reordering.",
+        "operationId": "thread_issues_reorder",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueReorderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Order rewritten"
+          },
+          "400": {
+            "description": "issue_ids must name every issue exactly once"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssues": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation for the explicit migration.",
+        "operationId": "thread_issues_migrate",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Migrated thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Already migrated or inconsistent range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation for the simplified migration.",
+        "operationId": "thread_issues_migrate_simple",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Migrated thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Already migrated or issue cannot be created"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}:setCurrentIssue": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation for correcting the current issue.",
+        "operationId": "thread_issues_set_current",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Corrected current issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thread inactive, untracked or issue unavailable"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/undo/{session_id}/snapshots": {
@@ -6409,6 +7105,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -6493,11 +7190,20 @@
             "type": "integer",
             "format": "int64"
           },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state."
+          },
           "snoozed_threads": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
-            }
+            },
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set."
           },
           "timezone": {
             "type": [
@@ -9012,6 +9718,831 @@
           }
         }
       },
+      "CreatorComparisonCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "upcoming_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorComparisonIssueRef": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorComparisonItem": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "rating_distribution",
+          "role_stats",
+          "strongest_series",
+          "min_rated_issues_per_series",
+          "unread_upcoming_count",
+          "read_unrated_count",
+          "unread_issue_refs",
+          "read_unrated_issue_refs",
+          "max_issue_refs_per_group",
+          "insufficient_data"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "insufficient_data": {
+            "type": "boolean"
+          },
+          "max_issue_refs_per_group": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "min_rated_issues_per_series": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "normalized_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rating_distribution": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
+            }
+          },
+          "role_stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonRoleStat"
+            }
+          },
+          "strongest_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonSeriesAggregate"
+            }
+          },
+          "top_rating_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "unread_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorComparisonIssueRef"
+            }
+          },
+          "unread_upcoming_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorComparisonResponse": {
+        "type": "object",
+        "required": [
+          "comparisons",
+          "coverage",
+          "insufficient_data_keys"
+        ],
+        "properties": {
+          "comparisons": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CreatorComparisonItem"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorComparisonCoverage"
+          },
+          "insufficient_data_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreatorComparisonRoleStat": {
+        "type": "object",
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorComparisonSeriesAggregate": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_count",
+          "rated_issue_count",
+          "average_rating"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorCredit": {
+        "type": "object",
+        "description": "One credited creator (Python `ComicVineCreator`).",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "creator_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreatorDetailResponse": {
+        "type": "object",
+        "required": [
+          "summary",
+          "coverage",
+          "role_stats",
+          "series_groups",
+          "series_groups_total",
+          "series_groups_complete",
+          "rated_issues",
+          "rated_population_scope",
+          "headline_roles",
+          "read_unrated_issues",
+          "upcoming_issues"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorSummaryCoverage"
+          },
+          "headline_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "insights": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorInsights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "rated_population_scope": {
+            "type": "string"
+          },
+          "rating_distribution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorRatingDistribution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read_unrated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "role_stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorRoleStat"
+            }
+          },
+          "series_groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorSeriesGroup"
+            }
+          },
+          "series_groups_complete": {
+            "type": "boolean"
+          },
+          "series_groups_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CreatorSummaryItem"
+          },
+          "upcoming_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          }
+        }
+      },
+      "CreatorDiscoveryCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorDiscoveryEntry": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "rated_issue_count",
+          "top_rating_count",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "trend_sample_count",
+          "reasons"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "max_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "min_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "normalized_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating_spread": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "rating_stddev": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "read_unrated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryReason"
+            }
+          },
+          "recent_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "top_rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "top_rating_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "trend_delta": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "trend_direction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trend_sample_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unread_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorDiscoveryReason": {
+        "type": "object",
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "properties": {
+          "comparison": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CreatorDiscoveryResponse": {
+        "type": "object",
+        "required": [
+          "views",
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorDiscoveryCoverage"
+          },
+          "max_entries_per_view": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "minimum_reliable_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryView"
+            }
+          }
+        }
+      },
+      "CreatorDiscoveryView": {
+        "type": "object",
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries",
+          "entries"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorDiscoveryEntry"
+            }
+          },
+          "max_entries": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "min_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorInsights": {
+        "type": "object",
+        "required": [
+          "min_series_sample",
+          "series_sample_met",
+          "excluded_incomplete_series_count",
+          "individual_issue_limit",
+          "individual_issues_combined",
+          "highest_rated_issues",
+          "lowest_rated_issues"
+        ],
+        "properties": {
+          "excluded_incomplete_series_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "highest_rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            }
+          },
+          "individual_issue_limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "individual_issues_combined": {
+            "type": "boolean"
+          },
+          "lowest_rated_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueInsight"
+            }
+          },
+          "min_series_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "most_rated_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_sample_met": {
+            "type": "boolean"
+          },
+          "strongest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weakest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CreatorIssueInsight": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "effective_rating",
+          "roles",
+          "sort_key"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorIssueRow": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "roles",
+          "sort_key"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "CreatorListItem": {
         "type": "object",
         "required": [
@@ -9072,6 +10603,555 @@
           "offset": {
             "type": "integer",
             "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorMetricCalculation": {
+        "type": "object",
+        "required": [
+          "formula",
+          "numerator"
+        ],
+        "properties": {
+          "denominator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formula": {
+            "type": "string"
+          },
+          "numerator": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreatorMetricDrilldown": {
+        "type": "object",
+        "required": [
+          "metric_type",
+          "creator_key",
+          "calculation",
+          "total_count",
+          "included_issues",
+          "excluded_issues",
+          "pagination"
+        ],
+        "properties": {
+          "bucket_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "bucket_percentage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/CreatorMetricCalculation"
+          },
+          "creator_key": {
+            "type": "string"
+          },
+          "excluded_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorMetricIssue"
+            }
+          },
+          "included_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorMetricIssue"
+            }
+          },
+          "metric_type": {
+            "type": "string"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/CreatorMetricPagination"
+          },
+          "rating_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "role_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "role_rated_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "series_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_rated_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorMetricIssue": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "creator_roles"
+        ],
+        "properties": {
+          "creator_roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "effective_rating_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "missing_rating_cause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorMetricPagination": {
+        "type": "object",
+        "required": [
+          "page",
+          "page_size",
+          "total_pages"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorRatingBucket": {
+        "type": "object",
+        "required": [
+          "rating",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CreatorRatingDistribution": {
+        "type": "object",
+        "required": [
+          "buckets",
+          "sample_count",
+          "mean_rating",
+          "median_rating",
+          "min_rating",
+          "max_rating"
+        ],
+        "properties": {
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorRatingBucket"
+            }
+          },
+          "max_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "mean_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "median_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "min_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "sample_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorRoleStat": {
+        "type": "object",
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorSeriesGroup": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "roles",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "metadata_complete",
+          "sort_key",
+          "population_scope"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_unrated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "unread_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorSeriesInsight": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
+          "roles",
+          "metadata_complete",
+          "sort_key"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "lowest_rating": {
+            "type": "number",
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorSeriesIssueListResponse": {
+        "type": "object",
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "roles",
+          "rated_issue_count",
+          "metadata_complete",
+          "population_scope",
+          "issues",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorIssueRow"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
           },
           "total": {
             "type": "integer",
@@ -9190,6 +11270,225 @@
           "upcoming_count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreatorTeamChemistryResponse": {
+        "type": "object",
+        "required": [
+          "pairs",
+          "pairs_total",
+          "min_shared_team_sample",
+          "max_ranked_pairs",
+          "coverage"
+        ],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/CreatorTeamCoverage"
+          },
+          "max_ranked_pairs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "min_shared_team_sample": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamPair"
+            }
+          },
+          "pairs_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatorTeamCoverage": {
+        "type": "object",
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "properties": {
+          "rated_issues_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rated_issues_with_creator_metadata": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreatorTeamIssueRef": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "effective_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatorTeamMember": {
+        "type": "object",
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "properties": {
+          "baseline_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "baseline_rated_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreatorTeamPair": {
+        "type": "object",
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count",
+          "shared_rating_distribution",
+          "shared_series",
+          "shared_issue_refs",
+          "max_shared_issue_refs"
+        ],
+        "properties": {
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamMember"
+            }
+          },
+          "max_shared_issue_refs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pair_key": {
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "shared_issue_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamIssueRef"
+            }
+          },
+          "shared_median_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "shared_rated_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shared_rating_distribution": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "shared_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorTeamSeriesRef"
+            }
+          }
+        }
+      },
+      "CreatorTeamSeriesRef": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
+        ],
+        "properties": {
+          "shared_issue_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": "string"
           }
         }
       },
@@ -10377,6 +12676,24 @@
           }
         }
       },
+      "IssueBulkRequest": {
+        "type": "object",
+        "description": "Request body for the bulk read-state operations.",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          }
+        }
+      },
       "IssueCard": {
         "type": "object",
         "required": [
@@ -10479,6 +12796,47 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueCreateRange": {
+        "type": "object",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
+        "required": [
+          "issue_range"
+        ],
+        "properties": {
+          "insert_after_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Insert after this issue id; omit for natural placement, null to append."
+          },
+          "issue_range": {
+            "type": "string",
+            "description": "Range such as `1-25` or `1, 3, 5-7`."
+          }
+        }
+      },
+      "IssueCreatorsEntry": {
+        "type": "object",
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
+        "required": [
+          "issue_id",
+          "creators"
+        ],
+        "properties": {
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorCredit"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -10703,6 +13061,24 @@
           }
         }
       },
+      "IssueMoveRequest": {
+        "type": "object",
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "required": [
+          "after_issue_id"
+        ],
+        "properties": {
+          "after_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Move after this issue. `null` moves the issue to position 1.",
+            "minimum": 1
+          }
+        }
+      },
       "IssueMutationItem": {
         "type": "object",
         "required": [
@@ -10821,6 +13197,63 @@
           }
         }
       },
+      "IssueReorderRequest": {
+        "type": "object",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "IssueResponse": {
+        "type": "object",
+        "description": "One issue row (Python `IssueResponse`).",
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "position",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "Request body for username/password login.\n\nLogin deliberately does not impose the registration minimum length: accounts\ncreated before the current policy must still be able to sign in. An empty\npassword is rejected by bcrypt verification with the same non-enumerating\n401 as any other incorrect credential, matching Python.",
@@ -10863,6 +13296,36 @@
             }
           }
         ]
+      },
+      "MigrateToIssuesRequest": {
+        "type": "object",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
+        "required": [
+          "last_issue_read",
+          "total_issues"
+        ],
+        "properties": {
+          "last_issue_read": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MigrateToIssuesSimpleRequest": {
+        "type": "object",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
+        "required": [
+          "issue_number"
+        ],
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        }
       },
       "MinimalReleaseResponse": {
         "type": "object",
@@ -11738,6 +14201,404 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "ReaderContextCrossover": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossover`.",
+        "required": [
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "membership_kind",
+          "ratings_count",
+          "read_count"
+        ],
+        "properties": {
+          "applies_to_current_issue": {
+            "type": "boolean"
+          },
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "membership_kind": {
+            "type": "string",
+            "description": "`issue` or `thread`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_member": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextCrossoverNextMember"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReaderContextCrossoverMembership": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossoverMembership`.",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextCrossoverNextMember": {
+        "type": "object",
+        "description": "Python `ReaderContextCrossoverNextMember`.",
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextEdge": {
+        "type": "object",
+        "description": "Python `ReaderContextEdge`.",
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`dependency` or `continuity`."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "source_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "target_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReaderContextLocalChain": {
+        "type": "object",
+        "description": "Python `ReaderContextLocalChain`.",
+        "required": [
+          "issues",
+          "edges"
+        ],
+        "properties": {
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextEdge"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextLocalIssue"
+            }
+          }
+        }
+      },
+      "ReaderContextLocalIssue": {
+        "type": "object",
+        "description": "Python `ReaderContextLocalIssue`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation",
+          "crossover_memberships"
+        ],
+        "properties": {
+          "crossover_memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossoverMembership"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "relation": {
+            "type": "string",
+            "description": "`previous`, `current`, `next` or `future`."
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ReaderContextPreviousIssue": {
+        "type": "object",
+        "description": "Python `ReaderContextPreviousIssue`.",
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "ReaderContextRecentRating": {
+        "type": "object",
+        "description": "Python `ReaderContextRecentRating`.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ReaderContextResponse": {
+        "type": "object",
+        "description": "Python `ReaderContextResponse`.",
+        "required": [
+          "issue_id",
+          "series",
+          "crossovers",
+          "local_chain"
+        ],
+        "properties": {
+          "crossovers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextCrossover"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/ReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/ReaderContextSeries"
+          }
+        }
+      },
+      "ReaderContextSeries": {
+        "type": "object",
+        "description": "Python `ReaderContextSeries`.",
+        "required": [
+          "identity_source",
+          "ratings_count",
+          "recent_ratings"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "identity_source": {
+            "type": "string",
+            "description": "`comicvine` or `unavailable`."
+          },
+          "lowest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "previous_issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "recent_ratings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReaderContextRecentRating"
+            }
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -14730,6 +17591,88 @@
           }
         }
       },
+      "SetCurrentIssueRequest": {
+        "type": "object",
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
+        "required": [
+          "issue_number"
+        ],
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        }
+      },
+      "SetCurrentIssueResponse": {
+        "type": "object",
+        "description": "Python `SetCurrentIssueResponse`.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SourceSyncFailure": {
         "type": "object",
         "required": [
@@ -15455,6 +18398,57 @@
           }
         }
       },
+      "ThreadIssueCreateListResponse": {
+        "type": "object",
+        "description": "Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueResponse"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadIssueCreatorsResponse": {
+        "type": "object",
+        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCreatorsEntry"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ThreadIssueDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
@@ -15691,6 +18685,112 @@
           },
           "thread_id": {
             "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadResponse": {
+        "type": "object",
+        "description": "Python `ThreadResponse`.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
+        ],
+        "properties": {
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "manual_creator_credits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "next_unread_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           }
         }

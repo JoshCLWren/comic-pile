@@ -261,14 +261,18 @@ async function createThreadsForUser(
 }
 
 function isExpectedAnonymousAuthProbe(message: string): boolean {
+  // Console logs print the request pathname (e.g. `/v2/auth/me`) while
+  // requestfailed entries print the full URL (`.../api/v2/auth/me`), so strip
+  // the optional `/api` mount prefix from the message before matching.
   const anonymousProbePaths = [
-    '/api/v2/auth/me',
-    '/api/v2/auth/refresh',
-    '/api/sessions/current',
-    '/api/threads/',
-    '/api/v1/dependencies/blocked',
+    '/v2/auth/me',
+    '/v2/auth/refresh',
+    '/sessions/current',
+    '/threads/',
+    '/v1/dependencies/blocked',
   ];
-  return anonymousProbePaths.some((path) => message.includes(path) || message.includes(path.slice(1)))
+  const normalizedMessage = message.replace(/\/api(?=\/)/g, '');
+  return anonymousProbePaths.some((path) => normalizedMessage.includes(path) || normalizedMessage.includes(path.slice(1)))
     && (message.includes('401') || message.includes('due to access control checks'));
 }
 

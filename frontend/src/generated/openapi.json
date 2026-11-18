@@ -594,55 +594,6 @@
         ],
         "type": "object"
       },
-      "BootstrapAliasCounterSchema": {
-        "description": "One aggregated bootstrap alias tally.",
-        "properties": {
-          "alias": {
-            "description": "Bootstrap alias: legacy, v1, or v2.",
-            "title": "Alias",
-            "type": "string"
-          },
-          "count": {
-            "description": "Number of observed hits.",
-            "minimum": 0.0,
-            "title": "Count",
-            "type": "integer"
-          },
-          "status_class": {
-            "description": "Response status class, e.g. 2xx.",
-            "title": "Status Class",
-            "type": "string"
-          },
-          "web_origin": {
-            "description": "True if request looked like a browser client.",
-            "title": "Web Origin",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "alias",
-          "web_origin",
-          "status_class",
-          "count"
-        ],
-        "title": "BootstrapAliasCounterSchema",
-        "type": "object"
-      },
-      "BootstrapAliasSnapshotSchema": {
-        "description": "Process-local bootstrap alias counters.",
-        "properties": {
-          "counters": {
-            "description": "Aggregated counts per (alias, web_origin, status class).",
-            "items": {
-              "$ref": "#/components/schemas/BootstrapAliasCounterSchema"
-            },
-            "title": "Counters",
-            "type": "array"
-          }
-        },
-        "title": "BootstrapAliasSnapshotSchema",
-        "type": "object"
-      },
       "BootstrapBandwidth": {
         "description": "Compact bandwidth block retained for existing Roll consumers.",
         "properties": {
@@ -905,7 +856,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "snoozed_thread_ids": {
+            "description": "Every owned thread the session currently has snoozed, uncapped, so\nconsumers such as Queue can resolve per-row snooze state.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "snoozed_threads": {
+            "description": "Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`\nfor the complete snooze set.",
             "items": {
               "$ref": "#/components/schemas/BootstrapThreadSummary"
             },
@@ -931,6 +891,7 @@
           "pool_reason",
           "snoozed_threads",
           "snoozed_count",
+          "snoozed_thread_ids",
           "skipped_thread_ids",
           "skipped_threads"
         ],
@@ -1179,113 +1140,78 @@
         "type": "object"
       },
       "BoundaryEditorTarget": {
-        "description": "Where the reader can change the rule that produced a boundary.\n\nThe target is a descriptor, not a URL: the client owns routing so a\nrenamed surface never breaks a stored deep link.",
         "properties": {
           "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "kind": {
-            "enum": [
-              "reading_list",
-              "prerequisite",
-              "issue"
-            ],
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
-            "title": "Label",
             "type": "string"
           },
           "list_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "List Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "prerequisite_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prerequisite Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
           "kind",
           "label"
         ],
-        "title": "BoundaryEditorTarget",
         "type": "object"
       },
       "BoundaryIssue": {
-        "description": "One named Issue, labeled with its Comic Vine volume when known.",
         "properties": {
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "label": {
-            "title": "Label",
             "type": "string"
           },
           "reading_lists": {
             "items": {
               "$ref": "#/components/schemas/BoundaryReadingList"
             },
-            "title": "Reading Lists",
             "type": "array"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_title": {
-            "title": "Thread Title",
             "type": "string"
           },
           "volume_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Volume Label"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1293,9 +1219,9 @@
           "thread_id",
           "thread_title",
           "issue_number",
-          "label"
+          "label",
+          "reading_lists"
         ],
-        "title": "BoundaryIssue",
         "type": "object"
       },
       "BoundaryListMode": {
@@ -1306,22 +1232,15 @@
         "type": "string"
       },
       "BoundaryReadingList": {
-        "description": "One owned Reading List that places an Issue.",
         "properties": {
           "list_id": {
-            "title": "List Id",
+            "format": "int32",
             "type": "integer"
           },
           "mode": {
-            "enum": [
-              "strict",
-              "loose"
-            ],
-            "title": "Mode",
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
-            "title": "Name",
             "type": "string"
           }
         },
@@ -1330,7 +1249,6 @@
           "name",
           "mode"
         ],
-        "title": "BoundaryReadingList",
         "type": "object"
       },
       "BoundaryState": {
@@ -4159,136 +4077,6 @@
         "title": "CheckPotentialDuplicatesResponse",
         "type": "object"
       },
-      "CollectionExclusionCreate": {
-        "description": "Exactly one target: external volume identity, Thread or Issue.",
-        "properties": {
-          "external_volume_id": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Volume Id"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          }
-        },
-        "title": "CollectionExclusionCreate",
-        "type": "object"
-      },
-      "CollectionExclusionResponse": {
-        "description": "Stored exclusion, with an ID for explicit removal.",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "external_volume_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Volume Id"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "user_id",
-          "provider",
-          "external_volume_id",
-          "thread_id",
-          "issue_id",
-          "created_at"
-        ],
-        "title": "CollectionExclusionResponse",
-        "type": "object"
-      },
       "ComicPileMatch": {
         "description": "Owner-scoped local representations of a related ComicVine issue.",
         "properties": {
@@ -6192,6 +5980,32 @@
         "title": "CreatorComparisonSeriesAggregate",
         "type": "object"
       },
+      "CreatorCredit": {
+        "description": "One credited creator (Python `ComicVineCreator`).",
+        "properties": {
+          "creator_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
+        "type": "object"
+      },
       "CreatorDetailResponse": {
         "description": "Full detail response for a single creator identity.",
         "properties": {
@@ -7215,6 +7029,35 @@
           "status"
         ],
         "title": "CreatorMetricIssue",
+        "type": "object"
+      },
+      "CreatorMetricPagination": {
+        "properties": {
+          "next_page_token": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_pages": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "page_size",
+          "total_pages"
+        ],
         "type": "object"
       },
       "CreatorRatingBucket": {
@@ -10808,6 +10651,24 @@
         "title": "IssueBulkMarkUnreadRequest",
         "type": "object"
       },
+      "IssueBulkRequest": {
+        "description": "Request body for the bulk read-state operations.",
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
       "IssueCard": {
         "properties": {
           "comicvine_issue_id": {
@@ -11807,111 +11668,6 @@
         ],
         "type": "object"
       },
-      "NativeBoundaryEditorTarget": {
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "kind": {
-            "$ref": "#/components/schemas/EditorKind"
-          },
-          "label": {
-            "type": "string"
-          },
-          "list_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "prerequisite_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "kind",
-          "label"
-        ],
-        "type": "object"
-      },
-      "NativeBoundaryIssue": {
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "reading_lists": {
-            "items": {
-              "$ref": "#/components/schemas/NativeBoundaryReadingList"
-            },
-            "type": "array"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "volume_label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "label",
-          "reading_lists"
-        ],
-        "type": "object"
-      },
-      "NativeBoundaryReadingList": {
-        "properties": {
-          "list_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "mode": {
-            "$ref": "#/components/schemas/BoundaryListMode"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "list_id",
-          "name",
-          "mode"
-        ],
-        "type": "object"
-      },
       "NativeCBLBreadcrumb": {
         "properties": {
           "name": {
@@ -12349,6 +12105,1325 @@
         ],
         "type": "object"
       },
+      "NativeCreatorComparisonCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_complete": {
+            "type": "boolean"
+          },
+          "read_unrated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "upcoming_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete",
+          "read_unrated_issues_total",
+          "read_unrated_issues_with_creator_metadata",
+          "read_unrated_complete",
+          "unread_issues_total",
+          "unread_issues_with_creator_metadata",
+          "upcoming_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonIssueRef": {
+        "properties": {
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonItem": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "insufficient_data": {
+            "type": "boolean"
+          },
+          "max_issue_refs_per_group": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "min_rated_issues_per_series": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "normalized_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rating_distribution": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
+            },
+            "type": "array"
+          },
+          "role_stats": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonRoleStat"
+            },
+            "type": "array"
+          },
+          "strongest_series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonSeriesAggregate"
+            },
+            "type": "array"
+          },
+          "top_rating_rate": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unread_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonIssueRef"
+            },
+            "type": "array"
+          },
+          "unread_upcoming_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "ratings_count",
+          "rating_distribution",
+          "role_stats",
+          "strongest_series",
+          "min_rated_issues_per_series",
+          "unread_upcoming_count",
+          "read_unrated_count",
+          "unread_issue_refs",
+          "read_unrated_issue_refs",
+          "max_issue_refs_per_group",
+          "insufficient_data"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonResponse": {
+        "properties": {
+          "comparisons": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NativeCreatorComparisonItem"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorComparisonCoverage"
+          },
+          "insufficient_data_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "comparisons",
+          "coverage",
+          "insufficient_data_keys"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonRoleStat": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorComparisonSeriesAggregate": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_count",
+          "rated_issue_count",
+          "average_rating"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDetailResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorSummaryCoverage"
+          },
+          "headline_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "insights": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorInsights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "rated_population_scope": {
+            "type": "string"
+          },
+          "rating_distribution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorRatingDistribution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read_unrated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "role_stats": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorRoleStat"
+            },
+            "type": "array"
+          },
+          "series_groups": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorSeriesGroup"
+            },
+            "type": "array"
+          },
+          "series_groups_complete": {
+            "type": "boolean"
+          },
+          "series_groups_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NativeCreatorSummaryItem"
+          },
+          "upcoming_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "summary",
+          "coverage",
+          "role_stats",
+          "series_groups",
+          "series_groups_total",
+          "series_groups_complete",
+          "rated_issues",
+          "rated_population_scope",
+          "headline_roles",
+          "read_unrated_issues",
+          "upcoming_issues"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryEntry": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "earlier_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "min_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "normalized_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rating_spread": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rating_stddev": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "read_unrated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryReason"
+            },
+            "type": "array"
+          },
+          "recent_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_rating_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "top_rating_rate": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "trend_delta": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "trend_direction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trend_sample_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unread_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "normalized_roles",
+          "rated_issue_count",
+          "top_rating_count",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "trend_sample_count",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryReason": {
+        "properties": {
+          "comparison": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "threshold": {
+            "format": "double",
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "label",
+          "value",
+          "threshold",
+          "comparison"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorDiscoveryCoverage"
+          },
+          "max_entries_per_view": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minimum_reliable_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "views": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "views",
+          "coverage",
+          "minimum_reliable_sample",
+          "max_entries_per_view"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorDiscoveryView": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorDiscoveryEntry"
+            },
+            "type": "array"
+          },
+          "max_entries": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "min_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "title",
+          "description",
+          "min_sample",
+          "total",
+          "truncated",
+          "max_entries",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorInsights": {
+        "properties": {
+          "excluded_incomplete_series_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "highest_rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
+            },
+            "type": "array"
+          },
+          "individual_issue_limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "individual_issues_combined": {
+            "type": "boolean"
+          },
+          "lowest_rated_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueInsight"
+            },
+            "type": "array"
+          },
+          "min_series_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "most_rated_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_sample_met": {
+            "type": "boolean"
+          },
+          "strongest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weakest_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeCreatorSeriesInsight"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "min_series_sample",
+          "series_sample_met",
+          "excluded_incomplete_series_count",
+          "individual_issue_limit",
+          "individual_issues_combined",
+          "highest_rated_issues",
+          "lowest_rated_issues"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorIssueInsight": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "effective_rating",
+          "roles",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorIssueRow": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "thread_title",
+          "status",
+          "roles",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricCalculation": {
+        "properties": {
+          "denominator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formula": {
+            "type": "string"
+          },
+          "numerator": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "formula",
+          "numerator"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricDrilldown": {
+        "properties": {
+          "bucket_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "bucket_percentage": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/NativeCreatorMetricCalculation"
+          },
+          "creator_key": {
+            "type": "string"
+          },
+          "excluded_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
+            },
+            "type": "array"
+          },
+          "included_issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorMetricIssue"
+            },
+            "type": "array"
+          },
+          "metric_type": {
+            "type": "string"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/CreatorMetricPagination"
+          },
+          "rating_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "role_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "role_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "series_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_rated_issue_count": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "metric_type",
+          "creator_key",
+          "calculation",
+          "total_count",
+          "included_issues",
+          "excluded_issues",
+          "pagination"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorMetricIssue": {
+        "properties": {
+          "creator_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "effective_rating_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_rating_timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "missing_rating_cause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "creator_roles"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRatingBucket": {
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "rating",
+          "count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRatingDistribution": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorRatingBucket"
+            },
+            "type": "array"
+          },
+          "max_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "mean_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "median_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "min_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "sample_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "buckets",
+          "sample_count",
+          "mean_rating",
+          "median_rating",
+          "min_rating",
+          "max_rating"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorRoleStat": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "issue_count",
+          "rated_issue_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesGroup": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_unrated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "unread_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "roles",
+          "unread_issue_count",
+          "read_unrated_issue_count",
+          "metadata_complete",
+          "sort_key",
+          "population_scope"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesInsight": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "sort_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
+          "roles",
+          "metadata_complete",
+          "sort_key"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorSeriesIssueListResponse": {
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorIssueRow"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metadata_complete": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "population_scope": {
+            "type": "string"
+          },
+          "rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "series_key": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "series_key",
+          "thread_id",
+          "thread_title",
+          "roles",
+          "rated_issue_count",
+          "metadata_complete",
+          "population_scope",
+          "issues",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
       "NativeCreatorSummaryCoverage": {
         "properties": {
           "rated_issues_total": {
@@ -12439,6 +13514,225 @@
           "ratings_count",
           "read_unrated_count",
           "upcoming_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamChemistryResponse": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/NativeCreatorTeamCoverage"
+          },
+          "max_ranked_pairs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "min_shared_team_sample": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamPair"
+            },
+            "type": "array"
+          },
+          "pairs_total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pairs",
+          "pairs_total",
+          "min_shared_team_sample",
+          "max_ranked_pairs",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamCoverage": {
+        "properties": {
+          "rated_issues_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rated_issues_with_creator_metadata": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ratings_complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rated_issues_total",
+          "rated_issues_with_creator_metadata",
+          "ratings_complete"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamIssueRef": {
+        "properties": {
+          "effective_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamMember": {
+        "properties": {
+          "baseline_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "baseline_rated_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "canonical_creator_key": {
+            "type": "string"
+          },
+          "difference_from_baseline": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_creator_key",
+          "display_name",
+          "roles",
+          "baseline_rated_count"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamPair": {
+        "properties": {
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamMember"
+            },
+            "type": "array"
+          },
+          "max_shared_issue_refs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pair_key": {
+            "type": "string"
+          },
+          "shared_average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "shared_issue_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamIssueRef"
+            },
+            "type": "array"
+          },
+          "shared_median_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "shared_rated_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "shared_rating_distribution": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "shared_series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeCreatorTeamSeriesRef"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_key",
+          "creators",
+          "shared_rated_issue_count",
+          "shared_rating_distribution",
+          "shared_series",
+          "shared_issue_refs",
+          "max_shared_issue_refs"
+        ],
+        "type": "object"
+      },
+      "NativeCreatorTeamSeriesRef": {
+        "properties": {
+          "shared_issue_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "shared_issue_count"
         ],
         "type": "object"
       },
@@ -12776,6 +14070,47 @@
         ],
         "type": "object"
       },
+      "NativeIssueCreateRange": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues`.",
+        "properties": {
+          "insert_after_issue_id": {
+            "description": "Insert after this issue id; omit for natural placement, null to append.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_range": {
+            "description": "Range such as `1-25` or `1, 3, 5-7`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_range"
+        ],
+        "type": "object"
+      },
+      "NativeIssueCreatorsEntry": {
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
+        "properties": {
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/CreatorCredit"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "creators"
+        ],
+        "type": "object"
+      },
       "NativeIssueListResponse": {
         "properties": {
           "issues": {
@@ -12803,6 +14138,111 @@
           "issues",
           "total_count",
           "page_size"
+        ],
+        "type": "object"
+      },
+      "NativeIssueMoveRequest": {
+        "description": "Request body for `POST /api/v1/issues/{issue_id}:move`.",
+        "properties": {
+          "after_issue_id": {
+            "description": "Move after this issue. `null` moves the issue to position 1.",
+            "format": "int32",
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "after_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeIssueReorderRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`.",
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeIssueResponse": {
+        "description": "One issue row (Python `IssueResponse`).",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "position",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "NativeMigrateToIssuesRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
+        "properties": {
+          "last_issue_read": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_issue_read",
+          "total_issues"
+        ],
+        "type": "object"
+      },
+      "NativeMigrateToIssuesSimpleRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
         ],
         "type": "object"
       },
@@ -12933,75 +14373,401 @@
         },
         "type": "object"
       },
-      "NativeReadingBoundaryBatchRequest": {
+      "NativeReaderContextCrossover": {
+        "description": "Python `ReaderContextCrossover`.",
         "properties": {
-          "thread_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "thread_ids"
-        ],
-        "type": "object"
-      },
-      "NativeReadingBoundaryBlocker": {
-        "properties": {
-          "editor": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
-              },
-              {
-                "type": "null"
-              }
+          "applies_to_current_issue": {
+            "type": "boolean"
+          },
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
             ]
           },
-          "kind": {
-            "$ref": "#/components/schemas/BlockerKind"
+          "id": {
+            "format": "int32",
+            "type": "integer"
           },
-          "origin": {
-            "$ref": "#/components/schemas/BlockerOrigin"
-          },
-          "reason": {
+          "membership_kind": {
+            "description": "`issue` or `thread`.",
             "type": "string"
           },
-          "waiting_on": {
-            "items": {
-              "$ref": "#/components/schemas/NativeBoundaryIssue"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "kind",
-          "origin",
-          "reason",
-          "waiting_on"
-        ],
-        "type": "object"
-      },
-      "NativeReadingBoundaryNext": {
-        "properties": {
-          "editor": {
+          "name": {
+            "type": "string"
+          },
+          "next_member": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeBoundaryEditorTarget"
+                "$ref": "#/components/schemas/NativeReaderContextCrossoverNextMember"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "issue": {
-            "$ref": "#/components/schemas/NativeBoundaryIssue"
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "read_count": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
-          "issue"
+          "id",
+          "name",
+          "applies_to_current_issue",
+          "membership_kind",
+          "ratings_count",
+          "read_count"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverMembership": {
+        "description": "Python `ReaderContextCrossoverMembership`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextCrossoverNextMember": {
+        "description": "Python `ReaderContextCrossoverNextMember`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextEdge": {
+        "description": "Python `ReaderContextEdge`.",
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "`dependency` or `continuity`.",
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalChain": {
+        "description": "Python `ReaderContextLocalChain`.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextEdge"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextLocalIssue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues",
+          "edges"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextLocalIssue": {
+        "description": "Python `ReaderContextLocalIssue`.",
+        "properties": {
+          "crossover_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossoverMembership"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "relation": {
+            "description": "`previous`, `current`, `next` or `future`.",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "position",
+          "status",
+          "relation",
+          "crossover_memberships"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextPreviousIssue": {
+        "description": "Python `ReaderContextPreviousIssue`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextRecentRating": {
+        "description": "Python `ReaderContextRecentRating`.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "rating"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextResponse": {
+        "description": "Python `ReaderContextResponse`.",
+        "properties": {
+          "crossovers": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextCrossover"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "local_chain": {
+            "$ref": "#/components/schemas/NativeReaderContextLocalChain"
+          },
+          "series": {
+            "$ref": "#/components/schemas/NativeReaderContextSeries"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series",
+          "crossovers",
+          "local_chain"
+        ],
+        "type": "object"
+      },
+      "NativeReaderContextSeries": {
+        "description": "Python `ReaderContextSeries`.",
+        "properties": {
+          "average_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "highest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "identity_source": {
+            "description": "`comicvine` or `unavailable`.",
+            "type": "string"
+          },
+          "lowest_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "previous_issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeReaderContextPreviousIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratings_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "recent_ratings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReaderContextRecentRating"
+            },
+            "type": "array"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "identity_source",
+          "ratings_count",
+          "recent_ratings"
         ],
         "type": "object"
       },
@@ -13431,6 +15197,88 @@
         },
         "type": "object"
       },
+      "NativeSetCurrentIssueRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeSetCurrentIssueResponse": {
+        "description": "Python `SetCurrentIssueResponse`.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
+        ],
+        "type": "object"
+      },
       "NativeSourceSyncFailure": {
         "properties": {
           "error": {
@@ -13702,6 +15550,132 @@
         "required": [
           "discoveries",
           "generated_at"
+        ],
+        "type": "object"
+      },
+      "NativeThreadIssueCreatorsResponse": {
+        "description": "Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`).",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "NativeThreadResponse": {
+        "description": "Python `ThreadResponse`.",
+        "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_unread_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
         ],
         "type": "object"
       },
@@ -15380,39 +17354,18 @@
         "type": "object"
       },
       "ReadingBoundaryBatchRequest": {
-        "description": "Owned series IDs to explain in one request.",
         "properties": {
           "thread_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "maxItems": 200,
-            "minItems": 1,
-            "title": "Thread Ids",
             "type": "array"
           }
         },
         "required": [
           "thread_ids"
         ],
-        "title": "ReadingBoundaryBatchRequest",
-        "type": "object"
-      },
-      "ReadingBoundaryBatchResponse": {
-        "description": "Canonical explanations keyed by Thread ID.",
-        "properties": {
-          "threads": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ReadingBoundaryExplanation"
-            },
-            "title": "Threads",
-            "type": "object"
-          }
-        },
-        "required": [
-          "threads"
-        ],
-        "title": "ReadingBoundaryBatchResponse",
         "type": "object"
       },
       "ReadingBoundaryBatchResponseV2": {
@@ -15434,10 +17387,9 @@
         "type": "object"
       },
       "ReadingBoundaryBlocker": {
-        "description": "One live Option E requirement that currently blocks the next Issue.",
         "properties": {
           "editor": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
@@ -15447,109 +17399,41 @@
             ]
           },
           "kind": {
-            "enum": [
-              "strict_order",
-              "hold",
-              "after_previous",
-              "prerequisite"
-            ],
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "enum": [
-              "reading_list",
-              "reader_prerequisite"
-            ],
-            "title": "Origin",
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
-            "title": "Reason",
             "type": "string"
           },
           "waiting_on": {
             "items": {
               "$ref": "#/components/schemas/BoundaryIssue"
             },
-            "title": "Waiting On",
             "type": "array"
           }
         },
         "required": [
           "kind",
           "origin",
-          "reason"
+          "reason",
+          "waiting_on"
         ],
-        "title": "ReadingBoundaryBlocker",
-        "type": "object"
-      },
-      "ReadingBoundaryExplanation": {
-        "description": "Canonical explanation of one series' reading boundaries.",
-        "properties": {
-          "blockers": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
-            },
-            "title": "Blockers",
-            "type": "array"
-          },
-          "historical": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingBoundaryHistorical"
-            },
-            "title": "Historical",
-            "type": "array"
-          },
-          "next": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "state": {
-            "enum": [
-              "blocked",
-              "available",
-              "complete",
-              "unavailable"
-            ],
-            "title": "State",
-            "type": "string"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id",
-          "state",
-          "summary"
-        ],
-        "title": "ReadingBoundaryExplanation",
         "type": "object"
       },
       "ReadingBoundaryExplanationV2": {
         "properties": {
           "blockers": {
             "items": {
-              "$ref": "#/components/schemas/NativeReadingBoundaryBlocker"
+              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
             },
             "type": "array"
           },
           "next": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
               },
               {
                 "type": "null"
@@ -15575,50 +17459,10 @@
         ],
         "type": "object"
       },
-      "ReadingBoundaryHistorical": {
-        "description": "A reader-owned association that is not a live blocker.\n\nHistorical rows never gate execution. They are listed so the reader can\nsee an old association without it being presented as a live boundary.",
-        "properties": {
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "editor": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kind": {
-            "enum": [
-              "converted_prerequisite",
-              "legacy_dependency",
-              "skipped_entry"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "label",
-          "detail"
-        ],
-        "title": "ReadingBoundaryHistorical",
-        "type": "object"
-      },
       "ReadingBoundaryNext": {
-        "description": "The Issue the reader may read now.",
         "properties": {
           "editor": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
@@ -15634,7 +17478,6 @@
         "required": [
           "issue"
         ],
-        "title": "ReadingBoundaryNext",
         "type": "object"
       },
       "ReadingGraphBlocker": {
@@ -18535,40 +20378,6 @@
           "snoozed_count"
         ],
         "title": "RollResponse",
-        "type": "object"
-      },
-      "RouteTrafficCounter": {
-        "description": "One aggregated (method, route template, status class) tally.",
-        "properties": {
-          "count": {
-            "description": "Requests observed since process start.",
-            "minimum": 1.0,
-            "title": "Count",
-            "type": "integer"
-          },
-          "method": {
-            "description": "HTTP method, e.g. GET.",
-            "title": "Method",
-            "type": "string"
-          },
-          "route": {
-            "description": "Routed path template, e.g. /api/v1/threads/{thread_id}.",
-            "title": "Route",
-            "type": "string"
-          },
-          "status_class": {
-            "description": "Response status class, e.g. 2xx or 4xx.",
-            "title": "Status Class",
-            "type": "string"
-          }
-        },
-        "required": [
-          "method",
-          "route",
-          "status_class",
-          "count"
-        ],
-        "title": "RouteTrafficCounter",
         "type": "object"
       },
       "SeriesDecision": {
@@ -21541,6 +23350,37 @@
         ],
         "type": "object"
       },
+      "ThreadIssueCreateListResponse": {
+        "description": "Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueResponse"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "ThreadIssueCreatorsResponse": {
         "description": "Bulk per-issue ComicVine creator credits for one thread.\n\nIssues without a confirmed ComicVine mapping (or without stored credit\narrays) are omitted; callers fall back to the series' manual creator\ncredits for those rows.",
         "properties": {
@@ -22172,29 +24012,6 @@
           "rating",
           "format"
         ],
-        "type": "object"
-      },
-      "TrafficMetricsSnapshot": {
-        "description": "Process-local traffic counters for one serverless instance.\n\nCounters are monotonic within a process lifetime, so a collector can\nreconstruct fleet-wide totals by keeping the maximum count per key across\npolls of the same ``instance_id``.",
-        "properties": {
-          "counters": {
-            "description": "Aggregated request tallies sorted deterministically.",
-            "items": {
-              "$ref": "#/components/schemas/RouteTrafficCounter"
-            },
-            "title": "Counters",
-            "type": "array"
-          },
-          "instance_id": {
-            "description": "Stable identifier for this process instance.",
-            "title": "Instance Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instance_id"
-        ],
-        "title": "TrafficMetricsSnapshot",
         "type": "object"
       },
       "UndoApplyResponse": {
@@ -22912,34 +24729,6 @@
         ]
       }
     },
-    "/api/v1/bootstrap-alias-metrics": {
-      "get": {
-        "description": "Return this instance's bootstrap alias counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
-        "operationId": "get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BootstrapAliasSnapshotSchema"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Bootstrap Alias Metrics",
-        "tags": [
-          "bootstrap-telemetry",
-          "bootstrap-telemetry"
-        ]
-      }
-    },
     "/api/v1/bug-reports/": {
       "post": {
         "operationId": "create_v1_documentation",
@@ -23205,129 +24994,6 @@
         "summary": "Documentation-only operation for targeted adoption into an existing plan.",
         "tags": [
           "issue-identity"
-        ]
-      }
-    },
-    "/api/v1/collection-exclusions": {
-      "get": {
-        "description": "Return exclusions explicitly entered by this reader.",
-        "operationId": "list_exclusions_api_v1_collection_exclusions_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CollectionExclusionResponse"
-                  },
-                  "title": "Response List Exclusions Api V1 Collection Exclusions Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Exclusions",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
-        ]
-      },
-      "post": {
-        "description": "Idempotently exclude one external volume, Thread or Issue.",
-        "operationId": "create_exclusion_api_v1_collection_exclusions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionExclusionCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionExclusionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Exclusion",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
-        ]
-      }
-    },
-    "/api/v1/collection-exclusions/{exclusion_id}": {
-      "delete": {
-        "description": "Remove one owned exclusion without changing the underlying comic.",
-        "operationId": "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "exclusion_id",
-            "required": true,
-            "schema": {
-              "title": "Exclusion Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Exclusion",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "collection-exclusions"
         ]
       }
     },
@@ -27225,7 +28891,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "summary": "Documentation-only operation for the CBL adoption plan.",
         "tags": [
           "issue-identity"
         ]
@@ -27233,15 +28899,15 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "description": "Preview all CBL positions and their default read-only adoption choices.",
-        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
+        "operationId": "cbl_adoption_preview_documentation",
         "parameters": [
           {
+            "description": "CBL source list identifier",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -27251,21 +28917,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CBLAdoptionPreviewResponse"
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Adoption preview for the active CBL list"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Path failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27273,9 +28945,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Cbl Adoption Preview",
+        "summary": "Documentation-only operation for the CBL adoption preview.",
         "tags": [
-          "issue-identity",
           "issue-identity"
         ]
       }
@@ -27549,15 +29220,15 @@
     },
     "/api/v1/issues/{issue_id}/reader-context": {
       "get": {
-        "description": "Return bounded reading analytics and local neighborhood for an owned issue.\n\nThe response is decorative context for the Roll experience and must never\nbe a prerequisite for rating. It is computed with bounded, user-scoped\nqueries that do not traverse the full library or hydrate ComicVine.\n\nArgs:\n    issue_id: ComicPile issue identifier.\n    current_user: Authenticated owner of the requested issue.\n    db: Async database session.\n\nReturns:\n    Bounded reader-context payload for the requested issue.\n\nRaises:\n    HTTPException: If the issue does not belong to the user.",
-        "operationId": "get_issue_reader_context_api_v1_issues__issue_id__reader_context_get",
+        "operationId": "issue_read_state_reader_context",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -27567,21 +29238,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReaderContextResponse"
+                  "$ref": "#/components/schemas/NativeReaderContextResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Bounded reader context"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27589,41 +29262,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Issue Reader Context",
+        "summary": "Documentation-only operation for reader context.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markRead": {
       "post": {
-        "description": "Mark an issue as read and update thread's next_unread_issue_id.\n\nArgs:\n    issue_id: The issue ID to mark as read.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already read.",
-        "operationId": "mark_issue_read_api_v1_issues__issue_id__markRead_post",
+        "operationId": "issue_read_state_mark_read",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked read and the thread counters refreshed"
+          },
+          "400": {
+            "description": "Issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27631,41 +29308,45 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Read",
+        "summary": "Documentation-only operation for `:markRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:markUnread": {
       "post": {
-        "description": "Mark an issue as unread and update thread's next_unread_issue_id.\n\nReactivates thread if it was completed.\n\nArgs:\n    issue_id: The issue ID to mark as unread.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nRaises:\n    HTTPException: If issue not found, thread not found, or issue already unread.",
-        "operationId": "mark_issue_unread_api_v1_issues__issue_id__markUnread_post",
+        "operationId": "issue_read_state_mark_unread",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue marked unread; a completed thread is reactivated"
+          },
+          "400": {
+            "description": "Issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27673,24 +29354,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Mark Issue Unread",
+        "summary": "Documentation-only operation for `:markUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues/{issue_id}:move": {
       "post": {
-        "description": "Move a single issue within its thread.\n\nArgs:\n    issue_id: The issue ID to move.\n    request: Move request containing the issue that should come before it.\n    current_user: The authenticated user making the move request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the issue or requested target issue is not found.",
-        "operationId": "move_issue_api_v1_issues__issue_id__move_post",
+        "operationId": "issue_read_state_move",
         "parameters": [
           {
+            "description": "Owned Issue identifier",
             "in": "path",
             "name": "issue_id",
             "required": true,
             "schema": {
-              "title": "Issue Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -27699,7 +29379,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueMoveRequest"
+                "$ref": "#/components/schemas/NativeIssueMoveRequest"
               }
             }
           },
@@ -27707,17 +29387,19 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Issue moved within its thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue or anchor issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27725,22 +29407,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Move Issue",
+        "summary": "Documentation-only operation for `:move`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkRead": {
       "post": {
-        "description": "Bulk mark issues as read.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already read.",
-        "operationId": "bulk_mark_issue_read_api_v1_issues_bulkMarkRead_post",
+        "operationId": "issue_read_state_bulk_mark_read",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkReadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -27748,17 +29428,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked read atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as read"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27766,22 +29451,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Read",
+        "summary": "Documentation-only operation for `:bulkMarkRead`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/issues:bulkMarkUnread": {
       "post": {
-        "description": "Bulk mark issues as unread.\n\nArgs:\n    request: Bounded list of issue IDs.\n    current_user: Authenticated user.\n    db: Database session.\n\nRaises:\n    HTTPException: If any issue is invalid or already unread.",
-        "operationId": "bulk_mark_issue_unread_api_v1_issues_bulkMarkUnread_post",
+        "operationId": "issue_read_state_bulk_mark_unread",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueBulkMarkUnreadRequest"
+                "$ref": "#/components/schemas/IssueBulkRequest"
               }
             }
           },
@@ -27789,17 +29472,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Every issue marked unread atomically"
+          },
+          "400": {
+            "description": "An issue is already marked as unread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27807,9 +29495,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Bulk Mark Issue Unread",
+        "summary": "Documentation-only operation for `:bulkMarkUnread`.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
@@ -27832,103 +29519,6 @@
         "summary": "OpenAPI documentation for the versioned metrics alias.",
         "tags": [
           "metrics"
-        ]
-      }
-    },
-    "/api/v1/reading-boundaries": {
-      "post": {
-        "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
-        "operationId": "get_reading_boundary_batch_api_v1_reading_boundaries_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Reading Boundary Batch",
-        "tags": [
-          "reading-boundaries",
-          "reading-boundaries"
-        ]
-      }
-    },
-    "/api/v1/reading-boundaries/{thread_id}": {
-      "get": {
-        "description": "Explain one owned series through the canonical Option E result.\n\nArgs:\n    thread_id: Owned Thread to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Named waiting Issues, live blockers, history, and editor targets.\n\nRaises:\n    HTTPException: With status 404 when the Thread is absent or foreign.",
-        "operationId": "get_reading_boundary_api_v1_reading_boundaries__thread_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "title": "Thread Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryExplanation"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Reading Boundary",
-        "tags": [
-          "reading-boundaries",
-          "reading-boundaries"
         ]
       }
     },
@@ -29196,34 +30786,6 @@
         ]
       }
     },
-    "/api/v1/sessions/current/": {
-      "get": {
-        "description": "Get current active session with deadlock retry handling.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse with current session details.\n\nRaises:\n    RuntimeError: If failed after max retries.",
-        "operationId": "get_current_session_api_v1_sessions_current__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Current Session",
-        "tags": [
-          "session",
-          "sessions"
-        ]
-      }
-    },
     "/api/v1/sessions/{session_id}": {
       "get": {
         "operationId": "get_session_v1_documentation",
@@ -29314,55 +30876,6 @@
         ],
         "summary": "Documentation-only operation for the versioned details.",
         "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-      "post": {
-        "description": "Restore session to its initial state at session start.\n\nArgs:\n    session_id: The session ID to restore.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    session_service: Session service for business logic.\n\nReturns:\n    SessionResponse with restored session details.\n\nRaises:\n    HTTPException: If session or snapshot not found.\n    RuntimeError: If failed after max retries.",
-        "operationId": "restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Restore Reading Session Start",
-        "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -30962,15 +32475,15 @@
         ]
       },
       "post": {
-        "description": "Create issues from a range string and place them in thread order.\n\nOrdinary numeric issue numbers are inserted at their natural position in the\nseries rather than always appended, so adding ``#2`` to ``#33, #34, #35``\nsaves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural\nplacement. Send explicit JSON ``null`` to append at the end (the UI\n\"At the end\" choice). When ``insert_after_issue_id`` is a concrete issue ID,\nexisting issues later in the thread are shifted upward so the new issues are\ninserted immediately after that issue. Irregular numbering such as\n``Annual 1`` or ``0`` falls back to append-only placement.\n\nArgs:\n    thread_id: The thread ID to create issues for.\n    request: Request with issue range string.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueListResponse with newly created issues only (not all issues).\n\nRaises:\n    HTTPException: If thread not found, all issues already exist,\n                  position collision detected, or issue range is invalid.",
-        "operationId": "create_issues_api_v1_threads__thread_id__issues_post",
+        "operationId": "thread_issues_create",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30979,7 +32492,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueCreateRange"
+                "$ref": "#/components/schemas/NativeIssueCreateRange"
               }
             }
           },
@@ -30990,21 +32503,29 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IssueListResponse"
+                  "$ref": "#/components/schemas/ThreadIssueCreateListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Newly created issues"
+          },
+          "400": {
+            "description": "Invalid or fully duplicate range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or anchor issue not found"
+          },
+          "409": {
+            "description": "Issue number already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31012,24 +32533,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Issues",
+        "summary": "Documentation-only operation for issue creation.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/threads/{thread_id}/issues/creators": {
       "get": {
-        "description": "Return stored ComicVine creator credits for every mapped issue in a thread.\n\nOne bulk read serves the whole issue list's creator column, so expanding\na full page never fans out into one provider-intelligence request per\nrow. Issues without a confirmed ComicVine mapping (or without stored\ncredits) are omitted; clients fall back to the series' manual creator\ncredits for those rows.\n\nArgs:\n    thread_id: ComicPile thread whose issue credits are returned.\n    current_user: Authenticated owner of the requested thread.\n    db: Async database session.\n\nReturns:\n    Per-issue stored ComicVine creator credits for the owned thread.",
-        "operationId": "list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get",
+        "operationId": "thread_issues_creators",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31039,21 +32559,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueCreatorsResponse"
+                  "$ref": "#/components/schemas/NativeThreadIssueCreatorsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Stored creator credits per mapped issue"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31061,24 +32583,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Issue Creators",
+        "summary": "Documentation-only operation for the bulk creator read.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
     },
     "/api/v1/threads/{thread_id}/issues:reorder": {
       "post": {
-        "description": "Rewrite all issue positions in a thread from an explicit ordered ID list.\n\nArgs:\n    thread_id: The thread whose issue order should be rewritten.\n    request: Ordered issue IDs representing the desired canonical order.\n    current_user: The authenticated user making the reorder request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the thread is not found or the issue IDs are invalid.",
-        "operationId": "reorder_issues_api_v1_threads__thread_id__issues_reorder_post",
+        "operationId": "thread_issues_reorder",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31087,7 +32608,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IssueReorderRequest"
+                "$ref": "#/components/schemas/NativeIssueReorderRequest"
               }
             }
           },
@@ -31095,17 +32616,22 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Order rewritten"
+          },
+          "400": {
+            "description": "issue_ids must name every issue exactly once"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31113,9 +32639,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Reorder Issues",
+        "summary": "Documentation-only operation for issue reordering.",
         "tags": [
-          "issues",
           "issues"
         ]
       }
@@ -31438,15 +32963,15 @@
     },
     "/api/v1/threads/{thread_id}:migrateToIssues": {
       "post": {
-        "description": "Migrate an old-style thread to issue tracking (#1..total_issues).\n\nMarks #1 through ``last_issue_read`` as read and updates the thread's\nissue-tracking fields.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
-        "operationId": "migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post",
+        "operationId": "thread_issues_migrate",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31455,7 +32980,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesRequest"
               }
             }
           },
@@ -31466,21 +32991,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Migrated thread"
+          },
+          "400": {
+            "description": "Already migrated or inconsistent range"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31488,24 +33018,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Migrate Thread To Issues",
+        "summary": "Documentation-only operation for the explicit migration.",
         "tags": [
-          "threads",
           "threads"
         ]
       }
     },
     "/api/v1/threads/{thread_id}:migrateToIssuesSimple": {
       "post": {
-        "description": "Simplified migration inferred from the issue just rated.\n\nMarks earlier issues read, keeps the rated issue unread so the rating\nflow can mark it read, and points ``next_unread_issue_id`` at it.\n\nRaises:\n    HTTPException: 404 if thread not found, 400 if validation fails.",
-        "operationId": "migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post",
+        "operationId": "thread_issues_migrate_simple",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31514,7 +33043,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesSimpleRequest"
               }
             }
           },
@@ -31525,21 +33054,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Migrated thread"
+          },
+          "400": {
+            "description": "Already migrated or issue cannot be created"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31547,24 +33081,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Migrate Thread To Issues Simple",
+        "summary": "Documentation-only operation for the simplified migration.",
         "tags": [
-          "threads",
           "threads"
         ]
       }
     },
     "/api/v1/threads/{thread_id}:setCurrentIssue": {
       "post": {
-        "description": "Atomically correct the current issue for an active thread.\n\nMarks every earlier issue read, ensures the target is unread, updates\n``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.\n\nRaises:\n    HTTPException: 404 if thread or issue not found, 400 for validation errors.",
-        "operationId": "set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post",
+        "operationId": "thread_issues_set_current",
         "parameters": [
           {
+            "description": "Owned Thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -31573,7 +33106,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+                "$ref": "#/components/schemas/NativeSetCurrentIssueRequest"
               }
             }
           },
@@ -31584,21 +33117,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                  "$ref": "#/components/schemas/NativeSetCurrentIssueResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Corrected current issue"
+          },
+          "400": {
+            "description": "Thread inactive, untracked or issue unavailable"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or issue not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -31606,9 +33144,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Set Current Issue",
+        "summary": "Documentation-only operation for correcting the current issue.",
         "tags": [
-          "threads",
           "threads"
         ]
       }
@@ -31658,34 +33195,6 @@
         "tags": [
           "dependencies",
           "dependencies"
-        ]
-      }
-    },
-    "/api/v1/traffic-metrics": {
-      "get": {
-        "description": "Return this instance's per-route traffic counters.\n\nArgs:\n    current_user: Authenticated user requesting the snapshot.\n\nReturns:\n    Process-local aggregated counters sorted deterministically.",
-        "operationId": "get_traffic_metrics_api_v1_traffic_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TrafficMetricsSnapshot"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Traffic Metrics",
-        "tags": [
-          "traffic",
-          "traffic"
         ]
       }
     },
@@ -32489,6 +33998,667 @@
         ]
       }
     },
+    "/api/v2/creators": {
+      "get": {
+        "operationId": "creators_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_ratings",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorListResponse"
+                }
+              }
+            },
+            "description": "Creator list"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid filters"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/compare": {
+      "get": {
+        "operationId": "compare_documentation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keys",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorComparisonResponse"
+                }
+              }
+            },
+            "description": "Creator comparison"
+          },
+          "400": {
+            "description": "Invalid creator keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/discoveries": {
+      "get": {
+        "operationId": "discoveries_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Creator discoveries"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/summaries": {
+      "get": {
+        "operationId": "summaries_documentation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keys",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorSummariesResponse"
+                }
+              }
+            },
+            "description": "Creator summaries"
+          },
+          "400": {
+            "description": "Invalid creator keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/team-chemistry": {
+      "get": {
+        "operationId": "team_chemistry_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorTeamChemistryResponse"
+                }
+              }
+            },
+            "description": "Creator team chemistry"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}": {
+      "get": {
+        "operationId": "detail_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorDetailResponse"
+                }
+              }
+            },
+            "description": "Creator detail"
+          },
+          "400": {
+            "description": "Invalid key"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Creator not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
+      "get": {
+        "operationId": "rating_distribution_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rating value",
+            "in": "path",
+            "name": "rating_value",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Rating distribution drilldown"
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/role-stats/{role}": {
+      "get": {
+        "operationId": "role_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Creator role",
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Role drilldown"
+          },
+          "400": {
+            "description": "Invalid role"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}": {
+      "get": {
+        "operationId": "series_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Series key",
+            "in": "path",
+            "name": "series_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Series drilldown"
+          },
+          "400": {
+            "description": "Invalid series"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/metrics/{metric_type}": {
+      "get": {
+        "operationId": "metric_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Metric type",
+            "in": "path",
+            "name": "metric_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating_value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "series_key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorMetricDrilldown"
+                }
+              }
+            },
+            "description": "Creator metric drilldown"
+          },
+          "400": {
+            "description": "Invalid metric"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Metric not available"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
+    "/api/v2/creators/{creator_key}/series/{series_key}/issues": {
+      "get": {
+        "operationId": "series_issues_documentation",
+        "parameters": [
+          {
+            "description": "Canonical creator key",
+            "in": "path",
+            "name": "creator_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Series key",
+            "in": "path",
+            "name": "series_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeCreatorSeriesIssueListResponse"
+                }
+              }
+            },
+            "description": "Creator series issues"
+          },
+          "400": {
+            "description": "Invalid keys"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "creators"
+        ]
+      }
+    },
     "/api/v2/demo-roll": {
       "get": {
         "operationId": "read_demo_roll_documentation",
@@ -32949,7 +35119,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeReadingBoundaryBatchRequest"
+                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
               }
             }
           },

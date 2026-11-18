@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Exercise the production server lifecycle with controlled in-flight handlers.
 use axum::{routing::get, Router};
-use comicpile_roll_service::{config::Config, serve, AppState};
+use comicpile_roll_service::{config::Config, serve, test_support, AppState};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -20,7 +20,7 @@ fn state() -> Arc<AppState> {
     })
     .unwrap();
     config.request_timeout = Duration::from_millis(20);
-    Arc::new(AppState::new(config).unwrap())
+    Arc::new(test_support::test_app_state(config))
 }
 
 #[tokio::test]
