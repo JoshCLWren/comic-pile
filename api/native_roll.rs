@@ -317,6 +317,15 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/issues", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(native_dispatch),
+        )
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v1/threads/", post(native_dispatch))

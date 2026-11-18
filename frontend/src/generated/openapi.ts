@@ -2964,33 +2964,8 @@ export interface paths {
         /** Same-path native OpenAPI for the browser's issue-list read. */
         get: operations["list_thread_issues_documentation"];
         put?: never;
-        /**
-         * Create Issues
-         * @description Create issues from a range string and place them in thread order.
-         *
-         *     Ordinary numeric issue numbers are inserted at their natural position in the
-         *     series rather than always appended, so adding ``#2`` to ``#33, #34, #35``
-         *     saves ``#2, #33, #34, #35``. Omit ``insert_after_issue_id`` for that natural
-         *     placement. Send explicit JSON ``null`` to append at the end (the UI
-         *     "At the end" choice). When ``insert_after_issue_id`` is a concrete issue ID,
-         *     existing issues later in the thread are shifted upward so the new issues are
-         *     inserted immediately after that issue. Irregular numbering such as
-         *     ``Annual 1`` or ``0`` falls back to append-only placement.
-         *
-         *     Args:
-         *         thread_id: The thread ID to create issues for.
-         *         request: Request with issue range string.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         IssueListResponse with newly created issues only (not all issues).
-         *
-         *     Raises:
-         *         HTTPException: If thread not found, all issues already exist,
-         *                       position collision detected, or issue range is invalid.
-         */
-        post: operations["create_issues_api_v1_threads__thread_id__issues_post"];
+        /** Documentation-only operation for issue creation. */
+        post: operations["thread_issues_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3004,25 +2979,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Thread Issue Creators
-         * @description Return stored ComicVine creator credits for every mapped issue in a thread.
-         *
-         *     One bulk read serves the whole issue list's creator column, so expanding
-         *     a full page never fans out into one provider-intelligence request per
-         *     row. Issues without a confirmed ComicVine mapping (or without stored
-         *     credits) are omitted; clients fall back to the series' manual creator
-         *     credits for those rows.
-         *
-         *     Args:
-         *         thread_id: ComicPile thread whose issue credits are returned.
-         *         current_user: Authenticated owner of the requested thread.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Per-issue stored ComicVine creator credits for the owned thread.
-         */
-        get: operations["list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get"];
+        /** Documentation-only operation for the bulk creator read. */
+        get: operations["thread_issues_creators"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3040,23 +2998,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Reorder Issues
-         * @description Rewrite all issue positions in a thread from an explicit ordered ID list.
-         *
-         *     Args:
-         *         thread_id: The thread whose issue order should be rewritten.
-         *         request: Ordered issue IDs representing the desired canonical order.
-         *         current_user: The authenticated user making the reorder request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         None. The response is HTTP 204 on success.
-         *
-         *     Raises:
-         *         HTTPException: If the thread is not found or the issue IDs are invalid.
-         */
-        post: operations["reorder_issues_api_v1_threads__thread_id__issues_reorder_post"];
+        /** Documentation-only operation for issue reordering. */
+        post: operations["thread_issues_reorder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3218,17 +3161,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Migrate Thread To Issues
-         * @description Migrate an old-style thread to issue tracking (#1..total_issues).
-         *
-         *     Marks #1 through ``last_issue_read`` as read and updates the thread's
-         *     issue-tracking fields.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread not found, 400 if validation fails.
-         */
-        post: operations["migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post"];
+        /** Documentation-only operation for the explicit migration. */
+        post: operations["thread_issues_migrate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3244,17 +3178,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Migrate Thread To Issues Simple
-         * @description Simplified migration inferred from the issue just rated.
-         *
-         *     Marks earlier issues read, keeps the rated issue unread so the rating
-         *     flow can mark it read, and points ``next_unread_issue_id`` at it.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread not found, 400 if validation fails.
-         */
-        post: operations["migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post"];
+        /** Documentation-only operation for the simplified migration. */
+        post: operations["thread_issues_migrate_simple"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3270,17 +3195,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Set Current Issue
-         * @description Atomically correct the current issue for an active thread.
-         *
-         *     Marks every earlier issue read, ensures the target is unread, updates
-         *     ``thread.next_unread_issue_id``, and pins ``session.pending_issue_id``.
-         *
-         *     Raises:
-         *         HTTPException: 404 if thread or issue not found, 400 for validation errors.
-         */
-        post: operations["set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post"];
+        /** Documentation-only operation for correcting the current issue. */
+        post: operations["thread_issues_set_current"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6815,6 +6731,13 @@ export interface components {
              */
             thread_title: string;
         };
+        /** @description One credited creator (Python `ComicVineCreator`). */
+        CreatorCredit: {
+            /** Format: int64 */
+            creator_id?: number | null;
+            name: string;
+            roles: string[];
+        };
         /**
          * CreatorDetailResponse
          * @description Full detail response for a single creator identity.
@@ -10155,6 +10078,22 @@ export interface components {
             mode?: string | null;
             name: string;
         };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
+        NativeIssueCreateRange: {
+            /**
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
+            issue_range: string;
+        };
+        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
+        NativeIssueCreatorsEntry: {
+            creators: components["schemas"]["CreatorCredit"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
@@ -10170,6 +10109,34 @@ export interface components {
              * @description Move after this issue. `null` moves the issue to position 1.
              */
             after_issue_id: number | null;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
+        NativeIssueReorderRequest: {
+            issue_ids: number[];
+        };
+        /** @description One issue row (Python `IssueResponse`). */
+        NativeIssueResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            read_at?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
+        NativeMigrateToIssuesRequest: {
+            /** Format: int32 */
+            last_issue_read: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
+        NativeMigrateToIssuesSimpleRequest: {
+            issue_number: string;
         };
         NativeOverlapDecisionItem: {
             continuing_volume_id: string;
@@ -10426,6 +10393,30 @@ export interface components {
             predicted_intent?: string | null;
             source?: string | null;
         };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
+        NativeSetCurrentIssueRequest: {
+            issue_number: string;
+        };
+        /** @description Python `SetCurrentIssueResponse`. */
+        NativeSetCurrentIssueResponse: {
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
         NativeSourceSyncFailure: {
             error: string;
             /** Format: int32 */
@@ -10517,6 +10508,39 @@ export interface components {
         NativeTasteDiscoveryListResponse: {
             discoveries: components["schemas"]["NativeTasteDiscovery"][];
             generated_at: string;
+        };
+        /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
+        NativeThreadIssueCreatorsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Python `ThreadResponse`. */
+        NativeThreadResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: Record<string, never>[];
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         NearMatch: {
             color: string;
@@ -13278,6 +13302,15 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        };
+        /** @description Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide. */
+        ThreadIssueCreateListResponse: {
+            issues: components["schemas"]["NativeIssueResponse"][];
+            next_page_token?: string | null;
+            /** Format: int32 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
         };
         /**
          * ThreadIssueCreatorsResponse
@@ -19442,102 +19475,183 @@ export interface operations {
             };
         };
     };
-    create_issues_api_v1_threads__thread_id__issues_post: {
+    thread_issues_create: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueCreateRange"];
+                "application/json": components["schemas"]["NativeIssueCreateRange"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Newly created issues */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueListResponse"];
+                    "application/json": components["schemas"]["ThreadIssueCreateListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid or fully duplicate range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue number already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    list_thread_issue_creators_api_v1_threads__thread_id__issues_creators_get: {
+    thread_issues_creators: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Stored creator credits per mapped issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadIssueCreatorsResponse"];
+                    "application/json": components["schemas"]["NativeThreadIssueCreatorsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    reorder_issues_api_v1_threads__thread_id__issues_reorder_post: {
+    thread_issues_reorder: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IssueReorderRequest"];
+                "application/json": components["schemas"]["NativeIssueReorderRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Order rewritten */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description issue_ids must name every issue exactly once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19734,108 +19848,189 @@ export interface operations {
             };
         };
     };
-    migrate_thread_to_issues_api_v1_threads__thread_id__migrateToIssues_post: {
+    thread_issues_migrate: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MigrateToIssuesRequest"];
+                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Migrated thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Already migrated or inconsistent range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    migrate_thread_to_issues_simple_api_v1_threads__thread_id__migrateToIssuesSimple_post: {
+    thread_issues_migrate_simple: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MigrateToIssuesSimpleRequest"];
+                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Migrated thread */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Already migrated or issue cannot be created */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    set_current_issue_api_v1_threads__thread_id__setCurrentIssue_post: {
+    thread_issues_set_current: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetCurrentIssueRequest"];
+                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Corrected current issue */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SetCurrentIssueResponse"];
+                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Thread inactive, untracked or issue unavailable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
