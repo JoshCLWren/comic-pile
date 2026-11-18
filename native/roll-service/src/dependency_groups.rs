@@ -73,17 +73,13 @@ const UNREAD_COUNTS_SQL: &str = "SELECT i.thread_id, COUNT(*) FROM issues i \
 const ISSUE_PROGRESS_SQL: &str = "SELECT i.id, i.thread_id, i.status FROM issues i \
      WHERE i.id = ANY($1::int[])";
 const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remaining, \
-     t.queue_position, t.status, t.last_rating, \
-     to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS last_activity_at, \
-     t.notes, t.is_test, t.is_blocked, \
-     to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS created_at, \
+     t.queue_position, t.status, t.last_rating, t.last_activity_at, \
+     t.notes, t.is_test, t.is_blocked, t.created_at, \
      t.total_issues, t.reading_progress, t.next_unread_issue_id, \
      t.next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
-     to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
-     to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
-     FROM issues i WHERE i.id = ANY($1::int[])";
+     i.read_at, i.created_at FROM issues i WHERE i.id = ANY($1::int[])";
 const OTHER_COUPLERS_SQL: &str =
     "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
      AS thread_id FROM dependency_group_memberships m \
@@ -92,7 +88,7 @@ const OTHER_COUPLERS_SQL: &str =
      WHERE m.group_id <> $2 AND (m.thread_id = ANY($3::int[]) OR i.thread_id = ANY($3::int[])) \
      ORDER BY g.name";
 const LINKED_PLANS_SQL: &str = "SELECT id, name FROM continuity_plans \
-     WHERE user_id = $1 AND nodes_json @> $2::jsonb ORDER BY name, id";
+     WHERE user_id = $1 AND nodes_json::jsonb @> $2::jsonb ORDER BY name, id";
 const DELETE_GROUP_SQL: &str = "DELETE FROM dependency_groups WHERE id = $1 AND user_id = $2";
 const SEQUENCE_OCCUPIED_SQL: &str = "SELECT id FROM dependency_group_memberships \
      WHERE group_id = $1 AND sequence_order = $2 LIMIT 1";
@@ -106,8 +102,8 @@ const INSERT_MEMBERSHIP_SQL: &str = "INSERT INTO dependency_group_memberships \
      VALUES ($1, $2, $3, $4) RETURNING id, group_id, thread_id, issue_id, sequence_order";
 const INSERT_ISSUE_MEMBERSHIPS_SQL: &str = "INSERT INTO dependency_group_memberships (group_id, issue_id) \
      SELECT $1, issue_id FROM unnest($2::int[]) AS issue_ids(issue_id) ON CONFLICT DO NOTHING RETURNING issue_id";
-const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name) \
-     VALUES ($1, $2) RETURNING id, name, created_at";
+const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name, created_at) \
+     VALUES ($1, $2, NOW()) RETURNING id, name, created_at";
 const UPDATE_GROUP_ORDER_SQL: &str = "UPDATE dependency_group_memberships AS membership \
      SET sequence_order = requested.sequence_order \
      FROM unnest($1::int[], $2::int[]) AS requested(membership_id, sequence_order) \
@@ -255,22 +251,17 @@ struct GroupRecord {
     created_at: DateTime<Utc>,
 }
 
-fn format_created_at(created_at: DateTime<Utc>) -> String {
-    let precision = if created_at.timestamp_subsec_micros() == 0 {
+fn format_python_datetime(value: DateTime<Utc>) -> String {
+    let precision = if value.timestamp_subsec_micros() == 0 {
         SecondsFormat::Secs
     } else {
         SecondsFormat::Micros
     };
-    created_at.to_rfc3339_opts(precision, true)
+    value.to_rfc3339_opts(precision, true)
 }
 
-fn normalize_thread_format(format: &str) -> String {
-    let trimmed = format.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => trimmed.to_string(),
-    }
+fn format_optional_python_datetime(value: Option<DateTime<Utc>>) -> Option<String> {
+    value.map(format_python_datetime)
 }
 
 fn unprocessable(detail: impl Into<String>) -> ApiError {
@@ -791,7 +782,7 @@ async fn group_response(
     Ok(DependencyGroupResponse {
         id: group.id,
         name: group.name.clone(),
-        created_at: format_created_at(group.created_at),
+        created_at: format_python_datetime(group.created_at),
         memberships: build_member_responses(memberships, &thread_titles, &issue_metadata),
         read_issues,
         total_issues,
@@ -871,7 +862,7 @@ pub async fn list_groups(
         responses.push(DependencyGroupResponse {
             id: group.id,
             name: group.name,
-            created_at: format_created_at(group.created_at),
+            created_at: format_python_datetime(group.created_at),
             memberships: build_member_responses(&memberships, &thread_titles, &issue_metadata),
             read_issues,
             total_issues,
@@ -1050,7 +1041,7 @@ pub async fn get_group_detail(
     Ok(Json(DependencyGroupDetailResponse {
         id: group.id,
         name: group.name,
-        created_at: format_created_at(group.created_at),
+        created_at: format_python_datetime(group.created_at),
         memberships: enriched,
         linked_plans,
     }))
