@@ -12253,43 +12253,6 @@
         ],
         "type": "object"
       },
-      "NativeReadingOrderProjectionResult": {
-        "properties": {
-          "added_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "kept_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "plan_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "reading_order_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "total_positions": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "updated_count": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "plan_id",
-          "reading_order_id",
-          "added_count",
-          "updated_count",
-          "kept_count",
-          "total_positions"
-        ],
-        "type": "object"
-      },
       "NativeSessionBandwidthState": {
         "description": "Canonical bandwidth state.",
         "properties": {
@@ -16221,7 +16184,7 @@
         "type": "object"
       },
       "ReadingOrderProjectionRequest": {
-        "description": "Request contract for both preview and confirm endpoints.",
+        "description": "Request contract for the Python preview; confirmation is served by Rust.",
         "properties": {
           "reading_order_id": {
             "exclusiveMinimum": 0.0,
@@ -16236,34 +16199,29 @@
         "type": "object"
       },
       "ReadingOrderProjectionResult": {
-        "description": "Response contract for the confirm endpoint.",
         "properties": {
           "added_count": {
-            "minimum": 0.0,
-            "title": "Added Count",
+            "format": "int32",
             "type": "integer"
           },
           "kept_count": {
-            "minimum": 0.0,
-            "title": "Kept Count",
+            "format": "int32",
             "type": "integer"
           },
           "plan_id": {
-            "title": "Plan Id",
+            "format": "int32",
             "type": "integer"
           },
           "reading_order_id": {
-            "title": "Reading Order Id",
+            "format": "int32",
             "type": "integer"
           },
           "total_positions": {
-            "minimum": 0.0,
-            "title": "Total Positions",
+            "format": "int32",
             "type": "integer"
           },
           "updated_count": {
-            "minimum": 0.0,
-            "title": "Updated Count",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -16275,7 +16233,6 @@
           "kept_count",
           "total_positions"
         ],
-        "title": "ReadingOrderProjectionResult",
         "type": "object"
       },
       "ReadingOrderResponse": {
@@ -23588,7 +23545,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReadingOrderProjectionResult"
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
                 }
               }
             },
