@@ -1,6 +1,6 @@
 """Per-resource router mounts for deferred cold-start registration (#3479).
 
-The Vercel function registers only the lightweight ping/metrics/keepalive routes
+The Vercel function registers only the lightweight ping/metrics routes
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
 ``/api/v1/undo`` tap pulled in catalog and delivery even though the
@@ -29,9 +29,8 @@ from fastapi import FastAPI
 RegisterMount = Callable[[FastAPI], None]
 
 #: Path segments that are registered eagerly and never need deferred loading:
-#: ping, metrics and keepalive are mounted by ``app.main`` before this registry
-#: is consulted.
-EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics", "keepalive"})
+#: ping and metrics are mounted by ``app.main`` before this registry is consulted.
+EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics"})
 
 
 @dataclass(frozen=True)
@@ -88,30 +87,11 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
     segment = request_segment(path)
     if not segment or segment in EAGER_SEGMENTS:
         return ()
-    if segment == "roll":
-        # The dependencies mount declares "roll" only for its composed
-        # POST /api/v1/roll/switch-prerequisite endpoint. Ordinary Roll
-        # requests must not import every dependency/CBL/continuity router
-        # on a cold worker just to answer a bootstrap GET.
-        switch_path = path.rstrip("/") == "/api/v1/roll/switch-prerequisite"
-        return tuple(
-            mount
-            for mount in mounts
-            if mount.key == "roll" or (switch_path and mount.key == "dependencies")
-        )
     return tuple(mount for mount in mounts if segment in mount.segments)
 
 
-def _register_roll(app: FastAPI) -> None:
-    """Register the Python Roll mutation routers, never the native v2 bootstrap."""
-    from app.api import roll
-
-    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-
-
 def _register_health(app: FastAPI) -> None:
-    """Register bounded health probes."""
+    """Register the bounded warm-up probe."""
     from app.api import health
 
     app.include_router(health.router, prefix="/api", tags=["health"])
@@ -163,27 +143,11 @@ def _register_reading_orders(app: FastAPI) -> None:
     app.include_router(reading_orders.router, tags=["reading-orders"])
 
 
-def _register_reading_boundary(app: FastAPI) -> None:
-    """Register versioned Reading Boundaries explanation routers."""
-    from app.api import reading_boundary
-
-    app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
-
-
 def _register_reading_plan_sync(app: FastAPI) -> None:
     """Register reading-plan sync routers."""
     from app.api import reading_plan_sync
 
     app.include_router(reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"])
-
-
-def _register_cron(app: FastAPI) -> None:
-    """Register the secret-gated Vercel Cron endpoint."""
-    from app.api import cron
-
-    # Machine-triggered Vercel Cron endpoint. It is secret-gated, omitted from
-    # the generated client schema, and delegates all work to the sync service.
-    app.include_router(cron.router, prefix="/api/v1", tags=["cron"])
 
 
 def _register_sessions(app: FastAPI) -> None:
@@ -202,20 +166,6 @@ def _register_undo(app: FastAPI) -> None:
     from app.api import undo
 
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-
-
-def _register_traffic_metrics(app: FastAPI) -> None:
-    """Register traffic-metrics routers."""
-    from app.api import traffic_metrics
-
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-
-
-def _register_bootstrap_telemetry(app: FastAPI) -> None:
-    """Register bootstrap-alias telemetry routers."""
-    from app.api import bootstrap_telemetry
-
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
 
 
 def _register_dependencies(app: FastAPI) -> None:
@@ -255,7 +205,6 @@ def _register_cbl_adoption(app: FastAPI) -> None:
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
-    RouterMount("roll", frozenset({"roll"}), _register_roll),
     RouterMount("health", frozenset({"health"}), _register_health),
     RouterMount("threads", frozenset({"threads"}), _register_threads),
     RouterMount("issues", frozenset({"issues", "threads"}), _register_issues),
@@ -271,31 +220,19 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         frozenset({"reading-orders", "threads"}),
         _register_reading_orders,
     ),
-    RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
     RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
-    RouterMount("cron", frozenset({"cron"}), _register_cron),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount("undo", frozenset({"undo"}), _register_undo),
-    RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
-    RouterMount(
-        "bootstrap-telemetry",
-        frozenset({"bootstrap-alias-metrics"}),
-        _register_bootstrap_telemetry,
-    ),
     RouterMount(
         "dependencies",
         frozenset(
             {
-                "collection-exclusions",
                 "continuity-plans",
-                "continuity-rules",
                 "custom-cbls",
                 "dependencies",
                 "issue-identity",
                 "issues",
                 "reading-order-groups",
-                # roll_recovery_switch composes under /roll in mount_subrouters().
-                "roll",
                 "threads",
             }
         ),

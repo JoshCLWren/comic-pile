@@ -7,7 +7,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import QueueBulkMapSeriesDialog from '../components/QueueBulkMapSeriesDialog'
 import { useCreateThread, useUpdateThread, useReactivateThread } from '../hooks/useThread'
 import { useQueueThreads, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
 
 vi.mock('../hooks/useCompletedThreads', () => ({
   useCompletedThreads: vi.fn(() => ({
@@ -38,7 +38,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 
@@ -115,7 +115,7 @@ const mockedUseShuffleQueue = vi.mocked(useShuffleQueue)
 const mockedUseCreateThread = vi.mocked(useCreateThread)
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedUseReactivateThread = vi.mocked(useReactivateThread)
-const mockedUseSession = vi.mocked(useSession)
+const mockedUseRollBootstrap = vi.mocked(useRollBootstrap)
 const mockedBulkDialog = vi.mocked(QueueBulkMapSeriesDialog)
 
 interface CapturedBulkProps {
@@ -166,7 +166,7 @@ describe('QueuePage bulk mapping wiring', () => {
     // SAFETY: QueuePage only reads mutate and isPending from these hooks; the full return type is irrelevant.
     mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     // SAFETY: QueuePage only reads data.snoozed_threads, data.skipped_thread_ids, data.skipped_threads, and refetch; the full return type is irrelevant.
-    mockedUseSession.mockReturnValue({
+    mockedUseRollBootstrap.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
       refetch: vi.fn(),
     } as never)

@@ -115,27 +115,6 @@ async def test_history_rows_expose_visible_thread_tags(
 
 
 @pytest.mark.asyncio
-async def test_current_session_rolled_thread_exposes_tags(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """The current-session payload carries tags on the rolled-thread path."""
-    tagged = await _thread(async_db, default_user.id, "Fantastic Four")
-    session = await _session_with_thread(async_db, default_user.id, tagged, pending=False)
-    await _tag_and_assign(async_db, default_user, tagged, "Physical")
-
-    response = await auth_client.get("/api/v1/sessions/current/")
-    assert response.status_code == 200, response.text
-    data = response.json()
-    assert data["id"] == session.id
-    active = data["active_thread"]
-    assert active is not None
-    assert active["id"] == tagged.id
-    assert [tag["name"] for tag in active["tags"]] == ["Physical"]
-
-
-@pytest.mark.asyncio
 async def test_history_rows_never_leak_another_users_private_tag(
     auth_client: AsyncClient,
     async_db: AsyncSession,
