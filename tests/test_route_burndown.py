@@ -821,3 +821,51 @@ def test_fragment_groups_preserve_exact_dest_and_methods() -> None:
             assert "OPTIONS" in methods
         else:
             assert "OPTIONS" not in methods
+
+
+def test_node_and_python_generators_produce_identical_bytes(tmp_path: Path) -> None:
+    """Node and Python generators are byte-identical on the same checked-in inputs."""
+    import shutil
+    import subprocess
+
+    node_script = ROOT / "scripts" / "generate_route_burndown.mjs"
+    python_script = ROOT / "scripts" / "generate_route_burndown.py"
+
+    def run(command: list[str], out_dir: Path) -> dict[str, Path]:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        paths = {
+            "inventory": out_dir / "v2-route-inventory.json",
+            "vercel": out_dir / "vercel.json",
+            "agents": out_dir / "AGENTS.md",
+            "rewrite": out_dir / "vercel-rewrites.json",
+        }
+        shutil.copyfile(INVENTORY_PATH, paths["inventory"])
+        shutil.copyfile(VERCEL_PATH, paths["vercel"])
+        shutil.copyfile(AGENTS_PATH, paths["agents"])
+        shutil.copyfile(REWRITE_FRAGMENT_PATH, paths["rewrite"])
+        subprocess.run(
+            [
+                *command,
+                "--inventory",
+                str(paths["inventory"]),
+                "--fragments",
+                str(FRAGMENT_DIR),
+                "--rewrite-fragment",
+                str(paths["rewrite"]),
+                "--vercel",
+                str(paths["vercel"]),
+                "--agents",
+                str(paths["agents"]),
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return paths
+
+    node_paths = run(["node", str(node_script)], tmp_path / "node")
+    python_paths = run(["python3", str(python_script)], tmp_path / "python")
+
+    for key in ("inventory", "vercel", "agents", "rewrite"):
+        assert node_paths[key].read_bytes() == python_paths[key].read_bytes(), key

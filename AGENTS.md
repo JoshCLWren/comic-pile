@@ -82,7 +82,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
 ### Route generation ownership (bot-owned)
 
-Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `python3 scripts/generate_route_burndown.py` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
+Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `node scripts/generate_route_burndown.mjs` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
 
 ## MANDATORY: Frontend Visual Policy
 

@@ -272,7 +272,7 @@ def test_ci_summary_gates_regeneration_proof() -> None:
     proof = next(step for step in steps if step.get("name", "").startswith("Prove regeneration PR"))
     assert "--allow-generated" in proof["run"]
     assert "generate_vercel_routes.mjs --check" in proof["run"]
-    assert "generate_route_burndown.py --check" in proof["run"]
+    assert "generate_route_burndown.mjs --check" in proof["run"]
     assert "rust-ingress" in ci["jobs"]["check-all-jobs"]["needs"]
 
 
