@@ -1279,27 +1279,8 @@ pub async fn import_series(
             return Err(unprocessable("Invalid reading order anchor"));
         }
     }
-    let Some(key) = provider_key() else {
-        return Err(series_import_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "provider_unavailable",
-            "ComicVine is not configured on this server",
-        ));
-    };
     let volume_id = request.comicvine_volume_id;
-    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &key)
-        .await
-        .map_err(|error| {
-            series_provider_failure(format!(
-                "Failed to fetch ComicVine series: {error:?}"
-            ))
-        })?;
-    let series_name = volume_name(&volume).ok_or_else(|| {
-        series_provider_failure("ComicVine series response did not contain valid data")
-    })?;
-    let rows = provider_roster(volume_id, &key).await.map_err(|error| {
-        series_provider_failure(format!("Failed to fetch series issues: {error:?}"))
-    })?;
+    let (series_name, rows) = series_import_provider_payload(volume_id).await?;
     if rows.is_empty() {
         return Err(series_import_error(
             StatusCode::BAD_REQUEST,
