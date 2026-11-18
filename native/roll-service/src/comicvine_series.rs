@@ -689,7 +689,13 @@ pub(crate) async fn import_series(
             };
 
         if conflict_detail.is_none() {
-            if let IssueLocator::Planned(index) = locator {
+            let planned_index = match locator {
+                IssueLocator::Planned(index) => Some(index),
+                IssueLocator::Existing(issue_id) => planned
+                    .iter()
+                    .position(|planned_issue| planned_issue.id == Some(issue_id)),
+            };
+            if let Some(index) = planned_index {
                 planned[index].confirmed_comicvine_id = Some(comicvine_issue_id);
             }
             mapping_specs.push((comicvine_issue_id, locator));
@@ -1100,7 +1106,20 @@ mod tests {
                  INSERT INTO issue_external_identity_mappings \
                     (issue_id, external_identity_id, status, evidence_source, evidence_json, \
                      confidence, created_at, updated_at) \
-                 VALUES (20, 30, 'confirmed', 'existing_mapping', '{}'::json, 1.0, now(), now());",
+                 VALUES (20, 30, 'confirmed', 'existing_mapping', '{}'::json, 1.0, now(), now()); \
+                 INSERT INTO threads \
+                    (id, title, format, issues_remaining, total_issues, queue_position, status, \
+                     user_id, created_at, is_test, is_blocked) \
+                 VALUES (40, 'Conflicts', 'Comic', 1, 1, 2, 'active', 1, now(), false, false); \
+                 INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) \
+                 VALUES (50, 40, '2', 1, 'unread', now()); \
+                 INSERT INTO external_identities \
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES (60, 'comicvine', 'series', '948350102', '{}'::json, now(), now()); \
+                 INSERT INTO thread_external_series_mappings \
+                    (thread_id, external_identity_id, status, evidence_source, confidence, \
+                     created_at, updated_at) \
+                 VALUES (40, 60, 'confirmed', 'existing_mapping', 1.0, now(), now());",
             )
             .await
             .expect("seed confirmed physical issue");
@@ -1122,8 +1141,10 @@ mod tests {
         )
         .await
         .expect("bounded conflict outcomes");
-        assert_eq!(response.issues_adopted, 1);
-        assert_eq!(response.issues_skipped, 0);
+        assert!(!response.thread_created);
+        assert_eq!(response.thread_id, 40);
+        assert_eq!(response.issues_adopted, 0);
+        assert_eq!(response.issues_skipped, 1);
         assert_eq!(response.issues_conflict, 2);
         assert_eq!(response.issue_results[0].outcome, "conflict");
         assert_eq!(response.issue_results[0].issue_id, Some(20));
@@ -1131,7 +1152,7 @@ mod tests {
             .conflict_detail
             .as_deref()
             .is_some_and(|detail| detail.contains("thread 10")));
-        assert_eq!(response.issue_results[1].outcome, "created");
+        assert_eq!(response.issue_results[1].outcome, "reused");
         assert_eq!(response.issue_results[2].outcome, "conflict");
         assert_eq!(
             response.issue_results[2].conflict_detail.as_deref(),
