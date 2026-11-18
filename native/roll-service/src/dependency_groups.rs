@@ -1886,8 +1886,68 @@ mod tests {
         let overlong = "x".repeat(MAX_GROUP_NAME_CHARS + 1);
         assert!(matches!(
             normalize_group_name(&overlong),
-            Err(ApiError::Unprocessable(_))
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
         ));
+        let padded_overlong = format!(" {} ", "x".repeat(MAX_GROUP_NAME_CHARS));
+        assert!(matches!(
+            normalize_group_name(&padded_overlong),
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
+        ));
+        assert!(matches!(
+            normalize_group_name(""),
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
+        ));
+    }
+
+    #[test]
+    fn request_validation_matches_python_schema_bounds() {
+        let member = DependencyGroupMemberCreateRequest {
+            thread_id: Some(0),
+            issue_id: None,
+            sequence_order: None,
+        };
+        assert!(matches!(
+            validate_member_request(&member),
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
+        ));
+        let range = DependencyGroupIssueRangeCreateRequest {
+            thread_id: 1,
+            start_position: 0,
+            end_position: 1,
+        };
+        assert!(matches!(
+            validate_issue_range_request(&range),
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
+        ));
+        let order = DependencyGroupOrderUpdateRequest {
+            items: vec![DependencyGroupOrderItem {
+                issue_id: 1,
+                sequence_order: 0,
+            }],
+        };
+        assert!(matches!(
+            validate_group_order_request(&order),
+            Err(ApiError::Unprocessable(detail)) if detail == "Validation failed"
+        ));
+    }
+
+    #[test]
+    fn linked_plan_filter_uses_python_jsonb_array_containment() {
+        assert_eq!(
+            linked_plan_containment(42),
+            serde_json::json!([{ "node_type": "crossover", "ref_id": 42 }])
+        );
+    }
+
+    #[test]
+    fn group_order_update_is_set_based_and_clears_omitted_issues() {
+        let members = BTreeMap::from([(11, 101), (12, 102), (13, 103)]);
+        let positions = BTreeMap::from([(12, 1), (13, 2)]);
+        let (membership_ids, sequence_orders) =
+            group_order_update_parameters(&members, &positions);
+        assert_eq!(membership_ids, vec![101, 102, 103]);
+        assert_eq!(sequence_orders, vec![None, Some(1), Some(2)]);
+        assert!(UPDATE_GROUP_ORDER_SQL.contains("FROM unnest"));
     }
 
     #[test]
@@ -1919,6 +1979,17 @@ mod tests {
         assert_eq!(
             crossover_progress(&memberships, &threads, &issues, &unread),
             (4, 5, "80%".to_string())
+        );
+        let stale_unread: BTreeMap<i32, i64> = BTreeMap::from([(10, 5_i64)]);
+        let loose_issues: BTreeMap<i32, (i32, String)> = BTreeMap::new();
+        assert_eq!(
+            crossover_progress(
+                &[member(1, Some(10), None)],
+                &threads,
+                &loose_issues,
+                &stale_unread,
+            ),
+            (0, 4, "0%".to_string())
         );
         let empty_threads: BTreeMap<i32, Option<i32>> = BTreeMap::new();
         let empty_issues: BTreeMap<i32, (i32, String)> = BTreeMap::new();
