@@ -275,6 +275,45 @@ fn app() -> Router {
         )
         .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
         .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
+        .route("/api/v1/reading-order-groups/", get(native_dispatch))
+        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(native_dispatch),
+        )
+        .route("/api/v1/reading-order-groups/{group_id}", get(native_dispatch))
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(native_dispatch),
+        )
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
