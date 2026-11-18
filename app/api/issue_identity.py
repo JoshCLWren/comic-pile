@@ -1,22 +1,19 @@
-"""CBL adoption preview and dry-run plan endpoints."""
+"""Retired Python handlers for CBL adoption preview/plan endpoints (#4843).
+
+The same-path operations are served by the native Rust router. This module keeps
+the response schema types and serialization helpers for any remaining Python
+tests while registering no HTTP handlers.
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
-from app.database import get_db
-from app.models.user import User
-from app.services.cbl_reconciliation import (
-    CBLAdoptionPlan,
-    CBLReconciliationReport,
-    preview_cbl_adoption,
-)
+from app.services.cbl_reconciliation import CBLAdoptionPlan, CBLReconciliationReport
 from app.services.cbl_source_public import public_cbl_repository
 
 router = APIRouter(prefix="/api/v1/issue-identity", tags=["issue-identity"])
@@ -98,6 +95,8 @@ class CBLAdoptionPreviewResponse(BaseModel):
     total_positions: int
     entries: list[CBLAdoptionEntryResponse]
     summary: CBLAdoptionSummaryResponse
+
+
 def _cbl_position(entry: dict[str, object]) -> int:
     """Return a validated CBL source position from one adoption-plan entry."""
     position = entry.get("cbl_position")
@@ -111,8 +110,6 @@ def _adoption_payload(
     plan: CBLAdoptionPlan,
 ) -> CBLAdoptionPreviewResponse:
     """Serialize the read-only CBL adoption preview and dry-run summary."""
-    # The concrete dataclasses are intentionally kept in the service layer;
-    # this adapter contains no query or adoption logic.
     adoption_entries = list(plan.entries)
     positions_by_decision = {
         decision: [
@@ -128,14 +125,11 @@ def _adoption_payload(
             "awaiting_opt_in",
         )
     }
-    if (
-        report.source_list_id is None
-        or report.source_repository is None
-        or report.source_path is None
-    ):
+    if report.source_list_id is None:
         raise ValueError("CBL adoption preview requires source list provenance")
     if report.content_hash is None or report.revision_sha is None:
         raise ValueError("CBL adoption preview requires source fingerprint")
+
     return CBLAdoptionPreviewResponse(
         source=CBLSourceFingerprintResponse(
             source_list_id=report.source_list_id,
@@ -161,32 +155,3 @@ def _adoption_payload(
             awaiting_opt_in_positions=positions_by_decision["awaiting_opt_in"],
         ),
     )
-
-
-@router.get("/cbl/{list_id}/adoption-preview", response_model=CBLAdoptionPreviewResponse)
-async def api_cbl_adoption_preview(
-    list_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> CBLAdoptionPreviewResponse:
-    """Preview all CBL positions and their default read-only adoption choices."""
-    report, plan = await preview_cbl_adoption(db, user_id=current_user.id, list_id=list_id)
-    return _adoption_payload(report, plan)
-
-
-@router.post("/cbl/{list_id}/adoption-plan", response_model=CBLAdoptionPreviewResponse)
-async def api_cbl_adoption_plan(
-    list_id: int,
-    request: CBLAdoptionPlanRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> CBLAdoptionPreviewResponse:
-    """Calculate a dry-run CBL adoption plan with explicit selection overrides."""
-    report, plan = await preview_cbl_adoption(
-        db,
-        user_id=current_user.id,
-        list_id=list_id,
-        series_decisions=request.series_decisions,
-        entry_decisions=request.entry_decisions,
-    )
-    return _adoption_payload(report, plan)

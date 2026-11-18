@@ -553,6 +553,26 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
 }
 
 #[tokio::test]
+async fn adoption_preview_returns_preview_shape_for_active_list() {
+    let (state, token, _csrf, _guard) = setup().await;
+    let (status, body) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/1/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["source"]["source_list_id"], 1);
+    assert_eq!(
+        body["source"]["source_path"], MIRROR_SOURCE_PATH,
+        "adoption preview must return raw stored source_path like Python"
+    );
+    assert!(body["total_positions"].as_i64().unwrap() >= 1, "{body}");
+    assert!(body["entries"].is_array(), "{body}");
+    assert!(body["summary"]["final_adopted_count"].is_number(), "{body}");
+}
+
+#[tokio::test]
 async fn adoption_plan_returns_preview_shape_for_active_list() {
     let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(

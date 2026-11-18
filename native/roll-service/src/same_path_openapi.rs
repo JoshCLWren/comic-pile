@@ -195,6 +195,10 @@ mod tests {
                 "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
                 "get",
             ),
+            (
+                "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+                "get",
+            ),
             ("/api/v1/issue-identity/cbl/{list_id}/adoption-plan", "post"),
             ("/api/v1/cbl/{list_id}/adoption-commit", "post"),
             (

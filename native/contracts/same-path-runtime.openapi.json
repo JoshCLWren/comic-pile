@@ -3641,7 +3641,7 @@
         "tags": [
           "issue-identity"
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "summary": "Documentation-only operation for the CBL adoption plan.",
         "operationId": "cbl_adoption_plan_documentation",
         "parameters": [
           {
@@ -3685,6 +3685,60 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for the CBL adoption preview.",
+        "operationId": "cbl_adoption_preview_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adoption preview for the active CBL list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Path failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [

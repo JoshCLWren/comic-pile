@@ -1620,6 +1620,24 @@ async fn load_active_cbl_list_meta(
     })
 }
 
+#[instrument(skip(state, auth))]
+pub async fn cbl_adoption_preview(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
+    let pool = checkout(&state).await?;
+    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
+    // Build reconciliation entries (faithful port of core fields used by adoption plan).
+    let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
+    let planned = calculate_adoption_plan_entries(
+        &report_entries,
+        &std::collections::HashMap::new(),
+        &std::collections::HashMap::new(),
+    );
+    Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
+}
+
 #[instrument(skip(state, auth, request))]
 pub async fn cbl_adoption_plan(
     State(state): State<Arc<AppState>>,
@@ -4414,6 +4432,23 @@ pub fn find_cbl_candidates_for_reading_list_documentation() {}
 
 /// Documentation-only operation for the CBL adoption preview.
 #[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    responses(
+        (status = 200, description = "Adoption preview for the active CBL list", body = CblAdoptionPreviewResponse),
+        (status = 404, description = "CBL source list not found or not active"),
+        (status = 422, description = "Path failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_adoption_preview_documentation() {}
+
+/// Documentation-only operation for the CBL adoption plan.
+#[utoipa::path(
     post,
     path = "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
     tag = "issue-identity",
@@ -4481,6 +4516,7 @@ pub fn cbl_targeted_adoption_commit_documentation() {}
         find_cbl_sources_by_comicvine_issue_documentation,
         compare_cbl_sources_documentation,
         find_cbl_candidates_for_reading_list_documentation,
+        cbl_adoption_preview_documentation,
         cbl_adoption_plan_documentation,
         cbl_adoption_commit_documentation,
         cbl_targeted_adoption_commit_documentation,
