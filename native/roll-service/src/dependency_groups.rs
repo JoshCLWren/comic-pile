@@ -1308,7 +1308,7 @@ pub async fn remove_member(
     match result {
         Ok(()) => {
             tx.commit().await.map_err(db::query_error)?;
-            issue_service::refresh_blocked_threads(tx, user.id()).await?;
+            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             Ok(StatusCode::NO_CONTENT)
         }
         Err(error) => {
