@@ -35,6 +35,7 @@ export interface RollPageStateSetters {
   setRolledResult: (value: number | null) => void
   setSelectedThreadId: (value: number | null) => void
   setIsOverrideOpen: (value: boolean) => void
+  setIsDirectIssueOpen: (value: boolean) => void
   setOverrideThreadId: (value: string) => void
   setOverrideErrorMessage: (value: string) => void
   setSnoozedExpanded: (value: boolean) => void
@@ -58,6 +59,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [rolledResult, setRolledResult] = useState<number | null>(null)
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
+  const [isDirectIssueOpen, setIsDirectIssueOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
@@ -88,6 +90,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setSelectedThreadId,
     isOverrideOpen,
     setIsOverrideOpen,
+    isDirectIssueOpen,
+    setIsDirectIssueOpen,
     overrideThreadId,
     setOverrideThreadId,
     overrideErrorMessage,
