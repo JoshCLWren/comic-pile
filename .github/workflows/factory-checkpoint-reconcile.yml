@@ -35,6 +35,11 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Configure restricted Neon factory event ledger
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
       - name: Publish saved work and retire incorporated checkpoints
         shell: bash
         env:
@@ -51,6 +56,11 @@ jobs:
           fi
           python3 .github/scripts/factory_checkpoint_handoff.py "${args[@]}" \
             | tee "$RUNNER_TEMP/factory-checkpoint-result.json"
+          # The remote-ref and merged-byte checks above are independent of the
+          # agent outcome. Idempotent Neon receipts never change worker status.
+          python3 .github/scripts/factory_state_ledger.py checkpoint-receipts \
+            --repo "$GITHUB_REPOSITORY" --run-id "${TARGET_RUN:-0}" \
+            --file "$RUNNER_TEMP/factory-checkpoint-result.json"
           {
             echo '### Checkpoint recovery'
             echo '```json'
