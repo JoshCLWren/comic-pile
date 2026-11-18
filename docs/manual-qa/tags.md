@@ -1,6 +1,6 @@
 # Tags
 
-**Owner ruling (2026-11-18, [#5436](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994216025)):** Tags page and ComicVine-derived tags are kept.
+**Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994669992)):** Tag data, including ComicVine-derived tags, is kept; there is no standalone `/tags` page or nav entry and none should be added. Tags are managed through inline editors and dialogs on thread and issue views.
 
 Tags can be private or global. They can be assigned to supported threads, issues, and reading plans; effective issue tags include allowed inherited assignments.
 
@@ -42,11 +42,9 @@ Tags can be private or global. They can be assigned to supported threads, issues
 
 ## MQA-TAG-006: Dedicated tag management page
 
-**Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994216025)):** Tags page and ComicVine-derived tags are kept; nothing is deleted under #5436 or #5437. All MQA-TAG IDs are current (not retired).
+**Status: Retired (2026-11-18)** -- Owner ruling (2026-11-18, [#5436 comment](https://github.com/JoshCLWren/comic-pile/issues/5436#issuecomment-6994669992), also posted on #5437): no Tags page; tag data is kept but no standalone `/tags` page or nav entry exists or should be added. Inline tag creation, editing and deletion stay covered by MQA-TAG-001..004.
 
-**Test:** Once built, visit `/tags`, search the library's tags, create/edit/delete a permitted tag, then use an inline tag editor.
-
-**Expected:** `/tags` is a real searchable tag-management page, not a redirect or 404. Inline tagging remains available. This owner-confirmed expectation remains in the inventory before implementation.
+**Original expectation (historical):** `/tags` is a real searchable tag-management page (search, create/edit/delete a permitted tag), not a redirect or 404; inline tagging remains available.
 
 ## MQA-TAG-007: Inherited sources are legible and navigable
 
