@@ -1,0 +1,647 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Handler-level HTTP regressions for the same-path thread ordering and
+//! dependency-inspection reads (#4832 part B).
+//!
+//! Exercises auth, ownership scoping, ordering and error mapping through the
+//! mounted router against the canonical disposable PostgreSQL schema. Requires
+//! `RUST_ROLL_TEST_DATABASE_URL` and hard-fails without it.
+
+use axum::{
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
+};
+use comicpile_roll_service::{config::Config, router, AppState};
+use serde_json::{json, Value};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+use tower::ServiceExt;
+
+static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
+
+fn unique_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
+async fn setup_user(
+    prefix: &str,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
+    let url = comicpile_roll_service::test_support::database_url().await;
+    let state = Arc::new(
+        AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+                "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
+                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+                _ => None,
+            })
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    (state, token, csrf, user_id, guard)
+}
+
+async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|cookie| cookie.to_str().ok())
+        .find_map(|cookie| cookie.strip_prefix("csrf_token="))
+        .and_then(|cookie| cookie.split(';').next())
+        .expect("csrf cookie")
+        .to_owned();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let token = body["access_token"].as_str().unwrap().to_owned();
+    let user_id: i32 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
+        .await
+        .unwrap()
+        .get(0);
+    (token, csrf, user_id)
+}
+
+async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, String, i32) {
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    register_user(state, &username).await
+}
+
+async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router(state.clone()).oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
+    let builder = Request::builder()
+        .method(method)
+        .uri(path)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"));
+    if let Some(body) = body {
+        builder
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    } else {
+        builder.body(Body::empty()).unwrap()
+    }
+}
+
+type Conn = deadpool_postgres::Object;
+
+async fn thread(conn: &Conn, user_id: i32, title: &str) -> i32 {
+    conn.query_one(
+        "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id) \
+         VALUES ($1, 'Comic', 0, 1, 'active', $2) RETURNING id",
+        &[&title, &user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status: &str) -> i32 {
+    conn.query_one(
+        "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+         VALUES ($1, $2, $3, NOW(), $4) RETURNING id",
+        &[&thread_id, &number, &status, &position],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
+    conn.execute(
+        "UPDATE threads SET next_unread_issue_id = $2 WHERE id = $1",
+        &[&thread_id, &issue_id],
+    )
+    .await
+    .unwrap();
+}
+
+async fn dependency(conn: &Conn, source: i32, target: i32, note: Option<&str>) -> i32 {
+    conn.query_one(
+        "INSERT INTO dependencies (created_at, source_issue_id, target_issue_id, note, origin) \
+         VALUES (NOW(), $1, $2, $3, 'reader') RETURNING id",
+        &[&source, &target, &note],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
+    authed("GET", path, token, csrf, None)
+}
+
+fn post(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
+    authed("POST", path, token, csrf, body)
+}
+
+#[tokio::test]
+async fn every_operation_requires_authentication() {
+    let (state, _token, _csrf, _user_id, _guard) = setup_user("tord-auth").await;
+    for (method, path) in [
+        ("POST", "/api/v1/threads/1:getBlockingInfo"),
+        ("POST", "/api/v1/threads:getBlockingInfo"),
+        ("GET", "/api/v1/threads/1/connected"),
+        ("GET", "/api/v1/threads/1/dependency-order-check"),
+        ("GET", "/api/v1/threads/1/issues:validateOrder"),
+        ("GET", "/api/v1/threads/1/reading-orders"),
+    ] {
+        let (status, body) = send(
+            &state,
+            Request::builder()
+                .method(method)
+                .uri(path)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"thread_ids": [1]}).to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "{method} {path}: {body:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-block").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-block2").await;
+    let conn = state.pool.get().await.unwrap();
+    let blocked = thread(&conn, user_id, "Blocked Series").await;
+    let blocker = thread(&conn, user_id, "Blocker Series").await;
+    let free = thread(&conn, user_id, "Free Series").await;
+    let blocked_issue = issue(&conn, blocked, "5", 1, "unread").await;
+    let blocker_issue = issue(&conn, blocker, "12", 1, "unread").await;
+    let free_issue = issue(&conn, free, "1", 1, "unread").await;
+    frontier(&conn, blocked, blocked_issue).await;
+    frontier(&conn, blocker, blocker_issue).await;
+    frontier(&conn, free, free_issue).await;
+    dependency(&conn, blocker_issue, blocked_issue, None).await;
+    // Historical cbl-order rows are inert and a read source is satisfied.
+    let inert_source = issue(&conn, free, "2", 2, "unread").await;
+    dependency(&conn, inert_source, blocked_issue, Some("cbl-order:legacy")).await;
+    let foreign = thread(&conn, user2, "Foreign Series").await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({
+            "is_blocked": true,
+            "blocking_reasons": ["Blocked by Blocker Series: #12"],
+            "blocking_dependencies": [{
+                "thread_id": blocker,
+                "thread_title": "Blocker Series",
+                "issue_number": "12",
+                "label": "Blocked by Blocker Series: #12",
+                "issue_id": null
+            }]
+        })
+    );
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{free}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
+    );
+
+    conn.execute(
+        "UPDATE issues SET status = 'read' WHERE id = $1",
+        &[&blocker_issue],
+    )
+    .await
+    .unwrap();
+    let (_, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(body["is_blocked"], false, "{body:?}");
+
+    // Missing and foreign threads are indistinguishable 404s.
+    for id in [999_999, foreign] {
+        let (status, body) = send(
+            &state,
+            post(
+                &format!("/api/v1/threads/{id}:getBlockingInfo"),
+                &token,
+                &csrf,
+                None,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], format!("Thread {id} not found"));
+    }
+    let (status, _) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+            &token2,
+            &csrf2,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = send(
+        &state,
+        post("/api/v1/threads/abc:getBlockingInfo", &token, &csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+}
+
+#[tokio::test]
+async fn batch_blocking_info_preserves_request_order_and_validates() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-batch").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-batch2").await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Alpha").await;
+    let b = thread(&conn, user_id, "Beta").await;
+    let ai = issue(&conn, a, "1", 1, "unread").await;
+    let bi = issue(&conn, b, "3", 1, "unread").await;
+    frontier(&conn, a, ai).await;
+    frontier(&conn, b, bi).await;
+    dependency(&conn, ai, bi, None).await;
+    let foreign = thread(&conn, user2, "Foreign").await;
+
+    let path = "/api/v1/threads:getBlockingInfo";
+    let request = json!({"thread_ids": [b, a, b]});
+    let response = router(state.clone())
+        .oneshot(post(path, &token, &csrf, Some(request.clone())))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let text = String::from_utf8(bytes.to_vec()).unwrap();
+    let body: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["threads"][b.to_string()]["is_blocked"], true, "{text}");
+    assert_eq!(
+        body["threads"][b.to_string()]["blocking_reasons"],
+        json!(["Blocked by Alpha: #1"])
+    );
+    assert_eq!(body["threads"][a.to_string()]["is_blocked"], false);
+    let first = text.find(&format!("\"{b}\":")).unwrap();
+    let second = text.find(&format!("\"{a}\":")).unwrap();
+    assert!(first < second, "request order must be preserved: {text}");
+
+    for payload in [
+        json!({"thread_ids": []}),
+        json!({}),
+        json!({"thread_ids": ["x"]}),
+        json!({"thread_ids": (1..=501).collect::<Vec<i32>>()}),
+    ] {
+        let (status, body) = send(&state, post(path, &token, &csrf, Some(payload))).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+    }
+    for ids in [vec![a, 999_999], vec![a, foreign]] {
+        let (status, body) = send(
+            &state,
+            post(path, &token, &csrf, Some(json!({"thread_ids": ids}))),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], "One or more threads not found");
+    }
+    let (status, body) = send(&state, post(path, &token2, &csrf2, Some(request))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+}
+
+#[tokio::test]
+async fn connected_threads_report_direction_and_issue_level_cycles() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-conn").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-conn2").await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Series A").await;
+    let b = thread(&conn, user_id, "Series B").await;
+    let c = thread(&conn, user_id, "Series C").await;
+    let a1 = issue(&conn, a, "1", 1, "unread").await;
+    let a2 = issue(&conn, a, "2", 2, "unread").await;
+    let b1 = issue(&conn, b, "1", 1, "unread").await;
+    let c1 = issue(&conn, c, "7", 1, "unread").await;
+    // A#2 -> B#1 -> A#1 closes a loop with the required A#1 -> A#2 order.
+    let blocks_dep = dependency(&conn, a2, b1, None).await;
+    dependency(&conn, b1, a1, None).await;
+    // C#7 -> A#1 is a plain blocked_by with no cycle.
+    let c_dep = dependency(&conn, c1, a1, None).await;
+
+    let (status, body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], a);
+    assert_eq!(
+        body["connected_threads"],
+        json!([
+            {"thread_id": b, "title": "Series B", "connection_type": "blocks & blocked_by",
+             "dependency_id": blocks_dep, "issue_number": "1", "is_circular": true},
+            {"thread_id": c, "title": "Series C", "connection_type": "blocked_by",
+             "dependency_id": c_dep, "issue_number": "7", "is_circular": false}
+        ]),
+        "{body:?}"
+    );
+
+    // A satisfied prerequisite (read source) drops out of blocked_by.
+    conn.execute("UPDATE issues SET status = 'read' WHERE id = $1", &[&c1])
+        .await
+        .unwrap();
+    let (_, body) = send(
+        &state,
+        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(
+        body["connected_threads"].as_array().unwrap().len(),
+        1,
+        "{body:?}"
+    );
+
+    let lonely = thread(&conn, user_id, "Lonely").await;
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v1/threads/{lonely}/connected"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"thread_id": lonely, "connected_threads": []}));
+
+    let foreign = thread(&conn, user2, "Foreign").await;
+    for (who, id) in [(&token, 999_999), (&token, foreign), (&token2, a)] {
+        let csrf_for = if who == &token { &csrf } else { &csrf2 };
+        let (status, body) = send(
+            &state,
+            get(&format!("/api/v1/threads/{id}/connected"), who, csrf_for),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], format!("Thread {id} not found"));
+    }
+}
+
+#[tokio::test]
+async fn order_check_and_validate_order_report_position_conflicts() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-order").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-order2").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Ordered").await;
+    let i1 = issue(&conn, t, "1", 1, "unread").await;
+    let i2 = issue(&conn, t, "2", 2, "unread").await;
+    let i3 = issue(&conn, t, "3", 3, "unread").await;
+    dependency(&conn, i2, i1, None).await; // conflict: 2 must precede 1
+    dependency(&conn, i1, i3, None).await; // consistent
+    let foreign = thread(&conn, user2, "Foreign").await;
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v1/threads/{t}/dependency-order-check"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({
+            "thread_id": t,
+            "conflicts": [{
+                "issue_id": i2,
+                "issue_number": "2",
+                "position": 2,
+                "dependency_requires_before": [{"issue_id": i1, "issue_number": "1", "position": 1}],
+                "conflict": "position 2 comes after issue at position 1, but dependency says it must come before"
+            }]
+        })
+    );
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v1/threads/{t}/issues:validateOrder"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"warnings": ["In thread \"Ordered\", issue #2 (position 2) blocks issue #1 (position 1). Position is canonical for in-thread order."]})
+    );
+
+    for path in ["dependency-order-check", "issues:validateOrder"] {
+        for (who, who_csrf, id) in [
+            (&token, &csrf, 999_999),
+            (&token, &csrf, foreign),
+            (&token2, &csrf2, t),
+        ] {
+            let (status, body) = send(
+                &state,
+                get(&format!("/api/v1/threads/{id}/{path}"), who, who_csrf),
+            )
+            .await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {body:?}");
+            assert_eq!(body["detail"], format!("Thread {id} not found"));
+        }
+        let (status, _) = send(
+            &state,
+            get(&format!("/api/v1/threads/nope/{path}"), &token, &csrf),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+#[tokio::test]
+async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-ro").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-ro2").await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Alpha").await;
+    let b = thread(&conn, user_id, "Beta").await;
+    issue(&conn, a, "1", 1, "read").await;
+    issue(&conn, b, "9", 1, "unread").await;
+    let order: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (name, description, user_id) VALUES ('Event', 'Big event', $1) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    for (thread_id, position, number) in [(b, 2, Some("9")), (a, 1, Some("1"))] {
+        conn.execute(
+            "INSERT INTO reading_order_items (reading_order_id, thread_id, position, issue_number) VALUES ($1,$2,$3,$4)",
+            &[&order, &thread_id, &position, &number],
+        )
+        .await
+        .unwrap();
+    }
+    conn.execute(
+        "INSERT INTO reading_orders (name, user_id) VALUES ('Unrelated', $1)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    let foreign_order: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (name, user_id) VALUES ('Theirs', $1) RETURNING id",
+            &[&user2],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO reading_order_items (reading_order_id, thread_id, position) VALUES ($1,$2,1)",
+        &[&foreign_order, &a],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v1/threads/{a}/reading-orders"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"reading_orders": [{
+            "id": order, "name": "Event", "description": "Big event",
+            "total_items": 2, "completed_items": 1,
+            "items": [
+                {"thread_id": a, "thread_title": "Alpha", "position": 1, "issue_number": "1", "is_read": true},
+                {"thread_id": b, "thread_title": "Beta", "position": 2, "issue_number": "9", "is_read": false}
+            ]
+        }]})
+    );
+
+    // Each reader sees only their own order containing the thread.
+    let (_, body) = send(
+        &state,
+        get(
+            &format!("/api/v1/threads/{a}/reading-orders"),
+            &token2,
+            &csrf2,
+        ),
+    )
+    .await;
+    assert_eq!(
+        body["reading_orders"].as_array().unwrap().len(),
+        1,
+        "{body:?}"
+    );
+    assert_eq!(body["reading_orders"][0]["name"], "Theirs");
+    assert_eq!(
+        body["reading_orders"][0]["items"][0]["thread_title"],
+        "Alpha"
+    );
+
+    let (status, body) = send(
+        &state,
+        get("/api/v1/threads/999999/reading-orders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"reading_orders": []}));
+    let (status, _) = send(
+        &state,
+        get("/api/v1/threads/x/reading-orders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
