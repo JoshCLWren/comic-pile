@@ -419,6 +419,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "reading-orders",
         "reading-plan-sync",
         "releases",
+        "roll",
         "sessions",
         "tags",
         "taste-discoveries",
