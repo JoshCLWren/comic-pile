@@ -45,7 +45,7 @@ const MAX_COMICVINE_ID_LENGTH: usize = 100;
 // ---------------------------------------------------------------------------
 
 /// Reader-safe summary of one active persisted CBL source list.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceListDiscoveryItem {
     pub id: i32,
     pub name: String,
@@ -59,7 +59,7 @@ pub struct CblSourceListDiscoveryItem {
 }
 
 /// One ordered source occurrence inside a CBL list.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceEntryDetail {
     pub position: i32,
     pub series_name: String,
@@ -71,7 +71,7 @@ pub struct CblSourceEntryDetail {
 }
 
 /// One active CBL source list with one bounded page of ordered occurrences.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceListDetail {
     pub id: i32,
     pub name: String,
@@ -88,7 +88,7 @@ pub struct CblSourceListDetail {
 }
 
 /// One Comic Vine occurrence in the shared CBL catalog.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblComicvineOccurrence {
     pub list_id: i32,
     pub list_name: String,
@@ -106,7 +106,7 @@ pub struct CblComicvineOccurrence {
 }
 
 /// A page of Comic Vine occurrences with shared-catalog totals.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblComicvineOccurrencePage {
     pub comicvine_issue_id: String,
     pub occurrences_total: i32,
@@ -663,12 +663,12 @@ pub async fn find_cbl_sources_by_comicvine_issue(
 use serde_json::Value as JsonValue;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceComparisonRequest {
     pub comicvine_issue_ids: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceComparisonMatch {
     pub list_id: i32,
     pub list_name: String,
@@ -694,7 +694,7 @@ pub struct CblSourceComparisonMatch {
     pub score: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblSourceComparisonResponse {
     pub comicvine_issue_ids: Vec<String>,
     pub input_total: i32,
@@ -988,7 +988,7 @@ pub async fn compare_cbl_sources(
     }))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblReadingListInputEntry {
     pub position: i32,
     pub issue_id: i32,
@@ -999,7 +999,7 @@ pub struct CblReadingListInputEntry {
     pub identity_status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblReadingListCandidatesResponse {
     pub list_id: i32,
     pub list_name: String,
@@ -1376,7 +1376,7 @@ async fn compute_source_comparison(
 }
 
 // Adoption plan (read-only) - mirrors app/api/issue_identity.py
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CblAdoptionPlanRequest {
     #[serde(default)]
     pub series_decisions: std::collections::HashMap<String, bool>,
@@ -1384,7 +1384,7 @@ pub struct CblAdoptionPlanRequest {
     pub entry_decisions: std::collections::HashMap<String, bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CblSourceFingerprintResponse {
     pub source_list_id: i32,
     pub source_repository: String,
@@ -1393,7 +1393,7 @@ pub struct CblSourceFingerprintResponse {
     pub revision_sha: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CblAdoptionEntryResponse {
     pub collection_excluded: bool,
     pub collection_exclusion_reason: Option<String>,
@@ -1420,7 +1420,7 @@ pub struct CblAdoptionEntryResponse {
     pub is_duplicate_identity: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CblAdoptionSummaryResponse {
     pub reused_existing_count: i32,
     pub missing_would_create_count: i32,
@@ -1436,7 +1436,7 @@ pub struct CblAdoptionSummaryResponse {
     pub awaiting_opt_in_positions: Vec<i32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CblAdoptionPreviewResponse {
     pub source: CblSourceFingerprintResponse,
     pub total_positions: i32,
@@ -2432,17 +2432,17 @@ fn normalize_title_number(value: &str) -> String {
         .to_lowercase()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CommitSeriesDecision {
     pub series_name: String,
     pub decision: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CommitEntryOverride {
     pub cbl_position: i32,
     pub decision: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CblAdoptionCommitRequest {
     #[serde(default)]
     pub entry_decisions: std::collections::HashMap<i32, String>,
@@ -2454,25 +2454,29 @@ pub struct CblAdoptionCommitRequest {
     pub revision_sha: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ContinuityPlanResponseWire {
     pub id: i32,
     pub user_id: i32,
     pub name: String,
     pub ordering_mode: String,
+    #[schema(value_type = Object)]
     pub lanes: JsonValue,
+    #[schema(value_type = Object)]
     pub nodes: JsonValue,
     pub created_at: String,
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct CblAdoptionCommitResponseWire {
     pub id: i32,
     pub user_id: i32,
     pub name: String,
     pub ordering_mode: String,
+    #[schema(value_type = Object)]
     pub lanes: JsonValue,
+    #[schema(value_type = Object)]
     pub nodes: JsonValue,
     pub created_at: String,
     pub updated_at: String,
@@ -4059,6 +4063,59 @@ fn guard_fact_for_existing_issue(
     fact
 }
 
+/// Insert a missing issue inside a nested savepoint so an integrity collision
+/// (for example a concurrent insert of the same thread/number) rolls back only
+/// the insert. Python's `_materialize_issue` catches that `IntegrityError`,
+/// re-reads the row that now exists and reuses it; mirror that fallback here
+/// instead of failing the whole adoption commit (#4843).
+async fn insert_issue_with_integrity_fallback_tx(
+    sp: &mut tokio_postgres::Transaction<'_>,
+    thread_id: i32,
+    issue_number: &str,
+    comicvine_id: Option<&str>,
+) -> Result<(i32, bool), MaterializeErr> {
+    let insert_sp = sp
+        .savepoint("insert_issue")
+        .await
+        .map_err(|e| tx_to_commit_err(e, "create issue insert savepoint"))?;
+    match insert_issue_natural_order_tx(&insert_sp, thread_id, issue_number).await {
+        Ok(issue_id) => {
+            insert_sp
+                .commit()
+                .await
+                .map_err(|e| tx_to_commit_err(e, "release issue insert savepoint"))?;
+            Ok((issue_id, true))
+        }
+        Err(MaterializeErr::DbUnavailable) => {
+            let _ = insert_sp.rollback().await;
+            Err(MaterializeErr::DbUnavailable)
+        }
+        Err(err @ MaterializeErr::Unexpected(_)) => {
+            let _ = insert_sp.rollback().await;
+            // The rolled-back insert may have lost a race with a concurrent
+            // commit that created this exact issue. Reuse that row when it
+            // exists, exactly like Python's IntegrityError fallback; otherwise
+            // the original failure is real and must surface.
+            let row = sp
+                .query_opt(
+                    "SELECT id FROM issues WHERE thread_id=$1 AND issue_number=$2",
+                    &[&thread_id, &issue_number],
+                )
+                .await
+                .map_err(|e| tx_to_commit_err(e, "lookup issue after insert conflict"))?;
+            if let Some(row) = row {
+                let existing_id: i32 = row.get(0);
+                if let Some(cvid) = comicvine_id {
+                    confirm_comicvine_issue_mapping_tx(sp, existing_id, cvid).await?;
+                }
+                Ok((existing_id, false))
+            } else {
+                Err(err)
+            }
+        }
+    }
+}
+
 async fn materialize_missing_issue_tx(
     tx: &mut tokio_postgres::Transaction<'_>,
     user_id: i32,
@@ -4142,7 +4199,7 @@ async fn materialize_missing_issue_tx(
     }
 
     // Target materialization runs in a savepoint so refusal/conflict leaves no partial state.
-    let sp = tx
+    let mut sp = tx
         .savepoint("materialize_issue")
         .await
         .map_err(|e| tx_to_commit_err(e, "create savepoint"))?;
@@ -4213,16 +4270,22 @@ async fn materialize_missing_issue_tx(
             });
         }
 
-        let issue_id = insert_issue_natural_order_tx(&sp, thread_id, &issue_number).await?;
-        apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
-
-        if let Some(cvid) = comicvine_id.as_deref() {
-            confirm_comicvine_issue_mapping_tx(&sp, issue_id, cvid).await?;
+        let (issue_id, created) = insert_issue_with_integrity_fallback_tx(
+            &mut sp,
+            thread_id,
+            &issue_number,
+            comicvine_id.as_deref(),
+        )
+        .await?;
+        // Python applies tracking state only for a genuinely inserted issue;
+        // the IntegrityError reuse path returns the existing row untouched.
+        if created {
+            apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
         }
 
         Ok(MaterializeOutcome::Issue {
             id: issue_id,
-            created: true,
+            created,
         })
     }
     .await;
@@ -4244,6 +4307,223 @@ async fn materialize_missing_issue_tx(
         Err(err) => {
             let _ = sp.rollback().await;
             Err(err)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Documentation-only OpenAPI operations for the same-path native contract.
+// These describe the live handlers above; they are not mounted anywhere. The
+// generated fragments are merged into `same_path_openapi` so the browser-facing
+// client contract keeps these operations when the Python handlers retire.
+// ---------------------------------------------------------------------------
+
+/// Documentation-only operation for CBL source discovery.
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl-sources",
+    tag = "issue-identity",
+    params(
+        ("q" = Option<String>, Query, description = "Case-insensitive list-name filter, max 200 characters"),
+        ("limit" = Option<i32>, Query, description = "Maximum results, 1-100 (default 25)"),
+    ),
+    responses(
+        (status = 200, description = "Active CBL source lists", body = Vec<CblSourceListDiscoveryItem>),
+        (status = 422, description = "Query failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn discover_cbl_source_lists_documentation() {}
+
+/// Documentation-only operation for one CBL source list.
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl-sources/{list_id}",
+    tag = "issue-identity",
+    params(
+        ("list_id" = i32, Path, description = "CBL source list identifier"),
+        ("offset" = Option<i32>, Query, description = "Entry offset, 0-based (default 0)"),
+        ("limit" = Option<i32>, Query, description = "Entry limit, 1-2000 (default 1000)"),
+    ),
+    responses(
+        (status = 200, description = "CBL source list with a bounded page of entries", body = CblSourceListDetail),
+        (status = 404, description = "CBL source list not found"),
+        (status = 422, description = "Query failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_cbl_source_list_documentation() {}
+
+/// Documentation-only operation for Comic Vine occurrence lookup.
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+    tag = "issue-identity",
+    params(
+        ("comicvine_issue_id" = String, Path, description = "Comic Vine issue identifier, max 100 characters"),
+        ("offset" = Option<i32>, Query, description = "Occurrence offset, 0-based (default 0)"),
+        ("limit" = Option<i32>, Query, description = "Occurrence limit, 1-200 (default 50)"),
+    ),
+    responses(
+        (status = 200, description = "Shared-catalog occurrences for the Comic Vine issue", body = CblComicvineOccurrencePage),
+        (status = 422, description = "Identifier or query failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn find_cbl_sources_by_comicvine_issue_documentation() {}
+
+/// Documentation-only operation for CBL source comparison.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issue-identity/cbl-sources/compare",
+    tag = "issue-identity",
+    params(("limit" = Option<i32>, Query, description = "Maximum ranked candidates, 1-100 (default 50)")),
+    request_body = CblSourceComparisonRequest,
+    responses(
+        (status = 200, description = "Ranked coverage comparison", body = CblSourceComparisonResponse),
+        (status = 422, description = "Request or query failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn compare_cbl_sources_documentation() {}
+
+/// Documentation-only operation for reading-list CBL candidates.
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+    tag = "issue-identity",
+    params(
+        ("list_id" = i32, Path, description = "Owned custom CBL list identifier"),
+        ("limit" = Option<i32>, Query, description = "Maximum ranked candidates, 1-100 (default 50)"),
+    ),
+    responses(
+        (status = 200, description = "Reading-list gaps and ranked CBL candidates", body = CblReadingListCandidatesResponse),
+        (status = 404, description = "Custom CBL not found"),
+        (status = 422, description = "Query failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn find_cbl_candidates_for_reading_list_documentation() {}
+
+/// Documentation-only operation for the CBL adoption preview.
+#[utoipa::path(
+    post,
+    path = "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    request_body = CblAdoptionPlanRequest,
+    responses(
+        (status = 200, description = "Adoption preview for the active CBL list", body = CblAdoptionPreviewResponse),
+        (status = 422, description = "Inactive list or invalid request", body = crate::cbl_catalog::ValidationErrorResponse),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_adoption_plan_documentation() {}
+
+/// Documentation-only operation for committing an adoption plan.
+#[utoipa::path(
+    post,
+    path = "/api/v1/cbl/{list_id}/adoption-commit",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    request_body = CblAdoptionCommitRequest,
+    responses(
+        (status = 201, description = "Reading Plan created with adopted CBL issues", body = CblAdoptionCommitResponseWire),
+        (status = 409, description = "Stale source fingerprint"),
+        (status = 422, description = "Request failed validation"),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_adoption_commit_documentation() {}
+
+/// Documentation-only operation for targeted adoption into an existing plan.
+#[utoipa::path(
+    post,
+    path = "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+    tag = "issue-identity",
+    params(
+        ("list_id" = i32, Path, description = "CBL source list identifier"),
+        ("plan_id" = i32, Path, description = "Owned continuity plan identifier"),
+    ),
+    request_body = CblAdoptionCommitRequest,
+    responses(
+        (status = 200, description = "Reading Plan updated with adopted CBL issues", body = CblAdoptionCommitResponseWire),
+        (status = 409, description = "Stale source fingerprint"),
+        (status = 422, description = "Request failed validation or plan not found"),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_targeted_adoption_commit_documentation() {}
+
+/// Same-path native contract document for the issue-identity / CBL adoption family.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native Issue Identity API",
+        version = "1.0.0",
+        description = "Generated contract for issue-identity operations served by the native Rust router at their original URLs."
+    ),
+    paths(
+        discover_cbl_source_lists_documentation,
+        get_cbl_source_list_documentation,
+        find_cbl_sources_by_comicvine_issue_documentation,
+        compare_cbl_sources_documentation,
+        find_cbl_candidates_for_reading_list_documentation,
+        cbl_adoption_plan_documentation,
+        cbl_adoption_commit_documentation,
+        cbl_targeted_adoption_commit_documentation,
+    ),
+    components(schemas(
+        CblSourceListDiscoveryItem,
+        CblSourceEntryDetail,
+        CblSourceListDetail,
+        CblComicvineOccurrence,
+        CblComicvineOccurrencePage,
+        CblSourceComparisonRequest,
+        CblSourceComparisonMatch,
+        CblSourceComparisonResponse,
+        CblReadingListInputEntry,
+        CblReadingListCandidatesResponse,
+        CblAdoptionPlanRequest,
+        CblSourceFingerprintResponse,
+        CblAdoptionEntryResponse,
+        CblAdoptionSummaryResponse,
+        CblAdoptionPreviewResponse,
+        CommitSeriesDecision,
+        CommitEntryOverride,
+        CblAdoptionCommitRequest,
+        ContinuityPlanResponseWire,
+        CblAdoptionCommitResponseWire,
+    )),
+    modifiers(&IssueIdentitySecurityAddon)
+)]
+pub(crate) struct IssueIdentityApi;
+
+struct IssueIdentitySecurityAddon;
+
+impl utoipa::Modify for IssueIdentitySecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
         }
     }
 }

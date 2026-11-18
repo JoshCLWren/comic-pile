@@ -21,6 +21,12 @@ use std::sync::{
 use tower::ServiceExt;
 
 static NEXT_CLIENT: AtomicUsize = AtomicUsize::new(1);
+/// One private database per test *binary*: every integration test target is a
+/// separate process with its own `DB_LOCK`, so a shared database lets parallel
+/// binaries truncate and reseed each other's rows mid-assertion. Loading the
+/// canonical Alembic fixture into a per-process database keeps schema and data
+/// deterministic without retries, timeouts or hand-written DDL.
+static PRIVATE_DB: tokio::sync::OnceCell<String> = tokio::sync::OnceCell::const_new();
 
 const MIRROR_REPOSITORY: &str = "/mnt/bigdata/CBL-ReadingLists";
 const PUBLIC_REPOSITORY: &str = "JoshCLWren/CBL-ReadingLists";
@@ -30,13 +36,86 @@ const PUBLIC_SOURCE_PATH: &str = "DC/Mister Miracle (1989)/Mister Miracle.cbl";
 const ISSUE_ID: &str = "4000-123";
 const VOLUME_ID: &str = "4050-9";
 
+/// Return a DML-role DSN for a database private to this test process. The admin
+/// DSN creates it and loads the checked-in Alembic schema once; every test in
+/// this binary then resets (truncates) only this database while holding the
+/// crate-wide `DB_LOCK`. Other binaries never touch these rows.
+async fn isolated_test_database_url() -> String {
+    PRIVATE_DB
+        .get_or_init(|| async {
+            // Provision the shared DML role and canonical schema first, so the
+            // role exists cluster-wide before the private database is granted.
+            let dml_shared = comicpile_roll_service::test_support::database_url().await;
+            let admin = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+                .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+            let with_database = |dsn: &str, database: &str| -> String {
+                let (prefix, _) = dsn
+                    .rsplit_once('/')
+                    .expect("database URL must contain a database name");
+                format!("{prefix}/{database}")
+            };
+
+            // A stable name keeps at most one private database on disk; each
+            // run drops and recreates it. No other integration-test binary uses
+            // this name, so parallel binaries stay isolated from one another.
+            let db_name = "issue_identity_rust_tests".to_string();
+            let (admin_client, connection) = tokio_postgres::connect(&admin, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            admin_client
+                .batch_execute(&format!("DROP DATABASE IF EXISTS {db_name}"))
+                .await
+                .unwrap();
+            admin_client
+                .batch_execute(&format!("CREATE DATABASE {db_name}"))
+                .await
+                .unwrap();
+            drop(admin_client);
+
+            let admin_private = with_database(&admin, &db_name);
+            let (admin_client, connection) =
+                tokio_postgres::connect(&admin_private, tokio_postgres::NoTls)
+                    .await
+                    .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let schema = std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/schema/public_schema.sql"),
+            )
+            .expect("canonical Alembic schema fixture");
+            admin_client.batch_execute(&schema).await.unwrap();
+            admin_client
+                .batch_execute(
+                    "REVOKE CREATE ON SCHEMA public FROM PUBLIC; \
+                     REVOKE CREATE ON SCHEMA public FROM roll_test_dml; \
+                     GRANT USAGE ON SCHEMA public TO roll_test_dml; \
+                     GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE \
+                         ON ALL TABLES IN SCHEMA public TO roll_test_dml; \
+                     GRANT USAGE, SELECT, UPDATE \
+                         ON ALL SEQUENCES IN SCHEMA public TO roll_test_dml;",
+                )
+                .await
+                .unwrap();
+            drop(admin_client);
+
+            with_database(&dml_shared, &db_name)
+        })
+        .await
+        .clone()
+}
+
 async fn setup() -> (
     Arc<AppState>,
     String,
     String,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
-    let url = comicpile_roll_service::test_support::database_url().await;
+    let url = isolated_test_database_url().await;
     let state = Arc::new(
         AppState::new(
             Config::from_lookup(|key| match key {
@@ -53,56 +132,51 @@ async fn setup() -> (
     );
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
+    let (token, csrf) = create_test_user(&state, "issue-identity").await;
+    seed_catalog(&state).await;
+    (state, token, csrf, guard)
+}
+
+/// Mint a valid access token for a reader without the bcrypt/HTTP registration
+/// round trip. Auth only needs a `users` row with a matching `sub` claim plus a
+/// non-empty `jti` (see `auth::identity::authenticate_claims`).
+fn mint_test_token(username: &str, jti: &str) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let key = jsonwebtoken::EncodingKey::from_secret(
+        comicpile_roll_service::test_support::TEST_JWT_SECRET.as_bytes(),
+    )
+    .unwrap();
+    jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &json!({"sub": username, "jti": jti, "type": "access", "exp": now + 3600}),
+        &key,
+    )
+    .unwrap()
+}
+
+/// Create an authenticated test user directly in the private database. The
+/// CBL route assertions below are unchanged; this only removes a timing-
+/// dependent bcrypt registration from setup so parallel/loaded runs are
+/// deterministic (no retries and no longer timeouts).
+async fn create_test_user(state: &Arc<AppState>, label: &str) -> (String, String) {
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let username = format!("issue-identity-{suffix}");
-    let response = router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header(
-                    "x-forwarded-for",
-                    format!(
-                        "2001:db8::{:x}",
-                        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
-                    ),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({
-                        "username": username,
-                        "email": format!("{username}@example.com"),
-                        "password": "correct-horse-battery"
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = response.status();
-    let csrf = response
-        .headers()
-        .get_all(header::SET_COOKIE)
-        .iter()
-        .find_map(|cookie| {
-            let cookie = cookie.to_str().ok()?;
-            cookie
-                .strip_prefix("csrf_token=")?
-                .split(';')
-                .next()
-                .map(str::to_owned)
-        })
-        .expect("register sets a CSRF cookie");
-    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
-    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(status, StatusCode::OK, "{body}");
-    let token = body["access_token"].as_str().unwrap().to_owned();
-    seed_catalog(&state).await;
-    (state, token, csrf, guard)
+    let username = format!("{label}-{suffix}");
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO users (username, created_at) VALUES ($1, NOW())",
+        &[&username],
+    )
+    .await
+    .unwrap();
+    let token = mint_test_token(&username, &format!("jti-{suffix}"));
+    let csrf = format!("csrf-{suffix}");
+    (token, csrf)
 }
 
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
@@ -779,6 +853,44 @@ async fn adoption_commit_unauthenticated_returns_401() {
 }
 
 #[tokio::test]
+async fn adoption_commit_routes_require_double_submit_csrf() {
+    let (state, token, _csrf, _guard) = setup().await;
+    for uri in [
+        "/api/v1/cbl/1/adoption-commit",
+        "/api/v1/cbl/1/reading-plans/1/adoption-commit",
+    ] {
+        // A valid bearer token is not enough: the double-submit CSRF pair is
+        // checked before authentication, so a missing pair must be rejected
+        // with the same 403 envelope as every other protected mutation.
+        let (status, body) = send(
+            &state,
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "entry_decisions": {},
+                        "series_decisions": [],
+                        "series_overrides": [],
+                        "content_hash": "h-mm",
+                        "revision_sha": "rev-1",
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{uri} -> {body}");
+        assert_eq!(
+            body["detail"], "CSRF token missing or invalid",
+            "{uri} -> {body}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn targeted_adoption_commit_other_users_plan_returns_422() {
     let (state, token, csrf, _guard) = setup().await;
     let (status, body) = post_json(
@@ -801,53 +913,8 @@ async fn targeted_adoption_commit_other_users_plan_returns_422() {
     );
     let plan_id = body["id"].as_i64().expect("plan id");
 
-    // register a second user
-    let suffix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let username = format!("issue-identity-other-{suffix}");
-    let response = router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header(
-                    "x-forwarded-for",
-                    format!(
-                        "2001:db8::{:x}",
-                        NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
-                    ),
-                )
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({
-                        "username": username,
-                        "email": format!("{username}@example.com"),
-                        "password": "correct-horse-battery"
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let csrf2 = response
-        .headers()
-        .get_all(header::SET_COOKIE)
-        .iter()
-        .find_map(|cookie| {
-            let cookie = cookie.to_str().ok()?;
-            cookie
-                .strip_prefix("csrf_token=")?
-                .split(';')
-                .next()
-                .map(str::to_owned)
-        })
-        .expect("register sets a CSRF cookie");
-    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
-    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
-    let token2 = body["access_token"].as_str().unwrap().to_owned();
+    // A distinct reader must not be able to reach the first reader's plan.
+    let (token2, csrf2) = create_test_user(&state, "issue-identity-other").await;
 
     let (status, body) = post_json(
         &state,
@@ -872,45 +939,14 @@ async fn targeted_adoption_commit_other_users_plan_returns_422() {
 
 async fn register_user(
     state: &Arc<AppState>,
-    username: &str,
-    ip_suffix: usize,
+    _username: &str,
+    _ip_suffix: usize,
 ) -> (String, String) {
-    let response = router(state.clone())
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/auth/register")
-                .header("x-forwarded-for", format!("2001:db8::{ip_suffix:x}"))
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({
-                        "username": username,
-                        "email": format!("{username}@example.com"),
-                        "password": "correct-horse-battery"
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let csrf = response
-        .headers()
-        .get_all(header::SET_COOKIE)
-        .iter()
-        .find_map(|cookie| {
-            let cookie = cookie.to_str().ok()?;
-            cookie
-                .strip_prefix("csrf_token=")?
-                .split(';')
-                .next()
-                .map(str::to_owned)
-        })
-        .expect("register sets a CSRF cookie");
-    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
-    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
-    let token = body["access_token"].as_str().unwrap().to_owned();
-    (token, csrf)
+    // Keep the helper signature stable while avoiding the flaky HTTP/bcrypt
+    // registration. `create_test_user` supplies its own short unique suffix;
+    // the caller's label already embeds a timestamp and would overflow the
+    // 50-character `users.username` column if appended again.
+    create_test_user(state, "iid2").await
 }
 
 #[tokio::test]
