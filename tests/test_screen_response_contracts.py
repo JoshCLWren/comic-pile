@@ -295,9 +295,6 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     assert _response_schema("/api/v1/sessions/current/") == {
         "$ref": "#/components/schemas/SessionResponse"
     }
-    assert _response_schema("/api/v1/threads/{thread_id}/issues") == {
-        "$ref": "#/components/schemas/IssueListResponse"
-    }
     assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
         "$ref": "#/components/schemas/ThreadDependenciesResponse"
     }

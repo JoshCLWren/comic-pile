@@ -9915,20 +9915,6 @@ export interface components {
             /** Format: int32 */
             reading_order_id: number;
         };
-        NativeReadingOrderProjectionResult: {
-            /** Format: int32 */
-            added_count: number;
-            /** Format: int32 */
-            kept_count: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            reading_order_id: number;
-            /** Format: int32 */
-            total_positions: number;
-            /** Format: int32 */
-            updated_count: number;
-        };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
             active_bandwidth?: string | null;
@@ -11354,28 +11340,24 @@ export interface components {
         };
         /**
          * ReadingOrderProjectionRequest
-         * @description Request contract for both preview and confirm endpoints.
+         * @description Request contract for the Python preview; confirmation is served by Rust.
          */
         ReadingOrderProjectionRequest: {
             /** Reading Order Id */
             reading_order_id: number;
         };
-        /**
-         * ReadingOrderProjectionResult
-         * @description Response contract for the confirm endpoint.
-         */
         ReadingOrderProjectionResult: {
-            /** Added Count */
+            /** Format: int32 */
             added_count: number;
-            /** Kept Count */
+            /** Format: int32 */
             kept_count: number;
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id: number;
-            /** Total Positions */
+            /** Format: int32 */
             total_positions: number;
-            /** Updated Count */
+            /** Format: int32 */
             updated_count: number;
         };
         /**
@@ -14681,7 +14663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
                 };
             };
         };
