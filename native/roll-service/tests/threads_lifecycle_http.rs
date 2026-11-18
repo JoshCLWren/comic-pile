@@ -1017,6 +1017,61 @@ async fn delete_refused_by_the_database_is_a_400_and_changes_nothing() {
     assert_eq!(tombstones, 0, "failed delete rolls back the tombstone");
 }
 
+/// A genuine database integrity failure (class 23) during the delete must still
+/// map to Python's 400 "Cannot delete thread..." — not a 500. A different
+/// user's checkpoint rule has a RESTRICT FK to the thread's issue and lies
+/// outside the user-scoped cleanup, so the cascading issue delete is refused by
+/// PostgreSQL itself. This keeps the `delete_error` integrity mapping covered.
+#[tokio::test]
+async fn delete_database_integrity_failure_is_a_400_and_changes_nothing() {
+    let ctx = setup("lcdelfkdb").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Referenced", "active", 1, 1).await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    let issue_ids: Vec<i32> = pool
+        .query(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+             VALUES ($1, '1', 'unread', NOW(), 0), ($1, '2', 'unread', NOW(), 1) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    let (_, _, other_id) = second_user(&ctx).await;
+    pool.execute(
+        "INSERT INTO continuity_rules (user_id, source_type, source_id, target_type, target_id, \
+             satisfaction_type, checkpoint_issue_id, created_at, updated_at) \
+         VALUES ($1, 'issue', $2, 'issue', $3, 'checkpoint', $2, NOW(), NOW())",
+        &[&other_id, &issue_ids[0], &issue_ids[1]],
+    )
+    .await
+    .unwrap();
+    drop(pool);
+
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{thread}"), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"]
+            .as_str()
+            .unwrap()
+            .starts_with("Cannot delete thread: "),
+        "integrity errors must keep the Python 400 mapping: {body:?}"
+    );
+    assert!(thread_row(&ctx, thread).await.is_some());
+    let tombstones: i64 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT count(*) FROM events WHERE type = 'delete'", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(tombstones, 0, "failed delete rolls back the tombstone");
+}
+
 #[tokio::test]
 async fn delete_is_owner_scoped() {
     let ctx = setup("lcdeliso").await;
