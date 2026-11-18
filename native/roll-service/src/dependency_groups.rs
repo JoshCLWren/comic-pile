@@ -1085,6 +1085,15 @@ async fn add_issue_range_tx(
     user_id: i32,
     request: &DependencyGroupIssueRangeCreateRequest,
 ) -> Result<DependencyGroupIssueRangeResponse, ApiError> {
+    if owned_group(tx, group_id, user_id).await?.is_none() {
+        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
+    }
+    if owned_thread_id(tx, request.thread_id, user_id).await?.is_none() {
+        return Err(ApiError::NotFound(format!(
+            "Thread {} not found",
+            request.thread_id
+        )));
+    }
     if request.end_position < request.start_position {
         return Err(unprocessable(
             "end_position must be greater than or equal to start_position",
@@ -1093,15 +1102,6 @@ async fn add_issue_range_tx(
     if i64::from(request.end_position - request.start_position + 1) > i64::from(MAX_RANGE_SIZE) {
         return Err(unprocessable(format!(
             "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
-        )));
-    }
-    if owned_group(tx, group_id, user_id).await?.is_none() {
-        return Err(ApiError::NotFound(format!("Group {group_id} not found")));
-    }
-    if owned_thread_id(tx, request.thread_id, user_id).await?.is_none() {
-        return Err(ApiError::NotFound(format!(
-            "Thread {} not found",
-            request.thread_id
         )));
     }
     let rows = tx
