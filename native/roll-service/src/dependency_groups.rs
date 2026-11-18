@@ -1347,6 +1347,7 @@ async fn remove_member_tx(
     if deleted == 0 {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
     }
+    issue_service::refresh_blocked_threads(tx, user_id).await?;
     Ok(())
 }
 
