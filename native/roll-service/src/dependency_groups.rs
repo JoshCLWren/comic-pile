@@ -1630,6 +1630,7 @@ pub async fn set_group_order(
     Path(group_id): Path<i32>,
     Json(request): Json<DependencyGroupOrderUpdateRequest>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    validate_group_order_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
