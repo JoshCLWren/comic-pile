@@ -614,6 +614,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[^/]+/connected$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
       "methods": [
         "GET"
@@ -628,9 +642,37 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/reading\\-orders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/completed/threads$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads:getBlockingInfo$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -1039,22 +1081,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/connected$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/exclude$",
       "methods": [
         "POST",
@@ -1087,22 +1113,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/reading\\-orders$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/restore$",
       "methods": [
         "POST",
@@ -1122,14 +1132,6 @@
       "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
       "methods": [
         "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1194,14 +1196,6 @@
       "src": "^/api/v1/threads/stale$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads:getBlockingInfo$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

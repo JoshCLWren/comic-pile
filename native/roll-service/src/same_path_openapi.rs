@@ -89,6 +89,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
+        .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
         .merge_from(crate::custom_cbl::CustomCblApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
@@ -158,6 +159,46 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    /// Every issue-identity / CBL-adoption operation routed to native Rust
+    /// must keep its wire contract in the same-path document so the generated
+    /// TypeScript client does not lose those methods when the Python handlers
+    /// retire (#4843).
+    #[test]
+    fn same_path_contract_documents_all_issue_identity_operations() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method) in [
+            ("/api/v1/issue-identity/cbl-sources", "get"),
+            ("/api/v1/issue-identity/cbl-sources/{list_id}", "get"),
+            (
+                "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+                "get",
+            ),
+            ("/api/v1/issue-identity/cbl-sources/compare", "post"),
+            (
+                "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+                "get",
+            ),
+            ("/api/v1/issue-identity/cbl/{list_id}/adoption-plan", "post"),
+            ("/api/v1/cbl/{list_id}/adoption-commit", "post"),
+            (
+                "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+                "post",
+            ),
+        ] {
+            let operation = &paths[path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in same-path contract"
+            );
+            assert!(
+                operation["responses"]["200"].is_object()
+                    || operation["responses"]["201"].is_object(),
+                "{method} {path} has no success response"
+            );
+        }
     }
 
     #[test]

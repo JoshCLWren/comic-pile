@@ -127,7 +127,6 @@
         "operationId": "continuity_plans_list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -163,7 +162,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -198,7 +196,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -233,7 +230,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -268,9 +264,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -306,7 +300,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -342,7 +335,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -386,7 +378,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -419,9 +410,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -468,7 +457,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -510,9 +498,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -540,7 +526,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -586,7 +571,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -622,7 +606,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -661,7 +644,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -689,7 +671,6 @@
         "operationId": "continuity_rules_list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -725,7 +706,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -761,7 +741,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -805,7 +784,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -838,9 +816,7 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         },
         "security": [
           {
@@ -1374,7 +1350,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1417,7 +1392,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1486,7 +1460,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1530,7 +1503,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1574,7 +1546,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2028,10 +1999,10 @@
               "schema": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
                   },
                   {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                    "type": "null"
                   }
                 ]
               }
@@ -2571,10 +2542,10 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "type": "null"
+                      "$ref": "#/components/schemas/IssueIntelligence"
                     },
                     {
-                      "$ref": "#/components/schemas/IssueIntelligence"
+                      "type": "null"
                     }
                   ]
                 }
@@ -4176,10 +4147,10 @@
           "active_thread": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapActiveThread"
               },
               {
-                "$ref": "#/components/schemas/BootstrapActiveThread"
+                "type": "null"
               }
             ]
           },
@@ -4189,10 +4160,10 @@
           "last_read": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapLastRead"
               },
               {
-                "$ref": "#/components/schemas/BootstrapLastRead"
+                "type": "null"
               }
             ]
           },
@@ -4216,10 +4187,10 @@
           "roll_recovery": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BootstrapRollRecovery"
               },
               {
-                "$ref": "#/components/schemas/BootstrapRollRecovery"
+                "type": "null"
               }
             ]
           },
@@ -5612,10 +5583,10 @@
           "updated_item": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/IdentityInboxItem"
               },
               {
-                "$ref": "#/components/schemas/IdentityInboxItem"
+                "type": "null"
               }
             ]
           }
@@ -7172,10 +7143,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -7214,10 +7185,10 @@
           "next": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
               },
               {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
+                "type": "null"
               }
             ]
           },
@@ -7242,10 +7213,10 @@
           "editor": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
               },
               {
-                "$ref": "#/components/schemas/BoundaryEditorTarget"
+                "type": "null"
               }
             ]
           },
@@ -7827,10 +7798,10 @@
           "explanation": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
               },
               {
-                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+                "type": "null"
               }
             ]
           },
@@ -8819,10 +8790,10 @@
           "release": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
               },
               {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
+                "type": "null"
               }
             ]
           }
@@ -8977,11 +8948,11 @@
           "last_roll": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/RollLastRoll",
                 "description": "The most recent recorded roll, when the reader has rolled."
+              },
+              {
+                "type": "null"
               }
             ]
           }
@@ -9413,10 +9384,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
               },
               {
-                "$ref": "#/components/schemas/ComicVineMappingHealth"
+                "type": "null"
               }
             ]
           },
@@ -9463,10 +9434,10 @@
           "series_metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
               },
               {
-                "$ref": "#/components/schemas/QueueSeriesMetadata"
+                "type": "null"
               }
             ]
           },
