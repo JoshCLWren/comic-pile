@@ -3,15 +3,23 @@
 //! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
+use bytes::Bytes;
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -491,7 +499,7 @@ pub async fn search_issues(
     user: AuthenticatedUser,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<IdentityInboxSearchResponse>, ApiError> {
-    let _ = (state, user);
+    let _ = user;
     if q.q.trim().is_empty() || q.q.len() > 200 || q.q.is_empty() {
         return Err(unprocessable("q invalid"));
     }
@@ -516,10 +524,7 @@ pub async fn search_issues(
     }
 
     let url = build_search_url(&api_key, &q.q, clamped);
-    let payload = tokio::task::spawn_blocking(move || fetch_comicvine(url))
-        .await
-        .ok()
-        .flatten();
+    let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
     let mut total_available = Some(0i64);
@@ -653,26 +658,49 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
     )
 }
 
-fn fetch_comicvine(url: String) -> Option<Value> {
-    use native_tls::TlsConnector;
-    use std::io::{Read, Write};
+/// Search-result payload cap. ComicVine search responses are small; the cap
+/// keeps a hostile provider from driving unbounded allocation.
+const MAX_SEARCH_BODY: usize = 5_000_000;
+const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Fetch one ComicVine search page through the app's outbound seam (#5339):
+/// the real HTTPS client in production, a recording fake in test contexts
+/// that never opens a socket. Any failure yields `None`, as before.
+async fn fetch_comicvine(outbound: &Arc<dyn OutboundHttp>, url: String) -> Option<Value> {
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
-    let path = format!("/{rest}");
-    let addr = format!("{host}:443");
-    let stream = std::net::TcpStream::connect(&addr).ok()?;
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
-    let connector = TlsConnector::new().ok()?;
-    let mut tls = connector.connect(host, stream).ok()?;
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
-    );
-    tls.write_all(request.as_bytes()).ok()?;
-    let mut buf = Vec::new();
-    tls.read_to_end(&mut buf).ok()?;
-    let text = String::from_utf8_lossy(&buf);
-    let body = text.split("\r\n\r\n").nth(1)?;
-    serde_json::from_str(body).ok()
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!("/{rest}"),
+        headers: vec![
+            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
+            ("accept".to_string(), "application/json".to_string()),
+            ("connection".to_string(), "close".to_string()),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(host, request).await.ok()?;
+        if !response.status.is_success() {
+            return None;
+        }
+        let mut data = Vec::new();
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
+            let frame = frame.ok()?;
+            if let Ok(bytes) = frame.into_data() {
+                data.extend_from_slice(&bytes);
+                if data.len() > MAX_SEARCH_BODY {
+                    return None;
+                }
+            }
+        }
+        serde_json::from_slice(&data).ok()
+    };
+    tokio::time::timeout(SEARCH_TIMEOUT, exchange)
+        .await
+        .ok()
+        .flatten()
 }
 
 pub async fn confirm(

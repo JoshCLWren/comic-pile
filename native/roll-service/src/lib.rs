@@ -36,6 +36,7 @@ pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
@@ -117,6 +118,11 @@ pub struct AppState {
     /// Production always enables this. The regression suite disables it to prove
     /// the first-statement failure it prevents; no environment variable can.
     pub connection_recovery: bool,
+    /// Outbound HTTPS seam (GitHub issue creation, ComicVine). Production
+    /// installs the real client; test builds/environments install a recording
+    /// fake that never opens a socket, so no test can reach the network
+    /// (#5339). See [`outbound`].
+    pub outbound: Arc<dyn outbound::OutboundHttp>,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -135,6 +141,33 @@ impl AppState {
     pub fn with_recycling(
         config: Config,
         recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound::default_transport())
+    }
+
+    /// Construct with an explicit outbound transport. Production callers use
+    /// [`Self::new`]; tests install a recording fake (#5339).
+    pub fn with_outbound(
+        config: Config,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, RecyclingMethod::Fast, outbound)
+    }
+
+    /// Construct with an explicit pool recycling method and outbound
+    /// transport; test-only combination.
+    pub fn with_recycling_and_outbound(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound)
+    }
+
+    fn build(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
     ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
@@ -172,7 +205,14 @@ impl AppState {
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
             connection_recovery: true,
+            outbound,
         })
+    }
+
+    /// The recording fake outbound client when one is installed (test
+    /// contexts), so tests can assert on recorded calls.
+    pub fn recording_fake(&self) -> Option<&outbound::RecordingFakeOutbound> {
+        self.outbound.as_any().downcast_ref()
     }
 }
 

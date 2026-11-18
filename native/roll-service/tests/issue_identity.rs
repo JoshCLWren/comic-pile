@@ -12,7 +12,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -116,20 +116,17 @@ async fn setup() -> (
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = isolated_test_database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => {
-                    Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
-                }
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => {
+                Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
+            }
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
     let (token, csrf) = create_test_user(&state, "issue-identity").await;
@@ -1132,21 +1129,18 @@ async fn adoption_commit_inactive_list_returns_422() {
 #[tokio::test]
 async fn adoption_commit_returns_503_on_database_outage() {
     let secret = comicpile_roll_service::test_support::TEST_JWT_SECRET;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => {
-                    Some("postgresql://127.0.0.1:1/unreachable?connect_timeout=1".into())
-                }
-                "RUST_ROLL_JWT_SECRET" => Some(secret.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("1".into()),
-                "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("1000".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => {
+                Some("postgresql://127.0.0.1:1/unreachable?connect_timeout=1".into())
+            }
+            "RUST_ROLL_JWT_SECRET" => Some(secret.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("1000".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

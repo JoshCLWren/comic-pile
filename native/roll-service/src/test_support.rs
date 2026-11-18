@@ -254,6 +254,40 @@ fn restricted_url(admin: &str) -> String {
 /// that the mounted router accepts without restating the value.
 pub const TEST_JWT_SECRET: &str = "synthetic-native-test";
 
+/// Build an [`AppState`] for a test binary with the recording fake outbound
+/// client forced in, and assert it is actually fake: a test-configured app
+/// must never construct a real network client (#5339 guard).
+pub fn test_app_state(config: crate::config::Config) -> AppState {
+    let state = AppState::with_outbound(
+        config,
+        std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new()),
+    )
+    .expect("test app state");
+    assert!(
+        state.outbound.is_fake(),
+        "test app state must use the recording fake outbound client"
+    );
+    state
+}
+
+/// [`test_app_state`] with a caller-selected pool recycling method.
+pub fn test_app_state_with_recycling(
+    config: crate::config::Config,
+    recycling_method: deadpool_postgres::RecyclingMethod,
+) -> AppState {
+    let state = AppState::with_recycling_and_outbound(
+        config,
+        recycling_method,
+        std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new()),
+    )
+    .expect("test app state");
+    assert!(
+        state.outbound.is_fake(),
+        "test app state must use the recording fake outbound client"
+    );
+    state
+}
+
 fn state_from_url(url: &str, pool_size: usize) -> AppState {
     let config = crate::config::Config::from_lookup(|name| match name {
         "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
@@ -262,7 +296,7 @@ fn state_from_url(url: &str, pool_size: usize) -> AppState {
         _ => None,
     })
     .expect("canonical test config");
-    AppState::new(config).expect("canonical test state")
+    test_app_state(config)
 }
 
 static ADMIN_STATE: tokio::sync::OnceCell<std::sync::Arc<AppState>> =
