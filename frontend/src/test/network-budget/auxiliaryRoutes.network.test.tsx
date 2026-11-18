@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import { waitFor } from '@testing-library/react'
 import { setAccessToken } from '../../services/api'
 import { renderAppAtRoute } from './appNetworkHarness'
 import {
@@ -46,10 +45,8 @@ describe('auxiliary route network budgets', () => {
     const app = renderAppAtRoute(path, { auth: 'guest' })
     await app.settle()
 
-    // Auth bootstrap and the route guard can settle on adjacent React turns.
-    // Observe the real redirect rather than assuming request-idleness means
-    // the router has already committed the navigation.
-    await waitFor(() => expect(app.currentPath()).toBe('/login'))
+    // Wait on the observable redirect itself, not on request idleness.
+    await app.settleUntil(() => app.currentPath() === '/login', 'guest redirected to /login')
     expect(app.rows()).toEqual([...GUEST_AUTH_PROBE])
     expect(app.rows().some(row => row.includes('/api/v1/releases/'))).toBe(false)
   })

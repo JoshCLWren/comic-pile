@@ -788,7 +788,7 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
     Ok(rows)
 }
 
-async fn rebuild_plan_issues_from_nodes_json(
+pub(crate) async fn rebuild_plan_issues_from_nodes_json(
     tx: &tokio_postgres::Transaction<'_>,
     plan_id: i32,
 ) -> Result<(), ApiError> {
