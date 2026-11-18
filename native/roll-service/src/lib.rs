@@ -20,6 +20,7 @@ pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
+pub mod dependency_groups;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
@@ -1048,6 +1049,54 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-mode/suggest",
             post(reading_mode::suggest_reading_mode),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            get(dependency_groups::list_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            post(dependency_groups::create_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(dependency_groups::list_thread_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(dependency_groups::add_issue_range),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(dependency_groups::add_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(dependency_groups::remove_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(dependency_groups::set_group_order),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(dependency_groups::list_crossover_plans),
         )
         .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
