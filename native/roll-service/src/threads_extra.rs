@@ -3,8 +3,8 @@
 //! GET /api/v1/threads/{thread_id}/connected, GET /api/v1/threads/{thread_id}/issues/creators
 //! with wire-contract preservation.
 
-use axum::{extract::State, Json, Path};
-use serde_json::json;
+use axum::extract::{Path, State};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use deadpool_postgres::Pool;
 use tokio::sqlx;
@@ -22,7 +22,7 @@ pub struct ThreadGroupBatchRequest {
 pub async fn list_thread_groups_batch(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ThreadGroupBatchRequest>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<Value>, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -44,16 +44,18 @@ pub async fn list_thread_groups_batch(
 
     let mut groups_by_thread = json!({});
     for (group_id, group_name, thread_id) in rows {
-        let thread_key = json!(thread_id);
+        let thread_key = Value::Number(serde_json::Number::from(thread_id));
         let group_entry = json!({"id": group_id, "name": group_name});
 
         if let Some(obj) = groups_by_thread.as_object_mut() {
             if let Some(arr) = obj.get(&thread_key.to_string()).and_then(|v| v.as_array_mut()) {
                 arr.push(group_entry);
             } else {
-                let mut new_arr: serde_json::Value = json!([]);
-                new_arr.push(group_entry);
-                *obj = json!({groups_by_thread: obj.clone().insert(thread_key.to_string(), new_arr)});
+                let mut new_arr: Value = Value::Array(Vec::new());
+                new_arr.as_array_mut().unwrap().push(group_entry);
+                let mut map = obj.clone();
+                map.insert(thread_key.to_string(), new_arr);
+                *obj = json!({groups_by_thread: map});
             }
         }
     }
@@ -83,7 +85,7 @@ fn default_page_size() -> usize { 50 }
 pub async fn list_excluded_threads(
     State(state): State<Arc<AppState>>,
     query: ExcludedThreadsQuery,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<Value>, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -131,7 +133,7 @@ pub async fn list_excluded_threads(
         ApiError::Internal(e.to_string())
     })?;
 
-    let threads: Vec<serde_json::Value> = rows
+    let threads: Vec<Value> = rows
         .into_iter()
         .map(|(id, title, format, status, queue_position, is_excluded, last_activity_at, read_issues, total_issues)| {
             json!({
@@ -158,7 +160,7 @@ pub async fn list_excluded_threads(
 pub async fn get_thread_connected(
     State(state): State<Arc<AppState>>,
     Path(thread_id): Path<i32>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<Value>, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -181,7 +183,7 @@ pub async fn get_thread_connected(
         ApiError::Internal(e.to_string())
     })?;
 
-    let threads: Vec<serde_json::Value> = rows
+    let threads: Vec<Value> = rows
         .into_iter()
         .map(|(id, title, format)| {
             json!({"id": id, "title": title, "format": format})
@@ -195,7 +197,7 @@ pub async fn get_thread_connected(
 pub async fn get_thread_issue_creators(
     State(state): State<Arc<AppState>>,
     Path(thread_id): Path<i32>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<Value>, ApiError> {
     let pool: &Pool = &state.pool;
     let mut client = pool.get().await.map_err(|e| {
         ApiError::DatabaseUnavailable
@@ -216,7 +218,7 @@ pub async fn get_thread_issue_creators(
         ApiError::Internal(e.to_string())
     })?;
 
-    let creators: Vec<serde_json::Value> = rows
+    let creators: Vec<Value> = rows
         .into_iter()
         .map(|(id, username, display_name)| {
             json!({"id": id, "username": username, "display_name": display_name})
