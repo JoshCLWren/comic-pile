@@ -147,6 +147,7 @@ describe('pending session hydration (#4352 wider source kept)', () => {
       rolledResult: null,
       selectedThreadId: null,
       isOverrideOpen: false,
+      isDirectIssueOpen: false,
       overrideThreadId: '',
       overrideErrorMessage: '',
       snoozedExpanded: false,

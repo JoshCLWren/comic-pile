@@ -132,7 +132,7 @@ describe('Roll exact-issue manual picker (#4445 A38)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Find issues' }))
     await waitFor(() => expect(listIssues).toHaveBeenCalledExactlyOnceWith(22, { page_size: 100 }))
-    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([92, 91]))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([91, 92]))
 
     const filter = screen.getByRole('searchbox', { name: 'Filter loaded issues' })
     await user.type(filter, '10')
