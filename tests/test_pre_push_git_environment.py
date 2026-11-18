@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> None:
-    """Run every hook gate while ensuring child Git commands use their own repo."""
+    """Run the lint-only hook while ensuring no test gates run and Git env is isolated."""
     hook = Path(__file__).resolve().parents[1] / ".githooks" / "pre-push"
     local_variables = subprocess.check_output(
         ["git", "rev-parse", "--local-env-vars"], text=True
@@ -72,8 +72,4 @@ def test_pre_push_clears_repository_local_git_environment(tmp_path: Path) -> Non
         ["bash", str(hook)], cwd=repository, env=environment, capture_output=True, text=True
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert gate_log.read_text().splitlines() == [
-        "-m pytest tests/ --cov=comic_pile --cov-report=xml",
-        "test",
-        "run audit:ui",
-    ]
+    assert not gate_log.exists() or gate_log.read_text() == ""

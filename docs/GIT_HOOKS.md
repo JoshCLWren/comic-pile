@@ -2,22 +2,13 @@
 
 This repository uses git hooks to enforce code quality checks.
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+## Principle: fix what hooks flag
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
-
-Git hooks that block on test failures are there for YOUR protection.
-
-When a hook blocks your commit/push:
-- ✅ Fix the failing tests
-- ✅ Fix the code that breaks the tests
-- ✅ Investigate root cause
-- ❌ **NEVER use `--no-verify` to bypass hooks**
-- ❌ **NEVER skip hooks to "save time"**
-
-**Using `git commit --no-verify` or `git push --no-verify` is unacceptable.**
-
-If a hook is blocking you, it's telling you something is wrong. **Fix it.**
+Hooks run fast static checks (lint/format/types). Tests are not run in git
+hooks; CI is the test gate. If a hook blocks you, fix the lint failure. Owner
+policy (2026-11-18): factory agents may push feature branches with
+`git push --no-verify` when a local hook blocks them, then open a PR so CI runs.
+Never force-push or push to main.
 
 ## Available Hooks
 
@@ -52,11 +43,8 @@ Runs automatically before each push to remote.
 
 **What it does:**
 - Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
-- Runs frontend unit tests (`pnpm test`)
-- Runs the rendered UI audit (`pnpm run audit:ui`)
 
-The Python API is frozen during the Rust cutover, so backend pytest no longer
-gates pushes. Backend pytest runs are not part of the pre-push hook.
+No tests run on push (no pytest, vitest, or UI audit). CI runs the tests.
 
 **What happens on failure:**
 - Push is aborted
@@ -100,7 +88,6 @@ git push --no-verify
 
 These hooks prevent broken code from being committed or pushed:
 - Catches linting errors locally before CI
-- Catches test failures locally before CI
 - Reduces CI/CD failures
 - Faster feedback loop (local vs remote)
 

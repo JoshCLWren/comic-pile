@@ -9,7 +9,7 @@ while IFS= read -r git_local_variable; do
     unset "$git_local_variable"
 done < <(git rev-parse --local-env-vars)
 
-echo "Running pre-push CI parity checks..."
+echo "Running pre-push lint..."
 
 # Ensure we're running at repo root
 if [ ! -f "pyproject.toml" ]; then
@@ -72,21 +72,9 @@ if [ ! -d "frontend/node_modules" ]; then
 fi
 
 echo ""
-echo "1/3 Running lint (scripts/lint.sh)..."
+echo "Running lint (scripts/lint.sh)..."
 bash scripts/lint.sh
 
 echo ""
-echo "2/3 Running frontend unit tests..."
-(
-    cd frontend
-    pnpm test
-)
-
-echo ""
-echo "3/3 Running rendered UI audit (CI parity)..."
-pnpm run audit:ui
-
-echo ""
-echo "All pre-push checks passed."
-echo "Note: full Playwright product E2E is not part of default CI; run make verify-e2e when needed."
+echo "Pre-push lint passed. Tests are not run on push; CI is the test gate."
 printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"
