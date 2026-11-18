@@ -79,10 +79,15 @@ async def _delivery_evidence(conn: Any, repo: str) -> dict[str, int]:
                 WHERE event_type IN ('worker_completed','worker_failed','worker_idle')
               ) AS terminal_runs,
               COUNT(DISTINCT detail->>'run_id') FILTER (
-                WHERE event_type='worker_completed'
+                WHERE detail->>'outcome_class'='success'
+                   OR (COALESCE(detail->>'outcome_class','')=''
+                       AND event_type='worker_completed')
               ) AS successful_runs,
               COUNT(DISTINCT detail->>'run_id') FILTER (
-                WHERE event_type='worker_failed'
+                WHERE (COALESCE(detail->>'outcome_class','') NOT IN
+                       ('','success','no_work','unconfigured'))
+                   OR (COALESCE(detail->>'outcome_class','')=''
+                       AND event_type='worker_failed')
               ) AS failed_runs,
               COUNT(DISTINCT detail->>'run_id') FILTER (
                 WHERE event_type='checkpoint_saved'
@@ -149,7 +154,12 @@ async def _export_view(conn: Any, repo: str) -> dict[str, Any]:
         if updated > target.get(worker, {}).get("updated", ""):
             target[worker] = {str(k): str(v) for k, v in record.items()}
     view["health"] = await _export_candidate_health(conn, repo)
-    view["delivery_evidence"] = await _delivery_evidence(conn, repo)
+    try:
+        view["delivery_evidence"] = await _delivery_evidence(conn, repo)
+    except (OSError, RuntimeError, ValueError):
+        # A telemetry read cannot prevent the dashboard from showing other
+        # authoritative worker state. The page displays "unavailable".
+        view["delivery_evidence"] = None
     return view
 
 def export_view(repo: str) -> dict[str, Any]:
