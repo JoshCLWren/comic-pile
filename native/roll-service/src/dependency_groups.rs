@@ -351,7 +351,8 @@ fn crossover_progress(
     let progress = if total_issues == 0 {
         "0%".to_string()
     } else {
-        format!("{read_issues * 100 / total_issues}%")
+        let percent = read_issues * 100 / total_issues;
+        format!("{percent}%")
     };
     (read_issues as i32, total_issues, progress)
 }
