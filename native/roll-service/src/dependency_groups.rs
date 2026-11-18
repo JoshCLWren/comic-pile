@@ -77,17 +77,13 @@ const UNREAD_COUNTS_SQL: &str = "SELECT i.thread_id, COUNT(*) FROM issues i \
 const ISSUE_PROGRESS_SQL: &str = "SELECT i.id, i.thread_id, i.status FROM issues i \
      WHERE i.id = ANY($1::int[])";
 const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remaining, \
-     t.queue_position, t.status, t.last_rating, \
-     to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS last_activity_at, \
-     t.notes, t.is_test, t.is_blocked, \
-     to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS created_at, \
+     t.queue_position, t.status, t.last_rating, t.last_activity_at, \
+     t.notes, t.is_test, t.is_blocked, t.created_at, \
      t.total_issues, t.reading_progress, t.next_unread_issue_id, \
-     t.next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
+     t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
-     to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
-     to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
-     FROM issues i WHERE i.id = ANY($1::int[])";
+     i.read_at, i.created_at FROM issues i WHERE i.id = ANY($1::int[])";
 const OTHER_COUPLERS_SQL: &str = "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
      AS thread_id FROM dependency_group_memberships m \
      JOIN dependency_groups g ON g.id = m.group_id AND g.user_id = $1 AND g.id <> $2 \
