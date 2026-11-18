@@ -439,7 +439,9 @@ def test_partial_acceptance_ready_is_actionable_repair_not_review_loop(tmp_path:
 def test_stale_acceptance_report_cannot_force_repair_or_ready(tmp_path: Path) -> None:
     """A report for a foreign head cannot control another PR's stage."""
     report = recovery_report("c" * 40)
-    report["items"] = [{**item, "status": "partial"} for item in report["items"]]
+    items = report["items"]
+    assert isinstance(items, list)
+    report["items"] = [{**item, "status": "partial"} for item in items]
     log = tmp_path / "stale.log"
     log.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(report) + "\n")
     mission = (f"ISSUE ACCEPTANCE: #4916, head {RECOVERY_HEAD}, "
