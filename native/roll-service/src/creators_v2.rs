@@ -21,7 +21,7 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{rejection::QueryRejection, Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -3757,6 +3757,10 @@ fn build_drilldown(
 // Handlers
 // ---------------------------------------------------------------------------
 
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
 fn page_params(
     limit: Option<i64>,
     offset: Option<i64>,
@@ -3765,15 +3769,11 @@ fn page_params(
 ) -> Result<(usize, usize), ApiError> {
     let limit = limit.unwrap_or(default_limit);
     if !(1..=max_limit).contains(&limit) {
-        return Err(ApiError::Unprocessable(format!(
-            "limit must be between 1 and {max_limit}"
-        )));
+        return Err(validation_failed());
     }
     let offset = offset.unwrap_or(0);
     if offset < 0 {
-        return Err(ApiError::Unprocessable(
-            "offset must be non-negative".to_string(),
-        ));
+        return Err(validation_failed());
     }
     Ok((limit as usize, offset as usize))
 }
@@ -3781,15 +3781,8 @@ fn page_params(
 fn drilldown_page(page: Option<i64>, page_size: Option<i64>) -> Result<(i64, i64), ApiError> {
     let page = page.unwrap_or(1);
     let page_size = page_size.unwrap_or(50);
-    if page < 1 {
-        return Err(ApiError::Unprocessable(
-            "page must be at least 1".to_string(),
-        ));
-    }
-    if !(1..=200).contains(&page_size) {
-        return Err(ApiError::Unprocessable(
-            "page_size must be between 1 and 200".to_string(),
-        ));
+    if page < 1 || !(1..=200).contains(&page_size) {
+        return Err(validation_failed());
     }
     Ok((page, page_size))
 }
@@ -3797,8 +3790,9 @@ fn drilldown_page(page: Option<i64>, page_size: Option<i64>) -> Result<(i64, i64
 pub async fn list_creators(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
-    Query(query): Query<CreatorListQuery>,
+    query: Result<Query<CreatorListQuery>, QueryRejection>,
 ) -> Result<Json<CreatorListResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let (limit, offset) = page_params(query.limit, query.offset, 20, 50)?;
     let min_ratings = query.min_ratings.unwrap_or(0).max(0);
@@ -3828,8 +3822,9 @@ pub async fn list_creators(
 pub async fn get_summaries(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
-    Query(query): Query<CreatorKeysQuery>,
+    query: Result<Query<CreatorKeysQuery>, QueryRejection>,
 ) -> Result<Json<CreatorSummariesResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let keys = validate_summary_keys(query.keys.as_deref())?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
@@ -3840,8 +3835,9 @@ pub async fn get_detail(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path(creator_key): Path<String>,
-    Query(query): Query<CreatorPageQuery>,
+    query: Result<Query<CreatorPageQuery>, QueryRejection>,
 ) -> Result<Json<CreatorDetailResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request("Invalid creator key format"));
     };
@@ -3864,8 +3860,9 @@ pub async fn get_series_issues(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path((creator_key, series_key)): Path<(String, String)>,
-    Query(query): Query<CreatorSeriesIssuesQuery>,
+    query: Result<Query<CreatorSeriesIssuesQuery>, QueryRejection>,
 ) -> Result<Json<CreatorSeriesIssueListResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request("Invalid creator key format"));
     };
@@ -3888,8 +3885,9 @@ pub async fn get_series_issues(
 pub async fn get_comparison(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
-    Query(query): Query<CreatorKeysQuery>,
+    query: Result<Query<CreatorKeysQuery>, QueryRejection>,
 ) -> Result<Json<CreatorComparisonResponse>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let keys = validate_comparison_keys(query.keys.as_deref())?;
     let user_id = resolve_user_id(&state, &claims).await?;
     let library = load_library(&state, user_id).await?;
@@ -3918,8 +3916,9 @@ pub async fn get_metric_drilldown(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path((creator_key, metric_type)): Path<(String, String)>,
-    Query(query): Query<CreatorMetricQuery>,
+    query: Result<Query<CreatorMetricQuery>, QueryRejection>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request(format!(
             "Invalid creator key format: {creator_key}"
@@ -3946,8 +3945,9 @@ pub async fn get_rating_distribution_drilldown(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path((creator_key, rating_value)): Path<(String, String)>,
-    Query(query): Query<CreatorMetricPageQuery>,
+    query: Result<Query<CreatorMetricPageQuery>, QueryRejection>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request(format!(
             "Invalid creator key format: {creator_key}"
@@ -3983,8 +3983,9 @@ pub async fn get_role_drilldown(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path((creator_key, role)): Path<(String, String)>,
-    Query(query): Query<CreatorMetricPageQuery>,
+    query: Result<Query<CreatorMetricPageQuery>, QueryRejection>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request(format!(
             "Invalid creator key format: {creator_key}"
@@ -4020,8 +4021,9 @@ pub async fn get_series_drilldown(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Path((creator_key, series_key)): Path<(String, String)>,
-    Query(query): Query<CreatorMetricPageQuery>,
+    query: Result<Query<CreatorMetricPageQuery>, QueryRejection>,
 ) -> Result<Json<CreatorMetricDrilldown>, ApiError> {
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let Some(creator_id) = parse_creator_key(&creator_key) else {
         return Err(bad_request(format!(
             "Invalid creator key format: {creator_key}"
@@ -4652,6 +4654,22 @@ mod tests {
             .unwrap_err()
             .status(),
             StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            page_params(Some(0), None, 20, 50).unwrap_err().detail(),
+            "Validation failed"
+        );
+        assert_eq!(
+            page_params(None, Some(-1), 20, 50).unwrap_err().detail(),
+            "Validation failed"
+        );
+        assert_eq!(
+            drilldown_page(Some(0), None).unwrap_err().detail(),
+            "Validation failed"
+        );
+        assert_eq!(
+            drilldown_page(Some(1), Some(201)).unwrap_err().detail(),
+            "Validation failed"
         );
     }
 
