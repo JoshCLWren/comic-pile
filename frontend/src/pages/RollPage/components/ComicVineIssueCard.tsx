@@ -62,8 +62,8 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
       seriesName,
       issueNumber,
       comicvineIssueId,
-      // The current Roll comic's cover cannot represent a related, unowned issue.
-      imageUrl: null,
+      // Use only this related issue's provider art, never the active Roll cover.
+      imageUrl,
       anchorBeforeThreadId,
       anchorAfterThreadId,
     })
@@ -163,6 +163,14 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                   return (
                     <div key={issue.comicvine_issue_id} className="p-2 rounded-lg bg-black/15 border border-white/5">
                       <div className="flex gap-2 justify-between items-start">
+                        {state === 'missing' && (
+                          <ComicIssueCover
+                            coverImageUrl={issue.image_url ?? null}
+                            threadTitle={issue.series_name ?? 'ComicVine issue'}
+                            issueNumber={issue.issue_number ?? '?'}
+                            variant="compact"
+                          />
+                        )}
                         <div className="flex-1 min-w-0">
                           <span className="text-[11px] font-bold text-stone-300 truncate block">{identity.primary}</span>
                           {identity.secondary && (
@@ -179,7 +187,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                           {state === 'missing' && (
                             <button
                               type="button"
-                              onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number, arc.related_issues)}
+                              onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id, issue.series_name, issue.issue_number, issue.image_url ?? null, arc.related_issues)}
                               className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
                               aria-label={`Add ${identity.primary} to ComicPile`}
                             >

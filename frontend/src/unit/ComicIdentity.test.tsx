@@ -511,11 +511,15 @@ describe('ComicIdentity', () => {
 
     renderWithToast(<ComicIdentity issueId={5} />)
     await waitForLoaded()
+    const relatedCover = screen.getByRole('img', { name: 'Cover for Batman #126' })
+    expect(relatedCover).toHaveAttribute('src', 'https://images.example/related-301.jpg')
+    expect(relatedCover).not.toHaveAttribute('src', 'https://images.example/300.jpg')
     const addButton = screen.getByRole('button', { name: /Add Batman #126 to ComicPile/i })
     fireEvent.click(addButton)
-    expect(await screen.findByTestId('add-to-comicpile-dialog')).toBeInTheDocument()
+    const dialog = await screen.findByTestId('add-to-comicpile-dialog')
     expect(screen.getByText('ComicVine Issue')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Batman #126')).toBeInTheDocument()
+    expect(dialog.querySelector('img')).toHaveAttribute('src', 'https://images.example/related-301.jpg')
   })
 
   it('closes Add to ComicPile dialog when onClose is called', async () => {
