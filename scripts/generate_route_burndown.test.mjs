@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,19 +19,62 @@ import {pythonJsonDumps} from './generate_route_burndown.mjs';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const nodeScript = path.join(repoRoot, 'scripts', 'generate_route_burndown.mjs');
 const pythonScript = path.join(repoRoot, 'scripts', 'generate_route_burndown.py');
+const fixturesRoot = path.join(repoRoot, 'scripts', '__fixtures__', 'route-burndown');
+const fixtureInputs = path.join(fixturesRoot, 'inputs');
+const fixtureGolden = path.join(fixturesRoot, 'golden');
 
-function runNode(args, cwd = repoRoot) {
-  return execFileSync(process.execPath, [nodeScript, ...args], {
-    cwd,
-    encoding: 'utf8',
-  });
+const GOLDEN_BY_KEY = {
+  inventory: 'inventory.json',
+  vercel: 'vercel.json',
+  agents: 'AGENTS.md',
+  rewrite: 'vercel-rewrites.json',
+};
+
+/**
+ * Stage the checked-in hermetic fixture inputs into a temp working directory.
+ *
+ * The generator reads `docs/api/sql-budget-sources.json` relative to cwd, so
+ * the staged layout must include that path. Nothing here reads the live
+ * `vercel.json`, inventory, AGENTS.md, or route fragments: fragment-only route
+ * PRs intentionally leave those bot-owned artifacts stale until post-merge
+ * regeneration, so comparing against them would fail every such PR in the
+ * `factory-pr-auth` job (which does not regenerate before running these tests).
+ *
+ * @param {string} tmp Temp directory root.
+ * @returns {object} Paths to the staged input/output files and fragments dir.
+ */
+function stageInputs(tmp) {
+  const fragments = path.join(tmp, 'fragments');
+  mkdirSync(path.join(tmp, 'docs', 'api'), {recursive: true});
+  cpSync(path.join(fixtureInputs, 'fragments'), fragments, {recursive: true});
+  for (const file of Object.values(GOLDEN_BY_KEY)) {
+    copyFileSync(path.join(fixtureInputs, file), path.join(tmp, file));
+  }
+  copyFileSync(
+    path.join(fixtureInputs, 'sql-budget-sources.json'),
+    path.join(tmp, 'docs', 'api', 'sql-budget-sources.json'),
+  );
+  return {
+    inventory: path.join(tmp, 'inventory.json'),
+    vercel: path.join(tmp, 'vercel.json'),
+    agents: path.join(tmp, 'AGENTS.md'),
+    rewrite: path.join(tmp, 'vercel-rewrites.json'),
+    fragments,
+  };
 }
 
-function runPython(args, cwd = repoRoot) {
-  return execFileSync('python3', [pythonScript, ...args], {
-    cwd,
-    encoding: 'utf8',
-  });
+function generatorArgs(files) {
+  return [
+    '--inventory', files.inventory,
+    '--fragments', files.fragments,
+    '--rewrite-fragment', files.rewrite,
+    '--vercel', files.vercel,
+    '--agents', files.agents,
+  ];
+}
+
+function run(scriptCmd, args, cwd) {
+  execFileSync(scriptCmd[0], [...scriptCmd.slice(1), ...args], {cwd, encoding: 'utf8'});
 }
 
 function readBytes(filePath) {
@@ -45,157 +89,83 @@ test('pythonJsonDumps escapes non-ASCII like Python ensure_ascii=True', () => {
   assert.ok(!text.includes('😀'), 'astral char must be escaped');
 });
 
-test('node generator matches checked-in golden outputs on repo inputs', (t) => {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-'));
+test('node generator matches checked-in golden fixtures on hermetic inputs', (t) => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-golden-'));
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
 
-  const inventory = path.join(tmp, 'v2-route-inventory.json');
-  const vercel = path.join(tmp, 'vercel.json');
-  const agents = path.join(tmp, 'AGENTS.md');
-  const rewrite = path.join(tmp, 'vercel-rewrites.json');
-  copyFileSync(path.join(repoRoot, 'docs/api/v2-route-inventory.json'), inventory);
-  copyFileSync(path.join(repoRoot, 'vercel.json'), vercel);
-  copyFileSync(path.join(repoRoot, 'AGENTS.md'), agents);
-  copyFileSync(path.join(repoRoot, 'docs/api/route-fragments/vercel-rewrites.json'), rewrite);
+  const files = stageInputs(tmp);
+  run([process.execPath, nodeScript], generatorArgs(files), tmp);
 
-  runNode([
-    '--inventory', inventory,
-    '--fragments', 'docs/api/route-fragments',
-    '--rewrite-fragment', rewrite,
-    '--vercel', vercel,
-    '--agents', agents,
-  ]);
+  for (const [key, golden] of Object.entries(GOLDEN_BY_KEY)) {
+    assert.deepEqual(
+      readBytes(files[key]),
+      readBytes(path.join(fixtureGolden, golden)),
+      `${golden} differs from the checked-in golden fixture`,
+    );
+  }
 
-  assert.deepEqual(
-    readBytes(inventory),
-    readBytes(path.join(repoRoot, 'docs/api/v2-route-inventory.json')),
-  );
-  assert.deepEqual(
-    readBytes(vercel),
-    readBytes(path.join(repoRoot, 'vercel.json')),
-  );
-  assert.deepEqual(
-    readBytes(agents),
-    readBytes(path.join(repoRoot, 'AGENTS.md')),
-  );
-  assert.deepEqual(
-    readBytes(rewrite),
-    readBytes(path.join(repoRoot, 'docs/api/route-fragments/vercel-rewrites.json')),
-  );
+  // Staleness detection is exercised against fixtures too: a freshly generated
+  // tree passes --check, and mutating one output makes it fail with exit 1.
+  const checkArgs = [...generatorArgs(files), '--check'];
+  run([process.execPath, nodeScript], checkArgs, tmp);
+  writeFileSync(files.inventory, `${readFileSync(files.inventory, 'utf8')}\n`);
+  assert.throws(() => run([process.execPath, nodeScript], checkArgs, tmp), err => err.status === 1);
 });
 
-test('node and python generators produce identical bytes on unicode metadata inputs', (t) => {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-unicode-'));
+test('node and python generators produce identical bytes on hermetic fixtures', (t) => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-parity-'));
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
 
-  const docsApi = path.join(tmp, 'docs', 'api');
-  const fragmentsDir = path.join(docsApi, 'route-fragments');
-  mkdirSync(fragmentsDir, {recursive: true});
+  const nodeDir = path.join(tmp, 'node');
+  const pyDir = path.join(tmp, 'python');
+  mkdirSync(nodeDir, {recursive: true});
+  mkdirSync(pyDir, {recursive: true});
+  const nodeFiles = stageInputs(nodeDir);
+  const pyFiles = stageInputs(pyDir);
 
-  // SQL budget sources path is hardcoded relative to cwd; run from tmp with this file present.
-  writeFileSync(
-    path.join(docsApi, 'sql-budget-sources.json'),
-    JSON.stringify({operations: []}, null, 2) + '\n',
-  );
+  run([process.execPath, nodeScript], generatorArgs(nodeFiles), nodeDir);
+  run(['python3', pythonScript], generatorArgs(pyFiles), pyDir);
 
-  const inventory = {
-    schema_version: 1,
-    description: 'Unicode fixture café 😀',
-    updated_by_issue: 4739,
-    burndown: {},
-    operations: [
-      {
-        owning_issue: 1,
-        runtime: 'native-rust',
-        status: 'complete',
-        method: 'GET',
-        path: '/api/v2/unicode',
-        consumers: ['café.ts 😀'],
-        ingress_destination: '/api/native_roll.rs',
-      },
-    ],
-    full_surface: {
-      summary: {},
-      catch_all: {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
-      v1_operations: [],
-      unversioned_operations: [],
-    },
-    retired_legacy_operations: [],
-  };
-  const vercel = {
-    routes: [
-      {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
-      {src: '/(.*)', dest: '/index.html'},
-    ],
-  };
-  const agents = [
-    '# Agents',
-    '',
-    '<!-- route-burndown:begin (generated by scripts/generate_route_burndown.py, issue #4739) -->',
-    'old',
-    '<!-- route-burndown:end -->',
-    '',
-    'tail',
-    '',
-  ].join('\n');
-  const fragment = {
-    family: 'unicode-fixture',
-    owned_path_patterns: ['^/api/v2/unicode$'],
-    defaults: {owning_issue: 1, status: 'complete'},
-    operations: [
-      {
-        bucket: 'operations',
-        method: 'GET',
-        path: '/api/v2/unicode',
-        runtime: 'native-rust',
-        consumers: ['café.ts 😀'],
-        dest: '/api/native_roll.rs',
-      },
-    ],
-  };
-
-  const invPath = path.join(tmp, 'inventory.json');
-  const vercelPath = path.join(tmp, 'vercel.json');
-  const agentsPath = path.join(tmp, 'AGENTS.md');
-  const rewritePath = path.join(tmp, 'rewrites.json');
-  writeFileSync(invPath, JSON.stringify(inventory, null, 2) + '\n');
-  writeFileSync(vercelPath, JSON.stringify(vercel, null, 2) + '\n');
-  writeFileSync(agentsPath, agents);
-  writeFileSync(rewritePath, '{}\n');
-  writeFileSync(path.join(fragmentsDir, 'unicode.json'), JSON.stringify(fragment, null, 2) + '\n');
-
-  const run = (scriptCmd, scriptPath) => {
-    const out = path.join(tmp, `out-${path.basename(scriptPath)}`);
-    mkdirSync(out, {recursive: true});
-    const files = {
-      inventory: path.join(out, 'inventory.json'),
-      vercel: path.join(out, 'vercel.json'),
-      agents: path.join(out, 'AGENTS.md'),
-      rewrite: path.join(out, 'rewrites.json'),
-    };
-    copyFileSync(invPath, files.inventory);
-    copyFileSync(vercelPath, files.vercel);
-    copyFileSync(agentsPath, files.agents);
-    copyFileSync(rewritePath, files.rewrite);
-    execFileSync(scriptCmd[0], [...scriptCmd.slice(1), scriptPath,
-      '--inventory', files.inventory,
-      '--fragments', fragmentsDir,
-      '--rewrite-fragment', files.rewrite,
-      '--vercel', files.vercel,
-      '--agents', files.agents,
-    ], {cwd: tmp, encoding: 'utf8'});
-    return files;
-  };
-
-  const nodeOut = run([process.execPath], nodeScript);
-  const pyOut = run(['python3'], pythonScript);
-
-  for (const key of ['inventory', 'vercel', 'agents', 'rewrite']) {
-    const nb = readBytes(nodeOut[key]);
-    const pb = readBytes(pyOut[key]);
-    assert.deepEqual(nb, pb, `${key} bytes differ between Node and Python`);
+  for (const key of Object.keys(GOLDEN_BY_KEY)) {
+    assert.deepEqual(
+      readBytes(nodeFiles[key]),
+      readBytes(pyFiles[key]),
+      `${key} bytes differ between Node and Python`,
+    );
+    assert.deepEqual(
+      readBytes(nodeFiles[key]),
+      readBytes(path.join(fixtureGolden, GOLDEN_BY_KEY[key])),
+      `${key} differs from the checked-in golden fixture`,
+    );
   }
-  const invText = readFileSync(nodeOut.inventory, 'utf8');
+
+  const invText = readFileSync(nodeFiles.inventory, 'utf8');
   assert.ok(invText.includes('\\u00e9'), 'expected escaped café');
   assert.ok(invText.includes('\\ud83d\\ude00'), 'expected escaped emoji surrogate pair');
+});
+
+test('generator rejects invalid fragment input and leaves fixtures untouched', (t) => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-invalid-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+
+  const files = stageInputs(tmp);
+  writeFileSync(
+    path.join(files.fragments, 'invalid.json'),
+    `${JSON.stringify({
+      family: 'invalid',
+      owned_path_patterns: ['^/api/v2/bad$'],
+      defaults: {},
+      operations: [{bucket: 'operations', method: 'GET', path: '/api/v2/bad', dest: '/api/bad'}],
+    }, null, 2)}\n`,
+  );
+
+  assert.throws(
+    () => run([process.execPath, nodeScript], generatorArgs(files), tmp),
+    err => err.status === 2,
+  );
+  assert.deepEqual(
+    readBytes(files.inventory),
+    readBytes(path.join(fixtureInputs, 'inventory.json')),
+    'rejected input must not modify the staged inventory',
+  );
 });
