@@ -12198,6 +12198,64 @@
         ],
         "type": "object"
       },
+      "NativeTasteDiscovery": {
+        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "distinct_thread_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "evidence_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "signal_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "signal_type",
+          "external_key",
+          "display_name",
+          "prompt",
+          "evidence_count",
+          "distinct_thread_count"
+        ],
+        "type": "object"
+      },
+      "NativeTasteDiscoveryListResponse": {
+        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
+        "properties": {
+          "discoveries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeTasteDiscovery"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "discoveries",
+          "generated_at"
+        ],
+        "type": "object"
+      },
       "NearMatch": {
         "properties": {
           "color": {
@@ -28781,20 +28839,16 @@
     },
     "/api/v1/taste/discoveries": {
       "get": {
-        "description": "Return ranked prompt-eligible discoveries for the reader.\n\nSurfacing counts as prompting: returned signals record ``last_prompted_at``\nso the canonical cooldown suppresses immediate re-prompting. Signals with\nany explicit verdict are never included.\n\nArgs:\n    current_user: The authenticated reader.\n    db: Async database session.\n    limit: Bounded maximum number of discoveries to return.\n\nReturns:\n    Ranked eligible discoveries with concise evidence context.",
-        "operationId": "list_taste_discoveries_api_v1_taste_discoveries_get",
+        "description": "Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.",
+        "operationId": "list_documentation",
         "parameters": [
           {
-            "description": "Maximum discoveries to return.",
+            "description": "Maximum discoveries to return (1-3, default 3).",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 3,
-              "description": "Maximum discoveries to return.",
-              "maximum": 3,
-              "minimum": 1,
-              "title": "Limit",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -28804,21 +28858,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
+                  "$ref": "#/components/schemas/NativeTasteDiscoveryListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Ranked discoveries"
+          },
+          "401": {
+            "description": "Not authenticated"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "limit is outside the allowed range"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -28826,9 +28879,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Taste Discoveries",
+        "summary": "Documentation-only operation for the mounted discovery listing.",
         "tags": [
-          "taste",
           "taste"
         ]
       }
