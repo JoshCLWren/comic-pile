@@ -2,6 +2,7 @@
 """Network-free regression coverage for factory repair stage 5."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import sys
@@ -13,15 +14,14 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from factory_work_policy import (  # noqa: E402
-    FACTORY_NO_DIFF_RETRY_LIMIT,
-    FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
-    TRUSTED_FACTORY_APP_SLUGS,
-    build_candidates,
-    comment_is_trusted,
-    lease_is_stale,
-    no_diff_attempts_from_comments,
-)
+_factory_work_policy = importlib.import_module("factory_work_policy")
+FACTORY_NO_DIFF_RETRY_LIMIT = _factory_work_policy.FACTORY_NO_DIFF_RETRY_LIMIT
+FACTORY_NO_DIFF_RETRY_RESET_SECONDS = _factory_work_policy.FACTORY_NO_DIFF_RETRY_RESET_SECONDS
+TRUSTED_FACTORY_APP_SLUGS = _factory_work_policy.TRUSTED_FACTORY_APP_SLUGS
+build_candidates = _factory_work_policy.build_candidates
+comment_is_trusted = _factory_work_policy.comment_is_trusted
+lease_is_stale = _factory_work_policy.lease_is_stale
+no_diff_attempts_from_comments = _factory_work_policy.no_diff_attempts_from_comments
 
 
 def load_controller():
@@ -223,19 +223,14 @@ def test_github_actions_heartbeat_resolves_unlabeled_run(
             ]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
-        if "issues/1093/comments" in joined:
-            return [
-                [
-                    {
-                        "author_association": "CONTRIBUTOR",
-                        "performed_via_github_app": {"slug": "github-actions"},
-                        "body": "Worker: opencode-free-model-factory-8\nRun: 222",
-                    }
-                ]
-            ]
         raise AssertionError(joined)
 
     monkeypatch.setattr(controller, "gh_json", fake_gh_json)
+    # Exact run attribution is durable, no longer sourced from issue comments.
+    import factory_runtime_view
+
+    monkeypatch.setattr(factory_runtime_view, "run_workers", lambda _repo, _runs: {"222": "8"})
+    monkeypatch.setattr(controller, "is_authorized_fixed_worker", lambda worker: worker == "8")
     workers, unresolved = controller.active_fixed_workers()
     assert workers == {8}
     assert unresolved == set()
@@ -248,17 +243,32 @@ def test_unresolvable_run_holds_fixed_leases_but_local_gc_continues(
     now = 2_000_000_000
     released: list[tuple[int, str]] = []
     monkeypatch.setattr(controller, "active_fixed_workers", lambda: ({7}, {"222"}))
-    monkeypatch.setattr(
-        controller,
-        "owned_targets",
-        lambda: [(1, "factory:7"), (2, "factory:8"), (3, "factory:local")],
-    )
+    monkeypatch.setattr(controller, "renew_verified_workers", lambda *_args: 0)
+    targets = [
+        {
+            "number": number,
+            "state": "OPEN",
+            "updatedAt": "2020-01-01T00:00:00Z",
+            "body": "",
+            "labels": labels("factory", owner),
+        }
+        for number, owner in (
+            (1, "factory:7"), (2, "factory:8"), (3, "factory:local")
+        )
+    ]
+    monkeypatch.setattr(controller, "list_issues", lambda: targets)
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
     monkeypatch.setattr(controller, "latest_lease_activity_epoch", lambda number: now - 10_000)
-    monkeypatch.setattr(
-        controller,
-        "replace_factory_labels",
-        lambda number, owner, stage=None: released.append((number, owner)),
-    )
+
+    def release_only_local(number: int, owner: str, **kwargs: object) -> bool:
+        assert number == 3
+        assert owner == "factory:unowned"
+        assert kwargs["expected_owner"] == "factory:local"
+        assert kwargs["observed_at_epoch"] == now
+        released.append((number, owner))
+        return True
+
+    monkeypatch.setattr(controller, "replace_factory_labels", release_only_local)
 
     assert controller.reconcile_stale_leases(now_epoch=now) == [3]
     assert released == [(3, "factory:unowned")]

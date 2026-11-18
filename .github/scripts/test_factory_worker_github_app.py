@@ -2,12 +2,14 @@
 """Worker 48 App bootstrap and installation-token selection."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,13 +19,14 @@ REPO = SCRIPTS.parents[1]
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import factory_worker_github_app as app  # noqa: E402
-from factory_review_policy import trusted_comment_bodies  # noqa: E402
-from factory_work_policy import (  # noqa: E402
-    TRUSTED_FACTORY_APP_SLUGS,
-    comment_is_trusted,
-)
-from stale_pr_decay import comment_is_trusted as stale_comment_is_trusted  # noqa: E402
+app = importlib.import_module("factory_worker_github_app")
+_factory_review_policy = importlib.import_module("factory_review_policy")
+trusted_comment_bodies = _factory_review_policy.trusted_comment_bodies
+_factory_work_policy = importlib.import_module("factory_work_policy")
+TRUSTED_FACTORY_APP_SLUGS = _factory_work_policy.TRUSTED_FACTORY_APP_SLUGS
+comment_is_trusted = _factory_work_policy.comment_is_trusted
+_stale_pr_decay = importlib.import_module("stale_pr_decay")
+stale_comment_is_trusted = _stale_pr_decay.comment_is_trusted
 
 
 def _load_fence():
@@ -172,7 +175,7 @@ class MintTest(unittest.TestCase):
                 def __exit__(self, *exc: object) -> bool:
                     return False
 
-            def opener(request, timeout=30):  # noqa: ANN001
+            def opener(request: object, timeout: int = 30) -> Response:
                 del timeout
                 seen["url"] = request.full_url
                 seen["auth"] = request.get_header("Authorization")
@@ -325,6 +328,16 @@ class HandoffTest(unittest.TestCase):
             else:
                 os.environ["FACTORY_WORKER_APP_MINT_STUB_TOKEN"] = previous
         self.assertEqual((source, token), ("installation", "handoff-token"))
+
+
+def test_faker_bootstrap_version_matches_the_actual_dependency_lock() -> None:
+    """Prevent test-only Faker substitution from masking a broken App bootstrap."""
+    config = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads((REPO / "uv.lock").read_text(encoding="utf-8"))
+    assert f"faker=={app.FAKER_VERSION}" in config["dependency-groups"]["dev"]
+    faker_packages = [entry for entry in lock["package"] if entry["name"] == "faker"]
+    assert len(faker_packages) == 1
+    assert faker_packages[0]["version"] == app.FAKER_VERSION
 
 
 if __name__ == "__main__":

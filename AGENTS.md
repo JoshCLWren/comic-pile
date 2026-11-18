@@ -60,7 +60,7 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 
 - Live v2 operations: 42 (42 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 129 operations (v1 126 + unversioned 3); v1 active 112 live Python / 1 migrated (shadowed by Rust); unversioned active 1 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 115 operations (v1 112 + unversioned 3); v1 active 79 live Python / 6 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -161,7 +161,10 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
-Leave full backend/frontend suites to CI. Python coverage thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
+Leave full backend/frontend suites to CI. The Python API is frozen during the Rust cutover, so
+backend pytest no longer gates pushes or merge to main; the pre-push hook runs lint, frontend
+unit tests, and the UI audit only. Python coverage thresholds are retired during the Rust
+cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
 `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
 requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.

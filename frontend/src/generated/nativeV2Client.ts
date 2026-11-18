@@ -46,6 +46,81 @@ export interface ConfirmRequest {
 
 export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
 
+export interface ContinuityPlansAdoptReadingOrderRequest {
+  body: components['schemas']['ReadingOrderAdoptRequest']
+}
+
+export type ContinuityPlansAdoptReadingOrderResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansCreateRequest {
+  body: components['schemas']['ContinuityPlanWrite']
+}
+
+export type ContinuityPlansCreateResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansDeleteRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansDeleteResponse = void
+
+export interface ContinuityPlansGetRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansGetResponse = components['schemas']['ContinuityPlanResponse']
+
+export interface ContinuityPlansLinkDependencyRequest {
+  path: {
+    plan_id: number
+    dependency_id: number
+  }
+  body: components['schemas']['ReadingPlanDependencyLinkRequest']
+}
+
+export type ContinuityPlansLinkDependencyResponse = components['schemas']['ReadingPlanDependencyLink']
+
+export type ContinuityPlansListResponse = Array<components['schemas']['ContinuityPlanListItem']>
+
+export interface ContinuityPlansMembershipRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ContinuityPlansMembershipResponse = components['schemas']['ReadingPlanMembershipResponse']
+
+export interface ContinuityPlansProjectToReadingOrderRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['NativeReadingOrderProjectionRequest']
+}
+
+export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['NativeReadingOrderProjectionResult']
+
+export interface ContinuityPlansUnlinkDependencyRequest {
+  path: {
+    plan_id: number
+    dependency_id: number
+  }
+}
+
+export type ContinuityPlansUnlinkDependencyResponse = void
+
+export interface ContinuityPlansUpdateRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['ContinuityPlanWrite']
+}
+
+export type ContinuityPlansUpdateResponse = components['schemas']['ContinuityPlanResponse']
+
 export interface ContinuityRulesCreateRequest {
   body: components['schemas']['ContinuityRuleRequest']
 }
@@ -378,6 +453,45 @@ export interface RejectRequest {
 
 export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
 
+export interface ReleaseSourcesCreateRequest {
+  body: components['schemas']['ReleaseSourceCreate']
+}
+
+export type ReleaseSourcesCreateResponse = components['schemas']['ContinuityReleaseSourceResponse']
+
+export interface ReleaseSourcesDeleteRequest {
+  path: {
+    source_id: number
+  }
+}
+
+export type ReleaseSourcesDeleteResponse = void
+
+export interface ReleaseSourcesListRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ReleaseSourcesListResponse = Array<components['schemas']['ContinuityReleaseSourceResponse']>
+
+export interface ReleaseSourcesListReaderRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ReleaseSourcesListReaderResponse = Array<components['schemas']['ReadingPlanReleaseSourceStatus']>
+
+export interface ReleaseSourcesUpdateRequest {
+  path: {
+    source_id: number
+  }
+  body: components['schemas']['ReleaseSourceUpdate']
+}
+
+export type ReleaseSourcesUpdateResponse = components['schemas']['ContinuityReleaseSourceResponse']
+
 export interface ReleasesGetRequest {
   path: {
     release_id: number
@@ -415,7 +529,7 @@ export interface ReleasesReconcileRequest {
   }
 }
 
-export type ReleasesReconcileResponse = components['schemas']['NativeReleaseSourceResponse']
+export type ReleasesReconcileResponse = components['schemas']['ReleaseSourceResponse']
 
 export interface ReleasesRetractRequest {
   path: {
@@ -504,6 +618,16 @@ export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
+  continuityPlansCreate(args: ContinuityPlansCreateRequest): Promise<ContinuityPlansCreateResponse>
+  continuityPlansDelete(args: ContinuityPlansDeleteRequest): Promise<ContinuityPlansDeleteResponse>
+  continuityPlansGet(args: ContinuityPlansGetRequest): Promise<ContinuityPlansGetResponse>
+  continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest): Promise<ContinuityPlansLinkDependencyResponse>
+  continuityPlansList(): Promise<ContinuityPlansListResponse>
+  continuityPlansMembership(args: ContinuityPlansMembershipRequest): Promise<ContinuityPlansMembershipResponse>
+  continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest): Promise<ContinuityPlansProjectToReadingOrderResponse>
+  continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest): Promise<ContinuityPlansUnlinkDependencyResponse>
+  continuityPlansUpdate(args: ContinuityPlansUpdateRequest): Promise<ContinuityPlansUpdateResponse>
   continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
   continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
   continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
@@ -557,6 +681,11 @@ export interface NativeV2Client {
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
+  releaseSourcesCreate(args: ReleaseSourcesCreateRequest): Promise<ReleaseSourcesCreateResponse>
+  releaseSourcesDelete(args: ReleaseSourcesDeleteRequest): Promise<ReleaseSourcesDeleteResponse>
+  releaseSourcesList(args: ReleaseSourcesListRequest): Promise<ReleaseSourcesListResponse>
+  releaseSourcesListReader(args: ReleaseSourcesListReaderRequest): Promise<ReleaseSourcesListReaderResponse>
+  releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest): Promise<ReleaseSourcesUpdateResponse>
   releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
   releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
   releasesPublish(args: ReleasesPublishRequest): Promise<ReleasesPublishResponse>
@@ -591,6 +720,59 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        args.body,
+      )
+    },
+    continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest) {
+      return client.post<ContinuityPlansAdoptReadingOrderResponse, ContinuityPlansAdoptReadingOrderRequest['body']>(
+        "/v1/continuity-plans/from-reading-order",
+        args.body,
+      )
+    },
+    continuityPlansCreate(args: ContinuityPlansCreateRequest) {
+      return client.post<ContinuityPlansCreateResponse, ContinuityPlansCreateRequest['body']>(
+        "/v1/continuity-plans/",
+        args.body,
+      )
+    },
+    continuityPlansDelete(args: ContinuityPlansDeleteRequest) {
+      return client.delete<ContinuityPlansDeleteResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    continuityPlansGet(args: ContinuityPlansGetRequest) {
+      return client.get<ContinuityPlansGetResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+      )
+    },
+    continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest) {
+      return client.post<ContinuityPlansLinkDependencyResponse, ContinuityPlansLinkDependencyRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        args.body,
+      )
+    },
+    continuityPlansList() {
+      return client.get<ContinuityPlansListResponse>("/v1/continuity-plans/")
+    },
+    continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
+      return client.get<ContinuityPlansMembershipResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+      )
+    },
+    continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
+      return client.post<ContinuityPlansProjectToReadingOrderResponse, ContinuityPlansProjectToReadingOrderRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
+        args.body,
+      )
+    },
+    continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest) {
+      return client.delete<ContinuityPlansUnlinkDependencyResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+      )
+    },
+    continuityPlansUpdate(args: ContinuityPlansUpdateRequest) {
+      return client.put<ContinuityPlansUpdateResponse, ContinuityPlansUpdateRequest['body']>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
         args.body,
       )
     },
@@ -851,6 +1033,33 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     reject(args: RejectRequest) {
       return client.post<RejectResponse, RejectRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        args.body,
+      )
+    },
+    releaseSourcesCreate(args: ReleaseSourcesCreateRequest) {
+      return client.post<ReleaseSourcesCreateResponse, ReleaseSourcesCreateRequest['body']>(
+        "/v1/continuity-plans/release-sources/",
+        args.body,
+      )
+    },
+    releaseSourcesDelete(args: ReleaseSourcesDeleteRequest) {
+      return client.delete<ReleaseSourcesDeleteResponse>(
+        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+      )
+    },
+    releaseSourcesList(args: ReleaseSourcesListRequest) {
+      return client.get<ReleaseSourcesListResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
+      )
+    },
+    releaseSourcesListReader(args: ReleaseSourcesListReaderRequest) {
+      return client.get<ReleaseSourcesListReaderResponse>(
+        `/v1/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
+      )
+    },
+    releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest) {
+      return client.patch<ReleaseSourcesUpdateResponse, ReleaseSourcesUpdateRequest['body']>(
+        `/v1/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
         args.body,
       )
     },
