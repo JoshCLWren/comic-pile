@@ -27,6 +27,7 @@ pub mod dice_state;
 pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
+pub mod issue_identity;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
@@ -864,6 +865,39 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
+        )
+        // Issue Identity / CBL Adoption family (#4843).
+        .route(
+            "/api/v1/issue-identity/cbl-sources",
+            get(issue_identity::discover_cbl_source_lists),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(issue_identity::get_cbl_source_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(issue_identity::find_cbl_sources_by_comicvine_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(issue_identity::compare_cbl_sources),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(issue_identity::cbl_adoption_plan),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(issue_identity::cbl_adoption_commit),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",

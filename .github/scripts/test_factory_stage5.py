@@ -258,7 +258,10 @@ def test_unresolvable_run_holds_fixed_leases_but_local_gc_continues(
     ]
     monkeypatch.setattr(controller, "list_issues", lambda: targets)
     monkeypatch.setattr(controller, "list_prs", lambda: [])
-    monkeypatch.setattr(controller, "latest_lease_activity_epoch", lambda number: now - 10_000)
+    local_ttl = _factory_work_policy.LOCAL_LEASE_TTL_SECONDS
+    monkeypatch.setattr(
+        controller, "latest_lease_activity_epoch", lambda number: now - (local_ttl + 1)
+    )
 
     def release_only_local(number: int, owner: str, **kwargs: object) -> bool:
         assert number == 3
@@ -285,6 +288,20 @@ def test_resolved_inactive_fixed_worker_reclaims_only_after_ttl() -> None:
     }
     assert lease_is_stale(latest_activity_epoch=now - 900, **kwargs) is False
     assert lease_is_stale(latest_activity_epoch=now - 901, **kwargs) is True
+    assert lease_is_stale(latest_activity_epoch=None, **kwargs) is False
+
+
+def test_local_lease_reclaims_only_after_24h_ttl() -> None:
+    now = 2_000_000_000
+    ttl = _factory_work_policy.LOCAL_LEASE_TTL_SECONDS
+    kwargs = {
+        "owner": "factory:local",
+        "active_fixed_workers": set(),
+        "has_unresolved_active_runs": False,
+        "now_epoch": now,
+    }
+    assert lease_is_stale(latest_activity_epoch=now - ttl, **kwargs) is False
+    assert lease_is_stale(latest_activity_epoch=now - ttl - 1, **kwargs) is True
     assert lease_is_stale(latest_activity_epoch=None, **kwargs) is False
 
 
