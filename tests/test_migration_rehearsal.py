@@ -371,3 +371,40 @@ def test_main_mode_upgrade_only(monkeypatch: pytest.MonkeyPatch) -> None:
         ["--database-url", "postgresql+psycopg://postgres:postgres@127.0.0.1:55432/comic_pile_test", "--upgrade-only"]
     )
     assert exit_code2 == 0
+
+
+def test_run_migration_rehearsal_times_data_dependent_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real violation/repair probe is a timed, fail-closed optional step."""
+    monkeypatch.setattr(rehearsal_module.command, "upgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module.command, "downgrade", lambda config, revision: None)
+    monkeypatch.setattr(rehearsal_module, "_alembic_config", lambda database_url, path: _FakeConfig())
+    monkeypatch.setattr(rehearsal_module, "ScriptDirectory", _FakeScriptDirectory)
+    engine = _FakeEngine()
+    monkeypatch.setattr(rehearsal_module, "create_engine", lambda url: engine)
+    guard_calls: list[object] = []
+    monkeypatch.setattr(
+        rehearsal_module,
+        "verify_data_dependent_failure_guard",
+        lambda actual_engine: guard_calls.append(actual_engine),
+    )
+
+    result = run_migration_rehearsal(
+        "postgresql://postgres:postgres@127.0.0.1:55432/comic_pile_test",
+        verify_data_guard=True,
+    )
+
+    assert guard_calls == [engine]
+    assert result.steps[-1].step == "data_dependent_guard"
+    assert engine.disposed is True
+
+
+def test_data_dependent_guard_requires_postgresql() -> None:
+    """The real probe cannot silently pass on another database dialect."""
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    try:
+        with pytest.raises(MigrationRehearsalError, match="requires disposable PostgreSQL"):
+            verify_data_dependent_failure_guard(engine)
+    finally:
+        engine.dispose()
