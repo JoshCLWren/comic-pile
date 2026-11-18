@@ -18,7 +18,7 @@ const diagnosticMessages = {
 } as const
 
 /** Labels arrive as "Series #number"; split for a truthful identity hint. */
-function splitPrerequisiteLabel(label: string): { title: string; number: string } {
+function splitPrerequisiteLabel(label: string) {
   const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(label)
   return {
     title: match?.groups?.title ?? label,

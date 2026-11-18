@@ -224,7 +224,14 @@ function renderCreatorDetail(entry: string) {
   )
 }
 
+beforeEach(() => {
+  // Domain request budgets start with the browser's normal CSRF cookie. Without
+  // it, the first new POST correctly spends an extra auth/bootstrap request.
+  document.cookie = 'csrf_token=budget-test; path=/'
+})
+
 afterEach(() => {
+  document.cookie = 'csrf_token=; Max-Age=0; path=/'
   expect(ledger.unhandled).toEqual([])
 })
 
