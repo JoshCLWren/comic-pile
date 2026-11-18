@@ -1957,8 +1957,15 @@ pub async fn search_series(
     _user: AuthenticatedUser,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
-    let limit = query.limit.clamp(1, 50);
-    let offset = query.offset.max(0);
+    if query.q.is_empty()
+        || query.q.chars().count() > 200
+        || !(1..=50).contains(&query.limit)
+        || query.offset < 0
+    {
+        return Err(unprocessable("Invalid series search query"));
+    }
+    let limit = query.limit;
+    let offset = query.offset;
     let page = offset / limit + 1;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
