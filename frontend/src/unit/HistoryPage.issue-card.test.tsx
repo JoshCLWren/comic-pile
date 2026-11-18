@@ -130,7 +130,7 @@ describe('History exact-issue actions (#4445)', () => {
     await userEvent.click(trigger)
     const card = screen.getByTestId('comic-issue-card')
     expect(card).toHaveAttribute('aria-label', 'Issue Saga #4')
-    expect(screen.getByRole('img', { name: 'Cover for Saga #4' })).toHaveAttribute(
+    expect(within(card).getByRole('img', { name: 'Cover for Saga #4' })).toHaveAttribute(
       'src',
       sagaCard.cover_image_url,
     )

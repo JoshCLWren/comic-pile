@@ -210,7 +210,7 @@ export default function HistoryPage() {
                       issueId={item.issue_id}
                       threadTitle={item.thread_title ?? 'Deleted series'}
                       issueNumber={item.issue_number ?? cardsByIssue.get(item.issue_id)?.issue_number ?? '?'}
-                      status={cardsByIssue.get(item.issue_id)?.status ?? 'unread'}
+                      status={cardsByIssue.get(item.issue_id)?.status === 'read' ? 'read' : 'unread'}
                       card={cardsByIssue.get(item.issue_id) ?? null}
                       hideTitle
                     />
