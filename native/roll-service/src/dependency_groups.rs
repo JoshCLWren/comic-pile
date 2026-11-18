@@ -836,11 +836,10 @@ pub async fn get_group_detail(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
     let memberships = memberships(&connection, group_id).await?;
+
     let mut thread_ids: BTreeSet<i32> = BTreeSet::new();
     let mut issue_ids: BTreeSet<i32> = BTreeSet::new();
-    let mut member_threads: BTreeMap<i32, Option<i32>> = BTreeMap::new();
     for member in &memberships {
-        member_threads.insert(member.id, member.thread_id);
         if let Some(thread_id) = member.thread_id {
             thread_ids.insert(thread_id);
         }
@@ -848,47 +847,39 @@ pub async fn get_group_detail(
             issue_ids.insert(issue_id);
         }
     }
-    let issue_to_thread = issue_parent_threads(&connection, &issue_ids).await?;
-    thread_ids.extend(issue_to_thread.values().copied().filter(|id| !id.is_empty()));
-    let threads = threads_by_ids(&connection, &thread_ids).await?;
+    // Resolve each issue's parent thread so issue members display their series
+    // title and group into the right thread's crossover set.
     let issues = issues_by_ids(&connection, &issue_ids).await?;
-    let reasons = blocking_reasons_by_thread(&connection, user.id(), &thread_ids).await?;
+    for issue in issues.values() {
+        thread_ids.insert(issue.thread_id);
+    }
+    let threads = threads_by_ids(&connection, &thread_ids).await?;
     let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
     let linked_plans = linked_plans(&connection, group_id, user.id()).await?;
+
     let mut enriched = Vec::with_capacity(memberships.len());
     for member in &memberships {
         let mut thread = None;
         let mut issue = None;
         let mut other: Vec<String> = Vec::new();
-        let mut blocking: Vec<String> = Vec::new();
-        let (series_title, issue_number) = if let Some(thread_id) = member.thread_id {
+        let mut series_title = None;
+        let mut issue_number = None;
+        if let Some(thread_id) = member.thread_id {
             thread = threads.get(&thread_id).cloned().flatten();
             series_title = thread.as_ref().map(|thread| thread.title.clone());
-            issue_number = None;
             other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
         } else if let Some(issue_id) = member.issue_id {
             issue = issues.get(&issue_id).cloned().flatten();
-            let thread_id = issue.as_ref().map(|issue| issue.thread_id);
-            let thread_id = thread_id.unwrap_or_default();
-            thread = threads.get(&thread_id).cloned().flatten();
-            series_title = thread.as_ref().map(|thread| thread.title.clone());
+            if let Some(resolved) = &issue {
+                thread = threads.get(&resolved.thread_id).cloned().flatten();
+                other = other_crossovers
+                    .get(&resolved.thread_id)
+                    .cloned()
+                    .unwrap_or_default();
+            }
             issue_number = issue.as_ref().map(|issue| issue.issue_number.clone());
-            other = other_crossovers.get(&thread_id).cloned().unwrap_or_default();
-            blocking = reasons.get(&thread_id).cloned().unwrap_or_default();
-        } else {
-            series_title = None;
-            issue_number = None;
+            series_title = thread.as_ref().map(|thread| thread.title.clone());
         }
-        let membership = member_response(
-            member.id,
-            member.thread_id,
-            member.issue_id,
-            member.sequence_order,
-            &thread_titles_cache(&threads, &issue_metadata_cache(&issues, &thread_ids)),
-            &BTreeMap::new(),
-        );
-        let _ = membership;
         enriched.push(DependencyGroupDetailMemberResponse {
             membership: DependencyGroupMemberResponse {
                 id: member.id,
