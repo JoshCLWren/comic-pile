@@ -15,7 +15,6 @@ pub mod config;
 pub mod continuity_rules;
 pub mod creators;
 pub mod db;
-pub mod demo;
 pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
