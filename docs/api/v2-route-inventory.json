@@ -1002,15 +1002,15 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 112,
+      "v1_total": 109,
       "v1_shadowed_by_rust": 6,
       "v1_live_python": 79,
       "v1_orphaned": 7,
-      "unversioned_total": 3,
+      "unversioned_total": 1,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 115,
+      "total_python_surface": 110,
       "total_shadowed_by_rust": 6,
       "total_live_python": 79,
       "total_orphaned": 7
@@ -2056,48 +2056,6 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4850,
-        "consumers": [
-          "frontend/src/services/api-roll.ts",
-          "frontend/src/services/rollBootstrapApi.ts"
-        ],
-        "method": "GET",
-        "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4850,
-        "consumers": [
-          "frontend/src/services/api-roll.ts",
-          "frontend/src/services/rollBootstrapApi.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/roll/override",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4850,
-        "consumers": [
-          "frontend/src/services/api-roll.ts",
-          "frontend/src/services/rollBootstrapApi.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/roll/switch-prerequisite",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "runtime": "python-fastapi",
         "status": "transitional",
         "owning_issue": 4839,
@@ -2675,30 +2633,6 @@
           "max_statements": 0,
           "grows_with_data": false
         },
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4850,
-        "consumers": [],
-        "method": "GET",
-        "path": "/api/roll/events/{event_id}/recommendation-explanation",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4850,
-        "consumers": [
-          "frontend/src/services/api-roll.ts"
-        ],
-        "method": "POST",
-        "path": "/api/roll/override",
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
