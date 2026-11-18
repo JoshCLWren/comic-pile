@@ -634,17 +634,17 @@ async fn threads_by_ids(
             Some(ThreadDetailResponse {
                 id: row.get(0),
                 title: row.get(1),
-                format: normalize_thread_format(row.get::<_, String>(2).as_str()),
+                format: row.get(2),
                 issues_remaining: row.get(3),
                 queue_position: row.get(4),
                 status: row.get(5),
                 last_rating: row.get(6),
-                last_activity_at: row.get(7),
+                last_activity_at: format_optional_python_datetime(row.get(7)),
                 notes: row.get(8),
                 is_test: row.get(9),
                 is_blocked: row.get(10),
                 blocking_reasons: Vec::new(),
-                created_at: row.get(11),
+                created_at: format_python_datetime(row.get(11)),
                 total_issues: row.get(12),
                 reading_progress: row.get(13),
                 next_unread_issue_id: row.get(14),
@@ -678,8 +678,8 @@ async fn issues_by_ids(
                 issue_number: row.get(2),
                 position: row.get(3),
                 status: row.get(4),
-                read_at: row.get(5),
-                created_at: row.get(6),
+                read_at: format_optional_python_datetime(row.get(5)),
+                created_at: format_python_datetime(row.get(6)),
             }),
         );
     }
@@ -1994,9 +1994,20 @@ mod tests {
     }
 
     #[test]
-    fn format_created_at_matches_python_rfc3339_utc() {
+    fn format_python_datetime_preserves_pydantic_precision() {
         let whole = Utc.with_ymd_and_hms(2026, 11, 17, 12, 34, 56).unwrap();
-        assert_eq!(format_created_at(whole), "2026-11-17T12:34:56Z");
+        let micros = whole
+            .with_nanosecond(123_456_000)
+            .expect("valid microseconds");
+        assert_eq!(
+            format_python_datetime(whole),
+            "2026-11-17T12:34:56Z"
+        );
+        assert_eq!(
+            format_python_datetime(micros),
+            "2026-11-17T12:34:56.123456Z"
+        );
+        assert_eq!(format_optional_python_datetime(None), None);
     }
 
     #[tokio::test]
