@@ -68,8 +68,11 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_lifecycle;
 pub mod thread_ordering;
+pub mod thread_validation;
 pub mod threads;
+pub mod threads_v1_openapi;
 pub mod undo_apply;
 pub mod undo_snapshots;
 
@@ -741,6 +744,47 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
+        )
+        .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
+        .route(
+            "/api/v1/threads/check-duplicates",
+            post(thread_lifecycle::check_potential_duplicates),
+        )
+        .route(
+            "/api/v1/threads/excluded/threads",
+            get(thread_lifecycle::list_excluded_threads),
+        )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(thread_lifecycle::list_thread_groups_batch),
+        )
+        .route(
+            "/api/v1/threads/reactivate",
+            post(thread_lifecycle::reactivate_thread),
+        )
+        .route(
+            "/api/v1/threads/stale",
+            get(thread_lifecycle::list_stale_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(thread_lifecycle::update_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            delete(thread_lifecycle::delete_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/exclude",
+            post(thread_lifecycle::exclude_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/restore",
+            post(thread_lifecycle::restore_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/set-pending",
+            post(thread_lifecycle::set_pending_thread),
         )
         .route(
             "/api/v2/reading-lists",
