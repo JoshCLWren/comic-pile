@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyEditedThreadToQueuePages,
+  applyIssueCardMutation,
   applyRatedThreadCache,
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
@@ -251,11 +252,15 @@ describe('targeted cache effects', () => {
 
     // Exact-count guard: every invalidation below is intentional; an
     // accidental extra key (or a dropped one) must fail this test.
-    expect(invalidateQueries).toHaveBeenCalledTimes(16)
+    expect(invalidateQueries).toHaveBeenCalledTimes(17)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    // Reader-progress reconciliation refreshes the Finished Series shelf for
+    // direct reads that complete a series; rating keeps its own conditional
+    // reset when it marks a series completed.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     // A rating writes a new "After rating" snapshot (#3468), so both the Roll
     // undo list (`undo.all`) and the session view's snapshot list
     // (`session.snapshotsAll`) must stop serving the pre-rating list.
@@ -376,6 +381,46 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
+  it('invalidates completed pages when a direct read finishes a series issue (#5264)', async () => {
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
+
+    const response = {
+      die_after: null,
+      final_rating: null,
+      issue: {
+        issue_id: 12,
+        thread_id: thread.id,
+        issue_number: '12',
+        status: 'read',
+        read_at: '2026-08-03T10:00:00Z',
+        rating: null,
+        has_confirmed_identity: false,
+        mapping_state: 'none',
+        comicvine_issue_id: null,
+        cover_image_url: null,
+        thread_title: thread.title,
+      },
+      rating_event_created: false,
+      read_event_created: true,
+      replayed: false,
+      thread: {
+        thread_id: thread.id,
+        issues_remaining: 0,
+        status: 'completed',
+        last_rating: null,
+        reading_progress: '12/12',
+        next_unread_issue_id: null,
+      },
+    } as unknown as Parameters<typeof applyIssueCardMutation>[1]
+
+    await applyIssueCardMutation(client, response)
+
+    // Direct reads go through the shared reader-progress reconciliation, so the
+    // separately mounted Finished Series shelf must refresh without a reset.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
+    expect(resetQueries).not.toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
+  })
+
   it('invalidates edited issue surfaces and reconciles open views after read/progress edits', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
@@ -384,7 +429,7 @@ describe('targeted cache effects', () => {
     // Exact-count guard: issue pages/creators/detail/summary plus the shared
     // reader-progress pass; dropped keys or extra invalidations fail here.
     // Issue edits do not reorder the Queue, so they invalidate (not reset) it.
-    expect(invalidateQueries).toHaveBeenCalledTimes(17)
+    expect(invalidateQueries).toHaveBeenCalledTimes(18)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
@@ -415,6 +460,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.completed.pages() })
     // No shelf is reset unconditionally by a read/progress edit: the finished
     // shelf is only reset by mutation-specific callers on completion.
     expect(resetQueries).not.toHaveBeenCalled()

@@ -1010,6 +1010,10 @@ async function invalidateReadingEligibility(
     resetQueue
       ? client.resetQueries({ queryKey: queryKeys.queue.all })
       : client.invalidateQueries({ queryKey: queryKeys.queue.all }),
+    // Direct reads/issue edits can move a series into Finished Series while the
+    // shelf stays mounted; invalidate active observers without clearing data.
+    // Rating keeps its own conditional reset when it marks a series completed.
+    client.invalidateQueries({ queryKey: queryKeys.completed.pages() }),
     // Keep other Roll surfaces actively refreshed; bootstrap may be owned by an
     // explicit authoritative fetch in some rating flows.
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
