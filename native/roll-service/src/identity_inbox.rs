@@ -141,14 +141,25 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
     // The collapsed inbox header renders this string. The list endpoint now
     // batch-loads real candidates, so an evidence/status-only reason can
     // contradict the candidate cards shown on expand (#5382). Reflect the real
-    // candidate state first; the reasons below apply only when there are
-    // genuinely no candidates for the issue.
+    // candidate state first. When candidates exist, keep any non-empty
+    // decision_reason so the header still explains why review is needed; only
+    // the empty-evidence "No candidates found" fallback is replaced by the
+    // count. The reasons below apply only when there are genuinely no
+    // candidates for the issue.
     if candidate_count > 0 {
-        return if candidate_count == 1 {
+        let count_text = if candidate_count == 1 {
             "1 candidate found".to_string()
         } else {
             format!("{candidate_count} candidates found")
         };
+        if let Some(obj) = evidence.as_object() {
+            if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
+                if !reason.is_empty() {
+                    return format!("{count_text}: {reason}");
+                }
+            }
+        }
+        return count_text;
     }
     let is_empty_evidence = evidence.is_null()
         || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
@@ -1125,13 +1136,23 @@ mod tests {
     #[test]
     fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
         let empty = serde_json::json!({});
-        // Real candidate state wins over the parent mapping's evidence.
+        // Real candidate state wins over the empty-evidence fallback, but a
+        // non-empty decision_reason is preserved so the header still explains
+        // why review is needed.
         assert_eq!(why_stopped("unresolved", &empty, 1), "1 candidate found");
         assert_eq!(why_stopped("unresolved", &empty, 3), "3 candidates found");
+        let with_reason = serde_json::json!({"decision_reason": "ambiguous title"});
+        assert_eq!(
+            why_stopped("unresolved", &with_reason, 1),
+            "1 candidate found: ambiguous title"
+        );
+        assert_eq!(
+            why_stopped("candidate", &with_reason, 2),
+            "2 candidates found: ambiguous title"
+        );
         // With no candidates the original evidence/status reasons still apply.
         assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
-        let with_reason = serde_json::json!({"decision_reason": "ambiguous title"});
-        assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title",);
+        assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
     }
 
     #[tokio::test]
@@ -1259,7 +1280,8 @@ mod tests {
     /// whose list response always had `candidates=[]`. An unresolved mapping
     /// with empty `evidence_json` therefore produced "No candidates found"
     /// while the very same response carried one candidate. The collapsed
-    /// inbox header rendered that contradiction to the user.
+    /// inbox header rendered that contradiction to the user. When candidates
+    /// exist, a non-empty decision_reason is preserved alongside the count.
     #[tokio::test]
     async fn list_inbox_why_stopped_reflects_real_candidates() {
         let Some(state) = test_support::test_state(2).await else {
@@ -1270,14 +1292,20 @@ mod tests {
         conn.batch_execute(
             "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
              INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
-                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+                 (1,1,'Mutant X','comics',1,0,'active','[]'::json,false,false,false,NOW()), \
+                 (2,1,'Mutant Y','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
              INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
-                 (1,1,'#1','unread',0,NOW()); \
+                 (1,1,'#1','unread',0,NOW()), \
+                 (2,2,'#1','unread',0,NOW()); \
              INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
-                 (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()); \
+                 (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()), \
+                 (2,'comicvine','issue','cv-2','{}'::json,NOW(),NOW()), \
+                 (3,'comicvine','issue','cv-3','{}'::json,NOW(),NOW()); \
              INSERT INTO issue_external_identity_mappings \
                  (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
-                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{}'::json);",
+                 (1,1,1,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (2,2,2,'unresolved','heuristic',0.5,NOW(),NOW(),'{\"decision_reason\":\"ambiguous title\"}'::json), \
+                 (3,2,3,'confirmed','user_confirmed',0.9,NOW(),NOW(),'{}'::json);",
         )
         .await
         .unwrap();
@@ -1295,19 +1323,37 @@ mod tests {
         .unwrap()
         .0;
 
-        assert_eq!(response.items.len(), 1);
-        let item = &response.items[0];
+        assert_eq!(response.items.len(), 2);
+
+        let one = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 1)
+            .expect("issue 1 item");
+        assert_eq!(one.candidates.len(), 1, "issue 1 has one candidate mapping");
+        assert!(
+            !one.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when a candidate exists; got {:?}",
+            one.why_stopped,
+        );
+        assert_eq!(one.why_stopped, "1 candidate found: ambiguous title");
+
+        let two = response
+            .items
+            .iter()
+            .find(|item| item.issue_id == 2)
+            .expect("issue 2 item");
         assert_eq!(
-            item.candidates.len(),
-            1,
-            "the issue has one candidate mapping",
+            two.candidates.len(),
+            2,
+            "issue 2 has N>1 candidate mappings"
         );
         assert!(
-            !item.why_stopped.contains("No candidates found"),
-            "collapsed header must not claim no candidates when a candidate exists; got {:?}",
-            item.why_stopped,
+            !two.why_stopped.contains("No candidates found"),
+            "collapsed header must not claim no candidates when candidates exist; got {:?}",
+            two.why_stopped,
         );
-        assert_eq!(item.why_stopped, "1 candidate found");
+        assert_eq!(two.why_stopped, "2 candidates found: ambiguous title");
     }
 
     #[tokio::test]
