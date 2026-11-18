@@ -288,10 +288,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert not any(item.get("path") == "/api/v1/reading-mode" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/reading-mode/dismiss-suggestion" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/reading-mode/suggest" for item in v1_ops)
-    # Thread lifecycle operations cut over to same-path native Rust (#4832).
-    assert not any(
+    # Thread lifecycle operations cut over to same-path native Rust (#4832);
+    # the Python handler stays mounted until its separate removal PR.
+    assert any(
         item.get("method") == "POST"
         and item.get("path") == "/api/v1/threads/groups:batch"
+        and item.get("burndown_status") == "native Rust"
         for item in v1_ops
     )
     assert any(
