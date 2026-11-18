@@ -655,7 +655,7 @@ async fn link_confirmed(
 }
 
 /// Extract the canonical series name from a volume provider payload.
-fn volume_name(value: &Value) -> Option<String> {
+pub(crate) fn volume_name(value: &Value) -> Option<String> {
     value
         .get("results")
         .and_then(Value::as_object)
@@ -901,7 +901,7 @@ pub async fn refresh_metadata(
 // ---------------------------------------------------------------------------
 
 /// Verify that a reading order belongs to the caller.
-async fn owned_reading_order(
+pub(crate) async fn owned_reading_order(
     tx: &Transaction<'_>,
     user: i32,
     order_id: i32,
@@ -922,7 +922,7 @@ async fn owned_reading_order(
 }
 
 /// Shift an existing reading order and insert the new thread at `target_pos`.
-async fn insert_into_reading_order(
+pub(crate) async fn insert_into_reading_order(
     tx: &Transaction<'_>,
     order_id: i32,
     thread_id: i32,
@@ -1386,7 +1386,7 @@ pub async fn import_series(
 // Provider-backed read handlers.
 // ---------------------------------------------------------------------------
 
-fn provider_key() -> Option<String> {
+pub(crate) fn provider_key() -> Option<String> {
     std::env::var("COMICVINE_API_KEY")
         .ok()
         .map(|key| key.trim().to_owned())
@@ -1543,7 +1543,10 @@ pub async fn series_issues(
 const ROSTER_PAGE_SIZE: usize = 100;
 const MAX_ROSTER_PAGES: usize = 10;
 
-async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
+pub(crate) async fn fetch_provider_roster(
+    volume_id: i32,
+    key: &str,
+) -> Result<Vec<Value>, ProviderFailure> {
     async fn fetch_page(
         volume_id: i32,
         key: &str,
@@ -1555,9 +1558,7 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
         );
         provider_response("issues", &extra, key).await
     }
-    let first = fetch_page(volume_id, key, 0)
-        .await
-        .map_err(map_provider_failure)?;
+    let first = fetch_page(volume_id, key, 0).await?;
     let mut rows: Vec<Value> = first
         .get("results")
         .and_then(Value::as_array)
@@ -1567,9 +1568,7 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
     let mut offset = rows.len();
     while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
     {
-        let page = fetch_page(volume_id, key, offset)
-            .await
-            .map_err(map_provider_failure)?;
+        let page = fetch_page(volume_id, key, offset).await?;
         let page_rows: Vec<Value> = page
             .get("results")
             .and_then(Value::as_array)
@@ -1588,13 +1587,17 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
             .and_then(|v| v.get("id"))
         {
             if coerce_provider_int(Some(volume_id_value)) != Some(volume_id) {
-                return Err(ApiError::ServiceUnavailable(
-                    "provider_invalid_payload".to_owned(),
-                ));
+                return Err(ProviderFailure::InvalidPayload);
             }
         }
     }
     Ok(rows)
+}
+
+async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
+    fetch_provider_roster(volume_id, key)
+        .await
+        .map_err(map_provider_failure)
 }
 
 /// Fetch a volume's canonical display name. Returns the raw name so callers
