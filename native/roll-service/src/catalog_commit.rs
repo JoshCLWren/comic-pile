@@ -8,7 +8,7 @@ use axum::{
     extract::{Json as AxumJson, State},
     Json,
 };
-use hmac::{Hmac, Mac};
+use hmac::{digest::KeyInit, Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};

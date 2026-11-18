@@ -4958,6 +4958,54 @@
         ]
       }
     },
+    "/api/v1/taste/discoveries": {
+      "get": {
+        "tags": [
+          "taste"
+        ],
+        "summary": "Documentation-only operation for the mounted discovery listing.",
+        "description": "Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.",
+        "operationId": "taste_discoveries_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum discoveries to return (1-3, default 3).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked discoveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "limit is outside the allowed range"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/taste/discoveries/{signal_id}/dismiss": {
       "post": {
         "tags": [
@@ -14565,6 +14613,64 @@
           "total_assignments": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "TasteDiscovery": {
+        "type": "object",
+        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
+        "required": [
+          "id",
+          "signal_type",
+          "external_key",
+          "display_name",
+          "prompt",
+          "evidence_count",
+          "distinct_thread_count"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "distinct_thread_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "signal_type": {
+            "type": "string"
+          }
+        }
+      },
+      "TasteDiscoveryListResponse": {
+        "type": "object",
+        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
+        "required": [
+          "discoveries",
+          "generated_at"
+        ],
+        "properties": {
+          "discoveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TasteDiscovery"
+            }
+          },
+          "generated_at": {
+            "type": "string"
           }
         }
       },

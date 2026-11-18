@@ -190,8 +190,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/health/warmup",
             "/api/instance/warm",
             "/api/roll/bootstrap",
-            "/api/roll/override",
-            "/api/roll/events/{event_id}/recommendation-explanation",
             "/api/tasks/",
             "/api/tasks/ready",
             "/api/tasks/metrics",

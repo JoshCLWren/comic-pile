@@ -252,6 +252,22 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Preview Series Mapping
+         * @description Preview a series mapping with safe scoping and classification.
+         *
+         *     This endpoint provides a read-only preview of what issues would be mapped
+         *     to a selected ComicVine series, with safe scoping rules and classification
+         *     of each issue mapping status.
+         *
+         *     Args:
+         *         request: Preview request with origin issue, provider, and series ID.
+         *         current_user: Authenticated user for authorization.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Preview response with scope information, counts, and classified rows.
+         */
         post: operations["preview_series_mapping_api_v1_catalog_series_mappings_preview_post"];
         delete?: never;
         options?: never;
@@ -856,6 +872,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Preview Plan Projection
+         * @description Preview a deterministic projection without mutating any resource.
+         *
+         *     The preview is recomputed from the persisted plan JSON on every call so
+         *     that callers always see the current state, even after concurrent edits.
+         *     Duplicate thread references, missing owned threads, and non-thread
+         *     nodes are reported as conflicts before any mutation is permitted.
+         */
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
         delete?: never;
         options?: never;
@@ -1811,6 +1836,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Api Cbl Adoption Preview
+         * @description Preview all CBL positions and their default read-only adoption choices.
+         */
         get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
         put?: never;
         post?: never;
@@ -1829,6 +1858,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Preview Cbl Reading Graph
+         * @description Preview the prospective reading graph for a CBL selection (read-only).
+         *
+         *     The graph comes from the same Option E evaluator and cycle validator that
+         *     execute the reader's saved lists. It never writes list membership, issue
+         *     status, or an overlap decision.
+         *
+         *     Args:
+         *         list_id: Shared CBL source list being adopted or updated.
+         *         payload: Included source positions, prior answers, and optional list
+         *             to preview as updated instead of newly added.
+         *         current_user: Authenticated reader whose existing lists are included.
+         *         db: Async database session for the request.
+         *
+         *     Returns:
+         *         Prospective series nodes, overlap questions with both choice effects,
+         *         the issue directory with active blockers, and any cycle rejection.
+         */
         post: operations["preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post"];
         delete?: never;
         options?: never;
@@ -2578,103 +2626,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/events/{event_id}/recommendation-explanation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Roll Recommendation Explanation
-         * @description Return human-readable explanations for a historical roll event.
-         *
-         *     Derives explanations solely from the recommendation context persisted at
-         *     roll decision time, never recomputing scores from current mutable state.
-         *     Unknown or absent context degrades gracefully to an empty explanation list.
-         *
-         *     Args:
-         *         event_id: Identifier of the roll event to explain.
-         *         current_user: Authenticated owner of the session that generated the event.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RecommendationExplanationResponse carrying the event identifier and
-         *         ordered list of human-readable explanation factors.
-         *
-         *     Raises:
-         *         HTTPException 404: When the event does not exist or does not belong
-         *             to the current user's session.
-         *         HTTPException 422: When the event type is not ``"roll"``.
-         */
-        get: operations["get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Override Roll
-         * @description Manually select a thread.
-         *
-         *     Args:
-         *         request: Override request containing thread_id.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         RollResponse with selected thread.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        post: operations["override_roll_api_v1_roll_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/switch-prerequisite": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Switch Roll Prerequisite
-         * @description Replace a blocked pending roll with one still-readable prerequisite.
-         *
-         *     Args:
-         *         request: Selected prerequisite issue from the current recovery guidance.
-         *         current_user: Authenticated owner of the pending Roll.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         The durable active Roll target after accepting the prerequisite.
-         */
-        post: operations["switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/": {
         parameters: {
             query?: never;
@@ -3024,22 +2975,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Taste Discoveries
-         * @description Return ranked prompt-eligible discoveries for the reader.
-         *
-         *     Surfacing counts as prompting: returned signals record ``last_prompted_at``
-         *     so the canonical cooldown suppresses immediate re-prompting. Signals with
-         *     any explicit verdict are never included.
-         *
-         *     Args:
-         *         current_user: The authenticated reader.
-         *         db: Async database session.
-         *         limit: Bounded maximum number of discoveries to return.
-         *
-         *     Returns:
-         *         Ranked eligible discoveries with concise evidence context.
+         * Documentation-only operation for the mounted discovery listing.
+         * @description Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.
          */
-        get: operations["list_taste_discoveries_api_v1_taste_discoveries_get"];
+        get: operations["taste_discoveries_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5254,37 +5193,6 @@ export interface components {
             /** User Id */
             user_id: number;
         };
-        CBLAdoptionEntry: {
-            adopted: boolean;
-            adoption_class: string;
-            adoption_decision: string;
-            /** Format: int64 */
-            canonical_issue_id?: number | null;
-            /** Format: int64 */
-            cbl_entry_id: number;
-            /** Format: int64 */
-            cbl_position: number;
-            collection_excluded: boolean;
-            collection_exclusion_ids: number[];
-            collection_exclusion_reason?: string | null;
-            comicvine_issue_id?: string | null;
-            comicvine_series_id?: string | null;
-            is_duplicate_identity: boolean;
-            issue_number: string;
-            /** Format: int64 */
-            publication_year?: number | null;
-            read_at?: string | null;
-            read_status?: string | null;
-            resolution_status: string;
-            /** Format: int64 */
-            resolved_issue_id?: number | null;
-            series_external_id?: string | null;
-            series_group_id: string;
-            series_name: string;
-            series_provider?: string | null;
-            /** Format: int64 */
-            volume_year?: number | null;
-        };
         /**
          * CBLAdoptionEntryResponse
          * @description Typed reconciliation and adoption state for one source position.
@@ -5371,26 +5279,6 @@ export interface components {
             summary: components["schemas"]["CBLAdoptionSummaryResponse"];
             /** Total Positions */
             total_positions: number;
-        };
-        CBLAdoptionSummary: {
-            /** Format: int64 */
-            awaiting_opt_in_count: number;
-            awaiting_opt_in_positions: number[];
-            /** Format: int64 */
-            excluded_count: number;
-            excluded_positions: number[];
-            /** Format: int64 */
-            final_adopted_count: number;
-            final_adopted_order: number[];
-            /** Format: int64 */
-            missing_would_create_count: number;
-            missing_would_create_positions: number[];
-            /** Format: int64 */
-            reused_existing_count: number;
-            reused_existing_positions: number[];
-            /** Format: int64 */
-            unresolved_count: number;
-            unresolved_positions: number[];
         };
         /**
          * CBLAdoptionSummaryResponse
@@ -5969,14 +5857,6 @@ export interface components {
              * @description Volume year recorded in the CBL source
              */
             volume_year?: number | null;
-        };
-        CBLSourceFingerprint: {
-            content_hash: string;
-            revision_sha: string;
-            /** Format: int64 */
-            source_list_id: number;
-            source_path: string;
-            source_repository: string;
         };
         /**
          * CBLSourceFingerprintResponse
@@ -8972,23 +8852,6 @@ export interface components {
             type: string;
         };
         /**
-         * ExplainableFactorResponse
-         * @description One human-readable explanation element returned by the API.
-         *
-         *     Attributes:
-         *         code: Stable machine-readable code identifying the factor family.
-         *         label: Short user-facing description.
-         *         detail: Optional extended context or sub-note.
-         */
-        ExplainableFactorResponse: {
-            /** Code */
-            code: string;
-            /** Detail */
-            detail?: string | null;
-            /** Label */
-            label: string;
-        };
-        /**
          * ExplicitReaderOrderMigrationContract
          * @description Server-owned proof that a plan replaced classified reader-order edges.
          */
@@ -9698,13 +9561,6 @@ export interface components {
             mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
-        NativeCBLAdoptionPreviewResponse: {
-            entries: components["schemas"]["CBLAdoptionEntry"][];
-            source: components["schemas"]["CBLSourceFingerprint"];
-            summary: components["schemas"]["CBLAdoptionSummary"];
-            /** Format: int64 */
-            total_positions: number;
-        };
         NativeCBLBreadcrumb: {
             name: string;
             path: string;
@@ -9992,86 +9848,6 @@ export interface components {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
-        NativeReadingGraphBlocker: {
-            explanation: string;
-            /** Format: int64 */
-            gate_issue_id?: number | null;
-            kind: string;
-            /** Format: int64 */
-            list_id?: number | null;
-            waiting_on_issue_ids: number[];
-        };
-        NativeReadingGraphChoiceEffect: {
-            choice: string;
-            detail: string;
-            label: string;
-            rollable_issue_ids: number[];
-            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
-            waiting_issue_ids: number[];
-        };
-        NativeReadingGraphCycleError: {
-            code: string;
-            message: string;
-        };
-        NativeReadingGraphIssueReference: {
-            blockers: components["schemas"]["NativeReadingGraphBlocker"][];
-            comicvine_volume_id?: string | null;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            series_name: string;
-        };
-        NativeReadingGraphOverlap: {
-            blocked_issue_ids: number[];
-            choices: components["schemas"]["NativeReadingGraphChoiceEffect"][];
-            continuing_series: components["schemas"]["NativeReadingGraphSeriesReference"];
-            overlap_id: string;
-            question: string;
-            selected_choice?: string | null;
-            waiting_series: components["schemas"]["NativeReadingGraphSeriesReference"];
-        };
-        NativeReadingGraphOverlapChoice: {
-            choice: string;
-            overlap_id: string;
-        };
-        NativeReadingGraphPreview: {
-            content_hash: string;
-            cycle_errors: components["schemas"]["NativeReadingGraphCycleError"][];
-            issues: components["schemas"]["NativeReadingGraphIssueReference"][];
-            overlaps: components["schemas"]["NativeReadingGraphOverlap"][];
-            revision_sha: string;
-            rollable_issue_ids: number[];
-            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
-            /** Format: int64 */
-            source_list_id: number;
-            waiting_issue_ids: number[];
-        };
-        NativeReadingGraphPreviewRequest: {
-            included_positions?: number[];
-            overlap_choices?: components["schemas"]["NativeReadingGraphOverlapChoice"][];
-            /** Format: int64 */
-            target_list_id?: number | null;
-        };
-        NativeReadingGraphSeriesNode: {
-            comicvine_volume_id: string;
-            /** Format: int64 */
-            rollable_count: number;
-            series_name: string;
-            state: string;
-            /** Format: int64 */
-            unread_count: number;
-            /** Format: int64 */
-            waiting_count: number;
-            waits_for_issue_ids: number[];
-            /** Format: int64 */
-            year?: number | null;
-        };
-        NativeReadingGraphSeriesReference: {
-            comicvine_volume_id: string;
-            series_name: string;
-            /** Format: int64 */
-            year?: number | null;
-        };
         NativeReadingListEntryIntent: {
             gate: string;
             skipped?: boolean;
@@ -10138,61 +9914,6 @@ export interface components {
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
-        };
-        NativeReadingOrderProjectionResult: {
-            /** Format: int32 */
-            added_count: number;
-            /** Format: int32 */
-            kept_count: number;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            reading_order_id: number;
-            /** Format: int32 */
-            total_positions: number;
-            /** Format: int32 */
-            updated_count: number;
-        };
-        NativeSeriesMappingPreviewCounts: {
-            /** Format: int64 */
-            already_confirmed: number;
-            /** Format: int64 */
-            excluded_special: number;
-            /** Format: int64 */
-            needs_review_ambiguous: number;
-            /** Format: int64 */
-            needs_review_conflict: number;
-            /** Format: int64 */
-            safe_exact_match: number;
-            /** Format: int64 */
-            unresolved: number;
-        };
-        /** @description Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`. */
-        NativeSeriesMappingPreviewRequest: {
-            /** Format: int32 */
-            origin_issue_id: number;
-            provider: string;
-            provider_series_external_id: string;
-            scope_mode?: string;
-        };
-        NativeSeriesMappingPreviewResponse: {
-            counts: components["schemas"]["NativeSeriesMappingPreviewCounts"];
-            /** Format: double */
-            expires_at?: number | null;
-            /** Format: double */
-            issued_at: number;
-            preview_token?: string | null;
-            provider_series?: unknown;
-            rows: unknown[];
-            scope: components["schemas"]["NativeSeriesMappingPreviewScope"];
-        };
-        NativeSeriesMappingPreviewScope: {
-            basis?: string | null;
-            /** Format: int32 */
-            origin_issue_id: number;
-            scope_key?: string | null;
-            series_label?: string | null;
-            status: string;
         };
         /** @description Canonical bandwidth state. */
         NativeSessionBandwidthState: {
@@ -10308,6 +10029,24 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
+        NativeTasteDiscovery: {
+            display_name: string;
+            /** Format: int32 */
+            distinct_thread_count: number;
+            /** Format: int32 */
+            evidence_count: number;
+            external_key: string;
+            /** Format: int32 */
+            id: number;
+            prompt: string;
+            signal_type: string;
+        };
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
+        NativeTasteDiscoveryListResponse: {
+            discoveries: components["schemas"]["NativeTasteDiscovery"][];
+            generated_at: string;
+        };
         NearMatch: {
             color: string;
             /** Format: int32 */
@@ -10391,14 +10130,6 @@ export interface components {
             thread_title: string;
             /** Volume Id */
             volume_id: string;
-        };
-        /**
-         * OverrideRequest
-         * @description Schema for manual thread override.
-         */
-        OverrideRequest: {
-            /** Thread Id */
-            thread_id: number;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         PasswordResetResponse: {
@@ -11609,28 +11340,24 @@ export interface components {
         };
         /**
          * ReadingOrderProjectionRequest
-         * @description Request contract for both preview and confirm endpoints.
+         * @description Request contract for the Python preview; confirmation is served by Rust.
          */
         ReadingOrderProjectionRequest: {
             /** Reading Order Id */
             reading_order_id: number;
         };
-        /**
-         * ReadingOrderProjectionResult
-         * @description Response contract for the confirm endpoint.
-         */
         ReadingOrderProjectionResult: {
-            /** Added Count */
+            /** Format: int32 */
             added_count: number;
-            /** Kept Count */
+            /** Format: int32 */
             kept_count: number;
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
-            /** Reading Order Id */
+            /** Format: int32 */
             reading_order_id: number;
-            /** Total Positions */
+            /** Format: int32 */
             total_positions: number;
-            /** Updated Count */
+            /** Format: int32 */
             updated_count: number;
         };
         /**
@@ -11756,22 +11483,6 @@ export interface components {
             /** Format: int32 */
             start_die: number;
             started_at: string;
-        };
-        /**
-         * RecommendationExplanationResponse
-         * @description Aggregate recommendation explanation for a single roll event.
-         *
-         *     Attributes:
-         *         event_id: The roll event whose recommendation context was explained.
-         *         factors: Ordered list of human-readable explanation elements derived
-         *             from the persisted decision-time context. Up to ``MAX_EXPLANATIONS``
-         *             factors are returned, ordered deterministically by factor family.
-         */
-        RecommendationExplanationResponse: {
-            /** Event Id */
-            event_id: number;
-            /** Factors */
-            factors: components["schemas"]["ExplainableFactorResponse"][];
         };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
@@ -12027,37 +11738,6 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
-        };
-        /**
-         * RollPrerequisiteSwitchRequest
-         * @description One recovery recommendation selected from the current Roll guidance.
-         */
-        RollPrerequisiteSwitchRequest: {
-            /** Node Id */
-            node_id: number;
-            /**
-             * Node Type
-             * @constant
-             */
-            node_type: "issue";
-        };
-        /**
-         * RollPrerequisiteSwitchResponse
-         * @description Durable active-target state after accepting a recovery recommendation.
-         */
-        RollPrerequisiteSwitchResponse: {
-            /** Changed */
-            changed: boolean;
-            /** Original Thread Id */
-            original_thread_id: number;
-            /** Target Issue Id */
-            target_issue_id: number;
-            /** Target Issue Number */
-            target_issue_number: string;
-            /** Target Thread Id */
-            target_thread_id: number;
-            /** Target Thread Title */
-            target_thread_title: string;
         };
         /**
          * RollResponse
@@ -14053,32 +13733,27 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
+                "application/json": components["schemas"]["SeriesMappingPreviewRequest"];
             };
         };
         responses: {
-            /** @description Read-only series mapping preview */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
+                    "application/json": components["schemas"]["SeriesMappingPreviewResponse"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid request body */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -14988,7 +14663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionResult"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
                 };
             };
         };
@@ -14998,53 +14673,33 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Continuity plan id */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
             };
         };
         responses: {
-            /** @description Deterministic projection preview */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingOrderProjectionPreview"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Plan or reading order not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Malformed plan */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid request body */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -16770,35 +16425,29 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Read-only adoption preview */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description CBL source list not found or not active */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -16807,46 +16456,33 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description CBL source list id */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingGraphPreviewRequest"];
+                "application/json": components["schemas"]["ReadingGraphPreviewRequest"];
             };
         };
         responses: {
-            /** @description Read-only graph preview */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingGraphPreview"];
+                    "application/json": components["schemas"]["ReadingGraphPreview"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description CBL source list not found or not active */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unknown or unresolved source position */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -18196,103 +17832,6 @@ export interface operations {
             };
         };
     };
-    get_roll_recommendation_explanation_api_v1_roll_events__event_id__recommendation_explanation_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                event_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationExplanationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    override_roll_api_v1_roll_override_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OverrideRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_sessions_v1_documentation: {
         parameters: {
             query?: {
@@ -18866,10 +18405,10 @@ export interface operations {
             };
         };
     };
-    list_taste_discoveries_api_v1_taste_discoveries_get: {
+    taste_discoveries_list: {
         parameters: {
             query?: {
-                /** @description Maximum discoveries to return. */
+                /** @description Maximum discoveries to return (1-3, default 3). */
                 limit?: number;
             };
             header?: never;
@@ -18878,23 +18417,35 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Ranked discoveries */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
+                    "application/json": components["schemas"]["NativeTasteDiscoveryListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description limit is outside the allowed range */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };

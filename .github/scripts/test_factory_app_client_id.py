@@ -2,6 +2,7 @@
 """Network-free tests for trusted GitHub App client-ID lookup."""
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 from unittest import mock
@@ -12,7 +13,7 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import factory_app_client_id as app_client  # noqa: E402
+app_client = importlib.import_module("factory_app_client_id")
 
 
 class Response:
