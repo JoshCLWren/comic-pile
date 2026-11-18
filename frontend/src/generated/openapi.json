@@ -3161,6 +3161,939 @@
         "title": "CanonicalCorrection",
         "type": "object"
       },
+      "CblAdoptionCommitRequest": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "entry_decisions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "series_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/CommitSeriesDecision"
+            },
+            "type": "array"
+          },
+          "series_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/CommitEntryOverride"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "content_hash",
+          "revision_sha"
+        ],
+        "type": "object"
+      },
+      "CblAdoptionCommitResponseWire": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "excluded_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lanes": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "object"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "reused_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "unresolved_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
+          "created_at",
+          "updated_at",
+          "reused_positions",
+          "created_positions",
+          "excluded_positions",
+          "unresolved_positions"
+        ],
+        "type": "object"
+      },
+      "CblAdoptionEntryResponse": {
+        "properties": {
+          "adopted": {
+            "type": "boolean"
+          },
+          "adoption_class": {
+            "type": "string"
+          },
+          "adoption_decision": {
+            "type": "string"
+          },
+          "canonical_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cbl_entry_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "cbl_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "collection_excluded": {
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "collection_exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_duplicate_identity": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "publication_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "type": "string"
+          },
+          "resolved_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_group_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "series_provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "collection_excluded",
+          "collection_exclusion_ids",
+          "cbl_position",
+          "cbl_entry_id",
+          "series_name",
+          "issue_number",
+          "series_group_id",
+          "adoption_class",
+          "adoption_decision",
+          "adopted",
+          "resolution_status",
+          "is_duplicate_identity"
+        ],
+        "type": "object"
+      },
+      "CblAdoptionPlanRequest": {
+        "properties": {
+          "entry_decisions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "series_decisions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "CblAdoptionPreviewResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CblAdoptionEntryResponse"
+            },
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CblSourceFingerprintResponse"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CblAdoptionSummaryResponse"
+          },
+          "total_positions": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "total_positions",
+          "entries",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "CblAdoptionSummaryResponse": {
+        "properties": {
+          "awaiting_opt_in_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "awaiting_opt_in_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "excluded_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "excluded_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "final_adopted_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "final_adopted_order": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "missing_would_create_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "missing_would_create_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "reused_existing_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reused_existing_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "unresolved_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "unresolved_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "reused_existing_count",
+          "missing_would_create_count",
+          "excluded_count",
+          "unresolved_count",
+          "awaiting_opt_in_count",
+          "final_adopted_count",
+          "final_adopted_order",
+          "reused_existing_positions",
+          "missing_would_create_positions",
+          "excluded_positions",
+          "unresolved_positions",
+          "awaiting_opt_in_positions"
+        ],
+        "type": "object"
+      },
+      "CblComicvineOccurrence": {
+        "description": "One Comic Vine occurrence in the shared CBL catalog.",
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "publication_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          },
+          "volume_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "position",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_id"
+        ],
+        "type": "object"
+      },
+      "CblComicvineOccurrencePage": {
+        "description": "A page of Comic Vine occurrences with shared-catalog totals.",
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "lists_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "occurrences": {
+            "items": {
+              "$ref": "#/components/schemas/CblComicvineOccurrence"
+            },
+            "type": "array"
+          },
+          "occurrences_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "occurrences_offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "occurrences_total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "occurrences_total",
+          "lists_total",
+          "occurrences_offset",
+          "occurrences_limit",
+          "occurrences"
+        ],
+        "type": "object"
+      },
+      "CblReadingListCandidatesResponse": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CblSourceComparisonMatch"
+            },
+            "type": "array"
+          },
+          "candidates_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CblReadingListInputEntry"
+            },
+            "type": "array"
+          },
+          "input_confirmed_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "input_conflict_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "input_entry_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "input_missing_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "input_entry_count",
+          "input_confirmed_total",
+          "input_missing_count",
+          "input_conflict_count",
+          "input_ids",
+          "entries",
+          "candidates_total",
+          "candidates"
+        ],
+        "type": "object"
+      },
+      "CblReadingListInputEntry": {
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "identity_status": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "comicvine_issue_ids",
+          "identity_status"
+        ],
+        "type": "object"
+      },
+      "CblSourceComparisonMatch": {
+        "properties": {
+          "declared_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "distinct_source_issues": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "duplicate_match_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "entries_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "input_coverage_percentage": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "input_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "matched_input_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "matched_input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "matched_occurrence_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "missing_input_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "order_disagreement_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "order_pair_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "order_status": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "score": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_coverage_percentage": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_only_issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "revision_sha",
+          "entries_total",
+          "distinct_source_issues",
+          "matched_input_count",
+          "input_total",
+          "matched_occurrence_count",
+          "duplicate_match_count",
+          "source_only_issue_count",
+          "input_coverage_percentage",
+          "source_coverage_percentage",
+          "order_status",
+          "order_pair_count",
+          "order_disagreement_count",
+          "matched_input_ids",
+          "missing_input_ids",
+          "score"
+        ],
+        "type": "object"
+      },
+      "CblSourceComparisonRequest": {
+        "properties": {
+          "comicvine_issue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_ids"
+        ],
+        "type": "object"
+      },
+      "CblSourceComparisonResponse": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CblSourceComparisonMatch"
+            },
+            "type": "array"
+          },
+          "candidates_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "comicvine_issue_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "input_total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "comicvine_issue_ids",
+          "input_total",
+          "candidates_total",
+          "candidates"
+        ],
+        "type": "object"
+      },
+      "CblSourceEntryDetail": {
+        "description": "One ordered source occurrence inside a CBL list.",
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "publication_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "volume_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "position",
+          "series_name",
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "CblSourceFingerprintResponse": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_list_id",
+          "source_repository",
+          "source_path",
+          "content_hash",
+          "revision_sha"
+        ],
+        "type": "object"
+      },
+      "CblSourceListDetail": {
+        "description": "One active CBL source list with one bounded page of ordered occurrences.",
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CblSourceEntryDetail"
+            },
+            "type": "array"
+          },
+          "entries_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "entries_offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "entries_total": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "source_ref",
+          "content_hash",
+          "revision_sha",
+          "entries_total",
+          "entries_offset",
+          "entries_limit",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "CblSourceListDiscoveryItem": {
+        "description": "Reader-safe summary of one active persisted CBL source list.",
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "declared_issue_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_path": {
+            "description": "Raw stored path: Python's discovery response deliberately returns the\nunprojected `source_path` (see `list_cbl_source_previews`).",
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_path",
+          "source_repository",
+          "content_hash",
+          "revision_sha"
+        ],
+        "type": "object"
+      },
       "CheckPotentialDuplicatesRequest": {
         "description": "Request to check for possible existing volumes before create or rename.",
         "properties": {
@@ -3883,6 +4816,22 @@
         "title": "ComicVineSeriesSearchResponse",
         "type": "object"
       },
+      "CommitEntryOverride": {
+        "properties": {
+          "cbl_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "decision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cbl_position",
+          "decision"
+        ],
+        "type": "object"
+      },
       "CommitRequest": {
         "properties": {
           "approved_row_ids": {
@@ -3948,6 +4897,21 @@
           "needs_review_issue_ids",
           "hydration_queued_issue_ids",
           "series_mapping"
+        ],
+        "type": "object"
+      },
+      "CommitSeriesDecision": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "series_name",
+          "decision"
         ],
         "type": "object"
       },
@@ -4371,6 +5335,47 @@
               "$ref": "#/components/schemas/NativeContinuityPlanNode"
             },
             "type": "array"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ContinuityPlanResponseWire": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lanes": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "object"
           },
           "ordering_mode": {
             "type": "string"
@@ -13453,6 +14458,64 @@
         ],
         "type": "object"
       },
+      "NativeTasteDiscovery": {
+        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "distinct_thread_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "evidence_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "signal_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "signal_type",
+          "external_key",
+          "display_name",
+          "prompt",
+          "evidence_count",
+          "distinct_thread_count"
+        ],
+        "type": "object"
+      },
+      "NativeTasteDiscoveryListResponse": {
+        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
+        "properties": {
+          "discoveries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeTasteDiscovery"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "discoveries",
+          "generated_at"
+        ],
+        "type": "object"
+      },
       "NearMatch": {
         "properties": {
           "color": {
@@ -16984,29 +18047,35 @@
         "description": "Response contract for the confirm endpoint.",
         "properties": {
           "added_count": {
+            "format": "int32",
             "minimum": 0.0,
             "title": "Added Count",
             "type": "integer"
           },
           "kept_count": {
+            "format": "int32",
             "minimum": 0.0,
             "title": "Kept Count",
             "type": "integer"
           },
           "plan_id": {
+            "format": "int32",
             "title": "Plan Id",
             "type": "integer"
           },
           "reading_order_id": {
+            "format": "int32",
             "title": "Reading Order Id",
             "type": "integer"
           },
           "total_positions": {
+            "format": "int32",
             "minimum": 0.0,
             "title": "Total Positions",
             "type": "integer"
           },
           "updated_count": {
+            "format": "int32",
             "minimum": 0.0,
             "title": "Updated Count",
             "type": "integer"
@@ -22970,6 +24039,9 @@
             },
             "description": "Reading Plan created with adopted CBL issues"
           },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -22979,6 +24051,9 @@
               }
             },
             "description": "Request failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -23039,6 +24114,9 @@
             },
             "description": "Reading Plan updated with adopted CBL issues"
           },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -23048,6 +24126,9 @@
               }
             },
             "description": "Request failed validation or plan not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -26841,6 +27922,9 @@
               }
             },
             "description": "Identifier or query failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27034,6 +28118,9 @@
             },
             "description": "CBL source list with a bounded page of entries"
           },
+          "404": {
+            "description": "CBL source list not found"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -27043,6 +28130,9 @@
               }
             },
             "description": "Query failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27260,6 +28350,9 @@
               }
             },
             "description": "Reading-list gaps and ranked CBL candidates"
+          },
+          "404": {
+            "description": "Custom CBL not found"
           },
           "422": {
             "content": {
@@ -30023,6 +31116,9 @@
             },
             "description": "Ranked discoveries"
           },
+          "401": {
+            "description": "Not authenticated"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -30032,6 +31128,9 @@
               }
             },
             "description": "limit is outside the allowed range"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
