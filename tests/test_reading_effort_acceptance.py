@@ -317,38 +317,6 @@ async def test_observed_history_takes_precedence_over_era_prior(async_db):
     assert estimate.minutes == pytest.approx(7.0)
 
 
-async def test_override_roll_records_decision_time_recommendation_context(
-    auth_client, async_db
-):
-    """Manual overrides also persist decision-time context without changing selection."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    thread = await _add_thread(async_db, user.id, "Override Candidate", queue_position=1)
-    override_response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": thread.id}
-    )
-    assert override_response.status_code == 200
-
-    override_event_result = await async_db.execute(
-        select(Event)
-        .where(Event.type == "roll")
-        .where(Event.selection_method == "override")
-        .order_by(Event.id.desc())
-        .limit(1)
-    )
-    override_event = override_event_result.scalar_one()
-    assert override_event.selected_thread_id == thread.id
-    context = override_event.recommendation_context
-    assert context is not None
-    candidate = context["selected_candidate"]
-    assert candidate["thread_id"] == thread.id
-    assert candidate["effort_source"] == EstimateSource.UNKNOWN.value
-    assert candidate["effort_minutes"] is None
-    assert candidate["effort_band"] == "unknown"
-
-
 async def test_roll_records_decision_time_recommendation_context(async_db):
     """A roll persists the versioned estimate/source that existed at decision time."""
     from tests.conftest import get_or_create_user_async

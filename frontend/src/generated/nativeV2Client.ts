@@ -119,7 +119,7 @@ export interface ContinuityPlansProjectToReadingOrderRequest {
   body: components['schemas']['NativeReadingOrderProjectionRequest']
 }
 
-export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['NativeReadingOrderProjectionResult']
+export type ContinuityPlansProjectToReadingOrderResponse = components['schemas']['ReadingOrderProjectionResult']
 
 export interface ContinuityPlansUnlinkDependencyRequest {
   path: {

@@ -2,6 +2,7 @@
 """Network-free regression coverage for factory repair stage 5."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import sys
@@ -13,15 +14,14 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from factory_work_policy import (  # noqa: E402
-    FACTORY_NO_DIFF_RETRY_LIMIT,
-    FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
-    TRUSTED_FACTORY_APP_SLUGS,
-    build_candidates,
-    comment_is_trusted,
-    lease_is_stale,
-    no_diff_attempts_from_comments,
-)
+_factory_work_policy = importlib.import_module("factory_work_policy")
+FACTORY_NO_DIFF_RETRY_LIMIT = _factory_work_policy.FACTORY_NO_DIFF_RETRY_LIMIT
+FACTORY_NO_DIFF_RETRY_RESET_SECONDS = _factory_work_policy.FACTORY_NO_DIFF_RETRY_RESET_SECONDS
+TRUSTED_FACTORY_APP_SLUGS = _factory_work_policy.TRUSTED_FACTORY_APP_SLUGS
+build_candidates = _factory_work_policy.build_candidates
+comment_is_trusted = _factory_work_policy.comment_is_trusted
+lease_is_stale = _factory_work_policy.lease_is_stale
+no_diff_attempts_from_comments = _factory_work_policy.no_diff_attempts_from_comments
 
 
 def load_controller():
