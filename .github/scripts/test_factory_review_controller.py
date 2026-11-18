@@ -362,7 +362,7 @@ def configure_review_handoff(
     monkeypatch.setattr(controller, "implementation_delivery_gate", lambda *_args: {
         "decision": "pass", "reason": "fixture source delivery verified",
     })
-    monkeypatch.setattr(controller.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(controller.issue_acceptance, "validate", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(controller, "run_gh", lambda *_args, **_kwargs: SimpleNamespace(
         stdout="app/feature.py\n", stderr="", returncode=0,
     ))

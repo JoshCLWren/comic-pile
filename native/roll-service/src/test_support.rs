@@ -3,7 +3,11 @@
 //! The native Roll service is a pure cutover of the Roll API: it reads and
 //! writes rows and never issues schema DDL. Tests therefore must not hand-write
 //! tables, either — hand-rolled fixtures only approximated production, which is
-//! how a production-only schema difference (#4535) escaped the suite.
+//! how a production-only schema difference escaped the suite (#4578). The
+//! #4535 incident itself was ultimately an axum path-parameter defect
+//! (#4583); the dead-pooled-connection retry (#4572, #4732) is a separate
+//! robustness path, and a clean `pg_terminate_backend` may not exercise that
+//! retry branch (#4578).
 //!
 //! Every test loads the canonical Alembic fixture, a `pg_dump --schema-only` of a database
 //! that Alembic migrated to head. Regenerate it with `make roll-test-schema`;
@@ -361,11 +365,58 @@ pub async fn test_state(pool_size: usize) -> Option<std::sync::Arc<AppState>> {
 ///
 /// Hold the returned guard for the whole test; dropping it releases the next
 /// test. This replaces the per-test `CREATE SCHEMA`/`CREATE TABLE` fixtures that
-/// let production-only schema differences escape the suite (#4535).
+/// let production-only schema differences escape the suite (#4578).
 pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static, ()> {
     let guard = DB_LOCK.lock().await;
     reset(state).await;
     guard
+}
+
+/// Test scaffolding: synthetic provider volume rosters.
+///
+/// The live ComicVine roster is an HTTP dependency, so a handler test that
+/// needs a deterministic roster installs one here instead. `catalog_volume_roster`
+/// returns the installed fixture for a matching external id before touching the
+/// network. Entries are keyed by volume id, never globally toggled, so parallel
+/// tests cannot leak a fixture into each other; tests must use unique volume
+/// ids and clear the fixture when done. Nothing here runs unless a test calls
+/// [`install_test_volume_roster`].
+type TestVolumeRosterFixture = (serde_json::Value, Vec<serde_json::Value>);
+
+static TEST_VOLUME_ROSTERS: std::sync::Mutex<
+    Option<std::collections::HashMap<String, TestVolumeRosterFixture>>,
+> = std::sync::Mutex::new(None);
+
+/// Install a synthetic `(series_info, roster)` returned for `external_id`.
+///
+/// Overwrites any previous fixture for the same volume id.
+pub fn install_test_volume_roster(
+    external_id: &str,
+    series: serde_json::Value,
+    roster: Vec<serde_json::Value>,
+) {
+    let mut guard = TEST_VOLUME_ROSTERS
+        .lock()
+        .expect("test volume roster registry poisoned");
+    guard
+        .get_or_insert_with(std::collections::HashMap::new)
+        .insert(external_id.to_owned(), (series, roster));
+}
+
+/// Remove the fixture for `external_id`, if any.
+pub fn clear_test_volume_roster(external_id: &str) {
+    let mut guard = TEST_VOLUME_ROSTERS
+        .lock()
+        .expect("test volume roster registry poisoned");
+    if let Some(map) = guard.as_mut() {
+        map.remove(external_id);
+    }
+}
+
+/// Look up an installed fixture. `None` outside tests and when unset.
+pub(crate) fn lookup_test_volume_roster(external_id: &str) -> Option<TestVolumeRosterFixture> {
+    let guard = TEST_VOLUME_ROSTERS.lock().ok()?;
+    guard.as_ref().and_then(|map| map.get(external_id).cloned())
 }
 
 #[cfg(test)]

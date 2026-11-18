@@ -12,9 +12,11 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
+pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
 pub mod creators_v2;
+pub mod cron_auth;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -46,19 +48,27 @@ pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
 pub mod reading_session;
+pub mod recommendation_explanation;
 pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
+pub mod roll_override;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod roll_switch_prerequisite;
+pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
+pub mod session_details;
 pub mod session_history;
+pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod undo_apply;
+pub mod undo_snapshots;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -233,6 +243,19 @@ pub enum ApiError {
     Conflict(String),
     /// 422.
     Unprocessable(String),
+    /// Explicit status with a structured JSON `detail` object.
+    ///
+    /// Python/FastAPI emits `{"detail": {"code": "...", ...}}` for domain
+    /// conflicts and validation errors. The scalar variants above cannot
+    /// represent that shape (their detail is a JSON string), so cutover
+    /// handlers that must preserve a structured wire contract use this
+    /// variant. The payload is serialized JSON text and parsed on response.
+    StructuredDetail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Serialized JSON object used as the `detail` value.
+        detail: String,
+    },
     /// 405.
     MethodNotAllowed(String),
     /// Fallback: explicit status + detail for statuses without a variant.
@@ -274,6 +297,7 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::StructuredDetail { status, .. } => *status,
             ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             ApiError::Detail { status, .. } => *status,
         }
@@ -295,6 +319,7 @@ impl ApiError {
             | ApiError::Forbidden(detail)
             | ApiError::Conflict(detail)
             | ApiError::Unprocessable(detail)
+            | ApiError::StructuredDetail { detail, .. }
             | ApiError::MethodNotAllowed(detail) => detail.as_str(),
             ApiError::Detail { detail, .. } => detail.as_str(),
         }
@@ -352,6 +377,18 @@ impl IntoResponse for ApiError {
                 .into_response();
         }
         let status = self.status();
+        if let ApiError::StructuredDetail { detail, .. } = &self {
+            let value: serde_json::Value = serde_json::from_str(detail)
+                .unwrap_or_else(|_| serde_json::Value::String(detail.clone()));
+            let mut response = (status, Json(serde_json::json!({"detail": value}))).into_response();
+            if status == StatusCode::UNAUTHORIZED {
+                response.headers_mut().insert(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    axum::http::HeaderValue::from_static("Bearer"),
+                );
+            }
+            return response;
+        }
         let detail_owned = self.detail().to_string();
         let mut response = (
             status,
@@ -370,6 +407,21 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// Per-route request deadlines used by `bound_request`. Cron drains run longer
+/// than ordinary requests. The release-sync deadline is derived from the
+/// handler's own wall-clock budget (`CRON_MAX_DURATION`) with a margin so the
+/// budget-exhaustion branch can actually return its truncated 200 report
+/// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
+fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
+    match path {
+        "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        "/api/v1/cron/release-sync" => {
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        }
+        _ => default_timeout,
+    }
+}
+
 async fn bound_request(
     State(state): State<Arc<AppState>>,
     request: Request,
@@ -378,11 +430,7 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
-        Duration::from_secs(50)
-    } else {
-        state.request_timeout
-    };
+    let timeout = request_timeout_for(request.uri().path(), state.request_timeout);
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|e| {
@@ -438,6 +486,23 @@ async fn catch_panic(request: Request, next: Next) -> Response {
         }
     })
     .await
+}
+
+/// Emit truthful runtime identity on every response from this native process.
+///
+/// This is the shared response boundary for both the standalone service and the
+/// Vercel ingress. The value is `rust` because this process is the Rust
+/// implementation; it is never derived from the API version or request path.
+/// Inserting at the outermost layer covers handler responses as well as
+/// authentication/CSRF rejections, timeouts, panics and 404/405 fallbacks
+/// (#5121).
+async fn runtime_identity(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        axum::http::HeaderValue::from_static("rust"),
+    );
+    response
 }
 
 /// Mount health and bootstrap routes; no partial-success fallback.
@@ -511,6 +576,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
+        .route("/api/v1/roll/override", post(roll_override::override_roll))
+        .route("/api/roll/override", post(roll_override::override_roll))
+        .route(
+            "/api/v1/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/v1/roll/switch-prerequisite",
+            post(roll_switch_prerequisite::switch_prerequisite),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
@@ -531,6 +610,36 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
+        // Session list (issue #4839)
+        .route("/api/sessions/", get(session_list::list_sessions))
+        .route("/api/v1/sessions/", get(session_list::list_sessions))
+        // Session details (issue #4839)
+        .route(
+            "/api/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        // Undo snapshots list (issue #4839)
+        .route(
+            "/api/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        // Undo apply snapshot (issue #4839)
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
@@ -545,6 +654,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
+        )
+        .route(
+            "/api/v1/cron/release-sync",
+            get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
             "/api/v1/reading-plan-sync/status",
@@ -793,6 +906,67 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
         )
+        // Continuity plans v1 routes (cutover from Python)
+        .route(
+            "/api/v1/continuity-plans/",
+            get(continuity_plans::list_continuity_plans),
+        )
+        .route(
+            "/api/v1/continuity-plans/",
+            post(continuity_plans::create_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            get(continuity_plans::get_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            put(continuity_plans::update_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}",
+            delete(continuity_plans::delete_continuity_plan),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/membership",
+            get(continuity_plans::get_continuity_plan_membership),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            post(continuity_plans::link_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+            delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
+            post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/",
+            get(continuity_plans::list_release_sources),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+            get(continuity_plans::list_release_sources_for_reader),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/",
+            post(continuity_plans::create_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            patch(continuity_plans::update_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/release-sources/{source_id}",
+            delete(continuity_plans::delete_release_source),
+        )
+        .route(
+            "/api/v1/continuity-plans/from-reading-order",
+            post(continuity_plans::adopt_reading_order),
+        )
         .route(
             "/api/v1/taste/discoveries",
             get(taste_discoveries::list_taste_discoveries),
@@ -865,6 +1039,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
         .layer(axum::middleware::from_fn(catch_panic))
+        .layer(axum::middleware::from_fn(runtime_identity))
         .with_state(state)
 }
 
@@ -873,6 +1048,28 @@ mod tests {
     use super::*;
     use axum::body::{to_bytes, Body};
     use tower::ServiceExt;
+
+    #[test]
+    fn release_sync_ingress_deadline_exceeds_handler_budget() {
+        let default = Duration::from_secs(3);
+        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        assert!(
+            bound > reading_plan_sync::CRON_MAX_DURATION,
+            "the release-sync ingress deadline must be reachable after the handler budget"
+        );
+        assert_eq!(
+            bound,
+            reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
+            Duration::from_secs(50)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v1/roll/bootstrap", default),
+            default
+        );
+    }
 
     #[tokio::test]
     async fn timeout_cancels_work_and_returns_json() {
@@ -1122,6 +1319,89 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Not Found"}"#
         );
+    }
+
+    /// Build the real production router without touching a database. None of
+    /// these probes needs a live connection: success, auth rejection and the
+    /// fallback are all resolved before any handler checks out a socket.
+    fn standalone_app() -> Router {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        router(Arc::new(AppState::new(config).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_success() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_not_found() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/no-such-route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_auth_rejection() {
+        // No Authorization header: the AuthenticatedUser extractor rejects the
+        // request with 401 before any database lookup.
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/auth/me")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn runtime_identity_covers_rejections_from_inner_layers() {
+        // A rejection produced by an inner middleware must still carry the
+        // identity because the header is inserted at the outermost boundary.
+        async fn reject() -> Response {
+            ApiError::Forbidden("denied".to_string()).into_response()
+        }
+        let app = Router::new()
+            .route("/protected", get(reject))
+            .layer(axum::middleware::from_fn(runtime_identity));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
     }
 
     #[test]

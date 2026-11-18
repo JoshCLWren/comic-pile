@@ -510,6 +510,7 @@ pub struct CreatorMetricDrilldown {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorListQuery {
     pub search: Option<String>,
     pub sort: Option<String>,
@@ -519,23 +520,27 @@ pub struct CreatorListQuery {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorKeysQuery {
     pub keys: Option<String>,
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorPageQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorSeriesIssuesQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorMetricQuery {
     pub role: Option<String>,
     pub rating_value: Option<String>,
@@ -545,6 +550,7 @@ pub struct CreatorMetricQuery {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CreatorMetricPageQuery {
     pub page: Option<i64>,
     pub page_size: Option<i64>,
@@ -580,6 +586,9 @@ struct CreatorLibrary {
     ratings: HashMap<i64, f64>,
     rating_timestamps: HashMap<i64, DateTime<Utc>>,
     metadata_issues: HashSet<i64>,
+    /// Read-without-rating audit cause keys for issues that are read and have
+    /// no effective rating, matching Python's `classify_issue_ids` contract.
+    missing_rating_causes: HashMap<i64, String>,
 }
 
 impl CreatorLibrary {
@@ -858,6 +867,206 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         }
     }
 
+    // Read-without-rating audit causes (issue #3175), matching Python's
+    // `classify_issue_ids` contract so metric drilldowns can expose
+    // `missing_rating_cause` for read issues without an effective rating.
+    let mut missing_rating_causes: HashMap<i64, String> = HashMap::new();
+    let read_without_rating: Vec<i64> = issues
+        .iter()
+        .filter(|issue| issue.status == "read" && !ratings.contains_key(&issue.id))
+        .map(|issue| issue.id)
+        .collect();
+    if !read_without_rating.is_empty() {
+        // Thread-level historical ratings for threads that own the population.
+        let thread_ids: Vec<i64> = {
+            let mut set: HashSet<i64> = HashSet::new();
+            for issue_id in &read_without_rating {
+                if let Some(issue) = issue_index.get(issue_id).map(|i| &issues[*i]) {
+                    set.insert(issue.thread_id);
+                }
+            }
+            let mut v: Vec<i64> = set.into_iter().collect();
+            v.sort_unstable();
+            v
+        };
+
+        #[derive(Clone)]
+        struct ThreadHistoricalRating {
+            _event_id: i64,
+            rating: f64,
+            _recorded_at: Option<DateTime<Utc>>,
+        }
+        let mut thread_historical: HashMap<i64, Vec<ThreadHistoricalRating>> = HashMap::new();
+        if !thread_ids.is_empty() {
+            for row in connection
+                .query(
+                    "SELECT ev.id, ev.thread_id, ev.rating, ev.timestamp
+                     FROM events ev
+                     JOIN threads t ON t.id = ev.thread_id
+                     WHERE t.user_id = $1 AND ev.type = 'rate'
+                           AND ev.rating IS NOT NULL AND ev.issue_id IS NULL
+                           AND ev.thread_id = ANY($2::bigint[])
+                     ORDER BY ev.thread_id, ev.timestamp ASC, ev.id ASC",
+                    &[&user_id, &thread_ids],
+                )
+                .await
+                .map_err(query_error)?
+            {
+                let event_id: i64 = row.get(0);
+                let thread_id: i64 = row.get(1);
+                let rating: f64 = row
+                    .try_get::<_, f64>(2)
+                    .or_else(|_| row.try_get::<_, f32>(2).map(f64::from))
+                    .map_err(query_error)?;
+                let recorded_at = row.try_get::<_, DateTime<Utc>>(3).ok();
+                thread_historical
+                    .entry(thread_id)
+                    .or_default()
+                    .push(ThreadHistoricalRating {
+                        _event_id: event_id,
+                        rating,
+                        _recorded_at: recorded_at,
+                    });
+            }
+        }
+
+        // Distinct mapping statuses per requested issue.
+        let mut mapping_statuses: HashMap<i64, Vec<String>> = HashMap::new();
+        for row in connection
+            .query(
+                "SELECT DISTINCT issue_id, status
+                 FROM issue_external_identity_mappings
+                 WHERE issue_id = ANY($1::bigint[])",
+                &[&read_without_rating],
+            )
+            .await
+            .map_err(query_error)?
+        {
+            let issue_id: i64 = row.get(0);
+            let status: String = row.get(1);
+            mapping_statuses.entry(issue_id).or_default().push(status);
+        }
+        for statuses in mapping_statuses.values_mut() {
+            statuses.sort();
+            statuses.dedup();
+        }
+
+        // Edition/duplicate conflicts: requested read-without-rating issues that
+        // share a confirmed external identity with another owned read issue.
+        let mut duplicate_issue_ids: HashMap<i64, Vec<i64>> = HashMap::new();
+        let mut requested_identities: HashMap<i64, HashSet<i64>> = HashMap::new();
+        for row in connection
+            .query(
+                "SELECT issue_id, external_identity_id
+                 FROM issue_external_identity_mappings
+                 WHERE issue_id = ANY($1::bigint[]) AND status = 'confirmed'",
+                &[&read_without_rating],
+            )
+            .await
+            .map_err(query_error)?
+        {
+            let issue_id: i64 = row.get(0);
+            let external_identity_id: i64 = row.get(1);
+            requested_identities
+                .entry(issue_id)
+                .or_default()
+                .insert(external_identity_id);
+        }
+        let shared_identities: Vec<i64> = {
+            let mut set: HashSet<i64> = HashSet::new();
+            for ids in requested_identities.values() {
+                set.extend(ids.iter().copied());
+            }
+            let mut v: Vec<i64> = set.into_iter().collect();
+            v.sort_unstable();
+            v
+        };
+        if !shared_identities.is_empty() {
+            let mut by_identity: HashMap<i64, HashSet<i64>> = HashMap::new();
+            for row in connection
+                .query(
+                    "SELECT m.issue_id, m.external_identity_id
+                     FROM issue_external_identity_mappings m
+                     JOIN issues i ON i.id = m.issue_id
+                     JOIN threads t ON t.id = i.thread_id
+                     WHERE t.user_id = $1 AND i.status = 'read'
+                           AND m.status = 'confirmed'
+                           AND m.external_identity_id = ANY($2::bigint[])",
+                    &[&user_id, &shared_identities],
+                )
+                .await
+                .map_err(query_error)?
+            {
+                let issue_id: i64 = row.get(0);
+                let external_identity_id: i64 = row.get(1);
+                by_identity
+                    .entry(external_identity_id)
+                    .or_default()
+                    .insert(issue_id);
+            }
+            for (issue_id, identities) in &requested_identities {
+                let mut others: HashSet<i64> = HashSet::new();
+                for identity_id in identities {
+                    if let Some(members) = by_identity.get(identity_id) {
+                        others.extend(members.iter().copied());
+                    }
+                }
+                others.remove(issue_id);
+                if !others.is_empty() {
+                    let mut v: Vec<i64> = others.into_iter().collect();
+                    v.sort_unstable();
+                    duplicate_issue_ids.insert(*issue_id, v);
+                }
+            }
+        }
+
+        // Unrated read issue counts per thread over the full library.
+        let mut thread_unrated_counts: HashMap<i64, i64> = HashMap::new();
+        for issue in &issues {
+            if issue.status == "read" && !ratings.contains_key(&issue.id) {
+                *thread_unrated_counts.entry(issue.thread_id).or_default() += 1;
+            }
+        }
+
+        fn agreed_historical_rating(entries: &[ThreadHistoricalRating]) -> Option<f64> {
+            let mut values: Vec<f64> = entries.iter().map(|e| e.rating).collect();
+            values.sort_by(|a, b| a.total_cmp(b));
+            values.dedup_by(|a, b| a.total_cmp(b) == std::cmp::Ordering::Equal);
+            if values.len() == 1 { values.first().copied() } else { None }
+        }
+
+        for issue_id in &read_without_rating {
+            let Some(issue) = issue_index.get(issue_id).map(|i| &issues[*i]) else {
+                continue;
+            };
+            let thread_id = issue.thread_id;
+            let historical = thread_historical.get(&thread_id);
+            let duplicates = duplicate_issue_ids.get(issue_id);
+            let statuses = mapping_statuses.get(issue_id);
+            let unrated_read_in_thread = thread_unrated_counts
+                .get(&thread_id)
+                .copied()
+                .unwrap_or(1);
+
+            let cause = if duplicates.is_some_and(|v| !v.is_empty()) {
+                "edition_conflict".to_string()
+            } else if let Some(entries) = historical.filter(|e| !e.is_empty()) {
+                if agreed_historical_rating(entries).is_none() {
+                    "ambiguous_thread_rating".to_string()
+                } else if unrated_read_in_thread != 1 {
+                    "ambiguous_thread_rating".to_string()
+                } else {
+                    "missing_rate_event".to_string()
+                }
+            } else if !statuses.is_some_and(|s| s.iter().any(|v| v == "confirmed")) {
+                "unresolved_mapping".to_string()
+            } else {
+                "no_source_rating".to_string()
+            };
+            missing_rating_causes.insert(*issue_id, cause);
+        }
+    }
+
     Ok(CreatorLibrary {
         issues,
         issue_index,
@@ -865,6 +1074,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         ratings,
         rating_timestamps,
         metadata_issues,
+        missing_rating_causes,
     })
 }
 
@@ -2810,7 +3020,7 @@ fn drilldown_issue(
         effective_rating_timestamp: library.rating_timestamps.get(&issue_id).map(iso_timestamp),
         creator_roles: roles_on_issue(library, creator_id, issue_id),
         exclusion_reason,
-        missing_rating_cause: None,
+        missing_rating_cause: library.missing_rating_causes.get(&issue_id).cloned(),
     }
 }
 
@@ -2879,7 +3089,19 @@ fn build_drilldown(
         "series-stats",
     ];
     if !VALID.contains(&metric_type) {
-        return Err(bad_request(format!("Invalid metric type: {metric_type}")));
+        let mut valid_types: Vec<&str> = VALID.to_vec();
+        valid_types.sort_unstable();
+        let valid_types = format!(
+            "{{{}}}",
+            valid_types
+                .iter()
+                .map(|value| format!("'{value}'"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        return Err(bad_request(format!(
+            "Invalid metric type: {metric_type}. Valid types: {valid_types}"
+        )));
     }
     let Some(attribution) = attribution(library, creator_id) else {
         return Err(not_found(format!(
@@ -3869,7 +4091,10 @@ pub fn discoveries_documentation() {}
 pub fn team_chemistry_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}", tag = "creators",
-    params(CreatorPageQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        CreatorPageQuery
+    ),
     responses((status = 200, description = "Creator detail", body = CreatorDetailResponse),
         (status = 400, description = "Invalid key"),
         (status = 404, description = "Creator not found"),
@@ -3878,7 +4103,11 @@ pub fn team_chemistry_documentation() {}
 pub fn detail_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}/series/{series_key}/issues", tag = "creators",
-    params(CreatorSeriesIssuesQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        ("series_key" = String, Path, description = "Series key"),
+        CreatorSeriesIssuesQuery
+    ),
     responses((status = 200, description = "Creator series issues", body = CreatorSeriesIssueListResponse),
         (status = 400, description = "Invalid keys"),
         (status = 404, description = "Series not found"),
@@ -3887,7 +4116,11 @@ pub fn detail_documentation() {}
 pub fn series_issues_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/{metric_type}", tag = "creators",
-    params(CreatorMetricQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        ("metric_type" = String, Path, description = "Metric type"),
+        CreatorMetricQuery
+    ),
     responses((status = 200, description = "Creator metric drilldown", body = CreatorMetricDrilldown),
         (status = 400, description = "Invalid metric"),
         (status = 404, description = "Metric not available"),
@@ -3896,7 +4129,11 @@ pub fn series_issues_documentation() {}
 pub fn metric_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}", tag = "creators",
-    params(CreatorMetricPageQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        ("rating_value" = String, Path, description = "Rating value"),
+        CreatorMetricPageQuery
+    ),
     responses((status = 200, description = "Rating distribution drilldown", body = CreatorMetricDrilldown),
         (status = 400, description = "Invalid value"),
         (status = 404, description = "Not available"),
@@ -3905,7 +4142,11 @@ pub fn metric_documentation() {}
 pub fn rating_distribution_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/role-stats/{role}", tag = "creators",
-    params(CreatorMetricPageQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        ("role" = String, Path, description = "Creator role"),
+        CreatorMetricPageQuery
+    ),
     responses((status = 200, description = "Role drilldown", body = CreatorMetricDrilldown),
         (status = 400, description = "Invalid role"),
         (status = 404, description = "Not available"),
@@ -3914,7 +4155,11 @@ pub fn rating_distribution_documentation() {}
 pub fn role_documentation() {}
 
 #[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}", tag = "creators",
-    params(CreatorMetricPageQuery),
+    params(
+        ("creator_key" = String, Path, description = "Canonical creator key"),
+        ("series_key" = String, Path, description = "Series key"),
+        CreatorMetricPageQuery
+    ),
     responses((status = 200, description = "Series drilldown", body = CreatorMetricDrilldown),
         (status = 400, description = "Invalid series"),
         (status = 404, description = "Not available"),
@@ -4025,6 +4270,7 @@ mod tests {
             ratings,
             rating_timestamps,
             metadata_issues,
+            missing_rating_causes: HashMap::new(),
         }
     }
 
