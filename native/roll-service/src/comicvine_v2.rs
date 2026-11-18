@@ -11,8 +11,12 @@
 
 use crate::{
     auth::AuthenticatedUser,
-    comicvine_repair::{provider_issue, provider_response, ProviderFailure},
-    db, ApiError, AppState,
+    comicvine_repair::{
+        normalize_roster_issue_metadata, provider_issue, provider_response, ProviderFailure,
+    },
+    db,
+    issue_service::refresh_blocked_threads,
+    ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
