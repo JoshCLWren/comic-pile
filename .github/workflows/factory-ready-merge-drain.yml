@@ -95,13 +95,17 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          # Every factory stage needs CI evidence: the work controller treats
+          # missing required checks as "waiting" and never assigns repair work.
+          # A bot-opened PR that a reviewer moved to changes-requested before
+          # its held runs were approved otherwise deadlocks forever.
           echo 'Recovering action_required workflow runs on current factory PR heads'
           mapfile -t open_heads < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"]) or contains(["factory:ci"])) | [.head.sha, .number, .head.ref] | @tsv' \
+              --jq '.[] | select(.labels | map(.name) | any(. == "factory")) | [.head.sha, .number, .head.ref] | @tsv' \
               || gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
                 --json number,headRefName,headRefOid,labels \
-                --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"]) or contains(["factory:ci"])) | [.headRefOid, .number, .headRefName] | @tsv'
+                --jq '.[] | select(.labels | map(.name) | any(. == "factory")) | [.headRefOid, .number, .headRefName] | @tsv'
           )
           (( ${#open_heads[@]} > 0 )) || exit 0
 

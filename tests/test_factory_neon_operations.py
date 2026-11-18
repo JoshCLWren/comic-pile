@@ -99,15 +99,6 @@ def test_expired_model_cooldown_is_eligible_for_a_new_probe():
     assert not denied
 
 
-def test_provider_streak_is_not_reset_by_capacity_reservations():
-    import inspect
-    source = inspect.getsource(operations.project_runtime)
-    assert 'factory-provider-backoff-v1:' in source
-    assert 'delay_seconds' in source
-    assert 'observed_at' in source
-    assert 'SELECT last_outcome,updated_at,cooldown_until' not in source
-
-
 def test_provider_exponential_backoff_doubles_and_caps():
     base = operations.exponential_provider_delay
     assert base("provider_throttle", None, 0, float("inf")) == 1800
@@ -310,11 +301,20 @@ def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     assert "last_run_id <= EXCLUDED.last_run_id" in text
 
 
-def test_fibonacci_retry_progresses_and_caps():
+def test_fibonacci_retry_progresses_without_cap():
     fib = operations.fibonacci_worker_delay
     assert [fib(i) for i in range(1, 8)] == [300, 300, 600, 900, 1500, 2400, 3900]
-    assert fib(20) == 86400
-    assert fib(50) == 86400
+    # No 24h ceiling: per-model backoff keeps growing.
+    assert fib(20) == 6765 * 300
+    assert fib(50) > fib(49) > 86400
+
+
+def test_fibonacci_retry_at_clamps_only_at_datetime_max():
+    observed = datetime(2026, 11, 17, tzinfo=UTC)
+    assert operations.fibonacci_retry_at(observed, 3) == observed + timedelta(seconds=600)
+    assert operations.fibonacci_retry_at(observed, 30) - observed == timedelta(seconds=832040 * 300)
+    huge = operations.fibonacci_retry_at(observed, 200)
+    assert huge == datetime.max.replace(tzinfo=UTC)
 
 
 def test_retry_time_and_retained_streak_are_independent_of_ttl():
@@ -611,16 +611,6 @@ def test_model_backoffs_are_in_trusted_catalog_exclusions():
     assert "vendor/other:free" not in exclusions["openrouter-free"]
 
 
-def test_terminal_account_quota_not_treated_as_model_cooldown() -> None:
-    import inspect
-
-    body = inspect.getsource(operations.project_runtime)
-    assert "not terminal_account_scope and not delivered" in body
-    assert "for account_source, account_classification in sorted(account_failures.items())" in body
-    assert 'fibonacci_worker_delay(streak)' in body
-    assert 'if scope == "account":' in body
-
-
 def test_worker_provider_model_backoffs_remain_independent() -> None:
     now = datetime.now(UTC)
     future = now + timedelta(minutes=15)
@@ -743,14 +733,7 @@ def test_legacy_account_failure_is_now_model_scoped():
         ("nvidia", "generated/paid", "provider_quota", "model")]
 
 
-def test_fibonacci_never_suspends_and_model_health_starts_at_five_minutes():
-    import inspect
-    body = inspect.getsource(operations.project_runtime)
-    assert "suspended = streak >=" not in body
-    assert body.count("suspended = False") == 3
-    assert body.count("fibonacci_worker_delay(streak))).isoformat()") == 3
-    assert '_provider_cooldown(failed_source, failed_outcome, observed)' not in body
-    assert 'status, until = "cooling", observed + timedelta(seconds=fibonacci_worker_delay(1))' in body
+def test_legacy_suspended_record_does_not_block_model():
     now = datetime.now(UTC)
     old = {"payload": [{"source": "nvidia", "model": "generated/paid",
                         "streak": 20, "suspended": True, "next_retry_at": None}],

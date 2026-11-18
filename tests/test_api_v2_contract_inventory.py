@@ -275,10 +275,20 @@ def test_declared_consumers_are_the_real_service_callers() -> None:
 
 
 def test_python_transitional_operations_are_explicit() -> None:
-    """A v2 path served by Python stays visible as transitional, not silently absent."""
+    """No v2 path is served by Python after the #5289 retirement.
+
+    The last Python v2 operation (GET /api/v2/reading-boundaries/{thread_id})
+    was retired by #5289, which updated the route-burndown contract alongside
+    the retirement. Keep the two guards in sync: do not silently reintroduce a
+    Python v2 declaration here. Any future one must be published explicitly as
+    transitional with its cutover evidence.
+    """
     operations = _inventory_operations()
     python_paths = _runtime_set(operations, PYTHON_RUNTIME)
-    assert ("get", "/api/v2/reading-boundaries/{thread_id}") in python_paths
+    assert not python_paths, (
+        "a Python v2 operation reappeared after #5289; publish it explicitly as "
+        "transitional with cutover evidence instead of leaving an undeclared route"
+    )
     for operation in operations:
         if operation["runtime"] == PYTHON_RUNTIME:
             assert operation["status"] == "transitional"
@@ -292,8 +302,9 @@ def test_published_transitional_operations_are_not_marked_final() -> None:
         for operation in operations
         if operation["status"] == "transitional"
     }
+    # GET /api/v2/reading-boundaries/{thread_id} was retired by #5289 together
+    # with its route-burndown contract; keep this set in sync with that change.
     assert transitional == {
-        ("get", "/api/v2/reading-boundaries/{thread_id}"),
         ("get", "/api/v2/roll/bootstrap"),
         ("post", "/api/v2/reading-sessions"),
         ("post", "/api/v2/roll/dice-command"),

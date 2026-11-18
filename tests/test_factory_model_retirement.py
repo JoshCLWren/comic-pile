@@ -25,7 +25,8 @@ def test_fibonacci_worker_backoff_is_durable_across_runtime_model_changes() -> N
     assert STATE.worker_backoff_reason(record, "another-provider", "", now) is None
 
 
-def test_fibonacci_delay_is_bounded_and_increases() -> None:
-    delays = [STATE.fibonacci_worker_delay(n) for n in range(1, 15)]
-    assert all(0 < amount <= 86_400 for amount in delays)
+def test_fibonacci_delay_is_uncapped_and_increases() -> None:
+    delays = [STATE.fibonacci_worker_delay(n) for n in range(1, 25)]
+    assert all(amount > 0 for amount in delays)
     assert delays == sorted(delays)
+    assert delays[-1] > 86_400

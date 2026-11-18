@@ -4089,49 +4089,33 @@
         "type": "object"
       },
       "ContinuityPlanListItem": {
-        "description": "Compact summary returned by the plans list endpoint.",
         "properties": {
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "lane_count": {
-            "title": "Lane Count",
+            "format": "int32",
             "type": "integer"
           },
           "name": {
-            "title": "Name",
             "type": "string"
           },
           "ordering_mode": {
-            "enum": [
-              "informational",
-              "strict_sequential"
-            ],
-            "title": "Ordering Mode",
             "type": "string"
           },
-          "source_names": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Source Names",
-            "type": "object"
-          },
+          "source_names": {},
           "source_paths": {
             "items": {
               "type": "string"
             },
-            "title": "Source Paths",
             "type": "array"
           },
           "step_count": {
-            "title": "Step Count",
+            "format": "int32",
             "type": "integer"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           }
         },
@@ -4143,7 +4127,6 @@
           "step_count",
           "updated_at"
         ],
-        "title": "ContinuityPlanListItem",
         "type": "object"
       },
       "ContinuityPlanNode": {
@@ -4364,124 +4347,141 @@
         "type": "object"
       },
       "ContinuityPlanResponse": {
-        "description": "Persisted continuity plan response.\n\nRead-only: never runs ``validate_structure`` write invariants. Legacy\nplans whose ``nodes_json`` predates the #3037 unique constraint and\ncontains the same issue twice therefore load without a 500 (issue #3347);\nwrites remain gated by ``ContinuityPlanWrite.validate_structure``.",
         "properties": {
           "created_at": {
-            "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "lanes": {
             "items": {
-              "$ref": "#/components/schemas/ContinuityPlanLane"
+              "$ref": "#/components/schemas/NativeContinuityPlanLane"
             },
-            "maxItems": 100,
-            "minItems": 0,
-            "title": "Lanes",
             "type": "array"
           },
           "name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
             "type": "string"
           },
           "nodes": {
             "items": {
-              "$ref": "#/components/schemas/ContinuityPlanNode"
+              "$ref": "#/components/schemas/NativeContinuityPlanNode"
             },
-            "maxItems": 1000,
-            "title": "Nodes",
             "type": "array"
           },
           "ordering_mode": {
-            "default": "informational",
-            "enum": [
-              "informational",
-              "strict_sequential"
-            ],
-            "title": "Ordering Mode",
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "user_id": {
-            "title": "User Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
-          "name",
-          "lanes",
           "id",
           "user_id",
+          "name",
+          "ordering_mode",
           "created_at",
           "updated_at"
         ],
-        "title": "ContinuityPlanResponse",
         "type": "object"
       },
       "ContinuityPlanWrite": {
-        "description": "Create/replace payload for a persisted continuity plan.",
+        "additionalProperties": false,
         "properties": {
           "expected_updated_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optimistic-concurrency token from GET ``updated_at``. When present on PUT, a mismatch returns 409 ``plan_version_conflict``.",
-            "title": "Expected Updated At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lanes": {
             "items": {
-              "$ref": "#/components/schemas/ContinuityPlanLane"
+              "$ref": "#/components/schemas/NativeContinuityPlanLane"
             },
-            "maxItems": 100,
-            "minItems": 0,
-            "title": "Lanes",
             "type": "array"
           },
           "name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
             "type": "string"
           },
           "nodes": {
             "items": {
-              "$ref": "#/components/schemas/ContinuityPlanNode"
+              "$ref": "#/components/schemas/NativeContinuityPlanNode"
             },
-            "maxItems": 1000,
-            "title": "Nodes",
             "type": "array"
           },
           "ordering_mode": {
-            "default": "informational",
-            "enum": [
-              "informational",
-              "strict_sequential"
-            ],
-            "title": "Ordering Mode",
             "type": "string"
           }
         },
         "required": [
           "name",
-          "lanes"
+          "ordering_mode"
         ],
-        "title": "ContinuityPlanWrite",
+        "type": "object"
+      },
+      "ContinuityReleaseSourceResponse": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
         "type": "object"
       },
       "ContinuityRuleRequest": {
@@ -11153,6 +11153,152 @@
         ],
         "type": "object"
       },
+      "NativeContinuityPlanLane": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inferred_gate_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "migration_contract": {},
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order"
+        ],
+        "type": "object"
+      },
+      "NativeContinuityPlanNode": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_target_ref_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "checkpoint_target_ref_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "convergence_gate": {
+            "items": {},
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_cbl_placements": {
+            "items": {},
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_confidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_story_arc_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "source_target_story_arc_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position"
+        ],
+        "type": "object"
+      },
       "NativeCreatorSummaryCoverage": {
         "properties": {
           "rated_issues_total": {
@@ -11506,30 +11652,180 @@
         ],
         "type": "object"
       },
-      "NativeReleaseSourceResponse": {
-        "description": "Result of reconciling a GitHub source identity with the ledger.",
+      "NativeReadingOrderProjectionConflict": {
         "properties": {
-          "exists": {
-            "type": "boolean"
+          "code": {
+            "type": "string"
           },
-          "release": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
-              }
+          "existing_positions": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
             ]
           }
         },
         "required": [
-          "exists"
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionEntry": {
+        "properties": {
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionPreview": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingOrderProjectionConflict"
+            },
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingOrderProjectionEntry"
+            },
+            "type": "array"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "NativeReadingOrderProjectionResult": {
+        "properties": {
+          "added_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kept_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_order_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_positions": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
         ],
         "type": "object"
       },
       "NativeSessionBandwidthState": {
-        "description": "Canonical bandwidth state; invalid stored values normalize to `null`.",
+        "description": "Canonical bandwidth state.",
         "properties": {
           "active_bandwidth": {
             "type": [
@@ -11565,8 +11861,92 @@
         },
         "type": "object"
       },
+      "NativeSessionDetailsResponse": {
+        "description": "Full session details response with events and narrative summary.",
+        "properties": {
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SessionEventDetail"
+            },
+            "type": "array"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "narrative_summary": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "session_id",
+          "started_at",
+          "start_die",
+          "ladder_path",
+          "narrative_summary",
+          "current_die",
+          "events"
+        ],
+        "type": "object"
+      },
+      "NativeSessionHistoryListResponse": {
+        "description": "Paginated session history list response.",
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionListItemResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "type": "object"
+      },
       "NativeSessionIntentState": {
-        "description": "Canonical intent state; invalid stored values normalize to `null`.",
+        "description": "Canonical intent state.",
         "properties": {
           "active_intent": {
             "type": [
@@ -15088,45 +15468,34 @@
         "type": "object"
       },
       "ReadingOrderAdoptRequest": {
-        "description": "Request to adopt a legacy reading order into the canonical plan.",
+        "additionalProperties": false,
         "properties": {
           "lane_id": {
-            "default": "adopted",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Lane Id",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lane_name": {
-            "default": "Adopted",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Lane Name",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "plan_name": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plan Name"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reading_order_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Reading Order Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
           "reading_order_id"
         ],
-        "title": "ReadingOrderAdoptRequest",
         "type": "object"
       },
       "ReadingOrderItemResponse": {
@@ -15476,29 +15845,23 @@
         "type": "object"
       },
       "ReadingPlanDependencyLink": {
-        "description": "One plan provenance reference to a canonical Dependency edge.",
         "properties": {
           "dependency_id": {
-            "title": "Dependency Id",
+            "format": "int32",
             "type": "integer"
           },
           "explanation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Explanation"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_issue_id": {
-            "title": "Source Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "target_issue_id": {
-            "title": "Target Issue Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -15507,133 +15870,91 @@
           "source_issue_id",
           "target_issue_id"
         ],
-        "title": "ReadingPlanDependencyLink",
         "type": "object"
       },
       "ReadingPlanDependencyLinkRequest": {
-        "description": "Request to reference one canonical Dependency edge from a plan.",
+        "additionalProperties": false,
         "properties": {
           "explanation": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Explanation"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "title": "ReadingPlanDependencyLinkRequest",
         "type": "object"
       },
       "ReadingPlanMemberIssue": {
-        "description": "One normalized Issue occurrence inside a Reading Plan.",
         "properties": {
           "display_position": {
-            "title": "Display Position",
+            "format": "int32",
             "type": "integer"
           },
           "is_checkpoint": {
-            "default": false,
-            "title": "Is Checkpoint",
             "type": "boolean"
           },
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lane_id": {
-            "title": "Lane Id",
             "type": "string"
           },
           "occurrence_id": {
-            "title": "Occurrence Id",
             "type": "string"
           },
           "reader_optional": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Optional"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "reader_role": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Role"
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "source_metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Metadata"
-          }
+          "source_metadata": {}
         },
         "required": [
           "occurrence_id",
           "issue_id",
           "lane_id",
-          "display_position"
+          "display_position",
+          "is_checkpoint"
         ],
-        "title": "ReadingPlanMemberIssue",
         "type": "object"
       },
       "ReadingPlanMembershipResponse": {
-        "description": "Normalized membership, provenance, and progress for one Reading Plan.",
+        "description": "Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`.",
         "properties": {
           "dependencies": {
             "items": {
               "$ref": "#/components/schemas/ReadingPlanDependencyLink"
             },
-            "title": "Dependencies",
             "type": "array"
           },
           "issues": {
             "items": {
               "$ref": "#/components/schemas/ReadingPlanMemberIssue"
             },
-            "title": "Issues",
             "type": "array"
           },
           "placements": {
             "items": {
               "$ref": "#/components/schemas/ReadingPlanSourcePlacementView"
             },
-            "title": "Placements",
             "type": "array"
           },
           "plan_id": {
-            "title": "Plan Id",
+            "format": "int32",
             "type": "integer"
           },
           "progress": {
@@ -15643,7 +15964,6 @@
             "items": {
               "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
             },
-            "title": "Sources",
             "type": "array"
           }
         },
@@ -15655,18 +15975,16 @@
           "placements",
           "progress"
         ],
-        "title": "ReadingPlanMembershipResponse",
         "type": "object"
       },
       "ReadingPlanProgress": {
-        "description": "Plan progress derived from global Issue read state.",
         "properties": {
           "read_issues": {
-            "title": "Read Issues",
+            "format": "int32",
             "type": "integer"
           },
           "total_issues": {
-            "title": "Total Issues",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -15674,86 +15992,58 @@
           "total_issues",
           "read_issues"
         ],
-        "title": "ReadingPlanProgress",
         "type": "object"
       },
       "ReadingPlanReleaseSourceStatus": {
-        "description": "One followed ComicVine volume and its sync state on a Reading Plan.",
         "properties": {
           "enabled": {
-            "title": "Enabled",
             "type": "boolean"
           },
           "external_identity_id": {
-            "title": "External Identity Id",
+            "format": "int32",
             "type": "integer"
           },
           "last_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_issue_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Issue Count"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "provider_publisher": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Publisher"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_start_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Start Year"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "provider_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Title"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_volume_id": {
-            "title": "Provider Volume Id",
             "type": "string"
           },
           "source_id": {
-            "title": "Source Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -15764,34 +16054,27 @@
           "provider_volume_id",
           "enabled"
         ],
-        "title": "ReadingPlanReleaseSourceStatus",
         "type": "object"
       },
       "ReadingPlanSourcePlacementView": {
-        "description": "One preserved source-position observation for a plan occurrence.",
         "properties": {
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "occurrence_id": {
-            "title": "Occurrence Id",
             "type": "string"
           },
           "plan_source_id": {
-            "title": "Plan Source Id",
+            "format": "int32",
             "type": "integer"
           },
           "source_position": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Position"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -15799,91 +16082,55 @@
           "occurrence_id",
           "plan_source_id"
         ],
-        "title": "ReadingPlanSourcePlacementView",
         "type": "object"
       },
       "ReadingPlanSourceSnapshot": {
-        "description": "One preserved import snapshot referenced by a Reading Plan.",
         "properties": {
           "adopted_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adopted At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "content_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Hash"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "raw_source_path": {
-            "title": "Raw Source Path",
             "type": "string"
           },
           "recorded_at": {
-            "format": "date-time",
-            "title": "Recorded At",
             "type": "string"
           },
           "repository": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revision_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision Sha"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Path"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -15891,7 +16138,6 @@
           "raw_source_path",
           "recorded_at"
         ],
-        "title": "ReadingPlanSourceSnapshot",
         "type": "object"
       },
       "ReadingSessionCreatedResponse": {
@@ -16221,21 +16467,18 @@
         "type": "object"
       },
       "ReleaseSourceCreate": {
-        "description": "Create a release source subscription.",
+        "additionalProperties": false,
         "properties": {
           "external_identity_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "External Identity Id",
+            "format": "int32",
             "type": "integer"
           },
           "plan_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Plan Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -16244,102 +16487,40 @@
           "thread_id",
           "external_identity_id"
         ],
-        "title": "ReleaseSourceCreate",
         "type": "object"
       },
       "ReleaseSourceResponse": {
-        "description": "A release source with provider display metadata.",
+        "description": "Result of reconciling a GitHub source identity with the ledger.",
         "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "enabled": {
-            "title": "Enabled",
+          "exists": {
             "type": "boolean"
           },
-          "external_identity_id": {
-            "title": "External Identity Id",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "last_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
+          "release": {
+            "oneOf": [
               {
                 "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
-          },
-          "plan_id": {
-            "title": "Plan Id",
-            "type": "integer"
-          },
-          "provider": {
-            "title": "Provider",
-            "type": "string"
-          },
-          "provider_title": {
-            "anyOf": [
-              {
-                "type": "string"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
               }
-            ],
-            "title": "Provider Title"
-          },
-          "provider_volume_id": {
-            "title": "Provider Volume Id",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
+            ]
           }
         },
         "required": [
-          "id",
-          "plan_id",
-          "thread_id",
-          "external_identity_id",
-          "provider",
-          "provider_volume_id",
-          "provider_title",
-          "enabled",
-          "last_synced_at",
-          "created_at",
-          "updated_at"
+          "exists"
         ],
-        "title": "ReleaseSourceResponse",
         "type": "object"
       },
       "ReleaseSourceUpdate": {
-        "description": "Update a release source (enable/disable).",
+        "additionalProperties": false,
         "properties": {
           "enabled": {
-            "title": "Enabled",
             "type": "boolean"
           }
         },
         "required": [
           "enabled"
         ],
-        "title": "ReleaseSourceUpdate",
         "type": "object"
       },
       "ReleaseUpsertRequest": {
@@ -17479,7 +17660,7 @@
         "type": "object"
       },
       "SessionActiveThread": {
-        "description": "Active (pending or freshly rolled) thread projection for one session.",
+        "description": "Active thread projection.",
         "properties": {
           "format": {
             "type": "string"
@@ -17907,6 +18088,96 @@
         "title": "SessionDetailsResponse",
         "type": "object"
       },
+      "SessionEventDetail": {
+        "description": "Event detail for session details response.",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "die_after": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "queue_move": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "selection_method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_deleted": {
+            "type": "boolean"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "timestamp",
+          "thread_deleted"
+        ],
+        "type": "object"
+      },
       "SessionHistoryListResponse": {
         "description": "Schema for paginated session history list response.",
         "properties": {
@@ -18165,6 +18436,125 @@
           "snapshot_count"
         ],
         "title": "SessionListItem",
+        "type": "object"
+      },
+      "SessionListItemResponse": {
+        "description": "List-item session response (history list endpoint).",
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "manual_die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "snapshot_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "reading_mode_suggested"
+        ],
+        "type": "object"
+      },
+      "SessionListParams": {
+        "description": "Query parameters for session history pagination.",
+        "properties": {
+          "page_size": {
+            "default": 50,
+            "format": "int32",
+            "maximum": 200,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "SessionResponse": {
@@ -18449,7 +18839,7 @@
         "type": "object"
       },
       "SessionTag": {
-        "description": "One direct visible tag on the active thread.",
+        "description": "Direct visible tag.",
         "properties": {
           "color": {
             "type": "string"
@@ -18493,7 +18883,7 @@
         "type": "object"
       },
       "SessionThreadSummary": {
-        "description": "Compact thread summary used for the (empty on this endpoint) snoozed and\nskipped lists, kept typed so the contract stays explicit.",
+        "description": "Compact thread summary.",
         "properties": {
           "id": {
             "format": "int32",
@@ -20402,6 +20792,221 @@
         "title": "TrafficMetricsSnapshot",
         "type": "object"
       },
+      "UndoApplyResponse": {
+        "description": "Full session response matching Python SessionResponse.",
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeSessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "manual_die": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pending_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "skipped_threads": {
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            },
+            "type": "array"
+          },
+          "snapshot_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snoozed_thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "snoozed_threads": {
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            },
+            "type": "array"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "type": "object"
+      },
+      "UndoSnapshotItem": {
+        "description": "Snapshot item in the list response.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "UndoSnapshotsResponse": {
+        "description": "Undo snapshots list response.",
+        "properties": {
+          "session_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/UndoSnapshotItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "snapshots"
+        ],
+        "type": "object"
+      },
       "UpdateTagRequest": {
         "properties": {
           "color": {
@@ -22090,8 +22695,7 @@
     },
     "/api/v1/continuity-plans/": {
       "get": {
-        "description": "List every continuity plan owned by the authenticated user.\n\nPlans are returned in descending ``updated_at`` order so the most\nrecently modified plan appears first.",
-        "operationId": "list_continuity_plans_api_v1_continuity_plans__get",
+        "operationId": "continuity_plans_list",
         "responses": {
           "200": {
             "content": {
@@ -22100,12 +22704,11 @@
                   "items": {
                     "$ref": "#/components/schemas/ContinuityPlanListItem"
                   },
-                  "title": "Response List Continuity Plans Api V1 Continuity Plans  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           }
         },
         "security": [
@@ -22113,16 +22716,12 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Continuity Plans",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       },
       "post": {
-        "description": "Create a plan and compile rules only when strict intent is explicit.",
-        "operationId": "create_continuity_plan_api_v1_continuity_plans__post",
+        "operationId": "continuity_plans_create",
         "requestBody": {
           "content": {
             "application/json": {
@@ -22142,17 +22741,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22160,18 +22749,14 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Continuity Plan",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/from-reading-order": {
       "post": {
-        "description": "Adopt a legacy reading order into the canonical continuity plan. The source reading order is not mutated; the new plan is the canonical owner of the ordering intent. See docs/READING_PLAN_CANONICAL_MODEL.md.",
-        "operationId": "adopt_reading_order_api_v1_continuity_plans_from_reading_order_post",
+        "operationId": "continuity_plans_adopt_reading_order",
         "requestBody": {
           "content": {
             "application/json": {
@@ -22191,17 +22776,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22209,18 +22784,14 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Adopt Reading Order",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/release-sources/": {
       "post": {
-        "description": "Subscribe a plan+thread to a confirmed ComicVine volume.",
-        "operationId": "create_release_source_api_v1_continuity_plans_release_sources__post",
+        "operationId": "release_sources_create",
         "requestBody": {
           "content": {
             "application/json": {
@@ -22236,21 +22807,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReleaseSourceResponse"
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22258,42 +22819,28 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Release Source",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-plan-release-sources"
+          "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/release-sources/{source_id}": {
       "delete": {
-        "description": "Remove a release source subscription.",
-        "operationId": "delete_release_source_api_v1_continuity_plans_release_sources__source_id__delete",
+        "operationId": "release_sources_delete",
         "parameters": [
           {
             "in": "path",
             "name": "source_id",
             "required": true,
             "schema": {
-              "title": "Source Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22301,23 +22848,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Release Source",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-plan-release-sources"
+          "continuity-plans"
         ]
       },
       "patch": {
-        "description": "Enable or disable a release source (non-destructive).",
-        "operationId": "update_release_source_api_v1_continuity_plans_release_sources__source_id__patch",
+        "operationId": "release_sources_update",
         "parameters": [
           {
             "in": "path",
             "name": "source_id",
             "required": true,
             "schema": {
-              "title": "Source Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22337,21 +22880,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReleaseSourceResponse"
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22359,42 +22892,28 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Release Source",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-plan-release-sources"
+          "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/{plan_id}": {
       "delete": {
-        "description": "Delete one plan and only the hard rules compiled by that plan.",
-        "operationId": "delete_continuity_plan_api_v1_continuity_plans__plan_id__delete",
+        "operationId": "continuity_plans_delete",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22402,23 +22921,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Continuity Plan",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       },
       "get": {
-        "description": "Return one owned continuity plan from normalized membership.",
-        "operationId": "get_continuity_plan_api_v1_continuity_plans__plan_id__get",
+        "operationId": "continuity_plans_get",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22432,17 +22947,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22450,23 +22955,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Continuity Plan",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       },
       "put": {
-        "description": "Replace a plan atomically, including rules explicitly owned by that plan.",
-        "operationId": "update_continuity_plan_api_v1_continuity_plans__plan_id__put",
+        "operationId": "continuity_plans_update",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22490,17 +22991,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22508,25 +22999,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Continuity Plan",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
       "delete": {
-        "description": "Remove one plan's reference to a Dependency edge.\n\nOnly this plan's link is removed; the canonical edge and every other\nplan's references are untouched.",
-        "operationId": "unlink_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__delete",
+        "operationId": "continuity_plans_unlink_dependency",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           },
@@ -22535,24 +23022,14 @@
             "name": "dependency_id",
             "required": true,
             "schema": {
-              "title": "Dependency Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22560,23 +23037,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Unlink Plan Dependency Edge",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       },
       "post": {
-        "description": "Reference one canonical Dependency edge from one owned plan.\n\nLinking records provenance only; it never creates, modifies, or deletes\nthe canonical edge and never changes Roll eligibility.",
-        "operationId": "link_plan_dependency_edge_api_v1_continuity_plans__plan_id__dependencies__dependency_id__post",
+        "operationId": "continuity_plans_link_dependency",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           },
@@ -22585,7 +23058,7 @@
             "name": "dependency_id",
             "required": true,
             "schema": {
-              "title": "Dependency Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22609,17 +23082,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22627,25 +23090,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Link Plan Dependency Edge",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/{plan_id}/membership": {
       "get": {
-        "description": "Return the normalized membership view for one owned plan.\n\nMembership, Dependency provenance, source snapshots, placements, and\nprogress derived from global Issue read state are read through the\nnormalized relational representation.",
-        "operationId": "get_continuity_plan_membership_api_v1_continuity_plans__plan_id__membership_get",
+        "operationId": "continuity_plans_membership",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22659,17 +23118,7 @@
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22677,25 +23126,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Continuity Plan Membership",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
       "post": {
-        "description": "Apply a projection atomically after a successful preview.\n\nThe confirm endpoint re-computes the projection and rejects the request\nif any conflict is detected. A failed or cancelled projection leaves\nboth the plan and the reading order unchanged because all mutations are\nperformed in a single transaction that rolls back on any error.",
-        "operationId": "confirm_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_post",
+        "operationId": "continuity_plans_project_to_reading_order",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22704,7 +23149,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/NativeReadingOrderProjectionRequest"
               }
             }
           },
@@ -22715,21 +23160,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                  "$ref": "#/components/schemas/NativeReadingOrderProjectionResult"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22737,10 +23172,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Confirm Plan Projection",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-orders"
         ]
       }
@@ -22807,15 +23239,14 @@
     },
     "/api/v1/continuity-plans/{plan_id}/release-sources/": {
       "get": {
-        "description": "List release sources for one plan.",
-        "operationId": "list_release_sources_api_v1_continuity_plans__plan_id__release_sources__get",
+        "operationId": "release_sources_list",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22826,24 +23257,13 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ReleaseSourceResponse"
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
                   },
-                  "title": "Response List Release Sources Api V1 Continuity Plans  Plan Id  Release Sources  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22851,25 +23271,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Release Sources",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-plan-release-sources"
+          "continuity-plans"
         ]
       }
     },
     "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
       "get": {
-        "description": "List reader-facing release source status for one plan.\n\nReturns enabled and disabled sources so the reader can re-enable a\npreviously disabled volume without leaving the plan reader view.",
-        "operationId": "list_release_sources_for_reader_api_v1_continuity_plans__plan_id__release_sources_reader_get",
+        "operationId": "release_sources_list_reader",
         "parameters": [
           {
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22882,22 +23298,11 @@
                   "items": {
                     "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
                   },
-                  "title": "Response List Release Sources For Reader Api V1 Continuity Plans  Plan Id  Release Sources Reader Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -22905,11 +23310,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Release Sources For Reader",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-plan-release-sources"
+          "continuity-plans"
         ]
       }
     },
@@ -27261,7 +27663,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReleaseSourceResponse"
+                  "$ref": "#/components/schemas/ReleaseSourceResponse"
                 }
               }
             },
@@ -27537,39 +27939,23 @@
     },
     "/api/v1/sessions/": {
       "get": {
-        "description": "List sessions with cursor-based pagination.\n\nArgs:\n    current_user: The authenticated user making the request.\n    page_size: Number of sessions to return per page (default 50, max 200).\n    page_token: Token for pagination continuation (started_at timestamp, session_id).\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionHistoryListResponse with paginated sessions and next_page_token if more exist.",
-        "operationId": "list_sessions_api_v1_sessions__get",
+        "operationId": "list_sessions_v1_documentation",
         "parameters": [
           {
-            "description": "Number of sessions to return per page (default 50, max 200)",
             "in": "query",
             "name": "page_size",
             "required": false,
             "schema": {
-              "default": 50,
-              "description": "Number of sessions to return per page (default 50, max 200)",
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
-            "description": "Token for pagination continuation (started_at,session_id)",
             "in": "query",
             "name": "page_token",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Token for pagination continuation (started_at,session_id)",
-              "title": "Page Token"
+              "type": "string"
             }
           }
         ],
@@ -27578,21 +27964,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                  "$ref": "#/components/schemas/NativeSessionHistoryListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Paginated session history"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27600,9 +27982,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Sessions",
+        "summary": "Documentation-only operation for the versioned list.",
         "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -27712,15 +28093,15 @@
     },
     "/api/v1/sessions/{session_id}/details": {
       "get": {
-        "description": "Get session details with all events for expanded view.\n\nArgs:\n    session_id: The session ID to retrieve details for.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionDetailsResponse with events and narrative summary.\n\nRaises:\n    HTTPException: If session not found.",
-        "operationId": "get_session_details_api_v1_sessions__session_id__details_get",
+        "operationId": "get_session_details_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -27730,21 +28111,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionDetailsResponse"
+                  "$ref": "#/components/schemas/NativeSessionDetailsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Session details with events"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -27752,9 +28132,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Session Details",
+        "summary": "Documentation-only operation for the versioned details.",
         "tags": [
-          "session",
           "sessions"
         ]
       }
@@ -30134,15 +30513,15 @@
     },
     "/api/v1/undo/{session_id}/snapshots": {
       "get": {
-        "description": "List all snapshots for a session.\n\nArgs:\n    session_id: Session whose snapshots should be listed.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Typed snapshot list in reverse chronological order.\n\nRaises:\n    HTTPException: If the session is not owned by the current user.",
-        "operationId": "list_session_snapshots_api_v1_undo__session_id__snapshots_get",
+        "operationId": "list_undo_snapshots_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30152,21 +30531,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SnapshotsListResponse"
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Session restore snapshots"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30174,33 +30552,33 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Session Snapshots",
+        "summary": "Documentation-only operation for the versioned undo snapshots.",
         "tags": [
-          "undo",
           "undo"
         ]
       }
     },
     "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
       "post": {
-        "description": "Undo session state to a snapshot.\n\nArgs:\n    session_id: Session to restore.\n    snapshot_id: Snapshot to restore.\n    current_user: Authenticated user.\n    db: Database session.\n\nReturns:\n    Restored session response.\n\nRaises:\n    HTTPException: If the session or snapshot is not found.\n    RuntimeError: If all deadlock retries fail.",
-        "operationId": "undo_to_snapshot_api_v1_undo__session_id__undo__snapshot_id__post",
+        "operationId": "undo_to_snapshot_v1_documentation",
         "parameters": [
           {
+            "description": "Owned reading session",
             "in": "path",
             "name": "session_id",
             "required": true,
             "schema": {
-              "title": "Session Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Snapshot to restore",
             "in": "path",
             "name": "snapshot_id",
             "required": true,
             "schema": {
-              "title": "Snapshot Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30210,21 +30588,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/UndoApplyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Restored session"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30232,9 +30612,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Undo To Snapshot",
+        "summary": "Documentation-only operation for the versioned undo apply.",
         "tags": [
-          "undo",
           "undo"
         ]
       }

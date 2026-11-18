@@ -394,6 +394,57 @@
         ]
       }
     },
+    "/api/sessions/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned list.",
+        "operationId": "list_sessions_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated session history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -420,6 +471,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/details": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the unversioned details.",
+        "operationId": "get_session_details_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
                 }
               }
             }
@@ -519,6 +617,113 @@
           },
           "404": {
             "description": "Thread not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/undo/{session_id}/snapshots": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the unversioned undo snapshots.",
+        "operationId": "list_undo_snapshots_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session restore snapshots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/undo/{session_id}/undo/{snapshot_id}": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the unversioned undo apply.",
+        "operationId": "undo_to_snapshot_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "description": "Snapshot to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -953,6 +1158,568 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityPlanListItem"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/from-reading-order": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_adopt_reading_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderAdoptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/release-sources/{source_id}": {
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_delete",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_update",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_get",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_update",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityPlanWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityPlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_delete",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_link_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingPlanDependencyLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_unlink_dependency",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/membership": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_membership",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPlanMembershipResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "operationId": "continuity_plans_project_to_reading_order",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectionResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityReleaseSourceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/release-sources/reader": {
+      "get": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "release_sources_list_reader",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2659,6 +3426,57 @@
         ]
       }
     },
+    "/api/v1/sessions/": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned list.",
+        "operationId": "list_sessions_v1_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated session history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionHistoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -2685,6 +3503,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/details": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only operation for the versioned details.",
+        "operationId": "get_session_details_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
                 }
               }
             }
@@ -3627,6 +4492,113 @@
           },
           "422": {
             "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/snapshots": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the versioned undo snapshots.",
+        "operationId": "list_undo_snapshots_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session restore snapshots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoSnapshotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/undo/{session_id}/undo/{snapshot_id}": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Documentation-only operation for the versioned undo apply.",
+        "operationId": "undo_to_snapshot_v1_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "description": "Snapshot to restore",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session or snapshot not found"
+          },
+          "409": {
+            "description": "Only the latest rating can be undone"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -5336,6 +6308,331 @@
             "type": "string"
           },
           "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ContinuityPlanLane": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "order"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "inferred_gate_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "migration_contract": {},
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityPlanListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ordering_mode",
+          "lane_count",
+          "step_count",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lane_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "source_names": {},
+          "source_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "step_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ContinuityPlanNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "node_type",
+          "ref_id",
+          "lane_id",
+          "position"
+        ],
+        "properties": {
+          "checkpoint_target_ref_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "checkpoint_target_ref_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "convergence_gate": {
+            "type": "array",
+            "items": {}
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_cbl_placements": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {}
+          },
+          "source_confidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_story_arc_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_target_story_arc_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityPlanResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "ordering_mode",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            }
+          },
+          "ordering_mode": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ContinuityPlanWrite": {
+        "type": "object",
+        "required": [
+          "name",
+          "ordering_mode"
+        ],
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lanes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanLane"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContinuityPlanNode"
+            }
+          },
+          "ordering_mode": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityReleaseSourceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
             "type": "string"
           }
         }
@@ -8733,6 +10030,37 @@
           }
         }
       },
+      "ReadingOrderAdoptRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "lane_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "plan_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "ReadingOrderListResponse": {
         "type": "object",
         "description": "Python `ReadingOrderListResponse`.",
@@ -8745,6 +10073,178 @@
             "items": {
               "$ref": "#/components/schemas/ReadingOrderSummary"
             }
+          }
+        }
+      },
+      "ReadingOrderProjectionConflict": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderProjectionEntry": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReadingOrderProjectionPreview": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionConflict"
+            }
+          },
+          "dropped_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectionEntry"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderProjectionRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingOrderProjectionResult": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "reading_order_id",
+          "added_count",
+          "updated_count",
+          "kept_count",
+          "total_positions"
+        ],
+        "properties": {
+          "added_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kept_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_count": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -8773,6 +10273,302 @@
           "total_items": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ReadingPlanDependencyLink": {
+        "type": "object",
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "target_issue_id"
+        ],
+        "properties": {
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanDependencyLinkRequest": {
+        "type": "object",
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingPlanMemberIssue": {
+        "type": "object",
+        "required": [
+          "occurrence_id",
+          "issue_id",
+          "lane_id",
+          "display_position",
+          "is_checkpoint"
+        ],
+        "properties": {
+          "display_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lane_id": {
+            "type": "string"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "reader_optional": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reader_role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_metadata": {}
+        }
+      },
+      "ReadingPlanMembershipResponse": {
+        "type": "object",
+        "description": "Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`.",
+        "required": [
+          "plan_id",
+          "issues",
+          "dependencies",
+          "sources",
+          "placements",
+          "progress"
+        ],
+        "properties": {
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanDependencyLink"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanMemberIssue"
+            }
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourcePlacementView"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReadingPlanProgress"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
+            }
+          }
+        }
+      },
+      "ReadingPlanProgress": {
+        "type": "object",
+        "required": [
+          "total_issues",
+          "read_issues"
+        ],
+        "properties": {
+          "read_issues": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_issues": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanReleaseSourceStatus": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "provider_publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "provider_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanSourcePlacementView": {
+        "type": "object",
+        "required": [
+          "id",
+          "occurrence_id",
+          "plan_source_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "plan_source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_position": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingPlanSourceSnapshot": {
+        "type": "object",
+        "required": [
+          "id",
+          "raw_source_path",
+          "recorded_at"
+        ],
+        "properties": {
+          "adopted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "raw_source_path": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "repository": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -9080,6 +10876,29 @@
           }
         }
       },
+      "ReleaseSourceCreate": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "thread_id",
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "ReleaseSourceResponse": {
         "type": "object",
         "description": "Result of reconciling a GitHub source identity with the ledger.",
@@ -9101,6 +10920,18 @@
             ]
           }
         }
+      },
+      "ReleaseSourceUpdate": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "ReleaseUpsertRequest": {
         "type": "object",
@@ -9531,7 +11362,7 @@
       },
       "SessionActiveThread": {
         "type": "object",
-        "description": "Active (pending or freshly rolled) thread projection for one session.",
+        "description": "Active thread projection.",
         "required": [
           "id",
           "title",
@@ -9629,7 +11460,7 @@
       },
       "SessionBandwidthState": {
         "type": "object",
-        "description": "Canonical bandwidth state; invalid stored values normalize to `null`.",
+        "description": "Canonical bandwidth state.",
         "properties": {
           "active_bandwidth": {
             "type": [
@@ -9825,9 +11656,183 @@
           }
         }
       },
+      "SessionDetailsResponse": {
+        "type": "object",
+        "description": "Full session details response with events and narrative summary.",
+        "required": [
+          "session_id",
+          "started_at",
+          "start_die",
+          "ladder_path",
+          "narrative_summary",
+          "current_die",
+          "events"
+        ],
+        "properties": {
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionEventDetail"
+            }
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "narrative_summary": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionEventDetail": {
+        "type": "object",
+        "description": "Event detail for session details response.",
+        "required": [
+          "id",
+          "type",
+          "timestamp",
+          "thread_deleted"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "queue_move": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "selection_method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_deleted": {
+            "type": "boolean"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionHistoryListResponse": {
+        "type": "object",
+        "description": "Paginated session history list response.",
+        "required": [
+          "sessions"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionListItemResponse"
+            }
+          }
+        }
+      },
       "SessionIntentState": {
         "type": "object",
-        "description": "Canonical intent state; invalid stored values normalize to `null`.",
+        "description": "Canonical intent state.",
         "properties": {
           "active_intent": {
             "type": [
@@ -9855,6 +11860,125 @@
             ]
           },
           "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionListItemResponse": {
+        "type": "object",
+        "description": "List-item session response (history list endpoint).",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SessionListParams": {
+        "type": "object",
+        "description": "Query parameters for session history pagination.",
+        "properties": {
+          "page_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1
+          },
+          "page_token": {
             "type": [
               "string",
               "null"
@@ -9917,7 +12041,7 @@
       },
       "SessionTag": {
         "type": "object",
-        "description": "One direct visible tag on the active thread.",
+        "description": "Direct visible tag.",
         "required": [
           "id",
           "name",
@@ -9961,7 +12085,7 @@
       },
       "SessionThreadSummary": {
         "type": "object",
-        "description": "Compact thread summary used for the (empty on this endpoint) snoozed and\nskipped lists, kept typed so the contract stays explicit.",
+        "description": "Compact thread summary.",
         "required": [
           "id",
           "title"
@@ -10970,6 +13094,221 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "UndoApplyResponse": {
+        "type": "object",
+        "description": "Full session response matching Python SessionResponse.",
+        "required": [
+          "id",
+          "started_at",
+          "start_die",
+          "user_id",
+          "ladder_path",
+          "current_die",
+          "has_restore_point",
+          "snapshot_count",
+          "snoozed_thread_ids",
+          "snoozed_threads",
+          "skipped_thread_ids",
+          "skipped_threads",
+          "reading_mode_suggested"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBandwidthState"
+              }
+            ]
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_restore_point": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "intent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionIntentState"
+              }
+            ]
+          },
+          "ladder_path": {
+            "type": "string"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_mode_suggested": {
+            "type": "boolean"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionThreadSummary"
+            }
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotItem": {
+        "type": "object",
+        "description": "Snapshot item in the list response.",
+        "required": [
+          "id",
+          "session_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UndoSnapshotsResponse": {
+        "type": "object",
+        "description": "Undo snapshots list response.",
+        "required": [
+          "session_id",
+          "snapshots"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UndoSnapshotItem"
+            }
           }
         }
       },
