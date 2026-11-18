@@ -74,9 +74,7 @@ fn ordinary_number(value: &str) -> Option<&str> {
 }
 
 fn compare_ordinary(left: &str, right: &str) -> Ordering {
-    left.len()
-        .cmp(&right.len())
-        .then_with(|| left.cmp(right))
+    left.len().cmp(&right.len()).then_with(|| left.cmp(right))
 }
 
 /// Merge one new numeric label into canonical thread order. This is the pure
@@ -628,69 +626,68 @@ pub(crate) async fn import_series(
         identities_to_upsert
             .entry(comicvine_issue_id)
             .or_insert_with(|| issue.clone());
-        let (locator, outcome, conflict_detail) = if let Some(index) =
-            planned_by_number.get(&issue.issue_number).copied()
-        {
-            let locator = if planned[index].id.is_some() {
-                IssueLocator::Existing(planned[index].id.unwrap_or_default())
-            } else {
-                IssueLocator::Planned(index)
-            };
-            if let Some(confirmed_id) = planned[index].confirmed_comicvine_id {
-                if confirmed_id != comicvine_issue_id {
-                    (
-                        locator,
-                        "conflict",
-                        Some("issue already has a confirmed comicvine identity".to_owned()),
-                    )
+        let (locator, outcome, conflict_detail) =
+            if let Some(index) = planned_by_number.get(&issue.issue_number).copied() {
+                let locator = if planned[index].id.is_some() {
+                    IssueLocator::Existing(planned[index].id.unwrap_or_default())
+                } else {
+                    IssueLocator::Planned(index)
+                };
+                if let Some(confirmed_id) = planned[index].confirmed_comicvine_id {
+                    if confirmed_id != comicvine_issue_id {
+                        (
+                            locator,
+                            "conflict",
+                            Some("issue already has a confirmed comicvine identity".to_owned()),
+                        )
+                    } else {
+                        (locator, "reused", None)
+                    }
                 } else {
                     (locator, "reused", None)
                 }
             } else {
-                (locator, "reused", None)
-            }
-        } else {
-            let mut canonical_indices: Vec<usize> = (0..planned.len()).collect();
-            canonical_indices.sort_by_key(|planned_index| {
-                let planned_issue = &planned[*planned_index];
-                (planned_issue.position, planned_issue.id)
-            });
-            let existing_labels: Vec<String> = canonical_indices
-                .into_iter()
-                .map(|planned_index| planned[planned_index].issue_number.clone())
-                .collect();
-            let order = natural_issue_order(&existing_labels, &issue.issue_number);
-            let next_position = planned
-                .iter()
-                .map(|planned_issue| planned_issue.position)
-                .max()
-                .unwrap_or(0)
-                + 1;
-            let position = order.as_ref().map_or(next_position, |labels| {
-                labels
+                let mut canonical_indices: Vec<usize> = (0..planned.len()).collect();
+                canonical_indices.sort_by_key(|planned_index| {
+                    let planned_issue = &planned[*planned_index];
+                    (planned_issue.position, planned_issue.id)
+                });
+                let existing_labels: Vec<String> = canonical_indices
+                    .into_iter()
+                    .map(|planned_index| planned[planned_index].issue_number.clone())
+                    .collect();
+                let order = natural_issue_order(&existing_labels, &issue.issue_number);
+                let next_position = planned
                     .iter()
-                    .position(|label| label == &issue.issue_number)
-                    .map_or(next_position, |index| index as i32 + 1)
-            });
-            let index = planned.len();
-            planned.push(PlannedIssue {
-                id: None,
-                issue_number: issue.issue_number.clone(),
-                original_position: 0,
-                position,
-                status: "unread".to_owned(),
-                confirmed_comicvine_id: None,
-            });
-            planned_by_number.insert(issue.issue_number.clone(), index);
-            if let Some(labels) = order {
-                for (position, label) in labels.into_iter().enumerate() {
-                    if let Some(planned_index) = planned_by_number.get(&label) {
-                        planned[*planned_index].position = position as i32 + 1;
+                    .map(|planned_issue| planned_issue.position)
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                let position = order.as_ref().map_or(next_position, |labels| {
+                    labels
+                        .iter()
+                        .position(|label| label == &issue.issue_number)
+                        .map_or(next_position, |index| index as i32 + 1)
+                });
+                let index = planned.len();
+                planned.push(PlannedIssue {
+                    id: None,
+                    issue_number: issue.issue_number.clone(),
+                    original_position: 0,
+                    position,
+                    status: "unread".to_owned(),
+                    confirmed_comicvine_id: None,
+                });
+                planned_by_number.insert(issue.issue_number.clone(), index);
+                if let Some(labels) = order {
+                    for (position, label) in labels.into_iter().enumerate() {
+                        if let Some(planned_index) = planned_by_number.get(&label) {
+                            planned[*planned_index].position = position as i32 + 1;
+                        }
                     }
                 }
-            }
-            (IssueLocator::Planned(index), "created", None)
-        };
+                (IssueLocator::Planned(index), "created", None)
+            };
 
         if conflict_detail.is_none() {
             if let IssueLocator::Planned(index) = locator {
@@ -905,14 +902,288 @@ mod tests {
             natural_issue_order(&["1".to_owned(), "3".to_owned()], "Annual 2"),
             None
         );
-        assert_eq!(
-            natural_issue_order(&["Annual 1".to_owned()], "2"),
-            None
-        );
+        assert_eq!(natural_issue_order(&["Annual 1".to_owned()], "2"), None);
         assert_eq!(
             natural_issue_order(&["1".to_owned()], "999999999999999999999999"),
             Some(vec!["1".to_owned(), "999999999999999999999999".to_owned()])
         );
+    }
+
+    fn import_request(volume_id: i32, already_read_count: i32) -> ImportSeriesRequest {
+        ImportSeriesRequest {
+            comicvine_volume_id: volume_id,
+            reading_order_id: None,
+            anchor_before_thread_id: None,
+            anchor_after_thread_id: None,
+            already_read_count,
+        }
+    }
+
+    async fn database_fixture() -> (
+        Arc<AppState>,
+        tokio::sync::MutexGuard<'static, ()>,
+        deadpool_postgres::Object,
+    ) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("database connection");
+        connection
+            .execute(
+                "INSERT INTO users (id, username, created_at) VALUES (1, 'series-owner', now())",
+                &[],
+            )
+            .await
+            .expect("seed owner");
+        (state, guard, connection)
+    }
+
+    #[tokio::test]
+    async fn fresh_import_is_natural_idempotent_and_preserves_rich_metadata() {
+        let (state, _guard, connection) = database_fixture().await;
+        let volume_id = 948_350_101;
+        crate::test_support::install_test_volume_roster(
+            &volume_id.to_string(),
+            json!({"name": "Stormwatch"}),
+            vec![
+                json!({
+                    "id": 103,
+                    "issue_number": "33",
+                    "name": "Thirty Three",
+                    "cover_date": "1994-06-01",
+                    "image": {"super_url": "https://example.test/33.jpg"}
+                }),
+                json!({"id": 101, "issue_number": "2", "name": "Two"}),
+                json!({"id": 102, "issue_number": "3", "name": "Three"}),
+            ],
+        );
+
+        let (_, Json(first)) = import_series(
+            state.clone(),
+            crate::auth::AuthenticatedUser::for_test(1),
+            import_request(volume_id, 1),
+        )
+        .await
+        .expect("fresh series import");
+        assert!(first.thread_created);
+        assert_eq!(first.issues_adopted, 3);
+        assert_eq!(first.issues_skipped, 0);
+        assert_eq!(first.issues_conflict, 0);
+        assert!(first
+            .issue_results
+            .iter()
+            .all(|result| result.hydration == "not_attempted"));
+
+        let rows = connection
+            .query(
+                "SELECT issue_number, position, status FROM issues \
+                 WHERE thread_id = $1 ORDER BY position",
+                &[&first.thread_id],
+            )
+            .await
+            .expect("natural issue order");
+        let actual: Vec<(String, i32, String)> = rows
+            .iter()
+            .map(|row| (row.get(0), row.get(1), row.get(2)))
+            .collect();
+        assert_eq!(
+            actual,
+            vec![
+                ("2".to_owned(), 1, "read".to_owned()),
+                ("3".to_owned(), 2, "unread".to_owned()),
+                ("33".to_owned(), 3, "unread".to_owned()),
+            ]
+        );
+        let tracking = connection
+            .query_one(
+                "SELECT t.total_issues, t.issues_remaining, t.reading_progress, t.status, \
+                        i.issue_number \
+                 FROM threads t JOIN issues i ON i.id = t.next_unread_issue_id \
+                 WHERE t.id = $1",
+                &[&first.thread_id],
+            )
+            .await
+            .expect("derived thread tracking");
+        assert_eq!(tracking.get::<_, i32>(0), 3);
+        assert_eq!(tracking.get::<_, i32>(1), 2);
+        assert_eq!(tracking.get::<_, String>(2), "in_progress");
+        assert_eq!(tracking.get::<_, String>(3), "active");
+        assert_eq!(tracking.get::<_, String>(4), "3");
+
+        let metadata: Value = connection
+            .query_one(
+                "SELECT metadata_json FROM external_identities \
+                 WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '103'",
+                &[],
+            )
+            .await
+            .expect("roster metadata")
+            .get(0);
+        assert_eq!(metadata["name"], json!("Thirty Three"));
+        assert_eq!(metadata["cover_date"], json!("1994-06-01"));
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://example.test/33.jpg")
+        );
+        let evidence: String = connection
+            .query_one(
+                "SELECT m.evidence_source FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE e.external_id = '103' AND m.status = 'confirmed'",
+                &[],
+            )
+            .await
+            .expect("adoption provenance")
+            .get(0);
+        assert_eq!(evidence, ADOPTION_EVIDENCE_SOURCE);
+
+        connection
+            .execute(
+                "UPDATE external_identities SET metadata_json = $1::json \
+                 WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '103'",
+                &[&json!({"name": "Fully hydrated", "description": "rich provider facts"})],
+            )
+            .await
+            .expect("seed hydrated metadata");
+        let (_, Json(retry)) = import_series(
+            state,
+            crate::auth::AuthenticatedUser::for_test(1),
+            import_request(volume_id, 1),
+        )
+        .await
+        .expect("idempotent retry");
+        assert!(!retry.thread_created);
+        assert_eq!(retry.thread_id, first.thread_id);
+        assert_eq!(retry.issues_adopted, 0);
+        assert_eq!(retry.issues_skipped, 3);
+        assert!(retry
+            .issue_results
+            .iter()
+            .all(|result| result.outcome == "reused"));
+        let preserved: Value = connection
+            .query_one(
+                "SELECT metadata_json FROM external_identities \
+                 WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '103'",
+                &[],
+            )
+            .await
+            .expect("preserved metadata")
+            .get(0);
+        assert_eq!(preserved["name"], json!("Fully hydrated"));
+        assert_eq!(preserved["description"], json!("rich provider facts"));
+        let issue_count: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issues WHERE thread_id = $1",
+                &[&first.thread_id],
+            )
+            .await
+            .expect("retry did not duplicate issues")
+            .get(0);
+        assert_eq!(issue_count, 3);
+        crate::test_support::clear_test_volume_roster(&volume_id.to_string());
+    }
+
+    #[tokio::test]
+    async fn import_reports_cross_thread_and_local_identity_conflicts() {
+        let (state, _guard, connection) = database_fixture().await;
+        connection
+            .batch_execute(
+                "INSERT INTO threads \
+                    (id, title, format, issues_remaining, total_issues, queue_position, status, \
+                     user_id, created_at, is_test, is_blocked) \
+                 VALUES (10, 'Existing', 'Comic', 1, 1, 1, 'active', 1, now(), false, false); \
+                 INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) \
+                 VALUES (20, 10, '1', 1, 'unread', now()); \
+                 INSERT INTO external_identities \
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES (30, 'comicvine', 'issue', '777', '{}'::json, now(), now()); \
+                 INSERT INTO issue_external_identity_mappings \
+                    (issue_id, external_identity_id, status, evidence_source, evidence_json, \
+                     confidence, created_at, updated_at) \
+                 VALUES (20, 30, 'confirmed', 'existing_mapping', '{}'::json, 1.0, now(), now());",
+            )
+            .await
+            .expect("seed confirmed physical issue");
+        let volume_id = 948_350_102;
+        crate::test_support::install_test_volume_roster(
+            &volume_id.to_string(),
+            json!({"name": "Conflicts"}),
+            vec![
+                json!({"id": 777, "issue_number": "1"}),
+                json!({"id": 778, "issue_number": "2"}),
+                json!({"id": 779, "issue_number": "2"}),
+            ],
+        );
+
+        let (_, Json(response)) = import_series(
+            state.clone(),
+            crate::auth::AuthenticatedUser::for_test(1),
+            import_request(volume_id, 0),
+        )
+        .await
+        .expect("bounded conflict outcomes");
+        assert_eq!(response.issues_adopted, 1);
+        assert_eq!(response.issues_skipped, 0);
+        assert_eq!(response.issues_conflict, 2);
+        assert_eq!(response.issue_results[0].outcome, "conflict");
+        assert_eq!(response.issue_results[0].issue_id, Some(20));
+        assert!(response.issue_results[0]
+            .conflict_detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("thread 10")));
+        assert_eq!(response.issue_results[1].outcome, "created");
+        assert_eq!(response.issue_results[2].outcome, "conflict");
+        assert_eq!(
+            response.issue_results[2].conflict_detail.as_deref(),
+            Some("issue already has a confirmed comicvine identity")
+        );
+        let local_numbers: Vec<String> = connection
+            .query(
+                "SELECT issue_number FROM issues WHERE thread_id = $1 ORDER BY position",
+                &[&response.thread_id],
+            )
+            .await
+            .expect("only nonconflicting issue adopted")
+            .iter()
+            .map(|row| row.get(0))
+            .collect();
+        assert_eq!(local_numbers, vec!["2".to_owned()]);
+        let original_evidence: String = connection
+            .query_one(
+                "SELECT evidence_source FROM issue_external_identity_mappings \
+                 WHERE issue_id = 20 AND external_identity_id = 30",
+                &[],
+            )
+            .await
+            .expect("original mapping unchanged")
+            .get(0);
+        assert_eq!(original_evidence, "existing_mapping");
+        let duplicate_import = crate::comicvine_v2::import_issue(
+            axum::extract::State(state),
+            crate::auth::AuthenticatedUser::for_test(1),
+            Json(crate::comicvine_v2::ImportIssueRequest {
+                title: "Duplicate".to_owned(),
+                comicvine_issue_id: 777,
+                issue_number: Some("1".to_owned()),
+                reading_order_id: None,
+                anchor_before_thread_id: None,
+                anchor_after_thread_id: None,
+            }),
+        )
+        .await
+        .expect_err("duplicate physical issue is structured");
+        assert_eq!(duplicate_import.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            duplicate_import.structured_detail(),
+            Some(&json!({
+                "code": "duplicate_physical_issue",
+                "comicvine_issue_id": 777,
+                "existing_issue_id": 20,
+                "message": "ComicVine issue 777 already exists as issue 20"
+            }))
+        );
+        crate::test_support::clear_test_volume_roster(&volume_id.to_string());
     }
 
     #[test]
@@ -933,6 +1204,9 @@ mod tests {
             roster[0].metadata["primary_image"],
             json!("https://example.test/701-super.jpg")
         );
-        assert!(roster[0].metadata.get("deep_metadata_refreshed_at").is_none());
+        assert!(roster[0]
+            .metadata
+            .get("deep_metadata_refreshed_at")
+            .is_none());
     }
 }
