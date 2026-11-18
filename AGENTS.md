@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 42 (42 native-rust + 0 python-fastapi).
+- Live v2 operations: 43 (43 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 110 operations (v1 109 + unversioned 1); v1 active 79 live Python / 6 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 109 operations (v1 108 + unversioned 1); v1 active 79 live Python / 5 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -72,6 +72,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4348 (1): `GET /api/v2/analytics/metrics -> native-rust`
 - #4443 (2): `POST /api/v2/issues/cards -> native-rust`; `PATCH /api/v2/issues/{issue_id} -> native-rust`
 - #4459 (8): `GET /api/v2/auth/csrf -> native-rust`; `POST /api/v2/auth/forgot-password -> native-rust`; `POST /api/v2/auth/login -> native-rust`; `POST /api/v2/auth/logout -> native-rust`; `GET /api/v2/auth/me -> native-rust`; `POST /api/v2/auth/refresh -> native-rust`; `POST /api/v2/auth/register -> native-rust`; `POST /api/v2/auth/reset-password -> native-rust`
+- #4589 (1): `POST /api/v2/roll/unsnooze -> native-rust`
 - #4595 (2): `GET /api/v2/roll/die-state -> native-rust`; `GET /api/v2/roll/eligible-issue-ids -> native-rust`
 - #4623 (1): `GET /api/v2/issues/{issue_id}/comicvine -> native-rust`
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`

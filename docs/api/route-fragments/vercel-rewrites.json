@@ -744,6 +744,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v2/roll/unsnooze$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/threads/[0-9]+/issue-order$",
       "methods": [
         "PUT"
