@@ -317,6 +317,15 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/issues", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(native_dispatch),
+        )
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v1/threads/", post(native_dispatch))
@@ -381,7 +390,18 @@ fn app() -> Router {
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkRead", post(native_dispatch))
+        .route("/api/v1/issues:bulkMarkUnread", post(native_dispatch))
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(native_dispatch),
+        )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(native_dispatch),
+        )
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(native_dispatch),
@@ -705,6 +725,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v1_issue_read_state_ingress_preserves_same_path_and_requires_auth() {
+        for (method, uri) in [
+            ("GET", "/api/v1/issues/7/reader-context"),
+            ("POST", "/api/v1/issues/7:markRead"),
+            ("POST", "/api/v1/issues/7:markUnread"),
+            ("POST", "/api/v1/issues/7:move"),
+            ("POST", "/api/v1/issues:bulkMarkRead"),
+            ("POST", "/api/v1/issues:bulkMarkUnread"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn v1_taste_discovery_list_ingress_preserves_same_path_and_requires_auth() {
         let mut router = app();
         let response = router
@@ -760,6 +815,31 @@ mod tests {
         assert!(
             !text.contains("Wrong number of path arguments"),
             "numeric signal ids must not fail Path extraction: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn v1_cbl_adoption_preview_ingress_reaches_rust_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/issue-identity/cbl/1/adoption-preview")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "adoption-preview must reach Rust ingress, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
         );
     }
 

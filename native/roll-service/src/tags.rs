@@ -511,6 +511,55 @@ async fn visible_assignments_conn(
     Ok(out)
 }
 
+// Plan membership for tag inheritance.
+//
+// The v2 plan reader (GET /api/v2/continuity-plans/{plan_id}/reader) renders
+// plan steps from the plan's linked authoritative Reading List alone
+// (`reading_plan_sources.custom_cbl_list_id` -> `custom_cbl_entries`), and
+// relinking a plan never rewrites the retained `reading_plan_issues` snapshot.
+// An issue the plan page shows through the authoritative list must therefore
+// inherit the plan's tags even when the snapshot predates the link (#5265), so
+// membership here is the union of the snapshot and every linked owned list's
+// entries. Ownership of both the plan and the linked list is enforced, so one
+// user's plan or list existence never leaks through an inheritance source.
+
+/// `(issue_id, plan_id, plan_name)` for every viewer-owned plan containing any
+/// of `issue_placeholders` (positional `$1..$n`), with the viewer id at
+/// `${user_param}`.
+fn plan_membership_select(issue_placeholders: &str, user_param: usize) -> String {
+    format!(
+        "SELECT rpi.issue_id, cp.id, cp.name \
+         FROM continuity_plans cp \
+         JOIN reading_plan_issues rpi ON rpi.plan_id = cp.id \
+         WHERE rpi.issue_id IN ({issue_placeholders}) AND cp.user_id = ${user_param} \
+         UNION \
+         SELECT e.issue_id, cp.id, cp.name \
+         FROM continuity_plans cp \
+         JOIN reading_plan_sources s ON s.plan_id = cp.id AND s.custom_cbl_list_id IS NOT NULL \
+         JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = cp.user_id \
+         JOIN custom_cbl_entries e ON e.list_id = l.id \
+         WHERE e.issue_id IN ({issue_placeholders}) AND cp.user_id = ${user_param} \
+         ORDER BY 2, 1"
+    )
+}
+
+/// Single-issue variant of [`plan_membership_select`] with `$1` = issue id and
+/// `$2` = viewer id, returning `(plan_id, plan_name)`.
+fn plan_membership_select_one() -> &'static str {
+    "SELECT cp.id, cp.name \
+     FROM continuity_plans cp \
+     JOIN reading_plan_issues rpi ON rpi.plan_id = cp.id \
+     WHERE rpi.issue_id = $1 AND cp.user_id = $2 \
+     UNION \
+     SELECT cp.id, cp.name \
+     FROM continuity_plans cp \
+     JOIN reading_plan_sources s ON s.plan_id = cp.id AND s.custom_cbl_list_id IS NOT NULL \
+     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = cp.user_id \
+     JOIN custom_cbl_entries e ON e.list_id = l.id \
+     WHERE e.issue_id = $1 AND cp.user_id = $2 \
+     ORDER BY 1"
+}
+
 // combine
 fn combine_assignments(
     self_type: &str,
@@ -1336,11 +1385,7 @@ async fn issues_still_inheriting_tag(
         plans_by_issue.insert(*id, vec![]);
     }
     let placeholders2: Vec<String> = (1..=unique.len()).map(|i| format!("${i}")).collect();
-    let sql2 = format!(
-        "SELECT rpi.issue_id, cp.id FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
-        placeholders2.join(","),
-        unique.len() + 1
-    );
+    let sql2 = plan_membership_select(&placeholders2.join(","), unique.len() + 1);
     let mut params2: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
     for id in &unique {
         params2.push(Box::new(*id));
@@ -1483,12 +1528,10 @@ pub async fn effective_for_issue(
         None => return Err(not_found(&format!("Issue {issue_id} does not exist"))),
     };
 
-    // plans containing issue for user
+    // plans containing issue for user (retained snapshot plus linked
+    // authoritative Reading List entries, see plan_membership_select)
     let plan_rows = conn
-        .query(
-            "SELECT cp.id, cp.name FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id=$1 AND cp.user_id=$2 ORDER BY cp.id",
-            &[&issue_id, &user_id],
-        )
+        .query(plan_membership_select_one(), &[&issue_id, &user_id])
         .await
         .map_err(db::query_error)?;
     let mut plan_names: BTreeMap<i32, String> = BTreeMap::new();
@@ -1631,13 +1674,10 @@ pub async fn thread_issues_effective(
         }));
     }
 
-    // plans containing issues for user
+    // plans containing issues for user (retained snapshot plus linked
+    // authoritative Reading List entries, see plan_membership_select)
     let placeholders: Vec<String> = (1..=issue_ids.len()).map(|i| format!("${i}")).collect();
-    let plan_sql = format!(
-        "SELECT rpi.issue_id, cp.id, cp.name FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
-        placeholders.join(","),
-        issue_ids.len() + 1
-    );
+    let plan_sql = plan_membership_select(&placeholders.join(","), issue_ids.len() + 1);
     let mut params: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
     for id in &issue_ids {
         params.push(Box::new(*id));

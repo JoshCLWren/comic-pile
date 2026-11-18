@@ -297,10 +297,6 @@ export const queryKeys = {
     all: ['readingOrders'] as const,
     forThread: (threadId: number) => ['readingOrders', 'thread', threadId] as const,
   },
-  analytics: {
-    all: ['analytics'] as const,
-    overview: () => ['analytics', 'overview'] as const,
-  },
   comicVine: {
     all: ['comicVine'] as const,
     issueIntelligence: (issueId: number) =>
