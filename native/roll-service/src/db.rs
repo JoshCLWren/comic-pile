@@ -197,7 +197,7 @@ fn is_availability_code(code: &str) -> bool {
 /// reasons takes the retryable "database unavailable" contract [`checkout`]
 /// already returns: the reader cannot fix a connection that died between
 /// requests, and a 5xx is a hard failure for the client. Reporting transport
-/// state as an internal error is wrong (#4535).
+/// state as an internal error is wrong (#4732).
 ///
 /// A statement the server did reject stays a 500: only a data or schema defect
 /// produces that, and the diagnostic log records the operation label and
@@ -242,6 +242,17 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
             );
             ApiError::Internal("Internal Server Error".to_string())
         }
+    }
+}
+
+/// Map a transactional-statement failure, honoring PostgreSQL deadlock victims
+/// as the retryable [`ApiError::DeadlockDetected`] variant so the bounded
+/// deadlock retry in restore/undo handlers actually engages.
+pub(crate) fn tx_error(error: tokio_postgres::Error) -> ApiError {
+    if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
+        ApiError::DeadlockDetected
+    } else {
+        query_error(error)
     }
 }
 
@@ -290,7 +301,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
 
-    /// #4535: a statement that never reached the server is transport state, not
+    /// #4732: a statement that never reached the server is transport state, not
     /// an internal error. A server-rejected statement and a value/shape defect
     /// stay 500.
     #[test]

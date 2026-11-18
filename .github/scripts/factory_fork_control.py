@@ -45,7 +45,6 @@ PROVIDER_ENV = {
     "vercel-ai-gateway": ("VERCEL_AI_GATEWAY_API_KEY", "AI_GATEWAY_API_KEY"),
     "mistral": ("MISTRAL_API_KEY",),
     "orcarouter": ("ORCAROUTER_API_KEY",),
-    "requesty": ("REQUESTY_API_KEY",),
     "gemini-free": ("GEMINI_API_KEY",),
     "groq-free": ("GROQ_API_KEY",),
     "aion-free": ("AION_API_KEY",),

@@ -408,14 +408,13 @@ stage_trusted_kilo_helper
 # The agent may check out/edit a PR branch before a fallback is needed.
 stage_trusted_model_failover() {
   FACTORY_TRUSTED_FAILOVER_DIR="$(mktemp -d "$RUNNER_TEMP/factory-model-failover.XXXXXXXX")"
-  local filename
-  for filename in \
-    factory_model_failover.py factory_live_opencode.py factory_candidate_health.py \
-    factory_completion_controller.py factory_work_policy.py factory_review_policy.py \
-    factory_provider_candidates.py factory_provider_registry.py \
-    factory_runtime_model_select.py factory_published_model_catalog.py \
-    factory_kilo_catalog.py; do
-    cp ".github/scripts/$filename" "$FACTORY_TRUSTED_FAILOVER_DIR/$filename"
+  local module
+  # Stage every trusted module, not a hand-kept list: a missing transitive
+  # import (factory_model_catalog) crashed every same-run failover with
+  # ModuleNotFoundError and ended the worker after its first model failed.
+  for module in .github/scripts/*.py; do
+    case "${module##*/}" in test_*|*_test.py) continue ;; esac
+    cp "$module" "$FACTORY_TRUSTED_FAILOVER_DIR/"
   done
   cp scripts/factory_eligibility.py "$FACTORY_TRUSTED_FAILOVER_DIR/factory_eligibility.py"
   cp .github/scripts/wait-opencode-model.sh "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh"

@@ -300,6 +300,7 @@ dependencies = [
  "comicpile-roll-service",
  "http-body",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-postgres",
  "tower",

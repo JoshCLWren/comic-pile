@@ -1982,7 +1982,8 @@ mod tests {
         );
     }
 
-    /// #4535: a reposition must not need a second pooled connection.
+    /// Nested pooled checkout removed during the #4535 investigation (root cause
+    /// unproven): a reposition must not need a second pooled connection.
     ///
     /// Production runs Option E with a bounded pool. The reposition handler used
     /// to keep its write transaction's connection checked out and then ask for a
@@ -2102,7 +2103,7 @@ mod tests {
     }
 
     /// A pooled connection can die between two requests without being flagged
-    /// closed first (platform freeze, idle reset, half-open socket). #4535: that
+    /// closed first (platform freeze, idle reset, half-open socket). #4572: that
     /// transport state must never lose a reader's move or turn into an opaque
     /// internal error for a request that has written nothing yet.
     #[tokio::test]
@@ -2283,7 +2284,7 @@ mod tests {
         }
     }
 
-    /// Frozen-connection regression for the reposition retry (#4535, #4578).
+    /// Frozen-connection regression for the reposition retry (#4572, #4578, #4732).
     ///
     /// `pg_terminate_backend` cannot prove the queue retry: it closes the
     /// socket cleanly, the pool hands out a fresh connection before the
@@ -2351,7 +2352,7 @@ mod tests {
         proxy.abort();
     }
 
-    /// Canonical-schema coverage for the reposition path (#4535).
+    /// Canonical-schema coverage for the reposition path (#4578).
     ///
     /// Every test in this module runs the canonical Alembic schema, so this
     /// one adds scale rather than environment: a production-sized queue of
