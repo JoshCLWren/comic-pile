@@ -37,6 +37,8 @@ export function useRollModals({
   const {
     isOverrideOpen,
     setIsOverrideOpen,
+    isDirectIssueOpen,
+    setIsDirectIssueOpen,
     overrideThreadId,
     setOverrideThreadId,
     setOverrideErrorMessage,
@@ -99,6 +101,12 @@ export function useRollModals({
     if (showMigrationDialog && threadToMigrate) {
       setRestoreAction(() => {
         setShowMigrationDialog(true)
+      })
+      return
+    }
+    if (isDirectIssueOpen) {
+      setRestoreAction(() => {
+        setIsDirectIssueOpen(true)
       })
       return
     }
