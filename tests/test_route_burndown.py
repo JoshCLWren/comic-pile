@@ -406,6 +406,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "catalog",
         "comicvine",
         "completed-threads",
+        "continuity-plans",
         "continuity-rules",
         "creators",
         "custom-cbl",
@@ -419,6 +420,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "reading-orders",
         "reading-plan-sync",
         "releases",
+        "roll",
         "sessions",
         "tags",
         "taste-discoveries",
@@ -463,6 +465,92 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
         for operation in fragment.operations
     )
 
+
+def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
+    """The bug-reports family owns both POST twins as native after #4852.
+
+    The same-path Rust cutover (#4899, issue #4852) plus the Python handler
+    retirement (#5162) exclude both operations from the Python inventory
+    surface while keeping their exact method/path on native ingress.
+    """
+    fragment = _fragment_named("bug-reports")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    assert set(operations) == {
+        ("POST", "/api/bug-reports/"),
+        ("POST", "/api/v1/bug-reports/"),
+    }
+    for operation in operations.values():
+        assert operation["dest"] == "/api/native_roll.rs"
+        assert operation["exclude_from_inventory"] is True
+        assert operation["owning_issue"] == 4852
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    for bucket in ("v1_operations", "unversioned_operations"):
+        raw_operations = full_surface[bucket]
+        assert isinstance(raw_operations, list)
+        assert not any(
+            "bug-reports" in str(item.get("path", ""))
+            for item in raw_operations
+            if isinstance(item, dict)
+        )
+
+
+def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
+    """The sessions and undo fragments cut the supported cutover ops to Rust.
+
+    The owner's 2026-11-17 correction on #4839 retired the current-session and
+    restore-session-start twins under #4343 instead of porting them: those
+    legacy lifecycle paths remain on Python and gain no compatibility handler
+    or extra lifecycle semantics. Only the read-only list/details/history and
+    undo operations are cut over to native Rust. Unversioned paths have no
+    TypeScript client or FastAPI registry operation; they stay in the fragment
+    only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
+    on Python because no browser caller exists.
+    """
+    sessions = _fragment_named("sessions")
+    undo = _fragment_named("undo")
+    native_ops = {
+        ("GET", "/api/sessions/"),
+        ("GET", "/api/v1/sessions/"),
+        ("GET", "/api/sessions/{session_id}/details"),
+        ("GET", "/api/v1/sessions/{session_id}/details"),
+        ("GET", "/api/undo/{session_id}/snapshots"),
+        ("POST", "/api/undo/{session_id}/undo/{snapshot_id}"),
+        ("GET", "/api/v1/undo/{session_id}/snapshots"),
+        ("POST", "/api/v1/undo/{session_id}/undo/{snapshot_id}"),
+    }
+    python_ops = {
+        ("GET", "/api/v1/sessions/correction-examples"),
+        ("GET", "/api/v1/sessions/current/"),
+        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
+    }
+    declared = {
+        (operation["method"], operation["path"]): operation
+        for fragment in (sessions, undo)
+        for operation in fragment.operations
+    }
+    assert native_ops | python_ops <= set(declared)
+    for key in native_ops:
+        operation = declared[key]
+        assert operation["dest"] == "/api/native_roll.rs", key
+        # The v1 Python handlers stay mounted until their cleanup slice, so
+        # those cutover operations remain on the Python inventory surface as
+        # shadowed-by-Rust entries. Unversioned paths have no FastAPI registry
+        # operation or TypeScript caller and stay in the fragment for the
+        # Vercel rewrite only.
+        if key[1].startswith("/api/v1/"):
+            assert operation.get("exclude_from_inventory") is not True, key
+        else:
+            assert operation.get("exclude_from_inventory") is True, key
+        assert operation["owning_issue"] == 4839, key
+    for key in python_ops:
+        operation = declared[key]
+        assert operation["dest"] == "/api/index.py", key
+        assert operation.get("exclude_from_inventory") is not True, key
 
 def test_release_fragment_covers_every_browser_called_release_route() -> None:
     """The releases family owns all five browser-called operations."""
@@ -645,10 +733,22 @@ def test_vercel_is_fully_derived_from_fragments() -> None:
             assert dest == operation["dest"]
 
 
-def test_hidden_cron_exception_is_preserved() -> None:
-    """The hidden cron release-sync route stays on Python after derivation."""
-    routes = _load_routes(VERCEL_PATH)
-    assert _resolve_destination("GET", "/api/v1/cron/release-sync", routes) == "/api/index.py"
+def test_hidden_cron_fragment_declares_native_rust() -> None:
+    """The hidden cron release-sync family declares native ingress (#5276).
+
+    The checked-in ingress is bot-owned and regenerated after the fragment
+    lands, so this pins the source fragment's declaration and the cron
+    schedule rather than a pre-regeneration destination.
+    """
+    fragment = _fragment_named("reading-plan-sync")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    cron = operations[("GET", "/api/v1/cron/release-sync")]
+    assert cron["dest"] == "/api/native_roll.rs"
+    assert cron["exclude_from_inventory"] is True
+    assert cron["owning_issue"] == 5276
     document = load_json(VERCEL_PATH)
     crons = document.get("crons")
     assert isinstance(crons, list)

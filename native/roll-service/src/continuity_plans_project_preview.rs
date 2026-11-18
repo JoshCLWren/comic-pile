@@ -226,6 +226,7 @@ fn flatten(
 #[utoipa::path(
     post,
     path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+    operation_id = "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
     request_body = ReadingOrderProjectionRequest,
     params(("plan_id" = i64, Path, description = "Continuity plan id")),
     responses(
@@ -262,11 +263,23 @@ pub async fn preview_plan_projection_handler(
     }
     let connection = db::checkout(&state).await?;
 
+    // `continuity_plans.id` and `reading_orders.id` are `integer` columns, so the
+    // i64 wire ids must be narrowed before binding. Values outside i32 cannot
+    // match any persisted row, so they are the same owner-scoped 404 as a miss.
+    let plan_key = i32::try_from(plan_id)
+        .map_err(|_| not_found(format!("Continuity plan {plan_id} not found")))?;
+    let reading_order_key = i32::try_from(request.reading_order_id).map_err(|_| {
+        not_found(format!(
+            "Reading order {} not found",
+            request.reading_order_id
+        ))
+    })?;
+
     let plan_row = connection
         .query_opt(
             "SELECT name, ordering_mode, nodes_json, lanes_json FROM continuity_plans \
              WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user.id()],
+            &[&plan_key, &user.id()],
         )
         .await
         .map_err(db::query_error)?
@@ -279,7 +292,7 @@ pub async fn preview_plan_projection_handler(
     let order_row = connection
         .query_opt(
             "SELECT name FROM reading_orders WHERE id = $1 AND user_id = $2",
-            &[&request.reading_order_id, &user.id()],
+            &[&reading_order_key, &user.id()],
         )
         .await
         .map_err(db::query_error)?
@@ -316,7 +329,7 @@ pub async fn preview_plan_projection_handler(
     let existing_rows = connection
         .query(
             "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1",
-            &[&request.reading_order_id],
+            &[&reading_order_key],
         )
         .await
         .map_err(db::query_error)?;
@@ -478,6 +491,43 @@ mod tests {
         )
         .await
         .expect_err("missing plan is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// An i64 path/body id beyond the int4 primary-key domain cannot match a
+    /// row. It must narrow to the same 404 as a missing plan instead of binding
+    /// an i64 to an integer column and surfacing a 500 (WrongType).
+    #[tokio::test]
+    async fn out_of_range_ids_are_not_found_not_internal_errors() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let beyond_int4 = i64::from(i32::MAX) + 1;
+        let error = preview_plan_projection_handler(
+            State(state.clone()),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(beyond_int4),
+            Json(ReadingOrderProjectionRequest {
+                reading_order_id: beyond_int4,
+            }),
+        )
+        .await
+        .expect_err("out-of-range plan is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+
+        // A valid plan id with an out-of-range reading order id also narrows
+        // cleanly instead of failing to bind the reading-order integer column.
+        let error = preview_plan_projection_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(9_001_001),
+            Json(ReadingOrderProjectionRequest {
+                reading_order_id: beyond_int4,
+            }),
+        )
+        .await
+        .expect_err("out-of-range reading order is a 404");
         assert_eq!(error.status(), StatusCode::NOT_FOUND);
     }
 

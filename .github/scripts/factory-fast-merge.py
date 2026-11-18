@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast-merge factory-only PRs after exact-head Python lint and types succeed.
+"""Fast-merge inert reference-only PRs after exact-head Python lint and types succeed.
 
 Only trusted main is executed, the path/ownership allowlist fails closed, and
 GitHub receives the exact verified head SHA. GitHub branch protection still
@@ -17,30 +17,14 @@ from typing import Any
 
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 OWNER_RE = re.compile(r"^factory:(?:local|[1-9][0-9]*)$")
-FACTORY_PATHS = tuple(
-    re.compile(pattern)
-    for pattern in (
-        r"^\.github/scripts/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.(?:py|sh|cjs)$",
-        r"^\.github/scripts/(?:local-ollama-review|local_review_contract|nvidia-factory-worker|omniroute-factory-worker|stale_pr_decay|hourly_coderabbit_review)\.(?:py|sh|cjs)$",
-        # Owner sign-off (2026-11-16, #1093 retirement): the factory status
-        # dashboard generator and its test are factory-only telemetry code.
-        r"^\.github/scripts/generate_factory_status_dashboard\.py$",
-        r"^tests/test_generate_factory_status_dashboard\.py$",
-        r"^\.github/workflows/(?:factory[-_]|fixed-model[-_]|free-model-factory[-_])[A-Za-z0-9_.-]+\.ya?ml$",
-        r"^\.github/workflows/local-ollama-review\.ya?ml$",
-        r"^\.github/actions/factory-syntax/[A-Za-z0-9_./-]+$",
-        r"^\.github/free-model-factories\.tsv$",
-        r"^\.github/factory-expected-workers\.json$",
-        r"^\.github/factory-roster-snapshot\.json$",
-        r"^tests/test_free_model_factories\.py$",
-        r"^scripts/(?:factory[-_]|test_factory_)[A-Za-z0-9_.-]+\.py$",
-        r"^scripts/tests/(?:test_factory|test_opencode_review_policy|test_select_fcm_nvidia_model)[A-Za-z0-9_.-]*\.py$",
-        r"^tests/(?:test_factory|test_fixed_model|test_local_ollama_review_contract|test_auto_ollama_dispatch)[A-Za-z0-9_.-]*\.py$",
-        r"^docs/FACTORY[A-Za-z0-9_.-]*\.md$",
-        r"^docs/(?:AUTONOMOUS_FACTORY_POLICY|LOCAL_FACTORY_REVIEW)\.md$",
-        r"^\.agents/skills/(?:crouton-factory-codex|local-factory-[A-Za-z0-9_-]+)/[A-Za-z0-9_./-]+$",
-    )
-)
+# An executable script, CI test, workflow, policy/prompt, or gate input is not
+# inert. This is deliberately a tiny explicit allowlist: only reference-only
+# documents verified to be unreferenced by workers and privileged workflows.
+# Tests scan code, workflow, prompt and agent paths for new consumers.
+FACTORY_PATHS = frozenset({
+    "docs/FACTORY_NEON_STATE.md",
+    "docs/FACTORY_RESOURCE_MEASUREMENTS.md",
+})
 PROTECTED = frozenset(
     {
         ".github/factory-fast-merge.json",
@@ -54,7 +38,15 @@ BLOCKED_LABELS = frozenset(
 )
 TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 # These job names come from .github/workflows/ci.yml, not a provider roster.
-REQUIRED_FAST_CHECKS = frozenset({"Python Lint (ruff)", "Python Type Check (ty)"})
+# CI Summary prevents an owner-bypass token from skipping other required jobs.
+REQUIRED_FAST_CHECKS = frozenset({
+    "CI Summary",
+    "Python Lint (ruff)",
+    "Python Type Check (ty)",
+    "Factory Tests (complete)",
+    "Factory Workflow Syntax (actionlint)",
+    "Factory Shell Scripts (shellcheck)",
+})
 
 
 def factory_path(path: str) -> bool:
@@ -67,7 +59,7 @@ def factory_path(path: str) -> bool:
         or any(part in {"", ".", ".."} for part in path.split("/"))
     ):
         return False
-    return any(pattern.fullmatch(path) for pattern in FACTORY_PATHS)
+    return path in FACTORY_PATHS
 
 
 def factory_candidate(
@@ -199,8 +191,8 @@ def numbers(repo: str, *, pr: int | None, head: str | None) -> list[int]:
     })
 
 
-def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
-    """Require successful CI lint and type checks for the exact candidate head.
+def required_checks_passed(repo: str, head: str) -> tuple[bool, str]:
+    """Require all exact-head CI syntax, test, lint and type checks.
 
     Missing, pending, failing, stale, or ambiguously paginated check evidence
     fails closed. Never execute PR-authored code in this privileged workflow.
@@ -212,7 +204,7 @@ def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
         or not isinstance(data.get("total_count"), int)
         or data["total_count"] > 100
     ):
-        return False, "Python CI check evidence missing or truncated"
+        return False, "Required CI check evidence missing or truncated"
     checks: dict[str, dict[str, Any]] = {}
     for check in data["check_runs"]:
         if not isinstance(check, dict) or check.get("name") not in REQUIRED_FAST_CHECKS:
@@ -227,11 +219,11 @@ def python_checks_passed(repo: str, head: str) -> tuple[bool, str]:
         check = checks.get(name)
         if not check or check.get("status") != "completed" or check.get("conclusion") != "success":
             return False, f"Exact-head {name} has not passed"
-    return True, "Python lint and type checks passed at exact head"
+    return True, "All factory CI checks passed at exact head"
 
 
 def handle(repo: str, number: int) -> tuple[bool, str]:
-    """Attempt one SHA-pinned merge after exact-head Python CI checks pass."""
+    """Attempt one SHA-pinned merge after every exact-head factory CI check passes."""
     pr = gh_api(f"repos/{repo}/pulls/{number}")
     if not isinstance(pr, dict):
         raise RuntimeError("Invalid pull request response")
@@ -243,7 +235,7 @@ def handle(repo: str, number: int) -> tuple[bool, str]:
     # The separate CI workflow runs untrusted PR code without privileged merge
     # credentials. Reuse only its signed GitHub Actions check-run conclusions.
     # An incomplete or failing result is a skip, never a bypass authorization.
-    checks_ok, checks_reason = python_checks_passed(repo, head)
+    checks_ok, checks_reason = required_checks_passed(repo, head)
     if not checks_ok:
         return False, checks_reason
     try:

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { runReview, permissionReply, chooseReviewModel, eligibleReviewModel } from
+import { runReview, permissionReply, chooseReviewModel, eligibleReviewModel, acpErrorReason } from
   '../.agents/skills/crouton-factory-codex/scripts/local-factory-acp-review.mjs';
 
 function fixture(t, behavior = '') {
@@ -25,6 +25,7 @@ import { createInterface } from 'node:readline';
 import { writeFileSync } from 'node:fs';
 const behavior = ${JSON.stringify(behavior)};
 const reply = (id, result) => console.log(JSON.stringify({jsonrpc:'2.0',id,result}));
+const failRpc = (id, error) => console.log(JSON.stringify({jsonrpc:'2.0',id,error}));
 const config = model => ({configOptions:[{id:'model',currentValue:model,options:[{value:'opencode/live-review-free'}]}]});
 const permission = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT).permission;
 if (permission.edit !== 'deny' || permission.bash !== 'deny') process.exit(9);
@@ -34,6 +35,7 @@ createInterface({input:process.stdin}).on('line', line => {
  if(m.method==='session/new') reply(m.id,{sessionId:'actual-session',...config('other')});
  if(m.method==='session/set_config_option') reply(m.id,config(behavior==='wrong-model'?'other':m.params.value));
  if(m.method==='session/prompt') {
+   if(behavior==='prompt-error') return failRpc(m.id,{code:-32603,message:'Free usage limit reached',data:{service:'session',errorName:'provider.free-limit'}});
    if(behavior==='exit') process.exit(2);
    if(behavior==='timeout') return;
    if(behavior==='mutate') writeFileSync('source.txt','changed');
@@ -68,6 +70,20 @@ for (const behavior of ['wrong-model', 'empty', 'cancelled', 'mutate', 'exit', '
     assert.equal(JSON.parse(readFileSync(join(options.output, 'status.json'))).state, 'blocked');
   });
 }
+
+test('surfaces the structured ACP error cause in the blocked status', async t => {
+  const options = fixture(t, 'prompt-error');
+  await assert.rejects(runReview(options), /provider\.free-limit/);
+  const status = JSON.parse(readFileSync(join(options.output, 'status.json')));
+  assert.equal(status.state, 'blocked');
+  assert.equal(status.reason, 'ACP session/prompt failed (code -32603 provider.free-limit)');
+});
+
+test('acpErrorReason stays bounded when a peer omits structured error data', () => {
+  assert.equal(acpErrorReason('session/prompt', {}), 'ACP session/prompt failed (unknown code)');
+  assert.equal(acpErrorReason('initialize', { code: 42 }),
+    'ACP initialize failed (code 42)');
+});
 
 test('rejects permission requests and unsupported client methods', () => {
   assert.deepEqual(permissionReply({ id: 9, method: 'session/request_permission',

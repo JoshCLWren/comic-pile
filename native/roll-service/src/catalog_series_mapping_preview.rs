@@ -234,6 +234,7 @@ fn count(plan: &Value, key: &str) -> i64 {
 #[utoipa::path(
     post,
     path = "/api/v1/catalog/series-mappings/preview",
+    operation_id = "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
     request_body = SeriesMappingPreviewRequest,
     responses(
         (status = 200, description = "Read-only series mapping preview", body = SeriesMappingPreviewResponse),

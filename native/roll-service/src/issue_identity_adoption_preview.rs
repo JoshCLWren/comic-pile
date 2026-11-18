@@ -111,6 +111,7 @@ fn group_id(entry: &SourceEntry, comicvine_series_id: Option<&str>) -> String {
 #[utoipa::path(
     get,
     path = "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+    operation_id = "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
     params(("list_id" = i64, Path, description = "CBL source list id")),
     responses(
         (status = 200, description = "Read-only adoption preview", body = CBLAdoptionPreviewResponse),
@@ -128,12 +129,16 @@ pub async fn api_cbl_adoption_preview_handler(
     Path(list_id): Path<i64>,
 ) -> Result<Json<CBLAdoptionPreviewResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
+    // `cbl_source_lists.id` and `cbl_source_entries.list_id` are `integer`
+    // columns, so the i64 wire id must be narrowed before binding. An id outside
+    // i32 cannot match any persisted list and is the same 404 as a missing row.
+    let list_key = i32::try_from(list_id).map_err(|_| source_not_found(list_id))?;
     let list_row = connection
         .query_opt(
             "SELECT l.source_path, l.content_hash, l.revision_sha, s.repository, l.active
              FROM cbl_source_lists l LEFT JOIN cbl_sources s ON s.id = l.source_id
              WHERE l.id = $1",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?
@@ -153,7 +158,7 @@ pub async fn api_cbl_adoption_preview_handler(
             "SELECT id, position, series_name, issue_number, volume_year, publication_year,
                     external_issue_identity_id, external_series_identity_id
              FROM cbl_source_entries WHERE list_id = $1 ORDER BY position",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?;
@@ -358,6 +363,7 @@ pub async fn api_cbl_adoption_preview_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use serde_json::Value;
 
     fn entry() -> SourceEntry {
@@ -416,5 +422,25 @@ mod tests {
             .get("source")
             .and_then(|s| s.get("source_list_id"))
             .is_some());
+    }
+
+    /// An i64 list id beyond the int4 primary-key domain cannot match a row and
+    /// must be the same owner-scoped 404 as a missing/inactive list, not a 500
+    /// from binding an i64 to the integer `cbl_source_lists.id` column.
+    #[tokio::test]
+    async fn out_of_range_list_id_is_not_found_not_internal_error() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let beyond_int4 = i64::from(i32::MAX) + 1;
+        let error = api_cbl_adoption_preview_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(beyond_int4),
+        )
+        .await
+        .expect_err("out-of-range source list is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
     }
 }

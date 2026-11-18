@@ -210,6 +210,7 @@ fn validate_request(request: &ReadingGraphPreviewRequest) -> Result<(), PreviewE
 #[utoipa::path(
     post,
     path = "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+    operation_id = "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
     request_body = ReadingGraphPreviewRequest,
     params(("list_id" = i64, Path, description = "CBL source list id")),
     responses(
@@ -232,10 +233,20 @@ pub async fn preview_cbl_reading_graph_handler(
     validate_request(&request)?;
     let connection = db::checkout(&state).await?;
 
+    // `cbl_source_lists.id` and `cbl_source_entries.list_id` are `integer`
+    // columns, so the i64 wire id must be narrowed before binding. An id outside
+    // i32 cannot match any persisted list and is the same 404 as a missing row.
+    let list_key = i32::try_from(list_id).map_err(|_| {
+        structured_error(
+            StatusCode::NOT_FOUND,
+            "cbl_source_not_found",
+            format!("CBL source list {list_id} was not found or is inactive"),
+        )
+    })?;
     let list_row = connection
         .query_opt(
             "SELECT content_hash, revision_sha, active FROM cbl_source_lists WHERE id = $1",
-            &[&list_id],
+            &[&list_key],
         )
         .await
         .map_err(db::query_error)?
@@ -266,7 +277,7 @@ pub async fn preview_cbl_reading_graph_handler(
                  FROM cbl_source_entries
                  WHERE list_id = $1 AND position = ANY($2::int8[])
                  ORDER BY position",
-                &[&list_id, &selected_positions],
+                &[&list_key, &selected_positions],
             )
             .await
             .map_err(db::query_error)?
@@ -495,6 +506,31 @@ mod tests {
         )
         .await
         .expect_err("missing source list is a 404");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// An i64 list id beyond the int4 primary-key domain cannot match a row and
+    /// must produce the same structured 404 as a missing/inactive list, not a
+    /// 500 from binding an i64 to the integer `cbl_source_lists.id` column.
+    #[tokio::test]
+    async fn out_of_range_list_id_is_not_found_not_internal_error() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let beyond_int4 = i64::from(i32::MAX) + 1;
+        let error = preview_cbl_reading_graph_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9_001),
+            Path(beyond_int4),
+            Json(ReadingGraphPreviewRequest {
+                included_positions: vec![1],
+                overlap_choices: Vec::new(),
+                target_list_id: None,
+            }),
+        )
+        .await
+        .expect_err("out-of-range source list is a 404");
         assert_eq!(error.status(), StatusCode::NOT_FOUND);
     }
 

@@ -127,13 +127,25 @@ WORKER_RETRY_CLASSES = frozenset({
 
 
 def fibonacci_worker_delay(streak: int) -> int:
-    """Five-minute Fibonacci retries capped at 24 hours per attempt."""
+    """Five-minute Fibonacci retries per exact model, with no upper bound."""
     if streak < 1:
         raise ValueError("failure streak must be positive")
     previous, current = 1, 1
     for _ in range(1, streak):
         previous, current = current, previous + current
-    return min(86400, previous * 300)
+    return previous * 300
+
+
+def fibonacci_retry_at(observed: datetime, streak: int) -> datetime:
+    """Next retry time; clamps only at the largest representable datetime.
+
+    SQL writers clamp expires_at to 9999-12-31 too, because asyncpg cannot
+    decode a later timestamptz into a Python datetime.
+    """
+    try:
+        return observed + timedelta(seconds=fibonacci_worker_delay(streak))
+    except OverflowError:
+        return datetime.max.replace(tzinfo=timezone.utc)
 
 
 def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -> str | None:
@@ -335,15 +347,6 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
     model_failures = validate_intermediate_model_failures(outcome.get("model_failures"), source)
-    terminal_account_scope = any(
-        failure_source == source and failure_model == model and scope == "account"
-        for failure_source, failure_model, _, scope in model_failures
-    )
-    account_failures = {
-        failure_source: failure_outcome
-        for failure_source, _, failure_outcome, scope in model_failures
-        if scope == "account"
-    }
     async with conn.transaction():
         inserted = await conn.fetchval(
             """INSERT INTO public.factory_runtime_event_keys(repo,run_id)
@@ -373,7 +376,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             status, until = "healthy", None
         else:
             status, until = "unknown", None
-        if attributed and not terminal_account_scope and (classification in MODEL_COOLDOWNS or model_scoped_transient(source, classification) or proven):
+        if attributed and (classification in MODEL_COOLDOWNS or model_scoped_transient(source, classification) or proven):
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_verified_at,last_run_id)
@@ -386,60 +389,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
-        for account_source, account_classification in sorted(account_failures.items()):
-            # Reservation bookkeeping updates budget.updated_at independently,
-            # so a provider failure streak must have its OWN durable timestamp.
-            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{account_source}"
-            previous = await conn.fetchrow(
-                """SELECT payload FROM public.factory_state_kv
-                   WHERE cache_key=$1 FOR UPDATE""", backoff_key)
-            stored = previous["payload"] if previous else None
-            if isinstance(stored, str):
-                stored = json.loads(stored)
-            prior = stored[0] if isinstance(stored, list) and stored else {}
-            previous_run = int(prior.get("run_id") or 0)
-            try:
-                observed_prior = datetime.fromisoformat(str(prior["observed_at"]))
-                age = (observed - observed_prior).total_seconds()
-            except (KeyError, TypeError, ValueError):
-                age = float("inf")
-            streak = int(prior.get("streak") or 0) + 1 if age < 12 * 3600 else 1
-            delay = fibonacci_worker_delay(streak)
-            until = _provider_cooldown(account_source, account_classification, observed, delay)
-            if previous_run <= run_id:
-                await conn.execute(
-                    """INSERT INTO public.factory_state_kv
-                         (cache_key,payload,fetched_at,expires_at,updated_at)
-                       VALUES($1,$2::jsonb,now(),$3,now())
-                       ON CONFLICT(cache_key) DO UPDATE SET
-                         payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
-                         expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
-                    backoff_key, json.dumps([{
-                        # Eligibility honours only account-scoped outcomes, so
-                        # record the proven account class, not this run's
-                        # terminal class (which may belong to a later model).
-                        # The streak must persist for Fibonacci growth.
-                        "run_id": run_id, "outcome": account_classification,
-                        "streak": streak, "delay_seconds": delay,
-                        "observed_at": observed.isoformat(),
-                    }]), until)
-            await conn.execute(
-                """INSERT INTO public.factory_provider_budget
-                     (repo,source,cooldown_until,quota_reset_at,last_outcome,last_run_id)
-                   VALUES($1,$2,$3,$4,$5,$6)
-                   ON CONFLICT(repo,source) DO UPDATE SET
-                     cooldown_until=greatest(factory_provider_budget.cooldown_until,EXCLUDED.cooldown_until),
-                     quota_reset_at=CASE WHEN EXCLUDED.quota_reset_at IS NOT NULL
-                        THEN EXCLUDED.quota_reset_at ELSE factory_provider_budget.quota_reset_at END,
-                     last_outcome=EXCLUDED.last_outcome,last_run_id=EXCLUDED.last_run_id,
-                     updated_at=now()
-                   WHERE factory_provider_budget.last_run_id<=EXCLUDED.last_run_id""",
-                repo, account_source, until, until if account_classification=="provider_quota" else None, account_classification,run_id)
         # Record every failed candidate independently even if another model
         # eventually completed the same leased task. No provider-wide breaker.
-        for failed_source, failed_model, failed_outcome, scope in model_failures:
-            if scope == "account":
-                continue
+        for failed_source, failed_model, failed_outcome, _scope in model_failures:
             failed_status = (
                 "retired" if failed_outcome == "model_retired_410"
                 else "unavailable" if failed_outcome in MODEL_COOLDOWNS
@@ -484,11 +436,11 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 streak = (int(prior_state.get("streak") or 0) if previous
                           else await _recent_streak(conn, run_id, failed_source, failed_model, repo=repo)) + 1
                 suspended = False
-                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                retry_at = fibonacci_retry_at(observed, streak).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                        (cache_key,payload,fetched_at,expires_at,updated_at)
-                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
+                       VALUES($1,$2::jsonb,now(),LEAST(GREATEST(now(),($2::jsonb->0->>'next_retry_at')::timestamptz)+interval '90 days',timestamptz '9999-12-31 23:59:59+00'),now())
                        ON CONFLICT(cache_key) DO UPDATE SET
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
@@ -538,11 +490,11 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                               model_independent=catalog_slot,
                           )) + 1
                 suspended = False
-                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                retry_at = fibonacci_retry_at(observed, streak).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
-                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
+                       VALUES($1,$2::jsonb,now(),LEAST(GREATEST(now(),($2::jsonb->0->>'next_retry_at')::timestamptz)+interval '90 days',timestamptz '9999-12-31 23:59:59+00'),now())
                        ON CONFLICT(cache_key) DO UPDATE SET
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
@@ -563,7 +515,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
         # only when the exact model actually ran. Never blame the model for
         # checkout, credential, or controller failures.
         model_key = f"factory-model-backoff-v1:{repo}:source:{source}:model:{model}"
-        if (attributed and not terminal_account_scope and not delivered
+        if (attributed and not delivered
                 and attributable_model_failure(classification, proven)):
             # Serialize first updates too, when no KV row exists to lock yet.
             await conn.fetchval(
@@ -587,11 +539,11 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 )
                 streak = prior_streak + 1
                 suspended = False
-                retry_at = (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                retry_at = fibonacci_retry_at(observed, streak).isoformat()
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
-                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
+                       VALUES($1,$2::jsonb,now(),LEAST(GREATEST(now(),($2::jsonb->0->>'next_retry_at')::timestamptz)+interval '90 days',timestamptz '9999-12-31 23:59:59+00'),now())
                        ON CONFLICT(cache_key) DO UPDATE SET
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
@@ -1168,10 +1120,9 @@ async def _export_fleet_failover_sources(conn: Any, repo: str, worker: str) -> l
     if worker not in roster:
         raise ValueError("unknown leased worker")
     assigned = roster[worker][0]
-    now = datetime.now(timezone.utc)
     budgets = {
         r["source"]: r for r in await conn.fetch(
-            "SELECT source,concurrency_limit,daily_limit,cooldown_until,quota_reset_at "
+            "SELECT source,concurrency_limit,daily_limit "
             "FROM public.factory_provider_budget WHERE repo=$1", repo,
         )
     }
@@ -1185,10 +1136,7 @@ async def _export_fleet_failover_sources(conn: Any, repo: str, worker: str) -> l
         if budget is not None:
             if budget["concurrency_limit"] is not None or budget["daily_limit"] is not None:
                 continue
-            if (budget["cooldown_until"] and budget["cooldown_until"] > now) or (
-                budget["quota_reset_at"] and budget["quota_reset_at"] > now
-            ):
-                continue
+            # No provider-wide cooldown: failing models back off individually.
         selected.add(source)
     return sorted(selected)
 

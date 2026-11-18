@@ -46,7 +46,7 @@ def test_openrouter_free_adapter_requires_published_free_endpoint() -> None:
     assert [item.model for item in result.candidates] == ["example/free:free"]
     assert result.candidates[0].runtime_model == "openrouter/example/free:free"
     # Other providers are not affected by the OpenRouter free endpoint policy.
-    generic = CANDIDATES.discover("requesty", catalog)
+    generic = CANDIDATES.discover("orcarouter", catalog)
     assert {item.model for item in generic.candidates} == {
         "example/free:free", "example/paid", "example/unpriced",
     }
