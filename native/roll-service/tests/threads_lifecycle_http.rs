@@ -1486,7 +1486,10 @@ async fn set_pending_rejects_stale_expected_issue_without_creating_checkpoint() 
         .await
         .unwrap()
         .get(0);
-    assert_eq!(sessions, 0, "rejected set-pending must not create a session");
+    assert_eq!(
+        sessions, 0,
+        "rejected set-pending must not create a session"
+    );
 }
 
 #[tokio::test]

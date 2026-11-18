@@ -1620,10 +1620,9 @@ async fn validate_set_pending_selection(
         }
     }
     if thread.issues_remaining <= 0 {
-        return Err(ApiError::BadRequest(format!(
-            "Thread {thread_id} has no issues remaining"
-        ))
-        .into());
+        return Err(
+            ApiError::BadRequest(format!("Thread {thread_id} has no issues remaining")).into(),
+        );
     }
     // A Reading Plan offers one exact Issue; never select its successor.
     if expected_issue_id.is_some() && issue_id != expected_issue_id {
