@@ -432,6 +432,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "demo",
         "dependencies",
         "issue-identity-cbl-catalog",
+        "issue-identity",
         "issues",
         "metrics",
         "preferences",
@@ -476,32 +477,31 @@ def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> No
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
 
 
-def test_creator_v2_operations_are_native_and_v1_creator_routes_retired() -> None:
-    """Every creator browser operation is Rust v2; no v1 creator route remains."""
-    inventory = load_json(INVENTORY_PATH)
-    operations = inventory["operations"]
-    assert isinstance(operations, list)
-    creator_operations = [
+def test_creator_v2_operations_are_native_rust_in_source_fragment() -> None:
+    """Issue #4836: every creator browser operation is declared Rust-served on v2.
+
+    Generated ``vercel.json`` and the inventory are bot-owned and regenerated
+    post-merge from fragments, so the source fragment is the reviewable proof
+    that each ``/api/v2/creators`` operation serves the native ingress with the
+    native-rust runtime, target status and owning issue (overriding the
+    family's python-fastapi/transitional/null defaults). The legacy v1 creator
+    declarations are retained here and retired by a later change.
+    """
+    fragment = _fragment_named("creators")
+    v2_operations = [
         operation
-        for operation in operations
-        if isinstance(operation, dict)
-        and str(operation.get("path", "")).startswith("/api/v2/creators")
+        for operation in fragment.operations
+        if str(operation.get("path", "")).startswith("/api/v2/creators")
     ]
-    assert len(creator_operations) == 11
-    for operation in creator_operations:
-        assert operation.get("runtime") == "native-rust"
-        assert operation.get("status") == "target"
-        assert operation.get("owning_issue") == 4836
-        assert operation.get("ingress_destination") == "/api/native_roll.rs"
-    full_surface = inventory["full_surface"]
-    assert isinstance(full_surface, dict)
-    v1_operations = full_surface["v1_operations"]
-    assert isinstance(v1_operations, list)
-    assert not any(
-        str(operation.get("path", "")).startswith("/api/v1/creators")
-        for operation in v1_operations
-        if isinstance(operation, dict)
-    )
+    assert len(v2_operations) == 11
+    assert len({(op["method"], op["path"]) for op in v2_operations}) == 11
+    for operation in v2_operations:
+        assert operation["bucket"] == "operations", operation
+        assert operation["method"] == "GET", operation
+        assert operation["dest"] == "/api/native_roll.rs", operation
+        assert operation["runtime"] == "native-rust", operation
+        assert operation["status"] == "target", operation
+        assert operation["owning_issue"] == 4836, operation
 
 
 def test_dependency_fragment_covers_native_and_python_metadata() -> None:

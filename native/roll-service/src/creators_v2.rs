@@ -589,6 +589,8 @@ struct CreatorLibrary {
     /// Read-without-rating audit cause keys for issues that are read and have
     /// no effective rating, matching Python's `classify_issue_ids` contract.
     missing_rating_causes: HashMap<i64, String>,
+    /// Set-based library-wide coverage totals for scoped loads.
+    coverage_override: Option<CreatorSummaryCoverage>,
 }
 
 impl CreatorLibrary {
@@ -752,15 +754,194 @@ fn extract_manual_credits(raw: Option<&str>) -> Vec<CreatorCredit> {
     out
 }
 
-async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, ApiError> {
+/// Which part of a reader's library a request needs.
+#[derive(Debug, Clone)]
+enum LibraryScope {
+    /// Every owned issue (list, discoveries, team chemistry aggregate all creators).
+    Full,
+    /// Only series that can carry credits for the requested creator ids.
+    Creators(Vec<i64>),
+}
+
+/// SQL predicate (over a jsonb element `c`) mirroring `extract_credits`
+/// validity: an object with a string name that is non-blank after trimming and
+/// an id that coerces to an integer (JSON integer or all-digit string).
+const CV_CREDIT_VALID: &str = r#"jsonb_typeof(c) = 'object'
+    AND jsonb_typeof(c->'name') = 'string'
+    AND btrim(c->>'name', E' \t\r\n') <> ''
+    AND ((jsonb_typeof(c->'id') = 'number' AND c->>'id' ~ '^-?[0-9]{1,18}$')
+         OR (jsonb_typeof(c->'id') = 'string' AND c->>'id' ~ '^[0-9]{1,18}$'))"#;
+
+/// SQL predicate mirroring `extract_manual_credits` validity (object with a
+/// non-blank string name).
+const MANUAL_CREDIT_VALID: &str = r#"jsonb_typeof(c) = 'object'
+    AND jsonb_typeof(c->'name') = 'string'
+    AND btrim(c->>'name', E' \t\r\n') <> ''"#;
+
+/// Library-wide coverage computed as set-based totals in PostgreSQL so scoped
+/// requests never materialize every issue, credit and rating.
+async fn load_coverage(
+    connection: &deadpool_postgres::Object,
+    user_id: i32,
+) -> Result<CreatorSummaryCoverage, ApiError> {
+    let sql = format!(
+        "WITH owned AS (
+             SELECT i.id, i.status, t.manual_creator_credits::jsonb AS manual
+             FROM issues i JOIN threads t ON t.id = i.thread_id
+             WHERE t.user_id = $1),
+         rated AS (
+             SELECT DISTINCT ev.issue_id
+             FROM events ev JOIN owned o ON o.id = ev.issue_id
+             WHERE ev.type = 'rate' AND ev.rating IS NOT NULL),
+         cv AS (
+             SELECT DISTINCT m.issue_id
+             FROM issue_external_identity_mappings m
+             JOIN owned o ON o.id = m.issue_id
+             JOIN external_identities e ON e.id = m.external_identity_id,
+             LATERAL jsonb_array_elements(
+                 CASE WHEN jsonb_typeof(e.metadata_json::jsonb->'creator_credits') = 'array'
+                      THEN e.metadata_json::jsonb->'creator_credits' ELSE '[]'::jsonb END) c
+             WHERE m.status = 'confirmed' AND e.provider = 'comicvine' AND {CV_CREDIT_VALID}),
+         classified AS (
+             SELECT o.status,
+                    (r.issue_id IS NOT NULL) AS rated,
+                    (cv.issue_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(
+                            CASE WHEN jsonb_typeof(o.manual) = 'array'
+                                 THEN o.manual ELSE '[]'::jsonb END) c
+                        WHERE {MANUAL_CREDIT_VALID})) AS has_meta
+             FROM owned o
+             LEFT JOIN rated r ON r.issue_id = o.id
+             LEFT JOIN cv ON cv.issue_id = o.id)
+         SELECT count(*) FILTER (WHERE rated),
+                count(*) FILTER (WHERE rated AND has_meta),
+                count(*) FILTER (WHERE status = 'read' AND NOT rated),
+                count(*) FILTER (WHERE status = 'read' AND NOT rated AND has_meta),
+                count(*) FILTER (WHERE status = 'unread'),
+                count(*) FILTER (WHERE status = 'unread' AND has_meta)
+         FROM classified"
+    );
+    let row = connection
+        .query_one(sql.as_str(), &[&user_id])
+        .await
+        .map_err(query_error)?;
+    let (rated_total, rated_with, read_total, read_with, unread_total, unread_with): (
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+        i64,
+    ) = (
+        row.get(0),
+        row.get(1),
+        row.get(2),
+        row.get(3),
+        row.get(4),
+        row.get(5),
+    );
+    Ok(CreatorSummaryCoverage {
+        rated_issues_total: rated_total,
+        rated_issues_with_creator_metadata: rated_with,
+        ratings_complete: rated_with >= rated_total,
+        read_unrated_issues_total: read_total,
+        read_unrated_issues_with_creator_metadata: read_with,
+        read_unrated_complete: read_with >= read_total,
+        unread_issues_total: unread_total,
+        unread_issues_with_creator_metadata: unread_with,
+        upcoming_complete: unread_with >= unread_total,
+    })
+}
+
+/// Thread ids that may carry credits for `creator_ids`: threads with a
+/// confirmed ComicVine credit for one of them (filtered in SQL) plus threads
+/// whose manual credits resolve to one of them.
+async fn candidate_threads(
+    connection: &deadpool_postgres::Object,
+    user_id: i32,
+    creator_ids: &[i64],
+) -> Result<Vec<i64>, ApiError> {
+    let wanted: Vec<String> = creator_ids.iter().map(|id| id.to_string()).collect();
+    let sql = format!(
+        "SELECT DISTINCT i.thread_id::bigint
+         FROM issues i
+         JOIN threads t ON t.id = i.thread_id
+         JOIN issue_external_identity_mappings m ON m.issue_id = i.id
+         JOIN external_identities e ON e.id = m.external_identity_id,
+         LATERAL jsonb_array_elements(
+             CASE WHEN jsonb_typeof(e.metadata_json::jsonb->'creator_credits') = 'array'
+                  THEN e.metadata_json::jsonb->'creator_credits' ELSE '[]'::jsonb END) c
+         WHERE t.user_id = $1 AND m.status = 'confirmed' AND e.provider = 'comicvine'
+               AND {CV_CREDIT_VALID}
+               AND COALESCE(NULLIF(ltrim(c->>'id', '0'), ''), '0') = ANY($2::text[])"
+    );
+    let mut threads: BTreeSet<i64> = connection
+        .query(sql.as_str(), &[&user_id, &wanted])
+        .await
+        .map_err(query_error)?
+        .iter()
+        .map(|row| row.get::<_, i64>(0))
+        .collect();
+    let wanted_set: HashSet<i64> = creator_ids.iter().copied().collect();
+    for row in connection
+        .query(
+            "SELECT id::bigint, manual_creator_credits::text FROM threads
+             WHERE user_id = $1 AND jsonb_typeof(manual_creator_credits::jsonb) = 'array'
+                   AND jsonb_array_length(manual_creator_credits::jsonb) > 0",
+            &[&user_id],
+        )
+        .await
+        .map_err(query_error)?
+    {
+        let text: Option<String> = row.try_get(1).map_err(query_error)?;
+        if extract_manual_credits(text.as_deref())
+            .iter()
+            .any(|credit| wanted_set.contains(&credit.external_id))
+        {
+            threads.insert(row.get(0));
+        }
+    }
+    Ok(threads.into_iter().collect())
+}
+
+async fn load_library(
+    state: &AppState,
+    user_id: i32,
+    scope: LibraryScope,
+    audit_missing_ratings: bool,
+) -> Result<CreatorLibrary, ApiError> {
     let connection = checkout(state).await?;
+    let (thread_filter, coverage_override): (Option<Vec<i64>>, Option<CreatorSummaryCoverage>) =
+        match &scope {
+            LibraryScope::Full => (None, None),
+            LibraryScope::Creators(ids) => {
+                let coverage = load_coverage(&connection, user_id).await?;
+                (
+                    Some(candidate_threads(&connection, user_id, ids).await?),
+                    Some(coverage),
+                )
+            }
+        };
+    if thread_filter.as_ref().is_some_and(Vec::is_empty) {
+        return Ok(CreatorLibrary {
+            issues: Vec::new(),
+            issue_index: HashMap::new(),
+            credits: HashMap::new(),
+            ratings: HashMap::new(),
+            rating_timestamps: HashMap::new(),
+            metadata_issues: HashSet::new(),
+            missing_rating_causes: HashMap::new(),
+            coverage_override,
+        });
+    }
     let mut issues: Vec<OwnedIssue> = connection
         .query(
-            "SELECT i.id, i.status, i.thread_id, i.issue_number, t.title,
-                    t.queue_position, i.position
+            "SELECT i.id::bigint, i.status, i.thread_id::bigint, i.issue_number, t.title,
+                    t.queue_position::bigint, i.position::bigint
              FROM issues i JOIN threads t ON t.id = i.thread_id
-             WHERE t.user_id = $1",
-            &[&user_id],
+             WHERE t.user_id = $1
+                   AND ($2::bigint[] IS NULL OR i.thread_id = ANY($2::bigint[]))",
+            &[&user_id, &thread_filter],
         )
         .await
         .map_err(query_error)?
@@ -771,8 +952,8 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
             thread_id: row.get(2),
             issue_number: row.get(3),
             thread_title: row.get(4),
-            queue_position: row.try_get(5).unwrap_or(0),
-            position: row.try_get(6).unwrap_or(0),
+            queue_position: row.get(5),
+            position: row.get(6),
         })
         .collect();
     issues.sort_by_key(|issue| issue.id);
@@ -781,12 +962,16 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         .enumerate()
         .map(|(index, issue)| (issue.id, index))
         .collect();
+    let issue_filter: Option<Vec<i64>> = thread_filter
+        .as_ref()
+        .map(|_| issues.iter().map(|issue| issue.id).collect());
 
     let mut thread_manual: HashMap<i64, String> = HashMap::new();
     for row in connection
         .query(
-            "SELECT id, manual_creator_credits::text FROM threads WHERE user_id = $1",
-            &[&user_id],
+            "SELECT id::bigint, manual_creator_credits::text FROM threads
+             WHERE user_id = $1 AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))",
+            &[&user_id, &thread_filter],
         )
         .await
         .map_err(query_error)?
@@ -800,13 +985,14 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
     let mut metadata_issues: HashSet<i64> = HashSet::new();
     for row in connection
         .query(
-            "SELECT i.id, e.metadata_json->>'creator_credits'
+            "SELECT i.id::bigint, e.metadata_json->>'creator_credits'
              FROM issues i
              JOIN threads t ON t.id = i.thread_id
              JOIN issue_external_identity_mappings m ON m.issue_id = i.id
              JOIN external_identities e ON e.id = m.external_identity_id
-             WHERE t.user_id = $1 AND m.status = 'confirmed' AND e.provider = 'comicvine'",
-            &[&user_id],
+             WHERE t.user_id = $1 AND m.status = 'confirmed' AND e.provider = 'comicvine'
+                   AND ($2::bigint[] IS NULL OR i.id = ANY($2::bigint[]))",
+            &[&user_id, &issue_filter],
         )
         .await
         .map_err(query_error)?
@@ -847,14 +1033,15 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
     let mut rating_timestamps: HashMap<i64, DateTime<Utc>> = HashMap::new();
     for row in connection
         .query(
-            "SELECT DISTINCT ON (ev.issue_id) ev.issue_id, ev.rating, ev.timestamp
+            "SELECT DISTINCT ON (ev.issue_id) ev.issue_id::bigint, ev.rating, ev.timestamp
              FROM events ev
              JOIN issues i ON i.id = ev.issue_id
              JOIN threads t ON t.id = i.thread_id
              WHERE t.user_id = $1 AND ev.type = 'rate' AND ev.issue_id IS NOT NULL
                    AND ev.rating IS NOT NULL
+                   AND ($2::bigint[] IS NULL OR ev.issue_id = ANY($2::bigint[]))
              ORDER BY ev.issue_id, ev.timestamp DESC, ev.id DESC",
-            &[&user_id],
+            &[&user_id, &issue_filter],
         )
         .await
         .map_err(query_error)?
@@ -879,7 +1066,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         .filter(|issue| issue.status == "read" && !ratings.contains_key(&issue.id))
         .map(|issue| issue.id)
         .collect();
-    if !read_without_rating.is_empty() {
+    if audit_missing_ratings && !read_without_rating.is_empty() {
         // Thread-level historical ratings for threads that own the population.
         let thread_ids: Vec<i64> = {
             let mut set: HashSet<i64> = HashSet::new();
@@ -903,7 +1090,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         if !thread_ids.is_empty() {
             for row in connection
                 .query(
-                    "SELECT ev.id, ev.thread_id, ev.rating, ev.timestamp
+                    "SELECT ev.id::bigint, ev.thread_id::bigint, ev.rating, ev.timestamp
                      FROM events ev
                      JOIN threads t ON t.id = ev.thread_id
                      WHERE t.user_id = $1 AND ev.type = 'rate'
@@ -937,7 +1124,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         let mut mapping_statuses: HashMap<i64, Vec<String>> = HashMap::new();
         for row in connection
             .query(
-                "SELECT DISTINCT issue_id, status
+                "SELECT DISTINCT issue_id::bigint, status
                  FROM issue_external_identity_mappings
                  WHERE issue_id = ANY($1::bigint[])",
                 &[&read_without_rating],
@@ -960,7 +1147,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         let mut requested_identities: HashMap<i64, HashSet<i64>> = HashMap::new();
         for row in connection
             .query(
-                "SELECT issue_id, external_identity_id
+                "SELECT issue_id::bigint, external_identity_id::bigint
                  FROM issue_external_identity_mappings
                  WHERE issue_id = ANY($1::bigint[]) AND status = 'confirmed'",
                 &[&read_without_rating],
@@ -988,7 +1175,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
             let mut by_identity: HashMap<i64, HashSet<i64>> = HashMap::new();
             for row in connection
                 .query(
-                    "SELECT m.issue_id, m.external_identity_id
+                    "SELECT m.issue_id::bigint, m.external_identity_id::bigint
                      FROM issue_external_identity_mappings m
                      JOIN issues i ON i.id = m.issue_id
                      JOIN threads t ON t.id = i.thread_id
@@ -1078,6 +1265,7 @@ async fn load_library(state: &AppState, user_id: i32) -> Result<CreatorLibrary, 
         rating_timestamps,
         metadata_issues,
         missing_rating_causes,
+        coverage_override,
     })
 }
 
@@ -1211,22 +1399,40 @@ fn validate_comparison_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> 
     Ok(keys)
 }
 
-/// Python `round(value, places)` (round half to even) on binary floats.
+/// Python `round(value, places)` on binary floats: round half to even on the
+/// exact binary value (so 4.175, stored just below the tie, rounds to 4.17).
+///
+/// Rust's `{:.N}` float formatting is exact, so the digits below are the true
+/// decimal expansion of the double; a tie exists only when they are exactly `5`
+/// followed by zeros.
 fn round_half_even(value: f64, places: i32) -> f64 {
-    let factor = 10_f64.powi(places);
-    let scaled = value * factor;
-    let floor = scaled.floor();
-    let fraction = scaled - floor;
-    if (fraction - 0.5).abs() < 1e-9 {
-        let base = floor as i64;
-        if base % 2 == 0 {
-            floor / factor
-        } else {
-            (floor + 1.0) / factor
-        }
-    } else {
-        scaled.round() / factor
+    if !value.is_finite() || !(0..=15).contains(&places) {
+        return value;
     }
+    let places_usize = places as usize;
+    let text = format!("{:.*}", places_usize + 120, value.abs());
+    let (int_part, frac_part) = text.split_once('.').unwrap_or((text.as_str(), ""));
+    let kept = &frac_part[..places_usize];
+    let rest = frac_part[places_usize..].bytes().collect::<Vec<u8>>();
+    let Ok(mut digits) = format!("{int_part}{kept}").parse::<u128>() else {
+        return value;
+    };
+    let round_up = match rest.first() {
+        Some(b'5') => {
+            if rest[1..].iter().any(|digit| *digit != b'0') {
+                true
+            } else {
+                digits % 2 == 1
+            }
+        }
+        Some(digit) => *digit > b'5',
+        None => false,
+    };
+    if round_up {
+        digits += 1;
+    }
+    let magnitude = digits as f64 / 10_f64.powi(places);
+    magnitude.copysign(value)
 }
 
 fn round2(value: f64) -> f64 {
@@ -1326,6 +1532,9 @@ fn roles_on_issue(library: &CreatorLibrary, creator_id: i64, issue_id: i64) -> V
 }
 
 fn coverage(library: &CreatorLibrary) -> CreatorSummaryCoverage {
+    if let Some(totals) = &library.coverage_override {
+        return totals.clone();
+    }
     let rated: HashSet<i64> = library.ratings.keys().copied().collect();
     let mut read_unrated = HashSet::new();
     let mut unread = HashSet::new();
@@ -2363,10 +2572,20 @@ fn discovery_profile(library: &CreatorLibrary, creator_id: i64) -> Option<Discov
                 && !library.ratings.contains_key(id)
         })
         .count() as i64;
+    // Same headline-eligible issue set as the personal average (Python
+    // `rated_issue_ids`): cover-only and editorial credits never feed the trend.
     let mut trend_points: Vec<(DateTime<Utc>, i64, f64)> = attribution
         .issue_ids
         .iter()
         .copied()
+        .filter(|id| {
+            library
+                .credits
+                .get(id)
+                .into_iter()
+                .flatten()
+                .any(|credit| credit.external_id == creator_id && has_headline_role(credit))
+        })
         .filter_map(|id| {
             let rating = *library.ratings.get(&id)?;
             let timestamp = *library.rating_timestamps.get(&id)?;
@@ -3778,6 +3997,12 @@ fn page_params(
     Ok((limit as usize, offset as usize))
 }
 
+fn summary_ids(keys: &[String]) -> Vec<i64> {
+    keys.iter()
+        .filter_map(|key| parse_creator_key(key))
+        .collect()
+}
+
 fn drilldown_page(page: Option<i64>, page_size: Option<i64>) -> Result<(i64, i64), ApiError> {
     let page = page.unwrap_or(1);
     let page_size = page_size.unwrap_or(50);
@@ -3808,7 +4033,7 @@ pub async fn list_creators(
                 value
             }
         });
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(&state, user_id, LibraryScope::Full, false).await?;
     Ok(Json(build_list(
         &library,
         search.as_deref(),
@@ -3827,7 +4052,13 @@ pub async fn get_summaries(
     let Query(query) = query.map_err(|_| validation_failed())?;
     let keys = validate_summary_keys(query.keys.as_deref())?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(summary_ids(&keys)),
+        false,
+    )
+    .await?;
     Ok(Json(build_summaries(&library, &keys)))
 }
 
@@ -3843,7 +4074,13 @@ pub async fn get_detail(
     };
     let (limit, offset) = page_params(query.limit, query.offset, 50, 100)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        false,
+    )
+    .await?;
     let owner = attribution(&library, creator_id)
         .ok_or_else(|| not_found(format!("Creator {creator_key} not found in your library")))?;
     Ok(Json(build_detail(
@@ -3871,7 +4108,13 @@ pub async fn get_series_issues(
     };
     let (limit, offset) = page_params(query.limit, query.offset, 50, 100)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        false,
+    )
+    .await?;
     if attribution(&library, creator_id).is_none() {
         return Err(not_found(format!(
             "Creator {creator_key} not found in your library"
@@ -3890,7 +4133,13 @@ pub async fn get_comparison(
     let Query(query) = query.map_err(|_| validation_failed())?;
     let keys = validate_comparison_keys(query.keys.as_deref())?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(summary_ids(&keys)),
+        false,
+    )
+    .await?;
     Ok(Json(build_comparison(&library, &keys)))
 }
 
@@ -3899,7 +4148,7 @@ pub async fn get_discoveries(
     claims: VerifiedAccessClaims,
 ) -> Result<Json<CreatorDiscoveryResponse>, ApiError> {
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(&state, user_id, LibraryScope::Full, false).await?;
     Ok(Json(build_discoveries(&library)))
 }
 
@@ -3908,7 +4157,7 @@ pub async fn get_team_chemistry(
     claims: VerifiedAccessClaims,
 ) -> Result<Json<CreatorTeamChemistryResponse>, ApiError> {
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(&state, user_id, LibraryScope::Full, false).await?;
     Ok(Json(build_team_chemistry(&library)))
 }
 
@@ -3926,7 +4175,13 @@ pub async fn get_metric_drilldown(
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        true,
+    )
+    .await?;
     let result = build_drilldown(
         &library,
         creator_id,
@@ -3955,7 +4210,13 @@ pub async fn get_rating_distribution_drilldown(
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        true,
+    )
+    .await?;
     let result = build_drilldown(
         &library,
         creator_id,
@@ -3993,7 +4254,13 @@ pub async fn get_role_drilldown(
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        true,
+    )
+    .await?;
     let result = build_drilldown(
         &library,
         creator_id,
@@ -4031,7 +4298,13 @@ pub async fn get_series_drilldown(
     };
     let (page, page_size) = drilldown_page(query.page, query.page_size)?;
     let user_id = resolve_user_id(&state, &claims).await?;
-    let library = load_library(&state, user_id).await?;
+    let library = load_library(
+        &state,
+        user_id,
+        LibraryScope::Creators(vec![creator_id]),
+        true,
+    )
+    .await?;
     let result = build_drilldown(
         &library,
         creator_id,
@@ -4277,6 +4550,7 @@ mod tests {
             rating_timestamps,
             metadata_issues,
             missing_rating_causes: HashMap::new(),
+            coverage_override: None,
         }
     }
 
@@ -4291,15 +4565,81 @@ mod tests {
         assert_eq!(parse_series_key("thread:"), None);
     }
 
+    /// Golden table measured from CPython 3.13 `round(value, places)`.
     #[test]
-    fn rounding_uses_python_half_to_even() {
-        assert_eq!(round_half_even(2.5, 0), 2.0);
-        assert_eq!(round_half_even(3.5, 0), 4.0);
-        assert_eq!(round_half_even(0.125, 2), 0.12);
-        assert_eq!(round_half_even(0.135, 2), 0.14);
+    fn rounding_matches_python_round_golden_table() {
+        let golden: [(f64, i32, f64); 22] = [
+            (83.5 / 20.0, 2, 4.17),
+            (4.175, 2, 4.17),
+            (0.125, 2, 0.12),
+            (0.135, 2, 0.14),
+            (2.675, 2, 2.67),
+            (1.005, 2, 1.0),
+            (2.5, 0, 2.0),
+            (3.5, 0, 4.0),
+            (0.5, 0, 0.0),
+            (1.5, 0, 2.0),
+            (8.345, 2, 8.35),
+            (0.0005, 3, 0.001),
+            (0.0015, 3, 0.002),
+            (0.0025, 3, 0.003),
+            (2.0 / 3.0, 3, 0.667),
+            (1.0 / 3.0, 2, 0.33),
+            (4.5, 0, 4.0),
+            (1.23456, 2, 1.23),
+            (0.875, 2, 0.88),
+            (0.285, 2, 0.28),
+            (1.115, 2, 1.11),
+            (4.125, 2, 4.12),
+        ];
+        for (value, places, expected) in golden {
+            assert_eq!(
+                round_half_even(value, places),
+                expected,
+                "round({value:?}, {places})"
+            );
+        }
+        assert_eq!(round2(0.625), 0.62);
+        assert_eq!(round3(5.0 / 6.0), 0.833);
         assert_eq!(round2(4.0), 4.0);
         assert_eq!(median(&[3.0, 4.0, 5.0]), 4.0);
         assert_eq!(median(&[3.0, 5.0]), 4.0);
+    }
+
+    #[test]
+    fn discovery_trend_counts_only_headline_eligible_credits() {
+        let mut library = fixture_library();
+        let creator_id = 7;
+        let issue_ids: Vec<i64> = library
+            .credits
+            .iter()
+            .filter(|(_, credits)| credits.iter().any(|c| c.external_id == creator_id))
+            .map(|(id, _)| *id)
+            .collect();
+        assert!(!issue_ids.is_empty());
+        let stamp = Utc::now();
+        for id in &issue_ids {
+            library.ratings.insert(*id, 4.0);
+            library.rating_timestamps.insert(*id, stamp);
+            for credit in library.credits.get_mut(id).unwrap() {
+                if credit.external_id == creator_id {
+                    credit.roles = vec!["cover".to_string()];
+                }
+            }
+        }
+        let profile = discovery_profile(&library, creator_id).expect("profile");
+        assert!(profile.trend_points.is_empty());
+        assert_eq!(profile.rated_issue_count, 0);
+        for id in &issue_ids {
+            for credit in library.credits.get_mut(id).unwrap() {
+                if credit.external_id == creator_id {
+                    credit.roles = vec!["writer".to_string()];
+                }
+            }
+        }
+        let profile = discovery_profile(&library, creator_id).expect("profile");
+        assert_eq!(profile.trend_points.len(), issue_ids.len());
+        assert_eq!(profile.rated_issue_count as usize, issue_ids.len());
     }
 
     #[test]
