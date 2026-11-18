@@ -550,6 +550,7 @@ describe('comparison and CBL discovery request budgets', () => {
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
+        'POST /api/v2/issues/cards': () => ({ data: { items: [] } }),
       },
       'cold crossovers',
     )
@@ -568,7 +569,8 @@ describe('comparison and CBL discovery request budgets', () => {
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
+    await waitFor(() => expect(ledger.requests).toHaveLength(3))
     expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
+    expect(ledger.requests[2]?.url).toBe('POST /api/v2/issues/cards')
   })
 })

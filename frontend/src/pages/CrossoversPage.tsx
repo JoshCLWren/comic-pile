@@ -109,14 +109,16 @@ export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   } = useCrossoverIssuesForRange(rangeThread?.id ?? null, api)
   const isLoadingRangeIssues = rangeThread !== null && isPendingRangeIssues
 
-  // One bounded batch projection for every exact owned issue named by any
-  // rendered membership row; thread-only memberships never produce a card.
+  // One bounded batch projection for exact owned issues in the expanded
+  // membership rows; collapsed groups and thread-only memberships stay inert.
   const memberIssueIds = useMemo(
     () =>
       groups.flatMap((group) =>
-        group.memberships.map((member) => member.issue_id).filter((id): id is number => id != null),
+        group.id === expandedId
+          ? group.memberships.map((member) => member.issue_id).filter((id): id is number => id != null)
+          : [],
       ),
-    [groups],
+    [groups, expandedId],
   )
   const cardsQuery = useIssueCards(memberIssueIds)
   const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
