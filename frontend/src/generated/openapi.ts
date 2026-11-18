@@ -1735,7 +1735,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the CBL adoption preview. */
+        /** Documentation-only operation for the CBL adoption plan. */
         post: operations["cbl_adoption_plan_documentation"];
         delete?: never;
         options?: never;
@@ -1750,11 +1750,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Cbl Adoption Preview
-         * @description Preview all CBL positions and their default read-only adoption choices.
-         */
-        get: operations["api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get"];
+        /** Documentation-only operation for the CBL adoption preview. */
+        get: operations["cbl_adoption_preview_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5001,212 +4998,6 @@ export interface components {
             target_type: string;
         };
         /**
-         * CBLAdoptionCommitRequest
-         * @description Reader decisions for committing CBL adoption to a Reading Plan.
-         *
-         *     The source fingerprint from the preview response is required so the commit
-         *     can revalidate the source list before any write; a stale preview aborts the
-         *     transaction with a structured conflict and no partial writes.
-         */
-        CBLAdoptionCommitRequest: {
-            /**
-             * Content Hash
-             * @description Content hash from the client's preview response for stale check
-             */
-            content_hash: string;
-            /**
-             * Entry Decisions
-             * @description Decisions per entry (cbl_position -> decision)
-             */
-            entry_decisions?: {
-                [key: string]: components["schemas"]["SourceBackedDecision"];
-            };
-            /**
-             * Revision Sha
-             * @description Revision SHA from the client's preview response for stale check
-             */
-            revision_sha: string;
-            /**
-             * Series Decisions
-             * @description Series-level inclusion/exclusion decisions
-             */
-            series_decisions?: components["schemas"]["SeriesDecision"][];
-            /**
-             * Series Overrides
-             * @description Individual entry overrides of series decisions
-             */
-            series_overrides?: components["schemas"]["EntryOverride"][];
-        };
-        /**
-         * CBLAdoptionCommitResponse
-         * @description Updated Reading Plan plus machine-readable adoption source positions.
-         */
-        CBLAdoptionCommitResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Created Positions
-             * @description CBL source positions where a missing issue was materialized
-             */
-            created_positions?: number[];
-            /**
-             * Excluded Positions
-             * @description CBL source positions explicitly excluded or left unapproved
-             */
-            excluded_positions?: number[];
-            /** Id */
-            id: number;
-            /** Lanes */
-            lanes: components["schemas"]["ContinuityPlanLane"][];
-            /** Name */
-            name: string;
-            /** Nodes */
-            nodes?: components["schemas"]["ContinuityPlanNode"][];
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /**
-             * Reused Positions
-             * @description CBL source positions whose issue/plan node was reused
-             */
-            reused_positions?: number[];
-            /**
-             * Unresolved Positions
-             * @description CBL source positions that could not be adopted
-             */
-            unresolved_positions?: number[];
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** User Id */
-            user_id: number;
-        };
-        /**
-         * CBLAdoptionEntryResponse
-         * @description Typed reconciliation and adoption state for one source position.
-         */
-        CBLAdoptionEntryResponse: {
-            /** Adopted */
-            adopted: boolean;
-            /**
-             * Adoption Class
-             * @enum {string}
-             */
-            adoption_class: "existing" | "missing_importable" | "ambiguous_unresolved";
-            /**
-             * Adoption Decision
-             * @enum {string}
-             */
-            adoption_decision: "included_existing" | "would_create_missing" | "awaiting_opt_in" | "excluded" | "unresolved";
-            /** Canonical Issue Id */
-            canonical_issue_id: number | null;
-            /** Cbl Entry Id */
-            cbl_entry_id: number;
-            /** Cbl Position */
-            cbl_position: number;
-            /**
-             * Collection Excluded
-             * @default false
-             */
-            collection_excluded: boolean;
-            /** Collection Exclusion Ids */
-            collection_exclusion_ids?: number[];
-            /** Collection Exclusion Reason */
-            collection_exclusion_reason?: string | null;
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string | null;
-            /** Comicvine Series Id */
-            comicvine_series_id: string | null;
-            /** Is Duplicate Identity */
-            is_duplicate_identity: boolean;
-            /** Issue Number */
-            issue_number: string;
-            /** Publication Year */
-            publication_year?: number | null;
-            /** Read At */
-            read_at: string | null;
-            /** Read Status */
-            read_status: string | null;
-            /** Resolution Status */
-            resolution_status: string;
-            /** Resolved Issue Id */
-            resolved_issue_id: number | null;
-            /** Series External Id */
-            series_external_id: string | null;
-            /** Series Group Id */
-            series_group_id: string;
-            /** Series Name */
-            series_name: string;
-            /** Series Provider */
-            series_provider: string | null;
-            /** Volume Year */
-            volume_year?: number | null;
-        };
-        /**
-         * CBLAdoptionPlanRequest
-         * @description Optional per-series and per-entry choices for a read-only CBL plan.
-         */
-        CBLAdoptionPlanRequest: {
-            /** Entry Decisions */
-            entry_decisions?: {
-                [key: string]: boolean;
-            };
-            /** Series Decisions */
-            series_decisions?: {
-                [key: string]: boolean;
-            };
-        };
-        /**
-         * CBLAdoptionPreviewResponse
-         * @description Complete typed, read-only CBL adoption preview contract.
-         */
-        CBLAdoptionPreviewResponse: {
-            /** Entries */
-            entries: components["schemas"]["CBLAdoptionEntryResponse"][];
-            source: components["schemas"]["CBLSourceFingerprintResponse"];
-            summary: components["schemas"]["CBLAdoptionSummaryResponse"];
-            /** Total Positions */
-            total_positions: number;
-        };
-        /**
-         * CBLAdoptionSummaryResponse
-         * @description Dry-run counts and source-position order for an adoption plan.
-         */
-        CBLAdoptionSummaryResponse: {
-            /** Awaiting Opt In Count */
-            awaiting_opt_in_count: number;
-            /** Awaiting Opt In Positions */
-            awaiting_opt_in_positions: number[];
-            /** Excluded Count */
-            excluded_count: number;
-            /** Excluded Positions */
-            excluded_positions: number[];
-            /** Final Adopted Count */
-            final_adopted_count: number;
-            /** Final Adopted Order */
-            final_adopted_order: number[];
-            /** Missing Would Create Count */
-            missing_would_create_count: number;
-            /** Missing Would Create Positions */
-            missing_would_create_positions: number[];
-            /** Reused Existing Count */
-            reused_existing_count: number;
-            /** Reused Existing Positions */
-            reused_existing_positions: number[];
-            /** Unresolved Count */
-            unresolved_count: number;
-            /** Unresolved Positions */
-            unresolved_positions: number[];
-        };
-        /**
          * CBLBreadcrumb
          * @description One step in the folder breadcrumb, from the catalog root to the folder.
          */
@@ -5273,113 +5064,6 @@ export interface components {
             source_path: string;
             /** Source Repository */
             source_repository: string;
-        };
-        /**
-         * CBLComicvineOccurrenceDetail
-         * @description One source position that contains an exact Comic Vine issue identity.
-         */
-        CBLComicvineOccurrenceDetail: {
-            /**
-             * Comicvine Issue Id
-             * @description Exact Comic Vine issue ID that matched
-             */
-            comicvine_issue_id: string;
-            /**
-             * Comicvine Volume Id
-             * @description Comic Vine volume identity of the occurrence when the source has one
-             */
-            comicvine_volume_id?: string | null;
-            /**
-             * Issue Number
-             * @description Issue number recorded in the CBL source
-             */
-            issue_number: string;
-            /**
-             * List Id
-             * @description CBL source list ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Display name of the CBL source list
-             */
-            list_name: string;
-            /**
-             * Position
-             * @description Source position in original CBL order
-             */
-            position: number;
-            /**
-             * Publication Year
-             * @description Publication year recorded in the CBL source
-             */
-            publication_year?: number | null;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Series Name
-             * @description Series name recorded in the CBL source
-             */
-            series_name: string;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-            /**
-             * Volume Year
-             * @description Volume year recorded in the CBL source
-             */
-            volume_year?: number | null;
-        };
-        /**
-         * CBLComicvineOccurrencePage
-         * @description One page of CBL source occurrences for an exact Comic Vine issue identity.
-         */
-        CBLComicvineOccurrencePage: {
-            /**
-             * Comicvine Issue Id
-             * @description Exact Comic Vine issue ID queried
-             */
-            comicvine_issue_id: string;
-            /**
-             * Lists Total
-             * @description Number of distinct source lists containing the identity
-             */
-            lists_total: number;
-            /**
-             * Occurrences
-             * @description Matching source occurrences in this page
-             */
-            occurrences?: components["schemas"]["CBLComicvineOccurrenceDetail"][];
-            /**
-             * Occurrences Limit
-             * @description Maximum source occurrences per page
-             */
-            occurrences_limit: number;
-            /**
-             * Occurrences Offset
-             * @description Zero-based offset of the returned page
-             */
-            occurrences_offset: number;
-            /**
-             * Occurrences Total
-             * @description Total matching source occurrences in the shared catalog
-             */
-            occurrences_total: number;
         };
         /**
          * CBLDatabaseUnavailableDetail
@@ -5462,315 +5146,6 @@ export interface components {
             source_path: string;
         };
         /**
-         * CBLReadingListCandidatesResponse
-         * @description Confirmed-comic gaps plus ranked shared CBL sources for one Reading List.
-         */
-        CBLReadingListCandidatesResponse: {
-            /**
-             * Candidates
-             * @description Ranked source list comparisons in this page
-             */
-            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
-            /**
-             * Candidates Total
-             * @description Number of source lists containing at least one input comic
-             */
-            candidates_total: number;
-            /**
-             * Entries
-             * @description Every current list entry and its identity gap
-             */
-            entries?: components["schemas"]["CBLReadingListInputEntry"][];
-            /**
-             * Input Confirmed Total
-             * @description Distinct confirmed Comic Vine issue IDs compared
-             */
-            input_confirmed_total: number;
-            /**
-             * Input Conflict Count
-             * @description List entries with conflicting confirmed Comic Vine issue IDs
-             */
-            input_conflict_count: number;
-            /**
-             * Input Entry Count
-             * @description Every current list entry
-             */
-            input_entry_count: number;
-            /**
-             * Input Ids
-             * @description Distinct confirmed input IDs in list order
-             */
-            input_ids?: string[];
-            /**
-             * Input Missing Count
-             * @description List entries without a confirmed Comic Vine issue ID
-             */
-            input_missing_count: number;
-            /**
-             * List Id
-             * @description Owned Reading List ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Owned Reading List name
-             */
-            list_name: string;
-        };
-        /**
-         * CBLReadingListInputEntry
-         * @description One current Reading List entry and its confirmed Comic Vine identity state.
-         */
-        CBLReadingListInputEntry: {
-            /**
-             * Comicvine Issue Id
-             * @description Confirmed Comic Vine issue ID when exactly one is confirmed
-             */
-            comicvine_issue_id?: string | null;
-            /**
-             * Comicvine Issue Ids
-             * @description Every confirmed Comic Vine issue ID, including conflicting IDs
-             */
-            comicvine_issue_ids?: string[];
-            /**
-             * Identity Status
-             * @description Whether this entry has one usable confirmed exact identity
-             * @enum {string}
-             */
-            identity_status: "confirmed" | "missing" | "conflict";
-            /**
-             * Issue Id
-             * @description ComicPile issue ID
-             */
-            issue_id: number;
-            /**
-             * Issue Number
-             * @description Reader-facing issue number
-             */
-            issue_number: string;
-            /**
-             * Position
-             * @description Current order position in the Reading List
-             */
-            position: number;
-            /**
-             * Series Name
-             * @description Reader-facing series name
-             */
-            series_name: string;
-        };
-        /**
-         * CBLSourceComparisonMatch
-         * @description Coverage and order comparison for one shared CBL source list.
-         */
-        CBLSourceComparisonMatch: {
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Distinct Source Issues
-             * @description Distinct confirmed Comic Vine issues in the source list
-             */
-            distinct_source_issues: number;
-            /**
-             * Duplicate Match Count
-             * @description Matched positions beyond the first occurrence of each distinct input comic
-             */
-            duplicate_match_count: number;
-            /**
-             * Entries Total
-             * @description Every occurrence in the source list
-             */
-            entries_total: number;
-            /**
-             * Input Coverage Percentage
-             * @description Percentage of distinct input comics covered
-             */
-            input_coverage_percentage: number;
-            /**
-             * Input Total
-             * @description Distinct input comics compared
-             */
-            input_total: number;
-            /**
-             * List Id
-             * @description CBL source list ID
-             */
-            list_id: number;
-            /**
-             * List Name
-             * @description Display name of the CBL source list
-             */
-            list_name: string;
-            /**
-             * Matched Input Count
-             * @description Distinct input comics found in this source list
-             */
-            matched_input_count: number;
-            /**
-             * Matched Input Ids
-             * @description Matched distinct IDs in input order
-             */
-            matched_input_ids?: string[];
-            /**
-             * Matched Occurrence Count
-             * @description Source positions that hold a matching input comic
-             */
-            matched_occurrence_count: number;
-            /**
-             * Missing Input Ids
-             * @description Input IDs absent from this source list
-             */
-            missing_input_ids?: string[];
-            /**
-             * Order Disagreement Count
-             * @description Matched pairs whose relative order differs from the input order
-             */
-            order_disagreement_count: number;
-            /**
-             * Order Pair Count
-             * @description Comparable matched comic pairs
-             */
-            order_pair_count: number;
-            /**
-             * Order Status
-             * @description Relative order of matched distinct comics
-             * @enum {string}
-             */
-            order_status: "same_order" | "reordered" | "not_comparable";
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Score
-             * @description Relevance score balancing coverage, precision, and order
-             */
-            score: number;
-            /**
-             * Source Coverage Percentage
-             * @description Percentage of this source's distinct comics that matched
-             */
-            source_coverage_percentage: number;
-            /**
-             * Source Only Issue Count
-             * @description Distinct source comics whose exact ID is not in the input list
-             */
-            source_only_issue_count: number;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-        };
-        /**
-         * CBLSourceComparisonRequest
-         * @description Distinct confirmed Comic Vine issue IDs to compare against shared CBL sources.
-         */
-        CBLSourceComparisonRequest: {
-            /**
-             * Comicvine Issue Ids
-             * @description Confirmed Comic Vine issue IDs in the caller's intended order
-             */
-            comicvine_issue_ids: string[];
-        };
-        /**
-         * CBLSourceComparisonResponse
-         * @description Ranked shared CBL source lists for one confirmed input set.
-         */
-        CBLSourceComparisonResponse: {
-            /**
-             * Candidates
-             * @description Ranked source list comparisons in this page
-             */
-            candidates?: components["schemas"]["CBLSourceComparisonMatch"][];
-            /**
-             * Candidates Total
-             * @description Number of source lists containing at least one input comic
-             */
-            candidates_total: number;
-            /**
-             * Comicvine Issue Ids
-             * @description Distinct input IDs that were compared
-             */
-            comicvine_issue_ids?: string[];
-            /**
-             * Input Total
-             * @description Distinct input comics compared
-             */
-            input_total: number;
-        };
-        /**
-         * CBLSourceEntryDetail
-         * @description One ordered source occurrence in a CBL list.
-         */
-        CBLSourceEntryDetail: {
-            /**
-             * Comicvine Issue Id
-             * @description Comic Vine issue ID when the source entry has one
-             */
-            comicvine_issue_id?: string | null;
-            /**
-             * Comicvine Volume Id
-             * @description Comic Vine volume ID when the source entry has one
-             */
-            comicvine_volume_id?: string | null;
-            /**
-             * Issue Number
-             * @description Issue number recorded in the CBL source
-             */
-            issue_number: string;
-            /**
-             * Position
-             * @description Source position in original CBL order
-             */
-            position: number;
-            /**
-             * Publication Year
-             * @description Publication year recorded in the CBL source
-             */
-            publication_year?: number | null;
-            /**
-             * Series Name
-             * @description Series name recorded in the CBL source
-             */
-            series_name: string;
-            /**
-             * Volume Year
-             * @description Volume year recorded in the CBL source
-             */
-            volume_year?: number | null;
-        };
-        /**
-         * CBLSourceFingerprintResponse
-         * @description Immutable source evidence needed to review and later accept a plan.
-         */
-        CBLSourceFingerprintResponse: {
-            /** Content Hash */
-            content_hash: string;
-            /** Revision Sha */
-            revision_sha: string;
-            /** Source List Id */
-            source_list_id: number;
-            /** Source Path */
-            source_path: string;
-            /** Source Repository */
-            source_repository: string;
-        };
-        /**
          * CBLSourceFolder
          * @description One immediate child folder of the requested catalog folder.
          */
@@ -5795,113 +5170,6 @@ export interface components {
              * @description Active CBLs anywhere below this folder.
              */
             total_list_count: number;
-        };
-        /**
-         * CBLSourceListDetail
-         * @description Read-only detail for one CBL source list.
-         */
-        CBLSourceListDetail: {
-            /**
-             * Content Hash
-             * @description Content hash of the imported source list
-             */
-            content_hash: string;
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Entries
-             * @description Ordered source occurrences in this page
-             */
-            entries?: components["schemas"]["CBLSourceEntryDetail"][];
-            /**
-             * Entries Limit
-             * @description Maximum source occurrences per page
-             */
-            entries_limit: number;
-            /**
-             * Entries Offset
-             * @description Zero-based offset of the returned page
-             */
-            entries_offset: number;
-            /**
-             * Entries Total
-             * @description Total source occurrences in the list
-             */
-            entries_total: number;
-            /**
-             * Id
-             * @description CBL source list ID
-             */
-            id: number;
-            /**
-             * Name
-             * @description Display name of the CBL source list
-             */
-            name: string;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Source Path
-             * @description Reader-safe path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Ref
-             * @description Reader-safe ``repository:path`` source identity
-             */
-            source_ref: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
-        };
-        /**
-         * CBLSourceListDiscoveryItem
-         * @description One active persisted source list that may be previewed by Add material.
-         */
-        CBLSourceListDiscoveryItem: {
-            /**
-             * Content Hash
-             * @description Content hash of the imported source list
-             */
-            content_hash: string;
-            /**
-             * Declared Issue Count
-             * @description Issue count declared by the source list
-             */
-            declared_issue_count?: number | null;
-            /**
-             * Id
-             * @description CBL source list ID
-             */
-            id: number;
-            /**
-             * Name
-             * @description Display name of the CBL source list
-             */
-            name: string;
-            /**
-             * Revision Sha
-             * @description Source revision the list was imported from
-             */
-            revision_sha: string;
-            /**
-             * Source Path
-             * @description Stored path of the CBL source file
-             */
-            source_path: string;
-            /**
-             * Source Repository
-             * @description Reader-safe source repository identity
-             */
-            source_repository: string;
         };
         /**
          * CanonicalCorrection
@@ -8974,19 +8242,6 @@ export interface components {
             target_type: string;
         };
         /**
-         * EntryOverride
-         * @description Individual entry override of a series decision.
-         */
-        EntryOverride: {
-            /**
-             * Cbl Position
-             * @description Position to override
-             */
-            cbl_position: number;
-            /** @description Decision for this specific entry */
-            decision: components["schemas"]["SourceBackedDecision"];
-        };
-        /**
          * EventDetail
          * @description Schema for event detail in session details.
          */
@@ -11979,19 +11234,6 @@ export interface components {
              */
             status_class: string;
         };
-        /**
-         * SeriesDecision
-         * @description Series-level decision for CBL adoption.
-         */
-        SeriesDecision: {
-            /** @description Include or exclude this entire series */
-            decision: components["schemas"]["SourceBackedDecision"];
-            /**
-             * Series Name
-             * @description Series name
-             */
-            series_name: string;
-        };
         /** @description Wire parity with Python `SeriesImportStatusResponse`. */
         SeriesImportStatusResponse: {
             /** Format: int32 */
@@ -12713,12 +11955,6 @@ export interface components {
             /** Title */
             title: string;
         };
-        /**
-         * SourceBackedDecision
-         * @description Decision values for source-backed adoption.
-         * @enum {string}
-         */
-        SourceBackedDecision: "include" | "exclude";
         /**
          * SourceSyncFailure
          * @description One source that could not be evaluated during a sync run.
@@ -16654,34 +15890,49 @@ export interface operations {
             };
         };
     };
-    api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get: {
+    cbl_adoption_preview_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description CBL source list identifier */
                 list_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Adoption preview for the active CBL list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLAdoptionPreviewResponse"];
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Path failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
