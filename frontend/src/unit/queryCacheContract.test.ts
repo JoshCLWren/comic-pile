@@ -559,14 +559,14 @@ describe('targeted cache effects', () => {
     })
   })
 
-  it('refreshes Roll, session, and plan views after a thread rename without resetting queue pages (#5264)', async () => {
+  it('refreshes Roll, session, plan, and issue-card views after a thread rename without resetting queue pages (#5264)', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
 
     await invalidateAfterThreadMetadataEdit(client)
 
     expect(setQueryData).not.toHaveBeenCalled()
     expect(resetQueries).not.toHaveBeenCalled()
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledTimes(7)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -577,6 +577,7 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.issueCardsAll(),
     })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,

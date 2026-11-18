@@ -421,8 +421,9 @@ export async function invalidateComicVineImportStatus(
  *
  * Queue rows and thread detail/summary are patched in place by the caller, so
  * this only reconciles surfaces that render thread metadata from other caches:
- * Roll bootstrap/pool, the current session, and reading plan/CBL views. Queue
- * order does not change, so queue pages are not invalidated or reset here.
+ * Roll bootstrap/pool, the current session, reading plan/CBL views, and shared
+ * issue-card batches so plan cards show renamed series titles. Queue order does
+ * not change, so queue pages are not invalidated or reset here.
  */
 export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Promise<void> {
   await Promise.all([
@@ -436,6 +437,7 @@ export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Pr
     client.invalidateQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
+    invalidateIssueCards(client),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,

@@ -103,6 +103,7 @@ it('creates, updates, deletes, and reactivates threads', async () => {
 
 it('refreshes Roll, session, and plan views when a thread is renamed (#5264)', async () => {
   const wrapper = createWrapper()
+  // SAFETY: mock payload supplies only the fields this rename reconciliation test asserts.
   const updatedThread = {
     id: 7,
     title: 'Renamed',
