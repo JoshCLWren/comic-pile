@@ -162,7 +162,8 @@
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/issues$"
+      "src": "^/api/v1/threads/[^/]+/issues$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
