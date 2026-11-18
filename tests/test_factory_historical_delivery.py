@@ -186,3 +186,46 @@ def test_incident_backfill_extracts_pr_candidates_but_not_authorization(
     assert delivery.incident_prs(REPO, 23) == [5123, 5124]
     assert delivery.incident_prs(REPO, 23, max_prs=1) == [5123]
     assert delivery.incident_prs(REPO, 23) != [23]
+
+
+def test_merged_pr_without_checkpoint_ancestry_gets_no_source_credit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bot comment cannot credit a source run dropped before the PR merged."""
+    pr = pr_data()
+    monkeypatch.setattr(delivery, "obj", lambda endpoint: (
+        pr if "/pulls/" in endpoint else {"status": "diverged"}))
+    monkeypatch.setattr(delivery, "verified_run", lambda *_args: {
+        "status": "completed"})
+    monkeypatch.setattr(delivery, "source_worker", lambda *_args: WORKER)
+    monkeypatch.setattr(delivery, "pages", lambda *_args: [{
+        "user": {"login": "github-actions[bot]"},
+        "body": f"<!-- factory-persisted-handoff:v1 run={RUN} head={SOURCE} -->",
+    }])
+    monkeypatch.setattr(delivery, "snapshot_for_run", lambda *_args: {
+        "head": SOURCE, "base": BASE, "tree": "e" * 40})
+    assert delivery.receipt_for_pr(REPO, 67) is None
+
+
+def test_multiple_source_checkpoint_snapshots_use_latest_verified_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run may save several immutable heads while one worker is coding."""
+    old, latest = "a" * 40, "b" * 40
+    pr = pr_data()
+    monkeypatch.setattr(delivery, "obj", lambda endpoint: (
+        pr if "/pulls/" in endpoint else {"status": "ahead"}))
+    monkeypatch.setattr(delivery, "verified_run", lambda *_args: {
+        "status": "completed"})
+    monkeypatch.setattr(delivery, "source_worker", lambda *_args: WORKER)
+    monkeypatch.setattr(delivery, "pages", lambda *_args: [
+        {"user": {"login": "github-actions[bot]"},
+         "body": f"<!-- factory-persisted-handoff:v1 run={RUN} head={sha} -->"}
+        for sha in (old, latest)
+    ])
+    monkeypatch.setattr(delivery, "snapshot_for_run",
+                        lambda _repo, sha, _run, _worker: {
+                            "head": sha, "base": BASE, "tree": "e" * 40})
+    monkeypatch.setattr(delivery, "incorporated", lambda *_args: True)
+    result = delivery.receipt_for_pr(REPO, 67)
+    assert result and result["checkpoint_sha"] == latest
