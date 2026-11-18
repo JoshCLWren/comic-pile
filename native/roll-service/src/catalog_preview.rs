@@ -60,7 +60,7 @@ pub struct SeriesMappingPreviewScope {
 }
 
 /// Python `SeriesMappingPreviewCounts`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewCounts {
     pub already_confirmed: i64,
     pub safe_exact_match: i64,
@@ -71,7 +71,7 @@ pub struct SeriesMappingPreviewCounts {
 }
 
 /// Python `SeriesMappingPreviewRow`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewRow {
     pub row_id: String,
     pub issue_id: i32,
@@ -92,7 +92,7 @@ pub struct SeriesMappingPreviewRow {
 }
 
 /// Python `SeriesMappingPreviewProviderSeries`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewProviderSeries {
     pub id: String,
     pub name: Option<String>,
@@ -157,26 +157,6 @@ impl IntoResponse for PreviewError {
             )
                 .into_response(),
         }
-    }
-}
-
-fn int_parsing(field: &str, input: &str) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: "int_parsing".to_string(),
-        loc: vec!["body".to_string(), field.to_string()],
-        msg: "Input should be a valid integer, unable to parse string as an integer".to_string(),
-        input: Value::String(input.to_string()),
-        ctx: None,
-    }
-}
-
-fn too_long(field: &str, input: &str, max: usize) -> ValidationErrorItem {
-    ValidationErrorItem {
-        error_type: "string_too_long".to_string(),
-        loc: vec!["body".to_string(), field.to_string()],
-        msg: format!("String should have at most {max} characters"),
-        input: Value::String(input.to_string()),
-        ctx: Some(serde_json::json!({"max_length": max})),
     }
 }
 
@@ -420,7 +400,7 @@ pub async fn preview_series_mapping(
     let provider = payload.provider.trim();
     let series_external_id = payload.provider_series_external_id.trim();
 
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
 
     let plan = catalog_commit::build_plan_db(
         &state.outbound,
