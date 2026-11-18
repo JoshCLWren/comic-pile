@@ -55,7 +55,8 @@ def test_historical_merged_source_run_proves_immutable_bytes(
     assert result == {"run_id": RUN, "worker": WORKER, "saved": True,
                       "checkpoint_sha": SOURCE, "published": True,
                       "work_pr": 67, "validated": False,
-                      "merged": True, "merge_sha": MERGE}
+                      "merged": True, "merge_sha": MERGE,
+                      "merge_basis": "pr_ancestry", "exact_bytes_included": True}
 
 
 def test_unverified_source_never_credits_code_or_merge(
@@ -82,7 +83,7 @@ def test_unverified_source_never_credits_code_or_merge(
 def test_backfill_retains_saved_credit_when_merge_bytes_are_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A later revert must not be falsely credited as a fully merged snapshot."""
+    """A later repair preserves PR history but not original-byte proof."""
     pr = pr_data()
     monkeypatch.setattr(delivery, "obj", lambda endpoint: (
         pr if "/pulls/" in endpoint else {"status": "ahead"}))
@@ -99,12 +100,14 @@ def test_backfill_retains_saved_credit_when_merge_bytes_are_missing(
                         destination == SOURCE)
     result = delivery.receipt_for_pr(REPO, 67)
     assert result and result["saved"] and result["published"]
-    assert not result.get("merged")
+    assert result["merged"] is True
+    assert result["merge_basis"] == "pr_ancestry"
+    assert result["exact_bytes_included"] is False
     writes: list[dict] = []
     summary = delivery.backfill(
         REPO, [67], receipt_writer=lambda _repo, rows: writes.extend(rows))
-    assert summary["saved"] == [67] and summary["merged"] == []
-    assert len(writes) == 1 and "merged" not in writes[0]
+    assert summary["saved"] == [67] and summary["merged"] == [67]
+    assert len(writes) == 1 and writes[0]["exact_bytes_included"] is False
 
 
 def test_source_commit_metadata_matches_exact_worker_run(
