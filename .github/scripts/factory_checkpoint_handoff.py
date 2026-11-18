@@ -472,9 +472,13 @@ def merged_checkpoint_receipt(repo: str, saved: dict, pr: dict) -> dict:
     if ancestry.get("status") not in {"ahead", "identical"}:
         return {}
     source = {**saved, "head": source_head, "tree": source_tree or saved["tree"]}
+    try:
+        exact = incorporated(repo, source, merge_sha)
+    except RuntimeError:
+        exact = None  # An unavailable tree read cannot prove unchanged bytes.
     return {
         "merged": True, "merge_sha": merge_sha, "merge_basis": "pr_ancestry",
-        "exact_bytes_included": incorporated(repo, source, merge_sha),
+        "exact_bytes_included": exact,
     }
 
 
