@@ -295,13 +295,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
         == "live transitional Python with callers"
         for item in v1_ops
     )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/sessions/current/"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
-        for item in v1_ops
-    )
     assert all(
         item.get("ingress_destination") == "/api/native_roll.rs"
         and item.get("burndown_status") == "shadowed by Rust"
@@ -522,9 +515,9 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     """The sessions and undo fragments cut the supported cutover ops to Rust.
 
     The owner's 2026-11-17 correction on #4839 retired the current-session and
-    restore-session-start twins under #4343 instead of porting them: those
-    legacy lifecycle paths remain on Python and gain no compatibility handler
-    or extra lifecycle semantics. Only the read-only list/details/history and
+    restore-session-start twins under #4343 instead of porting them: both
+    routes and their Python handlers are deleted and have no fragment entry
+    (see ``tests/test_retired_session_lifecycle_4343.py``). Only the read-only list/details/history and
     undo operations are cut over to native Rust. Unversioned paths have no
     TypeScript client or FastAPI registry operation; they stay in the fragment
     only for the Vercel rewrite. GET /api/v1/sessions/correction-examples stays
@@ -544,8 +537,6 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     }
     python_ops = {
         ("GET", "/api/v1/sessions/correction-examples"),
-        ("GET", "/api/v1/sessions/current/"),
-        ("POST", "/api/v1/sessions/{session_id}/restore-session-start"),
     }
     declared = {
         (operation["method"], operation["path"]): operation

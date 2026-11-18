@@ -2572,37 +2572,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/current/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Current Session
-         * @description Get current active session with deadlock retry handling.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse with current session details.
-         *
-         *     Raises:
-         *         RuntimeError: If failed after max retries.
-         */
-        get: operations["get_current_session_api_v1_sessions_current__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -2631,39 +2600,6 @@ export interface paths {
         get: operations["get_session_details_v1_documentation"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore Reading Session Start
-         * @description Restore session to its initial state at session start.
-         *
-         *     Args:
-         *         session_id: The session ID to restore.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *         session_service: Session service for business logic.
-         *
-         *     Returns:
-         *         SessionResponse with restored session details.
-         *
-         *     Raises:
-         *         HTTPException: If session or snapshot not found.
-         *         RuntimeError: If failed after max retries.
-         */
-        post: operations["restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18132,26 +18068,6 @@ export interface operations {
             };
         };
     };
-    get_current_session_api_v1_sessions_current__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-        };
-    };
     get_session_v1_documentation: {
         parameters: {
             query?: never;
@@ -18237,37 +18153,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };

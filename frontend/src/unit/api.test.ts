@@ -159,10 +159,8 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.setDie(6)
   await sessionApi.list({ status: 'complete' }, 'page')
   await sessionApi.get(1)
-  await sessionApi.getCurrent()
   await sessionApi.getDetails('2')
   await sessionApi.getSnapshots(2)
-  await sessionApi.restoreSessionStart(2)
   await undoApi.undo(1, 'snap')
   await undoApi.listSnapshots(1)
   await dependenciesApi.getIssueDependencies(2)
@@ -187,21 +185,22 @@ it('calls every remaining API resource endpoint', async () => {
 it('uses canonical v1 paths for session and undo resources', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
-  await sessionApi.getCurrent()
   await sessionApi.getDetails(7)
   await sessionApi.getSnapshots(7)
-  await sessionApi.restoreSessionStart(7)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
   expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
   expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
   expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
   expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
-  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
   expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
+})
+
+it('keeps the retired session lifecycle methods off the session service (#4343)', () => {
+  expect(sessionApi).not.toHaveProperty('getCurrent')
+  expect(sessionApi).not.toHaveProperty('restoreSessionStart')
 })
 
 it('adds auth and csrf headers to mutating requests', async () => {

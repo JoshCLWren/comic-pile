@@ -1,37 +1,39 @@
 import { useCallback, useMemo } from 'react'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
-import type { SessionCurrent } from '../../types'
-import type { SessionRefetch } from '../../hooks/useSession'
 import { queryClient } from '../../query/queryClient'
 
+/**
+ * Sessionless Roll state the Queue reads: the pending roll and the snoozed
+ * series, both derived from the Roll bootstrap (event-derived state).
+ */
+export interface QueueRollState {
+  pending_thread_id: number | null
+  snoozed_threads: Array<{ id: number }>
+}
+
 interface UseRollPendingSyncParams {
-  rollBootstrap: RollBootstrapResponse | null
-  session: SessionCurrent | null | undefined
-  refetchSession: SessionRefetch
+  rollBootstrap: RollBootstrapResponse | null | undefined
   refetchQueue: () => Promise<void>
 }
 
 interface UseRollPendingSyncResult {
-  session: SessionCurrent | null | undefined
+  rollState: QueueRollState | undefined
   onUpdated: () => Promise<void>
-  onRefetchSession: () => Promise<void>
+  onRefetchRollState: () => Promise<void>
 }
 
 export function useRollPendingSync({
   rollBootstrap,
-  session,
-  refetchSession,
   refetchQueue,
 }: UseRollPendingSyncParams): UseRollPendingSyncResult {
-  const syncedSession = useMemo(() => {
-    if (!session) return undefined
-    // Bootstrap is authoritative when it exists, including when pending_thread_id is null.
-    // Fall back to session.pending_thread_id only when bootstrap data is absent.
-    if (rollBootstrap != null) {
-      return { ...session, pending_thread_id: rollBootstrap.pending_thread_id }
+  // Bootstrap is authoritative, including when pending_thread_id is null.
+  const rollState = useMemo<QueueRollState | undefined>(() => {
+    if (rollBootstrap == null) return undefined
+    return {
+      pending_thread_id: rollBootstrap.pending_thread_id,
+      snoozed_threads: rollBootstrap.snoozed_threads ?? [],
     }
-    return session
-  }, [session, rollBootstrap])
+  }, [rollBootstrap])
 
   const onUpdated = useCallback(async () => {
     await refetchQueue()
@@ -40,12 +42,9 @@ export function useRollPendingSync({
     }
   }, [refetchQueue, rollBootstrap])
 
-  const onRefetchSession = useCallback(async () => {
-    await refetchSession()
-    if (rollBootstrap) {
-      await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
-    }
-  }, [refetchSession, rollBootstrap])
+  const onRefetchRollState = useCallback(async () => {
+    await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
+  }, [])
 
-  return { session: syncedSession, onUpdated, onRefetchSession }
+  return { rollState, onUpdated, onRefetchRollState }
 }
