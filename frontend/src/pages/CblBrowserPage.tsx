@@ -895,7 +895,7 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {graph && hasGenuineOverlap(graph) && (
+          {graph && (hasGenuineOverlap(graph) || graphCycleErrors.length > 0) && (
             <ReadingGraphSummary
               preview={graph}
               choices={overlapChoices}

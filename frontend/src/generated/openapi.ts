@@ -183,32 +183,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/bootstrap-alias-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Bootstrap Alias Metrics
-         * @description Return this instance's bootstrap alias counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/bug-reports/": {
         parameters: {
             query?: never;
@@ -304,50 +278,6 @@ export interface paths {
         /** Documentation-only operation for targeted adoption into an existing plan. */
         post: operations["cbl_targeted_adoption_commit_documentation"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Exclusions
-         * @description Return exclusions explicitly entered by this reader.
-         */
-        get: operations["list_exclusions_api_v1_collection_exclusions_get"];
-        put?: never;
-        /**
-         * Create Exclusion
-         * @description Idempotently exclude one external volume, Thread or Issue.
-         */
-        post: operations["create_exclusion_api_v1_collection_exclusions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/collection-exclusions/{exclusion_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Exclusion
-         * @description Remove one owned exclusion without changing the underlying comic.
-         */
-        delete: operations["delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1990,68 +1920,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reading-boundaries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Get Reading Boundary Batch
-         * @description Explain several owned series in one canonical eligibility snapshot.
-         *
-         *     Args:
-         *         payload: Owned Thread identifiers to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Explanations keyed by Thread identifier.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when a Thread is absent or foreign.
-         */
-        post: operations["get_reading_boundary_batch_api_v1_reading_boundaries_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-boundaries/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Reading Boundary
-         * @description Explain one owned series through the canonical Option E result.
-         *
-         *     Args:
-         *         thread_id: Owned Thread to explain.
-         *         current_user: Authenticated reader making the request.
-         *         db: Database session for the request.
-         *
-         *     Returns:
-         *         Named waiting Issues, live blockers, history, and editor targets.
-         *
-         *     Raises:
-         *         HTTPException: With status 404 when the Thread is absent or foreign.
-         */
-        get: operations["get_reading_boundary_api_v1_reading_boundaries__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-mode": {
         parameters: {
             query?: never;
@@ -2493,37 +2361,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/current/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Current Session
-         * @description Get current active session with deadlock retry handling.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse with current session details.
-         *
-         *     Raises:
-         *         RuntimeError: If failed after max retries.
-         */
-        get: operations["get_current_session_api_v1_sessions_current__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sessions/{session_id}": {
         parameters: {
             query?: never;
@@ -2552,39 +2389,6 @@ export interface paths {
         get: operations["get_session_details_v1_documentation"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/{session_id}/restore-session-start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore Reading Session Start
-         * @description Restore session to its initial state at session start.
-         *
-         *     Args:
-         *         session_id: The session ID to restore.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *         session_service: Session service for business logic.
-         *
-         *     Returns:
-         *         SessionResponse with restored session details.
-         *
-         *     Raises:
-         *         HTTPException: If session or snapshot not found.
-         *         RuntimeError: If failed after max retries.
-         */
-        post: operations["restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3503,32 +3307,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/traffic-metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Traffic Metrics
-         * @description Return this instance's per-route traffic counters.
-         *
-         *     Args:
-         *         current_user: Authenticated user requesting the snapshot.
-         *
-         *     Returns:
-         *         Process-local aggregated counters sorted deterministically.
-         */
-        get: operations["get_traffic_metrics_api_v1_traffic_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -3813,6 +3591,182 @@ export interface paths {
         get: operations["preview_documentation"];
         put?: never;
         post: operations["relink_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["creators_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["compare_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/discoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discoveries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["summaries_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/team-chemistry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["team_chemistry_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rating_distribution_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/role-stats/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["role_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/metrics/{metric_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["metric_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/creators/{creator_key}/series/{series_key}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["series_issues_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4630,43 +4584,6 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /**
-         * BootstrapAliasCounterSchema
-         * @description One aggregated bootstrap alias tally.
-         */
-        BootstrapAliasCounterSchema: {
-            /**
-             * Alias
-             * @description Bootstrap alias: legacy, v1, or v2.
-             */
-            alias: string;
-            /**
-             * Count
-             * @description Number of observed hits.
-             */
-            count: number;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx.
-             */
-            status_class: string;
-            /**
-             * Web Origin
-             * @description True if request looked like a browser client.
-             */
-            web_origin: boolean;
-        };
-        /**
-         * BootstrapAliasSnapshotSchema
-         * @description Process-local bootstrap alias counters.
-         */
-        BootstrapAliasSnapshotSchema: {
-            /**
-             * Counters
-             * @description Aggregated counts per (alias, web_origin, status class).
-             */
-            counters?: components["schemas"]["BootstrapAliasCounterSchema"][];
-        };
         /** @description Compact bandwidth block retained for existing Roll consumers. */
         BootstrapBandwidth: {
             active_bandwidth?: string | null;
@@ -4741,6 +4658,15 @@ export interface components {
             skipped_threads: components["schemas"]["BootstrapThreadSummary"][];
             /** Format: int64 */
             snoozed_count: number;
+            /**
+             * @description Every owned thread the session currently has snoozed, uncapped, so
+             *     consumers such as Queue can resolve per-row snooze state.
+             */
+            snoozed_thread_ids: number[];
+            /**
+             * @description Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+             *     for the complete snooze set.
+             */
             snoozed_threads: components["schemas"]["BootstrapThreadSummary"][];
             timezone?: string | null;
             /** Format: int32 */
@@ -4823,65 +4749,35 @@ export interface components {
             tags: components["schemas"]["BootstrapTag"][];
             title: string;
         };
-        /**
-         * BoundaryEditorTarget
-         * @description Where the reader can change the rule that produced a boundary.
-         *
-         *     The target is a descriptor, not a URL: the client owns routing so a
-         *     renamed surface never breaks a stored deep link.
-         */
         BoundaryEditorTarget: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "reading_list" | "prerequisite" | "issue";
-            /** Label */
+            kind: components["schemas"]["EditorKind"];
             label: string;
-            /** List Id */
+            /** Format: int32 */
             list_id?: number | null;
-            /** Prerequisite Id */
+            /** Format: int32 */
             prerequisite_id?: number | null;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id?: number | null;
         };
-        /**
-         * BoundaryIssue
-         * @description One named Issue, labeled with its Comic Vine volume when known.
-         */
         BoundaryIssue: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Label */
             label: string;
-            /** Reading Lists */
-            reading_lists?: components["schemas"]["BoundaryReadingList"][];
-            /** Thread Id */
+            reading_lists: components["schemas"]["BoundaryReadingList"][];
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
-            /** Volume Label */
             volume_label?: string | null;
         };
         /** @enum {string} */
         BoundaryListMode: "strict" | "loose";
-        /**
-         * BoundaryReadingList
-         * @description One owned Reading List that places an Issue.
-         */
         BoundaryReadingList: {
-            /** List Id */
+            /** Format: int32 */
             list_id: number;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
+            mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
         /** @enum {string} */
@@ -6140,43 +6036,6 @@ export interface components {
             /** Matches */
             matches?: components["schemas"]["PotentialDuplicateMatch"][];
         };
-        /**
-         * CollectionExclusionCreate
-         * @description Exactly one target: external volume identity, Thread or Issue.
-         */
-        CollectionExclusionCreate: {
-            /** External Volume Id */
-            external_volume_id?: string | null;
-            /** Issue Id */
-            issue_id?: number | null;
-            /** Provider */
-            provider?: string | null;
-            /** Thread Id */
-            thread_id?: number | null;
-        };
-        /**
-         * CollectionExclusionResponse
-         * @description Stored exclusion, with an ID for explicit removal.
-         */
-        CollectionExclusionResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** External Volume Id */
-            external_volume_id: string | null;
-            /** Id */
-            id: number;
-            /** Issue Id */
-            issue_id: number | null;
-            /** Provider */
-            provider: string | null;
-            /** Thread Id */
-            thread_id: number | null;
-            /** User Id */
-            user_id: number;
-        };
         /** @description Owner-scoped local representations of a related ComicVine issue. */
         ComicPileMatch: {
             /** Format: int32 */
@@ -6469,8 +6328,8 @@ export interface components {
             lane_count: number;
             name: string;
             ordering_mode: string;
-            source_names?: unknown;
-            source_paths?: string[];
+            source_names: unknown;
+            source_paths: string[];
             /** Format: int32 */
             step_count: number;
             updated_at: string;
@@ -6529,9 +6388,9 @@ export interface components {
             created_at: string;
             /** Format: int32 */
             id: number;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            lanes: components["schemas"]["NativeContinuityPlanLane"][];
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            nodes: components["schemas"]["NativeContinuityPlanNode"][];
             ordering_mode: string;
             updated_at: string;
             /** Format: int32 */
@@ -7565,6 +7424,16 @@ export interface components {
              * @description Title of the thread owning the issue.
              */
             thread_title: string;
+        };
+        CreatorMetricPagination: {
+            /** Format: int64 */
+            next_page_token?: number | null;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_pages: number;
         };
         /**
          * CreatorRatingBucket
@@ -9633,35 +9502,6 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        NativeBoundaryEditorTarget: {
-            /** Format: int32 */
-            issue_id?: number | null;
-            kind: components["schemas"]["EditorKind"];
-            label: string;
-            /** Format: int32 */
-            list_id?: number | null;
-            /** Format: int32 */
-            prerequisite_id?: number | null;
-            /** Format: int32 */
-            thread_id?: number | null;
-        };
-        NativeBoundaryIssue: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            label: string;
-            reading_lists: components["schemas"]["NativeBoundaryReadingList"][];
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-            volume_label?: string | null;
-        };
-        NativeBoundaryReadingList: {
-            /** Format: int32 */
-            list_id: number;
-            mode: components["schemas"]["BoundaryListMode"];
-            name: string;
-        };
         NativeCBLBreadcrumb: {
             name: string;
             path: string;
@@ -9758,25 +9598,385 @@ export interface components {
             /** Format: int32 */
             checkpoint_target_ref_id?: number | null;
             checkpoint_target_ref_ids?: number[];
-            convergence_gate?: unknown[];
+            convergence_gate: unknown[];
             id: string;
             is_checkpoint?: boolean;
-            label?: string | null;
+            label: string | null;
             lane_id: string;
             node_type: string;
             /** Format: int32 */
             position: number;
-            reader_optional?: boolean | null;
-            reader_role?: string | null;
+            reader_optional: boolean | null;
+            reader_role: string | null;
             /** Format: int32 */
             ref_id: number;
-            source_cbl_placements?: unknown[] | null;
-            source_confidence?: string | null;
-            source_explanation?: string | null;
-            source_paths?: string[] | null;
-            source_role?: string | null;
-            source_story_arc_ids?: string[] | null;
-            source_target_story_arc_id?: string | null;
+            source_cbl_placements: unknown[] | null;
+            source_confidence: string | null;
+            source_explanation: string | null;
+            source_paths: string[] | null;
+            source_role: string | null;
+            source_story_arc_ids: string[] | null;
+            source_target_story_arc_id: string | null;
+        };
+        NativeCreatorComparisonCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        NativeCreatorComparisonIssueRef: {
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorComparisonItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            insufficient_data: boolean;
+            /** Format: int64 */
+            max_issue_refs_per_group: number;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: int64 */
+            min_rated_issues_per_series: number;
+            normalized_roles: string[];
+            rating_distribution: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            read_unrated_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            role_stats: components["schemas"]["NativeCreatorComparisonRoleStat"][];
+            strongest_series: components["schemas"]["NativeCreatorComparisonSeriesAggregate"][];
+            /** Format: double */
+            top_rating_rate?: number | null;
+            unread_issue_refs: components["schemas"]["NativeCreatorComparisonIssueRef"][];
+            /** Format: int64 */
+            unread_upcoming_count: number;
+        };
+        NativeCreatorComparisonResponse: {
+            comparisons: {
+                [key: string]: components["schemas"]["NativeCreatorComparisonItem"];
+            };
+            coverage: components["schemas"]["NativeCreatorComparisonCoverage"];
+            insufficient_data_keys: string[];
+        };
+        NativeCreatorComparisonRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorComparisonSeriesAggregate: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorDetailResponse: {
+            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            headline_roles: string[];
+            insights?: components["schemas"]["NativeCreatorInsights"] | null;
+            next_cursor?: string | null;
+            rated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            rated_population_scope: string;
+            rating_distribution?: components["schemas"]["NativeCreatorRatingDistribution"] | null;
+            read_unrated_issues: components["schemas"]["NativeCreatorIssueRow"][];
+            role_stats: components["schemas"]["NativeCreatorRoleStat"][];
+            series_groups: components["schemas"]["NativeCreatorSeriesGroup"][];
+            series_groups_complete: boolean;
+            /** Format: int64 */
+            series_groups_total: number;
+            summary: components["schemas"]["NativeCreatorSummaryItem"];
+            upcoming_issues: components["schemas"]["NativeCreatorIssueRow"][];
+        };
+        NativeCreatorDiscoveryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorDiscoveryEntry: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            /** Format: double */
+            earlier_average_rating?: number | null;
+            /** Format: double */
+            max_rating?: number | null;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: double */
+            min_rating?: number | null;
+            normalized_roles: string[];
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: double */
+            rating_spread?: number | null;
+            /** Format: double */
+            rating_stddev?: number | null;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            reasons: components["schemas"]["NativeCreatorDiscoveryReason"][];
+            /** Format: double */
+            recent_average_rating?: number | null;
+            /** Format: int64 */
+            top_rating_count: number;
+            /** Format: double */
+            top_rating_rate?: number | null;
+            /** Format: double */
+            trend_delta?: number | null;
+            trend_direction?: string | null;
+            /** Format: int64 */
+            trend_sample_count: number;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorDiscoveryReason: {
+            comparison: string;
+            label: string;
+            metric: string;
+            /** Format: double */
+            threshold: number;
+            /** Format: double */
+            value: number;
+        };
+        NativeCreatorDiscoveryResponse: {
+            coverage: components["schemas"]["NativeCreatorDiscoveryCoverage"];
+            /** Format: int64 */
+            max_entries_per_view: number;
+            /** Format: int64 */
+            minimum_reliable_sample: number;
+            views: components["schemas"]["NativeCreatorDiscoveryView"][];
+        };
+        NativeCreatorDiscoveryView: {
+            description: string;
+            entries: components["schemas"]["NativeCreatorDiscoveryEntry"][];
+            /** Format: int64 */
+            max_entries: number;
+            /** Format: int64 */
+            min_sample: number;
+            mode: string;
+            title: string;
+            /** Format: int64 */
+            total: number;
+            truncated: boolean;
+        };
+        NativeCreatorInsights: {
+            /** Format: int64 */
+            excluded_incomplete_series_count: number;
+            highest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            individual_issue_limit: number;
+            individual_issues_combined: boolean;
+            lowest_rated_issues: components["schemas"]["NativeCreatorIssueInsight"][];
+            /** Format: int64 */
+            min_series_sample: number;
+            most_rated_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            series_message?: string | null;
+            series_sample_met: boolean;
+            strongest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+            weakest_series?: components["schemas"]["NativeCreatorSeriesInsight"] | null;
+        };
+        NativeCreatorIssueInsight: {
+            /** Format: double */
+            effective_rating: number;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            roles: string[];
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorIssueRow: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            rating_timestamp?: string | null;
+            roles: string[];
+            sort_key: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorMetricCalculation: {
+            denominator?: string | null;
+            formula: string;
+            numerator: string;
+            percentage?: string | null;
+        };
+        NativeCreatorMetricDrilldown: {
+            /** Format: int64 */
+            bucket_count?: number | null;
+            /** Format: double */
+            bucket_percentage?: number | null;
+            calculation: components["schemas"]["NativeCreatorMetricCalculation"];
+            creator_key: string;
+            excluded_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            included_issues: components["schemas"]["NativeCreatorMetricIssue"][];
+            metric_type: string;
+            pagination: components["schemas"]["CreatorMetricPagination"];
+            rating_value?: string | null;
+            role?: string | null;
+            /** Format: double */
+            role_average_rating?: number | null;
+            /** Format: int64 */
+            role_issue_count?: number | null;
+            /** Format: int64 */
+            role_rated_issue_count?: number | null;
+            /** Format: double */
+            series_average_rating?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            /** Format: int64 */
+            series_issue_count?: number | null;
+            /** Format: int64 */
+            series_rated_issue_count?: number | null;
+            series_title?: string | null;
+            /** Format: int64 */
+            total_count: number;
+        };
+        NativeCreatorMetricIssue: {
+            creator_roles: string[];
+            /** Format: double */
+            effective_rating?: number | null;
+            effective_rating_source?: string | null;
+            effective_rating_timestamp?: string | null;
+            exclusion_reason?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            missing_rating_cause?: string | null;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorRatingBucket: {
+            /** Format: int64 */
+            count: number;
+            /** Format: double */
+            rating: number;
+        };
+        NativeCreatorRatingDistribution: {
+            buckets: components["schemas"]["NativeCreatorRatingBucket"][];
+            /** Format: double */
+            max_rating: number;
+            /** Format: double */
+            mean_rating: number;
+            /** Format: double */
+            median_rating: number;
+            /** Format: double */
+            min_rating: number;
+            /** Format: int64 */
+            sample_count: number;
+        };
+        NativeCreatorRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        NativeCreatorSeriesGroup: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        NativeCreatorSeriesInsight: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: double */
+            highest_rating: number;
+            /** Format: double */
+            lowest_rating: number;
+            metadata_complete: boolean;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorSeriesIssueListResponse: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            issues: components["schemas"]["NativeCreatorIssueRow"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            next_cursor?: string | null;
+            /** Format: int64 */
+            offset: number;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            total: number;
         };
         NativeCreatorSummaryCoverage: {
             /** Format: int64 */
@@ -9807,6 +10007,69 @@ export interface components {
             read_unrated_count: number;
             /** Format: int64 */
             upcoming_count: number;
+        };
+        NativeCreatorTeamChemistryResponse: {
+            coverage: components["schemas"]["NativeCreatorTeamCoverage"];
+            /** Format: int64 */
+            max_ranked_pairs: number;
+            /** Format: int64 */
+            min_shared_team_sample: number;
+            pairs: components["schemas"]["NativeCreatorTeamPair"][];
+            /** Format: int64 */
+            pairs_total: number;
+        };
+        NativeCreatorTeamCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        NativeCreatorTeamIssueRef: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        NativeCreatorTeamMember: {
+            /** Format: double */
+            baseline_average_rating?: number | null;
+            /** Format: int64 */
+            baseline_rated_count: number;
+            canonical_creator_key: string;
+            /** Format: double */
+            difference_from_baseline?: number | null;
+            display_name: string;
+            roles: string[];
+        };
+        NativeCreatorTeamPair: {
+            creators: components["schemas"]["NativeCreatorTeamMember"][];
+            /** Format: int64 */
+            max_shared_issue_refs: number;
+            pair_key: string;
+            /** Format: double */
+            shared_average_rating?: number | null;
+            shared_issue_refs: components["schemas"]["NativeCreatorTeamIssueRef"][];
+            /** Format: double */
+            shared_median_rating?: number | null;
+            /** Format: int64 */
+            shared_rated_issue_count: number;
+            shared_rating_distribution: {
+                [key: string]: number;
+            };
+            shared_series: components["schemas"]["NativeCreatorTeamSeriesRef"][];
+        };
+        NativeCreatorTeamSeriesRef: {
+            /** Format: int64 */
+            shared_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
         };
         NativeCustomCBLApplyRequest: {
             expected_updated_at?: string | null;
@@ -10055,20 +10318,6 @@ export interface components {
             ratings_count: number;
             recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
             series_name?: string | null;
-        };
-        NativeReadingBoundaryBatchRequest: {
-            thread_ids: number[];
-        };
-        NativeReadingBoundaryBlocker: {
-            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
-            kind: components["schemas"]["BlockerKind"];
-            origin: components["schemas"]["BlockerOrigin"];
-            reason: string;
-            waiting_on: components["schemas"]["NativeBoundaryIssue"][];
-        };
-        NativeReadingBoundaryNext: {
-            editor?: components["schemas"]["NativeBoundaryEditorTarget"] | null;
-            issue: components["schemas"]["NativeBoundaryIssue"];
         };
         NativeReadingListEntryIntent: {
             gate: string;
@@ -10918,101 +11167,29 @@ export interface components {
             /** Series Name */
             series_name?: string | null;
         };
-        /**
-         * ReadingBoundaryBatchRequest
-         * @description Owned series IDs to explain in one request.
-         */
         ReadingBoundaryBatchRequest: {
-            /** Thread Ids */
             thread_ids: number[];
-        };
-        /**
-         * ReadingBoundaryBatchResponse
-         * @description Canonical explanations keyed by Thread ID.
-         */
-        ReadingBoundaryBatchResponse: {
-            /** Threads */
-            threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanation"];
-            };
         };
         ReadingBoundaryBatchResponseV2: {
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
         };
-        /**
-         * ReadingBoundaryBlocker
-         * @description One live Option E requirement that currently blocks the next Issue.
-         */
         ReadingBoundaryBlocker: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "reading_list" | "reader_prerequisite";
-            /** Reason */
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
             reason: string;
-            /** Waiting On */
-            waiting_on?: components["schemas"]["BoundaryIssue"][];
-        };
-        /**
-         * ReadingBoundaryExplanation
-         * @description Canonical explanation of one series' reading boundaries.
-         */
-        ReadingBoundaryExplanation: {
-            /** Blockers */
-            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
-            /** Historical */
-            historical?: components["schemas"]["ReadingBoundaryHistorical"][];
-            next?: components["schemas"]["ReadingBoundaryNext"] | null;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "blocked" | "available" | "complete" | "unavailable";
-            /** Summary */
-            summary: string;
-            /** Thread Id */
-            thread_id: number;
+            waiting_on: components["schemas"]["BoundaryIssue"][];
         };
         ReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: components["schemas"]["NativeReadingBoundaryNext"] | null;
+            blockers: components["schemas"]["ReadingBoundaryBlocker"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
             state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReadingBoundaryHistorical
-         * @description A reader-owned association that is not a live blocker.
-         *
-         *     Historical rows never gate execution. They are listed so the reader can
-         *     see an old association without it being presented as a live boundary.
-         */
-        ReadingBoundaryHistorical: {
-            /** Detail */
-            detail: string;
-            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "converted_prerequisite" | "legacy_dependency" | "skipped_entry";
-            /** Label */
-            label: string;
-        };
-        /**
-         * ReadingBoundaryNext
-         * @description The Issue the reader may read now.
-         */
         ReadingBoundaryNext: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
             issue: components["schemas"]["BoundaryIssue"];
@@ -11998,32 +12175,6 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
-        };
-        /**
-         * RouteTrafficCounter
-         * @description One aggregated (method, route template, status class) tally.
-         */
-        RouteTrafficCounter: {
-            /**
-             * Count
-             * @description Requests observed since process start.
-             */
-            count: number;
-            /**
-             * Method
-             * @description HTTP method, e.g. GET.
-             */
-            method: string;
-            /**
-             * Route
-             * @description Routed path template, e.g. /api/v1/threads/{thread_id}.
-             */
-            route: string;
-            /**
-             * Status Class
-             * @description Response status class, e.g. 2xx or 4xx.
-             */
-            status_class: string;
         };
         /**
          * SeriesDecision
@@ -13315,26 +13466,6 @@ export interface components {
             rating: number;
             title: string;
         };
-        /**
-         * TrafficMetricsSnapshot
-         * @description Process-local traffic counters for one serverless instance.
-         *
-         *     Counters are monotonic within a process lifetime, so a collector can
-         *     reconstruct fleet-wide totals by keeping the maximum count per key across
-         *     polls of the same ``instance_id``.
-         */
-        TrafficMetricsSnapshot: {
-            /**
-             * Counters
-             * @description Aggregated request tallies sorted deterministically.
-             */
-            counters?: components["schemas"]["RouteTrafficCounter"][];
-            /**
-             * Instance Id
-             * @description Stable identifier for this process instance.
-             */
-            instance_id: string;
-        };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
             active_thread?: components["schemas"]["SessionActiveThread"] | null;
@@ -13822,26 +13953,6 @@ export interface operations {
             };
         };
     };
-    get_bootstrap_alias_metrics_api_v1_bootstrap_alias_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BootstrapAliasSnapshotSchema"];
-                };
-            };
-        };
-    };
     create_v1_documentation: {
         parameters: {
             query?: never;
@@ -14074,88 +14185,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    list_exclusions_api_v1_collection_exclusions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"][];
-                };
-            };
-        };
-    };
-    create_exclusion_api_v1_collection_exclusions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CollectionExclusionCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollectionExclusionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                exclusion_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -17283,70 +17312,6 @@ export interface operations {
             };
         };
     };
-    get_reading_boundary_batch_api_v1_reading_boundaries_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryBatchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_reading_boundary_api_v1_reading_boundaries__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryExplanation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_reading_mode_documentation: {
         parameters: {
             query?: never;
@@ -18324,26 +18289,6 @@ export interface operations {
             };
         };
     };
-    get_current_session_api_v1_sessions_current__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-        };
-    };
     get_session_v1_documentation: {
         parameters: {
             query?: never;
@@ -18429,37 +18374,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    restore_reading_session_start_api_v1_sessions__session_id__restore_session_start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -18843,7 +18757,7 @@ export interface operations {
     taste_discoveries_list: {
         parameters: {
             query?: {
-                /** @description Maximum discoveries to return (1-3, default 3). */
+                /** @description Maximum discoveries to return. */
                 limit?: number;
             };
             header?: never;
@@ -19958,26 +19872,6 @@ export interface operations {
             };
         };
     };
-    get_traffic_metrics_api_v1_traffic_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrafficMetricsSnapshot"];
-                };
-            };
-        };
-    };
     list_undo_snapshots_v1_documentation: {
         parameters: {
             query?: never;
@@ -20774,6 +20668,467 @@ export interface operations {
             };
         };
     };
+    creators_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                sort?: string;
+                limit?: number;
+                offset?: number;
+                min_ratings?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorComparisonResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discoveries_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDiscoveryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summaries_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    team_chemistry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator team chemistry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorTeamChemistryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorDetailResponse"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Creator not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rating_distribution_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Rating value */
+                rating_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating distribution drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    role_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Creator role */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid role */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid series */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    metric_documentation: {
+        parameters: {
+            query?: {
+                role?: string;
+                rating_value?: string;
+                series_key?: string;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Metric type */
+                metric_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator metric drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid metric */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Metric not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_issues_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator series issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeCreatorSeriesIssueListResponse"];
+                };
+            };
+            /** @description Invalid keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     read_demo_roll_documentation: {
         parameters: {
             query?: never;
@@ -21201,7 +21556,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeReadingBoundaryBatchRequest"];
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
             };
         };
         responses: {

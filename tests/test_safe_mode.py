@@ -47,43 +47,6 @@ async def safe_mode_auth_client(
 
 
 @pytest.mark.asyncio
-async def test_current_session_response_includes_restore_point(
-    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
-) -> None:
-    """Test that /sessions/current/ includes has_restore_point field."""
-    session = ReadingSession(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Comic",
-        format="comic",
-        issues_remaining=10,
-        queue_position=1,
-        user_id=safe_mode_user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    snapshot = Snapshot(
-        session_id=session.id,
-        event_id=None,
-        thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
-        description="Session start",
-    )
-    async_db.add(snapshot)
-    await async_db.commit()
-
-    response = await safe_mode_auth_client.get("/api/v1/sessions/current/")
-    assert response.status_code == 200
-    data = response.json()
-    assert "has_restore_point" in data
-    assert data["has_restore_point"] is True
-    assert data["snapshot_count"] == 1
-
-
-@pytest.mark.asyncio
 async def test_list_sessions_includes_restore_point_for_each(
     safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
 ) -> None:
