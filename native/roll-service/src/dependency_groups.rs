@@ -466,8 +466,8 @@ async fn load_issue_progress(
     Ok(issues)
 }
 
-async fn owned_group(
-    connection: &deadpool_postgres::Object,
+async fn owned_group<C: tokio_postgres::GenericClient>(
+    connection: &C,
     group_id: i32,
     user_id: i32,
 ) -> Result<Option<GroupRecord>, ApiError> {
@@ -482,8 +482,8 @@ async fn owned_group(
     }))
 }
 
-async fn owned_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_thread_id<C: tokio_postgres::GenericClient>(
+    connection: &C,
     thread_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -494,8 +494,8 @@ async fn owned_thread_id(
     Ok(row.map(|row| row.get(0)))
 }
 
-async fn owned_issue_thread_id(
-    connection: &deadpool_postgres::Object,
+async fn owned_issue_thread_id<C: tokio_postgres::GenericClient>(
+    connection: &C,
     issue_id: i32,
     user_id: i32,
 ) -> Result<Option<i32>, ApiError> {
@@ -915,7 +915,9 @@ pub async fn get_group_detail(
     // title and group into the right thread's crossover set.
     let issues = issues_by_ids(&connection, &issue_ids).await?;
     for issue in issues.values() {
-        thread_ids.insert(issue.thread_id);
+        if let Some(resolved) = issue {
+            thread_ids.insert(resolved.thread_id);
+        }
     }
     let threads = threads_by_ids(&connection, &thread_ids).await?;
     let other_crossovers = other_crossovers(&connection, group_id, user.id(), &thread_ids).await?;
@@ -1157,7 +1159,11 @@ async fn add_issue_range_tx(
         }
         return Err(unprocessable(format!(
             "Issue range contains missing positions: {}",
-            missing.join(", ")
+            missing
+                .iter()
+                .map(|position| position.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         )));
     }
     let issue_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
