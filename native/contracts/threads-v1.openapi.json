@@ -548,11 +548,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetPendingRequest"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SetPendingRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -980,10 +986,10 @@
           "comicvine_mapping": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
               },
               {
-                "$ref": "#/components/schemas/ComicVineMappingHealth"
+                "type": "null"
               }
             ]
           },
@@ -1030,10 +1036,10 @@
           "series_metadata": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
               },
               {
-                "$ref": "#/components/schemas/QueueSeriesMetadata"
+                "type": "null"
               }
             ]
           },

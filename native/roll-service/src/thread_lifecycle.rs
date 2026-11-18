@@ -866,18 +866,20 @@ async fn update_once(
     input: &UpdateInput,
 ) -> Result<(), LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
-        let thread = find_owned(&tx, user.id(), thread_id, false).await?;
-        let mut status = thread.status.clone();
-        let mut queue_position = thread.queue_position;
-        let mut manual_cleared = false;
-        let mut issues_remaining = thread.issues_remaining;
-        let mut renormalize_after = false;
+        // Lock the owned row so a concurrent writer cannot change fields that this
+        // partial PUT does not supply while we decide/apply queue transitions.
+        let thread = find_owned(&tx, user.id(), thread_id, true).await?;
+
+        // Python applies the legacy issues_remaining transition in-place (and may
+        // flush status before computing an append position) instead of rewriting the
+        // whole row from a stale snapshot.
         if let Some(remaining) = input.issues_remaining {
             if thread.total_issues.is_none() {
-                // Take the queue lock before any row is written (same order as
-                // move/shuffle) so row locks always follow it.
                 acquire_queue_lock(&tx, user.id()).await?;
-                issues_remaining = remaining;
+                let mut status = thread.status.clone();
+                let mut queue_position = thread.queue_position;
+                let mut manual_cleared = false;
+                let mut renormalize_after = false;
                 let excluded = status == "excluded";
                 if remaining == 0 {
                     if !excluded {
@@ -900,33 +902,42 @@ async fn update_once(
                         renormalize_after = true;
                     }
                 }
+                tx.execute(
+                    "UPDATE threads SET issues_remaining = $2, status = $3, queue_position = $4,
+                        queue_position_is_manual = CASE WHEN $5 THEN false ELSE queue_position_is_manual END
+                     WHERE id = $1",
+                    &[
+                        &thread.id,
+                        &remaining,
+                        &status,
+                        &queue_position,
+                        &manual_cleared,
+                    ],
+                )
+                .await
+                .map_err(db::tx_error)?;
+                if renormalize_after {
+                    renormalize(&tx, user.id()).await?;
+                }
             }
         }
-        let title = input.title.clone().unwrap_or_else(|| thread.title.clone());
-        let format_value = input
-            .format
-            .as_deref()
-            .map(normalize_format_value)
-            .unwrap_or_else(|| thread.format.clone());
-        tx.execute(
-            "UPDATE threads SET title = $2, format = $3, issues_remaining = $4, status = $5,
-                queue_position = $6,
-                queue_position_is_manual = CASE WHEN $7 THEN false ELSE queue_position_is_manual END
-         WHERE id = $1",
-            &[
-                &thread.id,
-                &title,
-                &format_value,
-                &issues_remaining,
-                &status,
-                &queue_position,
-                &manual_cleared,
-            ],
-        )
-        .await
-        .map_err(db::tx_error)?;
-        if renormalize_after {
-            renormalize(&tx, user.id()).await?;
+
+        if let Some(title) = &input.title {
+            tx.execute(
+                "UPDATE threads SET title = $2 WHERE id = $1",
+                &[&thread.id, title],
+            )
+            .await
+            .map_err(db::tx_error)?;
+        }
+        if let Some(format) = &input.format {
+            let format_value = normalize_format_value(format);
+            tx.execute(
+                "UPDATE threads SET format = $2 WHERE id = $1",
+                &[&thread.id, &format_value],
+            )
+            .await
+            .map_err(db::tx_error)?;
         }
         if input.notes_present {
             let notes = normalize_notes_value(input.notes.as_deref());
@@ -1526,25 +1537,32 @@ fn parse_set_pending(body: Option<Value>) -> Result<Option<i32>, LifecycleError>
     Ok(value)
 }
 
-async fn set_pending_once(
-    state: &AppState,
-    user: AuthenticatedUser,
+struct SetPendingSelection {
+    thread_id: i32,
+    title: String,
+    format: String,
+    issues_remaining: i32,
+    total_issues: Option<i32>,
+    reading_progress: Option<String>,
+    queue_position: i32,
+    issue_id: Option<i32>,
+    issue_number: Option<String>,
+}
+
+async fn validate_set_pending_selection(
+    tx: &Transaction<'_>,
+    user_id: i32,
     thread_id: i64,
     expected_issue_id: Option<i32>,
-) -> Result<RollResponse, LifecycleError> {
-    let user_id = user.id();
-    // Resolve the current session (and die) before the write transaction so
-    // the request never nests two pool checkouts.
-    let active = reading_session::initialize(state, user, None, SessionPolicy::default()).await?;
-    with_tx!(state, tx, db::tx_error, {
-        let thread = find_owned(&tx, user_id, thread_id, true).await?;
-        if thread.status != "active" {
-            return Err(ApiError::BadRequest(format!("Thread {thread_id} is not active")).into());
-        }
-        if thread.is_blocked {
-            let reason = tx
-                .query_opt(
-                    "SELECT DISTINCT st.id, st.title, si.id, si.issue_number
+) -> Result<SetPendingSelection, LifecycleError> {
+    let thread = find_owned(tx, user_id, thread_id, true).await?;
+    if thread.status != "active" {
+        return Err(ApiError::BadRequest(format!("Thread {thread_id} is not active")).into());
+    }
+    if thread.is_blocked {
+        let reason = tx
+            .query_opt(
+                "SELECT DISTINCT st.id, st.title, si.id, si.issue_number
                  FROM threads tt
                  JOIN issues nu ON nu.id = tt.next_unread_issue_id
                  JOIN dependencies d ON d.target_issue_id = nu.id
@@ -1556,65 +1574,99 @@ async fn set_pending_once(
                    AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%')
                  ORDER BY st.id, st.title, si.id, si.issue_number
                  LIMIT 1",
-                    &[&thread.id, &user_id],
-                )
-                .await
-                .map_err(db::tx_error)?
-                .map(|row| {
-                    let title: String = row.get(1);
-                    let number: String = row.get(3);
-                    format!(": Blocked by {title}: #{number}")
-                })
-                .unwrap_or_default();
-            return Err(ApiError::BadRequest(format!(
-                "Thread {thread_id} is blocked by a dependency{reason}"
-            ))
-            .into());
-        }
-        let position_row = tx
-            .query_opt(
-                "SELECT pos FROM (
+                &[&thread.id, &user_id],
+            )
+            .await
+            .map_err(db::tx_error)?
+            .map(|row| {
+                let title: String = row.get(1);
+                let number: String = row.get(3);
+                format!(": Blocked by {title}: #{number}")
+            })
+            .unwrap_or_default();
+        return Err(ApiError::BadRequest(format!(
+            "Thread {thread_id} is blocked by a dependency{reason}"
+        ))
+        .into());
+    }
+    let position_row = tx
+        .query_opt(
+            "SELECT pos FROM (
                  SELECT id, row_number() OVER (ORDER BY is_blocked, queue_position, id)::int AS pos
                  FROM threads
                  WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked
              WHERE id = $2",
-                &[&user_id, &thread.id],
-            )
-            .await
-            .map_err(db::tx_error)?;
-        let queue_position: i32 = position_row.map(|row| row.get(0)).unwrap_or(0);
+            &[&user_id, &thread.id],
+        )
+        .await
+        .map_err(db::tx_error)?;
+    let queue_position: i32 = position_row.map(|row| row.get(0)).unwrap_or(0);
 
-        let mut issue_id: Option<i32> = None;
-        let mut issue_number: Option<String> = None;
-        if thread.total_issues.is_some() {
-            if let Some(next_id) = thread.next_unread_issue_id {
-                if let Some(row) = tx
-                    .query_opt(
-                        "SELECT id, issue_number FROM issues WHERE id = $1",
-                        &[&next_id],
-                    )
-                    .await
-                    .map_err(db::tx_error)?
-                {
-                    issue_id = Some(row.get(0));
-                    issue_number = Some(row.get(1));
-                }
+    let mut issue_id: Option<i32> = None;
+    let mut issue_number: Option<String> = None;
+    if thread.total_issues.is_some() {
+        if let Some(next_id) = thread.next_unread_issue_id {
+            if let Some(row) = tx
+                .query_opt(
+                    "SELECT id, issue_number FROM issues WHERE id = $1",
+                    &[&next_id],
+                )
+                .await
+                .map_err(db::tx_error)?
+            {
+                issue_id = Some(row.get(0));
+                issue_number = Some(row.get(1));
             }
         }
-        if thread.issues_remaining <= 0 {
-            return Err(ApiError::BadRequest(format!(
-                "Thread {thread_id} has no issues remaining"
-            ))
-            .into());
-        }
-        // A Reading Plan offers one exact Issue; never select its successor.
-        if expected_issue_id.is_some() && issue_id != expected_issue_id {
-            return Err(ApiError::Conflict(
+    }
+    if thread.issues_remaining <= 0 {
+        return Err(ApiError::BadRequest(format!(
+            "Thread {thread_id} has no issues remaining"
+        ))
+        .into());
+    }
+    // A Reading Plan offers one exact Issue; never select its successor.
+    if expected_issue_id.is_some() && issue_id != expected_issue_id {
+        return Err(ApiError::Conflict(
             "This issue is no longer next and available. Refresh the reading plan and try again."
                 .to_string(),
         )
         .into());
-        }
+    }
+    Ok(SetPendingSelection {
+        thread_id: thread.id,
+        title: thread.title.clone(),
+        format: normalize_format_value(&thread.format),
+        issues_remaining: thread.issues_remaining,
+        total_issues: thread.total_issues,
+        reading_progress: thread.reading_progress.clone(),
+        queue_position,
+        issue_id,
+        issue_number,
+    })
+}
+
+async fn set_pending_once(
+    state: &AppState,
+    user: AuthenticatedUser,
+    thread_id: i64,
+    expected_issue_id: Option<i32>,
+) -> Result<RollResponse, LifecycleError> {
+    let user_id = user.id();
+
+    // Validate the offered selection before initializing the reading session so a
+    // rejected request (notably a stale expected_issue_id 409) does not commit a
+    // session-start undo checkpoint like Python's pre-get_or_create checks.
+    with_tx!(state, tx, db::tx_error, {
+        validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id).await?;
+        Ok::<_, LifecycleError>(())
+    })?;
+
+    let active = reading_session::initialize(state, user, None, SessionPolicy::default()).await?;
+
+    with_tx!(state, tx, db::tx_error, {
+        let selection =
+            validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id).await?;
 
         let session = tx
             .query_opt(
@@ -1627,13 +1679,13 @@ async fn set_pending_once(
             .ok_or_else(|| ApiError::Conflict("Reading session changed; try again".to_string()))?;
         let snoozed_raw: Option<String> = session.get(0);
         let mut snoozed_ids = reading_session::decode_thread_ids(snoozed_raw)?.unwrap_or_default();
-        if snoozed_ids.contains(&thread.id) {
+        if snoozed_ids.contains(&selection.thread_id) {
             // Manual selection clears a current-session snooze; record the
             // unsnooze so historical replay sees the boundary (#4209).
             tx.execute(
                 "INSERT INTO events (type, timestamp, user_id, session_id, thread_id)
              VALUES ('unsnooze', NOW(), $1, $2, $3)",
-                &[&user_id, &active.session.id, &thread.id],
+                &[&user_id, &active.session.id, &selection.thread_id],
             )
             .await
             .map_err(db::tx_error)?;
@@ -1647,10 +1699,10 @@ async fn set_pending_once(
             &[
                 &user_id,
                 &active.session.id,
-                &thread.id,
+                &selection.thread_id,
                 &active.current_die,
-                &issue_id,
-                &issue_number,
+                &selection.issue_id,
+                &selection.issue_number,
             ],
         )
         .await
@@ -1666,11 +1718,11 @@ async fn set_pending_once(
                         THEN pending_issue_id
                     ELSE NULL END
          WHERE id = $2 AND user_id = $3",
-            &[&thread.id, &active.session.id, &user_id],
+            &[&selection.thread_id, &active.session.id, &user_id],
         )
         .await
         .map_err(db::tx_error)?;
-        if let Some(index) = snoozed_ids.iter().position(|id| *id == thread.id) {
+        if let Some(index) = snoozed_ids.iter().position(|id| *id == selection.thread_id) {
             snoozed_ids.remove(index);
             let encoded = serde_json::to_string(&snoozed_ids)
                 .map_err(|_| ApiError::Internal("Internal Server Error".to_string()))?;
@@ -1684,21 +1736,21 @@ async fn set_pending_once(
             snoozed_count = offset;
         }
         Ok(RollResponse {
-            thread_id: thread.id,
-            title: thread.title.clone(),
-            format: normalize_format_value(&thread.format),
-            issues_remaining: thread.issues_remaining,
-            queue_position,
+            thread_id: selection.thread_id,
+            title: selection.title,
+            format: selection.format,
+            issues_remaining: selection.issues_remaining,
+            queue_position: selection.queue_position,
             die_size: active.current_die,
             result: 0,
             offset,
             snoozed_count,
-            issue_id,
-            issue_number: issue_number.clone(),
-            next_issue_id: issue_id,
-            next_issue_number: issue_number,
-            total_issues: thread.total_issues,
-            reading_progress: thread.reading_progress.clone(),
+            issue_id: selection.issue_id,
+            issue_number: selection.issue_number.clone(),
+            next_issue_id: selection.issue_id,
+            next_issue_number: selection.issue_number,
+            total_issues: selection.total_issues,
+            reading_progress: selection.reading_progress,
             explanation: None,
         })
     })
@@ -2478,7 +2530,7 @@ pub fn reactivate_thread_documentation() {}
     tag = "threads",
     description = "Manually select a thread as the pending roll.",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
-    request_body(content = SetPendingRequest, description = "Optional exact-issue guard"),
+    request_body(content = Option<SetPendingRequest>, description = "Optional exact-issue guard"),
     responses(
         (status = 200, description = "Selected thread", body = RollResponse),
         (status = 400, description = "Thread is inactive, blocked or out of issues"),

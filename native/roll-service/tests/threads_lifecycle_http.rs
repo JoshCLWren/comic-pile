@@ -672,6 +672,34 @@ async fn update_leaves_excluded_status_and_tracked_counters_alone() {
 }
 
 #[tokio::test]
+async fn update_partial_put_preserves_untouched_fields_under_concurrency() {
+    let ctx = setup("lcuppartial").await;
+    let id = seed_thread(&ctx, ctx.user_id, "Original", "active", 1, 5).await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute("UPDATE threads SET notes = 'keep-me' WHERE id = $1", &[&id])
+        .await
+        .unwrap();
+    let path = format!("/api/v1/threads/{id}");
+    let (a, b) = tokio::join!(
+        call(&ctx, "PUT", &path, Some(json!({"title": "Renamed"}))),
+        call(&ctx, "PUT", &path, Some(json!({"notes": "changed"}))),
+    );
+    assert_eq!(a.0, StatusCode::OK, "{:?}", a.1);
+    assert_eq!(b.0, StatusCode::OK, "{:?}", b.1);
+    let (_, body) = call(&ctx, "PUT", &path, Some(json!({}))).await;
+    assert_eq!(body["title"], "Renamed");
+    assert_eq!(body["notes"], "changed");
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["queue_position"], 1);
+    assert_eq!(body["issues_remaining"], 5);
+    assert_eq!(body["format"], "Comic");
+}
+
+#[tokio::test]
 async fn update_validation_and_isolation() {
     let ctx = setup("lcupvalid").await;
     let (other_token, other_csrf, other_id) = second_user(&ctx).await;
@@ -1416,6 +1444,49 @@ async fn set_pending_rejections_match_python_details() {
         .unwrap()
         .get(0);
     assert_eq!(rolls, 1, "rejected selections record no roll event");
+}
+
+#[tokio::test]
+async fn set_pending_rejects_stale_expected_issue_without_creating_checkpoint() {
+    let ctx = setup("lcpendckpt").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Series", "active", 1, 0).await;
+    let issues = track(&ctx, thread, &["unread", "unread"]).await;
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{thread}/set-pending"),
+        Some(json!({"expected_issue_id": issues[0] + 1000})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    assert_eq!(
+        body["detail"],
+        "This issue is no longer next and available. Refresh the reading plan and try again."
+    );
+    let pool = ctx.state.pool.get().await.unwrap();
+    let snapshots: i64 = pool
+        .query_one(
+            "SELECT count(*) FROM snapshots s
+             JOIN sessions sess ON sess.id = s.session_id
+             WHERE sess.user_id = $1",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        snapshots, 0,
+        "rejected set-pending must not create a session-start checkpoint"
+    );
+    let sessions: i64 = pool
+        .query_one(
+            "SELECT count(*) FROM sessions WHERE user_id = $1",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(sessions, 0, "rejected set-pending must not create a session");
 }
 
 #[tokio::test]
