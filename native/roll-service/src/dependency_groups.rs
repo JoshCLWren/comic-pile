@@ -1035,6 +1035,7 @@ pub async fn add_issue_range(
     let result = add_issue_range_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok(response) => {
+            issue_service::refresh_blocked_threads(&tx, user_id).await?;
             tx.commit().await.map_err(db::query_error)?;
             Ok((StatusCode::OK, Json(response)))
         }
@@ -1139,6 +1140,7 @@ pub async fn add_member(
     let result = add_member_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok((member, thread_id, issue_id, sequence_order)) => {
+            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             let thread_ids: BTreeSet<i32> = thread_id.into_iter().collect();
             let issue_ids: BTreeSet<i32> = issue_id.into_iter().collect();
