@@ -49,7 +49,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use tokio_postgres::Transaction;
+use tokio_postgres::{GenericClient, Transaction};
 
 const MAX_GROUP_NAME_CHARS: usize = 120;
 const MAX_RANGE_SIZE: i32 = 250;
