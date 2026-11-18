@@ -1,4 +1,3 @@
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 import {
   act,
   screen,
@@ -47,6 +46,7 @@ import {
   expandVolume,
 } from './CblBrowserPage.fixture'
 import { issueCardsApi } from '../services/issueCardsApi'
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage adoption', () => {
   it('selecting a source shows the preview with the consequence summary', async () => {

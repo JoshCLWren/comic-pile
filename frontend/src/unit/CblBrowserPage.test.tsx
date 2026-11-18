@@ -1,4 +1,3 @@
-vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 import {
   act,
   screen,
@@ -32,6 +31,7 @@ import {
   searchFor,
 } from './CblBrowserPage.fixture'
 import { issueCardsApi } from '../services/issueCardsApi'
+vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
 
 describe('CblBrowserPage catalog', () => {
   it('browses the catalog root immediately without a search submission', async () => {
