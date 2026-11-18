@@ -223,7 +223,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/factory_outcome_reconcile.py \
-            --repo "$GITHUB_REPOSITORY" --hours 24 --limit 5 --max-pages 4 \
+            --repo "$GITHUB_REPOSITORY" --hours 12 --limit 1 --max-pages 1 \
             --exclude-run "$GITHUB_RUN_ID"
 
       # The signed-in Actions run, not Neon, owns this durable handoff record.
