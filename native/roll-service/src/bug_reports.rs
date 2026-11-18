@@ -2309,8 +2309,8 @@ mod tests {
     /// Detailed `detail[]` remains the non-production shape (golden tables).
     #[tokio::test]
     async fn production_sanitizes_validation_errors_to_generic_detail() {
-        use axum::body::to_bytes;
         use crate::config::Environment;
+        use axum::body::to_bytes;
 
         // Bodies covering each required validation failure class.
         let cases: Vec<(&str, Vec<u8>)> = vec![
@@ -2399,7 +2399,11 @@ mod tests {
             .expect_err(name);
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
             let response = error.into_response();
-            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "{name}");
+            assert_eq!(
+                response.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "{name}"
+            );
             let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
             let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
             assert_eq!(
