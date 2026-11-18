@@ -926,52 +926,120 @@ async fn owned_reading_order(
     }
 }
 
-/// Shift an existing reading order and insert the new thread at `target_pos`.
+#[derive(Debug, Clone, Copy)]
+struct ReadingOrderItemPlacement {
+    id: Option<i32>,
+    thread_id: i32,
+    position: i32,
+}
+
+/// Port of the shared `apply_insert` placement rule. Existing memberships are
+/// moved (and their neighbours shifted), while a new membership makes room at
+/// the target position. Keeping this in memory also lets persistence stay
+/// set-based instead of issuing one UPDATE per reading-order row.
+fn apply_reading_order_insert(
+    items: &mut Vec<ReadingOrderItemPlacement>,
+    thread_id: i32,
+    target_pos: i32,
+) {
+    if let Some(current_index) = items.iter().position(|item| item.thread_id == thread_id) {
+        let old_pos = items[current_index].position;
+        if old_pos < target_pos {
+            for item in items.iter_mut() {
+                if old_pos < item.position && item.position <= target_pos {
+                    item.position -= 1;
+                }
+            }
+        } else if target_pos < old_pos {
+            for item in items.iter_mut() {
+                if target_pos <= item.position && item.position < old_pos {
+                    item.position += 1;
+                }
+            }
+        }
+        items[current_index].position = target_pos;
+        return;
+    }
+    for item in items.iter_mut() {
+        if item.position >= target_pos {
+            item.position += 1;
+        }
+    }
+    items.push(ReadingOrderItemPlacement {
+        id: None,
+        thread_id,
+        position: target_pos,
+    });
+}
+
+/// Shift an existing reading order and insert or move the imported thread.
 async fn insert_into_reading_order(
     tx: &Transaction<'_>,
     order_id: i32,
     thread_id: i32,
     target_pos: i32,
-) -> Result<(), ApiError> {
+) -> Result<i32, ApiError> {
     let rows = tx
         .query(
-            "SELECT thread_id, position FROM reading_order_items \
-             WHERE reading_order_id = $1 ORDER BY position, id",
+            "SELECT id, thread_id, position FROM reading_order_items \
+             WHERE reading_order_id = $1 ORDER BY position, id FOR UPDATE",
             &[&order_id],
         )
         .await
         .map_err(db::query_error)?;
-    let mut positions: HashMap<i32, i32> = HashMap::new();
-    for row in &rows {
-        positions.insert(row.get(0), row.get(1));
+    let mut items: Vec<ReadingOrderItemPlacement> = rows
+        .iter()
+        .map(|row| ReadingOrderItemPlacement {
+            id: Some(row.get(0)),
+            thread_id: row.get(1),
+            position: row.get(2),
+        })
+        .collect();
+    let original_positions: HashMap<i32, i32> = items
+        .iter()
+        .filter_map(|item| item.id.map(|id| (id, item.position)))
+        .collect();
+    let already_present = items.iter().any(|item| item.thread_id == thread_id);
+    apply_reading_order_insert(&mut items, thread_id, target_pos);
+
+    let changed: Vec<(i32, i32)> = items
+        .iter()
+        .filter_map(|item| {
+            let id = item.id?;
+            (original_positions.get(&id) != Some(&item.position)).then_some((id, item.position))
+        })
+        .collect();
+    if !changed.is_empty() {
+        let ids: Vec<i32> = changed.iter().map(|(id, _)| *id).collect();
+        let positions: Vec<i32> = changed.iter().map(|(_, position)| *position).collect();
+        tx.execute(
+            "UPDATE reading_order_items AS item SET position = update.position \
+             FROM (SELECT unnest($1::int[]) AS id, unnest($2::int[]) AS position) AS update \
+             WHERE item.id = update.id AND item.reading_order_id = $3",
+            &[&ids, &positions, &order_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     }
-    if positions.contains_key(&thread_id) {
-        // A retry must move, never duplicate, the existing membership.
-        tx.execute(
-            "UPDATE reading_order_items SET position = $3 \
-             WHERE reading_order_id = $1 AND thread_id = $2",
-            &[&order_id, &thread_id, &target_pos],
-        )
-        .await
-        .map_err(db::query_error)?;
-    } else {
-        tx.execute(
-            "UPDATE reading_order_items SET position = position + 1 \
-             WHERE reading_order_id = $1 AND position >= $2",
-            &[&order_id, &target_pos],
-        )
-        .await
-        .map_err(db::query_error)?;
+    if !already_present {
         tx.execute(
             "INSERT INTO reading_order_items \
-                (reading_order_id, thread_id, position, issue_number, created_at, updated_at) \
-             VALUES ($1, $2, $3, NULL, now(), now())",
+                (reading_order_id, thread_id, position, issue_number) \
+             VALUES ($1, $2, $3, NULL)",
             &[&order_id, &thread_id, &target_pos],
         )
         .await
         .map_err(db::query_error)?;
     }
-    Ok(())
+    let total_items: i64 = tx
+        .query_one(
+            "SELECT COUNT(*) FROM reading_order_items WHERE reading_order_id = $1",
+            &[&order_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    Ok(i32::try_from(total_items).unwrap_or(i32::MAX))
 }
 
 /// `POST /api/v2/comicvine/issues:import`.
