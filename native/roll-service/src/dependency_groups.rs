@@ -1392,6 +1392,12 @@ async fn add_issue_range_tx(
             request.thread_id
         )));
     }
+    let range_size = i64::from(request.end_position) - i64::from(request.start_position) + 1_i64;
+    if range_size > i64::from(MAX_RANGE_SIZE) {
+        return Err(unprocessable(format!(
+            "Issue range cannot contain more than {MAX_RANGE_SIZE} positions"
+        )));
+    }
     let rows = tx
         .query(
             "SELECT i.id, i.position FROM issues i WHERE i.thread_id = $1 AND i.position >= $2 \
