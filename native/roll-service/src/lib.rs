@@ -47,19 +47,27 @@ pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
 pub mod reading_session;
+pub mod recommendation_explanation;
 pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
+pub mod roll_override;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod roll_switch_prerequisite;
+pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
+pub mod session_details;
 pub mod session_history;
+pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod undo_apply;
+pub mod undo_snapshots;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -485,6 +493,23 @@ async fn catch_panic(request: Request, next: Next) -> Response {
     .await
 }
 
+/// Emit truthful runtime identity on every response from this native process.
+///
+/// This is the shared response boundary for both the standalone service and the
+/// Vercel ingress. The value is `rust` because this process is the Rust
+/// implementation; it is never derived from the API version or request path.
+/// Inserting at the outermost layer covers handler responses as well as
+/// authentication/CSRF rejections, timeouts, panics and 404/405 fallbacks
+/// (#5121).
+async fn runtime_identity(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        axum::http::HeaderValue::from_static("rust"),
+    );
+    response
+}
+
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
@@ -561,6 +586,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
+        .route("/api/v1/roll/override", post(roll_override::override_roll))
+        .route("/api/roll/override", post(roll_override::override_roll))
+        .route(
+            "/api/v1/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/roll/events/{event_id}/recommendation-explanation",
+            get(recommendation_explanation::get_recommendation_explanation),
+        )
+        .route(
+            "/api/v1/roll/switch-prerequisite",
+            post(roll_switch_prerequisite::switch_prerequisite),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
@@ -580,6 +619,36 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
+        )
+        // Session list (issue #4839)
+        .route("/api/sessions/", get(session_list::list_sessions))
+        .route("/api/v1/sessions/", get(session_list::list_sessions))
+        // Session details (issue #4839)
+        .route(
+            "/api/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}/details",
+            get(session_details::get_session_details),
+        )
+        // Undo snapshots list (issue #4839)
+        .route(
+            "/api/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/snapshots",
+            get(undo_snapshots::list_undo_snapshots),
+        )
+        // Undo apply snapshot (issue #4839)
+        .route(
+            "/api/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
+        )
+        .route(
+            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+            post(undo_apply::undo_to_snapshot),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
@@ -909,6 +978,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
         .layer(axum::middleware::from_fn(catch_panic))
+        .layer(axum::middleware::from_fn(runtime_identity))
         .with_state(state)
 }
 
@@ -1166,6 +1236,89 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Not Found"}"#
         );
+    }
+
+    /// Build the real production router without touching a database. None of
+    /// these probes needs a live connection: success, auth rejection and the
+    /// fallback are all resolved before any handler checks out a socket.
+    fn standalone_app() -> Router {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        router(Arc::new(AppState::new(config).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_success() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_not_found() {
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/no-such-route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn standalone_router_emits_rust_runtime_identity_on_auth_rejection() {
+        // No Authorization header: the AuthenticatedUser extractor rejects the
+        // request with 401 before any database lookup.
+        let response = standalone_app()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/auth/me")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+    }
+
+    #[tokio::test]
+    async fn runtime_identity_covers_rejections_from_inner_layers() {
+        // A rejection produced by an inner middleware must still carry the
+        // identity because the header is inserted at the outermost boundary.
+        async fn reject() -> Response {
+            ApiError::Forbidden("denied".to_string()).into_response()
+        }
+        let app = Router::new()
+            .route("/protected", get(reject))
+            .layer(axum::middleware::from_fn(runtime_identity));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/protected")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
     }
 
     #[test]
