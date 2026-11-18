@@ -818,7 +818,7 @@ async fn threads_by_ids(
         .map_err(db::query_error)?;
     for row in rows {
         let manual_creator_credits = row
-            .get::<_, Option<String>>(16)
+            .get::<_, Option<String>>(15)
             .and_then(|value| serde_json::from_str(&value).ok())
             .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
         result.insert(
@@ -826,21 +826,21 @@ async fn threads_by_ids(
             Some(ThreadDetailResponse {
                 id: row.get(0),
                 title: row.get(1),
-                format: normalize_thread_format(row.get::<_, String>(2).as_str()),
+                format: row.get(2),
                 issues_remaining: row.get(3),
                 queue_position: row.get(4),
                 status: row.get(5),
                 last_rating: row.get(6),
-                last_activity_at: row.get(7),
+                last_activity_at: format_optional_python_datetime(row.get(7)),
                 notes: row.get(8),
                 is_test: row.get(9),
                 is_blocked: row.get(10),
                 blocking_reasons: Vec::new(),
-                created_at: row.get(11),
+                created_at: format_python_datetime(row.get(11)),
                 total_issues: row.get(12),
                 reading_progress: row.get(13),
                 next_unread_issue_id: row.get(14),
-                next_unread_issue_number: row.get(15),
+                next_unread_issue_number: None,
                 manual_creator_credits,
             }),
         );
