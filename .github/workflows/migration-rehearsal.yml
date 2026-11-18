@@ -45,7 +45,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -h 127.0.0.1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -84,7 +84,7 @@ jobs:
       - name: Rehearse upgrade, fixture load, rollback and re-upgrade
         run: |
           set -euo pipefail
-          .venv/bin/python scripts/migration_rehearsal.py \
+          timeout 330 .venv/bin/python scripts/migration_rehearsal.py \
             --database-url "postgresql://postgres:postgres@localhost:5432/comic_pile_rehearsal" \
             --apply-fixture \
             --base-revision "${{ steps.base.outputs.revision }}" \

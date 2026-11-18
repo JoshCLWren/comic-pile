@@ -257,15 +257,24 @@ jobs:
             -e POSTGRES_PASSWORD=rehearsal -e POSTGRES_DB=rehearsal \
             -p 127.0.0.1:55432:5432 postgres:16 >/dev/null
           trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+          ready=false
           for _ in $(seq 1 30); do
-            if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
             sleep 2
           done
+          if [[ "$ready" != "true" ]]; then
+            echo "ERROR: disposable Postgres did not become ready" >&2
+            exit 1
+          fi
           base_revision="${PROD_REVISION:--1}"
           # DATABASE_URL is deliberately unset: the rehearsal pins its own disposable URL.
-          env -u DATABASE_URL .venv/bin/python scripts/migration_rehearsal.py \
+          timeout 330 env -u DATABASE_URL .venv/bin/python scripts/migration_rehearsal.py \
             --database-url "postgresql://postgres:rehearsal@127.0.0.1:55432/rehearsal" \
             --apply-fixture \
+            --mode upgrade-only \
             --base-revision "$base_revision" \
             --budget-seconds 300 | tee rehearsal.log
           {
