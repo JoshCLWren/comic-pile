@@ -211,6 +211,7 @@ pub struct DependencyGroupDetailResponse {
 }
 
 /// Persisted group membership as the service resolves it.
+#[derive(Clone)]
 struct GroupMemberInput {
     id: i32,
     group_id: i32,
@@ -742,11 +743,15 @@ async fn create_group_tx(
     let row = tx
         .query_one(
             "INSERT INTO dependency_groups (user_id, name) VALUES ($1, $2) RETURNING id, name, created_at",
-            &[user_id, name],
+            &[user_id, &name],
         )
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error
+                .as_db_error()
+                .map(|db_err| db_err.code().code() == "23505")
+                .unwrap_or(false)
+            {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1007,7 +1012,11 @@ async fn update_group_tx(
         )
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error
+                .as_db_error()
+                .map(|db_err| db_err.code().code() == "23505")
+                .unwrap_or(false)
+            {
                 return conflict("A group with this name already exists");
             }
             db::query_error(error)
@@ -1259,7 +1268,11 @@ async fn add_member_tx(
         .query_one(INSERT_MEMBERSHIP_SQL, &[&group_id, &thread_id, &issue_id, &sequence_order])
         .await
         .map_err(|error| {
-            if error.is_unique_violation() {
+            if error
+                .as_db_error()
+                .map(|db_err| db_err.code().code() == "23505")
+                .unwrap_or(false)
+            {
                 return conflict("This member is already in the group");
             }
             db::query_error(error)
