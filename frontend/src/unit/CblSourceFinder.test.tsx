@@ -194,6 +194,11 @@ describe('CblComicFinder', () => {
     expect(within(actions).getByTestId('comic-issue-card')).toHaveAttribute(
       'aria-label', 'Issue Ultimate Spider-Man #1',
     )
+    const occurrenceRow = await screen.findByTestId('cbl-comic-occurrence-7')
+    const occurrenceTrigger = within(occurrenceRow).getByTestId('issue-card-trigger-5')
+    expect(within(occurrenceTrigger).getByRole('img', {
+      name: 'Cover for Ultimate Spider-Man #1',
+    })).toHaveAttribute('src', 'https://comicvine.gamespot.com/a/ultimate-spider-man-1.jpg')
     expect(fetchCards).toHaveBeenCalledExactlyOnceWith([5])
   })
 

@@ -220,10 +220,21 @@ export function CblComicFinder({
                     key={`${occurrence.list_id}-${occurrence.position}`}
                     data-testid={`${testIdPrefix}-occurrence-${occurrence.list_id}`}
                   >
-                    {displayCblSourceTitle(occurrence.list_name, occurrence.source_path) ??
-                      occurrence.list_name}{' '}
-                    · position {occurrence.position} · {occurrence.series_name} #
-                    {occurrence.issue_number}
+                    <p>
+                      {displayCblSourceTitle(occurrence.list_name, occurrence.source_path) ??
+                        occurrence.list_name}{' '}
+                      · position {occurrence.position} · {occurrence.series_name} #
+                      {occurrence.issue_number}
+                    </p>
+                    <CompactIssueCardTrigger
+                      issueId={issueId}
+                      card={ownedCard}
+                      threadTitle={occurrence.series_name}
+                      issueNumber={occurrence.issue_number}
+                      status={ownedCard?.status === 'read' ? 'read' : 'unread'}
+                      rating={ownedCard?.rating}
+                      hideTitle
+                    />
                   </li>
                 ))}
               </ul>
@@ -299,6 +310,55 @@ export function CblReadingListFinder({
 }: CblReadingListFinderProps) {
   const [open, setOpen] = useState(false)
   const candidatesQuery = useCblReadingListCandidates(listId, open)
+  const entries = candidatesQuery.data?.entries ?? []
+  // One bounded owner-card batch for the exact entries returned by the finder.
+  // Duplicate appearances reuse the same canonical projection and never fetch
+  // a collapsed row independently.
+  const entryCards = useIssueCards(
+    entries.map((entry) => entry.issue_id),
+    { enabled: open && candidatesQuery.data != null },
+  )
+  const cardsByIssue = indexIssueCards(entryCards.data)
+  const entryList = entries.length > 0 ? (
+    <section className="space-y-2" aria-label={`${listName} issues`}>
+      <h3 className="text-sm font-bold text-[var(--theme-text-primary)]">Reading List issues</h3>
+      <ul className="space-y-2">
+        {entries.map((entry) => {
+          const card = cardsByIssue.get(entry.issue_id) ?? null
+          return (
+            <li
+              key={`${entry.position}-${entry.issue_id}`}
+              data-testid={`${testIdPrefix}-entry-${entry.position}`}
+              className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-2"
+            >
+              <CompactIssueCardTrigger
+                issueId={entry.issue_id}
+                card={card}
+                threadTitle={entry.series_name}
+                issueNumber={entry.issue_number}
+                status={card?.status === 'read' ? 'read' : 'unread'}
+                rating={card?.rating}
+              />
+              {entry.identity_status !== 'confirmed' && (
+                <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
+                  {entry.identity_status === 'missing'
+                    ? 'No confirmed Comic Vine ID; reading and mapping actions remain available.'
+                    : 'Conflicting Comic Vine IDs; review mapping before CBL matching.'}
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {entryCards.isError && (
+        <LookupError
+          error={entryCards.error}
+          retry={() => void entryCards.refetch()}
+          message="Could not load issue covers and reading state. Expand an issue to retry its actions."
+        />
+      )}
+    </section>
+  ) : null
 
   const renderResults = () => {
     if (candidatesQuery.isPending) {
@@ -319,25 +379,32 @@ export function CblReadingListFinder({
     const conflictCount = result?.input_conflict_count ?? 0
     if (confirmedTotal === 0) {
       return (
-        <p className="text-sm text-[var(--theme-text-muted)]" data-testid={`${testIdPrefix}-identity-gaps`}>
-          None of {listName}&apos;s {result?.input_entry_count ?? 0} entries has exactly one
-          confirmed Comic Vine ID ({missingCount} missing, {conflictCount} conflicting), so
-          ComicPile cannot claim that no CBL covers this list.
-        </p>
+        <div className="space-y-3">
+          {entryList}
+          <p className="text-sm text-[var(--theme-text-muted)]" data-testid={`${testIdPrefix}-identity-gaps`}>
+            None of {listName}&apos;s {result?.input_entry_count ?? 0} entries has exactly one
+            confirmed Comic Vine ID ({missingCount} missing, {conflictCount} conflicting), so
+            ComicPile cannot claim that no CBL covers this list.
+          </p>
+        </div>
       )
     }
-    const gapSummary =
-      missingCount > 0 || conflictCount > 0 ? (
-        <p
-          className="text-xs text-[var(--theme-text-muted)]"
-          data-testid={`${testIdPrefix}-gap-summary`}
-        >
-          Coverage uses the {confirmedTotal} confirmed Comic Vine issue
-          {confirmedTotal === 1 ? '' : 's'}. {missingCount} entr
-          {missingCount === 1 ? 'y has' : 'ies have'} no confirmed ID and {conflictCount} entr
-          {conflictCount === 1 ? 'y has' : 'ies have'} conflicting IDs.
-        </p>
-      ) : null
+    const gapSummary = (
+      <>
+        {entryList}
+        {missingCount > 0 || conflictCount > 0 ? (
+          <p
+            className="text-xs text-[var(--theme-text-muted)]"
+            data-testid={`${testIdPrefix}-gap-summary`}
+          >
+            Coverage uses the {confirmedTotal} confirmed Comic Vine issue
+            {confirmedTotal === 1 ? '' : 's'}. {missingCount} entr
+            {missingCount === 1 ? 'y has' : 'ies have'} no confirmed ID and {conflictCount} entr
+            {conflictCount === 1 ? 'y has' : 'ies have'} conflicting IDs.
+          </p>
+        ) : null}
+      </>
+    )
     return (
       <CblComparisonResults
         candidates={result?.candidates ?? []}
