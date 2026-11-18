@@ -4,6 +4,8 @@
 
 ## MQA-ROLL-001: Rating steps the die ladder
 
+**Owner ruling (#4354, 2026-11-03; #4405):** the Auto/Manual session-mode UI and `session-mode` mutation were removed with no replacement; the rating threshold is 4.0.
+
 **Setup:** QA account with multiple active tracked series and a pending roll.
 
 **Test:** Rate below 4.0, then rate at least 4.0 on a subsequent roll; also try the boundaries.
@@ -42,13 +44,17 @@
 
 ## MQA-ROLL-006: Out-of-pool label matches visible rows
 
-**Test:** Inspect the out-of-pool count and displayed rows, accounting for any filters or paging.
+**Status: Retired (2026-11-18)** -- the out-of-pool/blocked/stale diagnostic sections were deleted from Roll (owner-approved in #4405; implemented by #4441 / PR #4474, merged Nov 1). Roll shows only the bounded pool.
 
-**Expected:** The count describes exactly the corresponding rows; no off-by-one or mismatched count.
+**Original expectation (historical):** The count describes exactly the corresponding rows; no off-by-one or mismatched count.
 
 ## MQA-ROLL-007: Roll again replaces the pending selection
 
+**Owner ruling ([#4338](https://github.com/JoshCLWren/comic-pile/issues/4338), [#4339](https://github.com/JoshCLWren/comic-pile/issues/4339), [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)):** snooze acts as a reroll. The separate Snooze/Skip endpoints and buttons were retired; pressing Roll again on a pending comic is the snooze, per the approved sessionless Roll contract.
+
 **Test:** Roll once, request another before rating/snoozing/canceling.
+
+**Owner ruling (2026-11-16, [#5262 comment](https://github.com/JoshCLWren/comic-pile/issues/5262#issuecomment-6922279397), [#4472 comment](https://github.com/JoshCLWren/comic-pile/issues/4472#issuecomment-6922434724), docs PR #5295):** "Roll again" is an explicit new-roll request; replacing the pending selection is intended and is not a bug. Do not re-file.
 
 **Expected:** Requesting another roll is an explicit choice that discards the pending selection and rolls a new one (owner ruling #5267, 2026-11-16). Per [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) the reroll records a snooze event for the passed comic, excludes it temporarily in this browser, moves the logical die one step up (maximum d20) and immediately selects again; there is no separate Snooze or Skip button. Both roll events are preserved in activity history. Navigation, reload, and Back to Queue preserve the pending selection; only an explicit new roll, snooze, cancel, or rate replaces it.
 
@@ -84,11 +90,9 @@
 
 ## MQA-ROLL-012: Distinct identities and bounded stale suggestions
 
-**Setup:** Two QA Threads with the same title but different canonical identities, plus more than one eligible stale series.
+**Status: Retired (2026-11-18)** -- the stale-series suggestion and Out-of-the-Roll-Pool sections were removed with #4441 / PR #4474. Same-name Threads must still stay separate (see MQA-ROLL-009). Prior intent ruling kept for history: owner confirmed on #3457 (2026-10-14) that one random stale suggestion among N was intentional, not a missing-rows bug.
 
-**Test:** Inspect Series Out of the Roll Pool and refresh the stale-series suggestion.
-
-**Expected:** Same-name Threads remain separate with truthful identifying metadata (year, volume, publisher where known) or a safe Thread-specific fallback. No title-based merge or deletion occurs. The stale-series headline may count all eligible stale Threads while showing one featured suggestion; changing which one is featured does not imply missing data. Do not require a full unbounded stale-series list.
+**Original expectation (historical):** Same-name Threads remain separate with truthful identifying metadata (year, volume, publisher where known) or a safe Thread-specific fallback. No title-based merge or deletion occurs. The stale-series headline may count all eligible stale Threads while showing one featured suggestion; changing which one is featured does not imply missing data. Do not require a full unbounded stale-series list.
 
 ## MQA-ROLL-013: Blocker explanations and result copy stay accurate
 

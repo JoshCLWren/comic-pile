@@ -44,6 +44,8 @@
 
 ## MQA-LIST-006: Eligibility explanations agree
 
+**Owner ruling (2026-10-14, [#3636 comment](https://github.com/JoshCLWren/comic-pile/issues/3636#issuecomment-6174141373)):** a dependency may be described from both ends -- "Young Justice blocked by Hourman #9" and "Hourman blocking Young Justice #16" are the source and dependent of one prerequisite and legitimately name different issue numbers. Do not change edges or labels to make the numbers equal; flag only if an endpoint is not actually related.
+
 **Test:** View a thread waiting on a real requirement, read its source issue, and revisit Queue, Roll and list.
 
 **Expected:** Each surface agrees on next unread and eligibility, explains actual named blockers and updates when satisfied.
