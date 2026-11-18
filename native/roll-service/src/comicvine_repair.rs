@@ -413,6 +413,12 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
 pub(crate) async fn catalog_volume_roster(
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
+    // Test scaffolding only: an installed fixture short-circuits the live
+    // provider so handler tests stay deterministic. Production never installs
+    // one, so this is an inert map lookup.
+    if let Some(fixture) = crate::test_support::lookup_test_volume_roster(external_id) {
+        return Ok(fixture);
+    }
     let unavailable = || ApiError::ServiceUnavailable("provider_unavailable".to_owned());
     let volume_id = external_id
         .parse::<u32>()
