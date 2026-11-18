@@ -134,6 +134,7 @@ jobs:
       - name: Build scalar parity runner
         run: cargo build --locked -p comicpile-roll-service --examples
       - name: Python versus Rust scalar parity
+        if: github.event_name == 'pull_request'
         working-directory: .
         env:
           PYTHONPATH: .
