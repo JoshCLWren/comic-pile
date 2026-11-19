@@ -11472,6 +11472,12 @@
           "user_id": {
             "format": "int32",
             "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [

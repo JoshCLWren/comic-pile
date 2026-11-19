@@ -14733,6 +14733,12 @@
           "user_id": {
             "type": "integer",
             "format": "int32"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

@@ -333,7 +333,6 @@ async fn combined_failures_report_all_query_errors() {
     assert_eq!(types, vec!["string_too_long", "greater_than_equal"]);
 }
 
-
 async fn put(
     state: &Arc<AppState>,
     token: &str,
@@ -430,11 +429,16 @@ async fn strict_list_reports_partial_coverage_warnings() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
-    assert_eq!(body["mode"], "strict");
-    assert_eq!(body["issue_count"], 1);
-    let entries = body["entries"].as_array().expect("entries array");
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["issue_id"], 910201);
+    let warnings = body["warnings"].as_array().expect("warnings array");
+    assert!(
+        warnings.iter().any(|value| {
+            value.as_str().is_some_and(|text| {
+                text.contains("Strict list omits 1 unread Issues from Saga")
+                    && text.contains("Saga #8")
+            })
+        }),
+        "expected strict partial-coverage warning: {body}"
+    );
 }
 
 #[tokio::test]

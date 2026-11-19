@@ -7452,6 +7452,7 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+            warnings?: string[];
         };
         ReadingListBlockerExplanation: {
             blocking_dependencies: components["schemas"]["ReadingListDependency"][];

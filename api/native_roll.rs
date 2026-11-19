@@ -275,10 +275,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
-        .route(
-            "/api/v2/series-mapping-commits",
-            post(native_dispatch),
-        )
+        .route("/api/v2/series-mapping-commits", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/unsnooze", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
@@ -660,7 +657,6 @@ fn app() -> Router {
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
         )
-
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",

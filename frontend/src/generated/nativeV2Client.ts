@@ -320,7 +320,7 @@ export interface ExportCustomCblRequest {
   }
 }
 
-export type ExportCustomCblResponse = void
+export type ExportCustomCblResponse = string
 
 export interface ForgotPasswordRequest {
   body: components['schemas']['ForgotPasswordRequest']
