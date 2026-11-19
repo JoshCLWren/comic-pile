@@ -13,9 +13,9 @@ export interface AuthUserRecord {
 const DATABASE_URL = process.env.DATABASE_URL || '';
 if (!DATABASE_URL) throw new Error('DATABASE_URL environment variable must be set');
 
-const pool =
-  (globalThis as typeof globalThis & { pool?: Pick<Pool, 'query'> }).pool ||
-  new Pool(buildAuthPoolConfig(DATABASE_URL));
+// SAFETY: tests may inject a mock pool on globalThis; when absent we create the real configured pool.
+const injectedPool = (globalThis as typeof globalThis & { pool?: Pick<Pool, 'query'> }).pool;
+const pool = injectedPool || new Pool(buildAuthPoolConfig(DATABASE_URL));
 
 /** Read revocation state without making authorization decisions. */
 export async function isTokenRevoked(username: string, jti: string): Promise<boolean> {

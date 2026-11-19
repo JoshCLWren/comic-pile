@@ -1029,9 +1029,7 @@ export default function CustomCBLBuilder({
                     )}
 
                     {replaceError && (
-                      <p role="alert" className="text-sm text-[var(--theme-danger)]">
-                        {replaceError}
-                      </p>
+                      <p role="alert" className="text-sm text-[var(--theme-danger)]">{replaceError}</p>
                     )}
                   </div>
                 )}
@@ -1052,9 +1050,7 @@ export default function CustomCBLBuilder({
                   </div>
                 )}
                 {replaceError && !replaceOpen && (
-                  <p role="alert" className="text-sm text-[var(--theme-danger)]">
-                    {replaceError}
-                  </p>
+                  <p role="alert" className="text-sm text-[var(--theme-danger)]">{replaceError}</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1080,9 +1076,7 @@ export default function CustomCBLBuilder({
               <p>{createCycleError}</p>
               {cycleEditorLinks.size > 0 && (
                 <ul className="space-y-1">
-                  {[...cycleEditorLinks].map(([threadId, issueName]) => (
-                    <li key={threadId}><Link className="text-[var(--theme-continuity-accent)] underline" to={`/thread/${threadId}?prerequisites=1`}>Review prerequisites for {issueName}</Link></li>
-                  ))}
+                  {[...cycleEditorLinks].map(([threadId, issueName]) => (<li key={threadId}><Link className="text-[var(--theme-continuity-accent)] underline" to={`/thread/${threadId}?prerequisites=1`}>Review prerequisites for {issueName}</Link></li>))}
                 </ul>
               )}
             </div>
@@ -1107,10 +1101,7 @@ export default function CustomCBLBuilder({
         <p className="text-sm text-[var(--theme-text-muted)]">
           Permanently delete <span className="font-bold text-[var(--theme-text-primary)]">{persisted?.name}</span>?
         </p>
-        <p className="text-sm text-[var(--theme-text-muted)]">
-          This removes the Reading List together with its entries and reading order. Read history
-          and ratings for those comics are not changed.
-        </p>
+        <p className="text-sm text-[var(--theme-text-muted)]">This removes the Reading List together with its entries and reading order. Read history and ratings for those comics are not changed.</p>
       </ConfirmDialog>
       <Modal
         isOpen={confirmationChanges !== null}
@@ -1118,9 +1109,7 @@ export default function CustomCBLBuilder({
         onClose={() => saveMutation.reset()}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--theme-text-muted)]">
-            This edit changes which issues wait on which. Review the new waits, then confirm to save. Cancel keeps the saved list exactly as it is.
-          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">This edit changes which issues wait on which. Review the new waits, then confirm to save. Cancel keeps the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Waiting changes">
             {(confirmationChanges ?? []).map((change) => (
               <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
@@ -1128,14 +1117,7 @@ export default function CustomCBLBuilder({
           </ul>
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => saveMutation.reset()} disabled={saveMutation.isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
-            <button
-              type="button"
-              onClick={() => saveMutation.mutate(saveErrorDetail?.predecessorChanges ?? null)}
-              disabled={saveMutation.isPending}
-              className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
-            >
-              {saveMutation.isPending ? 'Saving…' : 'Confirm and save'}
-            </button>
+            <button type="button" onClick={() => saveMutation.mutate(saveErrorDetail?.predecessorChanges ?? null)} disabled={saveMutation.isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Confirm and save'}</button>
           </div>
         </div>
       </Modal>
@@ -1145,9 +1127,7 @@ export default function CustomCBLBuilder({
         onClose={() => setReplaceConfirmation(null)}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--theme-text-muted)]">
-            Replacing this Reading List changes which issues wait on which. Review the new waits, then confirm the same replacement review. Cancel leaves the saved list exactly as it is.
-          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Replacing this Reading List changes which issues wait on which. Review the new waits, then confirm the same replacement review. Cancel leaves the saved list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Replacement waiting changes">
             {(replaceConfirmation?.changes ?? []).map((change) => (
               <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
@@ -1177,9 +1157,7 @@ export default function CustomCBLBuilder({
         onClose={() => setUndoConfirmation(null)}
       >
         <div className="space-y-4">
-          <p className="text-sm text-[var(--theme-text-muted)]">
-            Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.
-          </p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Restoring the previous list changes which issues wait on which. Review the restored waits, then confirm. Cancel keeps the replaced list exactly as it is.</p>
           <ul className="space-y-2" aria-label="Undo waiting changes">
             {(undoConfirmation ?? []).map((change) => (
               <li key={change.issue_id} className="rounded-xl border border-[var(--theme-border)] p-3 text-sm text-[var(--theme-text-primary)]">{describePredecessorChange(change)}</li>
