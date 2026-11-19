@@ -27,6 +27,10 @@ use utoipa::ToSchema;
 
 type HmacSha256 = Hmac<Sha256>;
 
+fn default_scope_mode() -> String {
+    "confirmed_origin".to_string()
+}
+
 // Re-export types that match Python schemas
 pub type ReadingGraphChoiceId = String;
 
@@ -43,7 +47,7 @@ pub struct SeriesMappingPreviewRequest {
     pub provider: String,
     #[serde(rename = "provider_series_external_id")]
     pub provider_series_external_id: String,
-    #[serde(rename = "scope_mode", default = "confirmed_origin")]
+    #[serde(default = "default_scope_mode")]
     pub scope_mode: String,
 }
 
@@ -546,7 +550,7 @@ pub async fn preview_series_mapping(
 
         // Check if origin has confirmed mapping to this series
         let origin_confirmed = origin_mapping_status.as_deref() == Some("confirmed")
-            && origin_mapping_provider.as_deref().map(|p| p.to_lowercase()) == Some(provider);
+            && origin_mapping_provider.as_deref().map(|p| p.to_lowercase()) == Some(provider.as_str());
         let linked_thread = if let Some(tid) = origin_thread_id {
             let rows = pool
                 .query(
@@ -655,7 +659,7 @@ pub async fn preview_series_mapping(
         origin_issue_id,
         &payload.provider,
         &payload.provider_series_external_id,
-        Some(provider_series),
+        provider_series,
         &payload.scope_mode,
         issues_with_mappings,
         &state,
@@ -885,7 +889,7 @@ pub async fn preview_plan_projection(
     let order_row = pool
         .query_opt(
             "SELECT id, name FROM reading_orders WHERE id = $1 AND user_id = $2",
-            &[&payload.reading_order_id, &auth.id() as i32],
+            &[&payload.reading_order_id, &auth.id()],
         )
         .await
         .map_err(db::query_error)?
@@ -922,7 +926,7 @@ pub async fn preview_plan_projection(
         let title_rows = pool
             .query(
                 "SELECT id, title FROM threads WHERE user_id = $1 AND id = ANY($2::int[])",
-                &[&auth.id() as i32, &thread_ids],
+                &[&auth.id(), &thread_ids],
             )
             .await
             .map_err(db::query_error)?
