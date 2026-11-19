@@ -531,7 +531,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/taste/discoveries$",
@@ -562,7 +562,7 @@
         "POST",
         "OPTIONS"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/v1/reading\\-order\\-groups/$",
