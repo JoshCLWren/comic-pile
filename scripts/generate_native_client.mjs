@@ -133,9 +133,18 @@ function successResponseType(operation) {
     .sort((a, b) => a - b);
   if (!codes.length) return 'void';
   const response = obj(responses[String(codes[0])], 'success response');
-  const schema = response.content?.[JSON_MEDIA_TYPE]?.schema;
-  if (!isObject(response.content) || !isObject(response.content[JSON_MEDIA_TYPE]) || !isObject(schema)) return 'void';
-  return tsType(schema);
+  if (!isObject(response.content)) return 'void';
+  const jsonContent = response.content[JSON_MEDIA_TYPE];
+  if (isObject(jsonContent) && isObject(jsonContent.schema)) {
+    return tsType(jsonContent.schema);
+  }
+  for (const [mediaType, content] of Object.entries(response.content)) {
+    if (!isObject(content) || !isObject(content.schema)) continue;
+    if (mediaType === 'application/xml' || mediaType.startsWith('text/')) {
+      return tsType(content.schema);
+    }
+  }
+  return 'void';
 }
 
 function jsonBodySchema(requestBody) {

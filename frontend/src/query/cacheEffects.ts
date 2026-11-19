@@ -356,6 +356,9 @@ export async function invalidateAfterQueueMovement(
     // that changes membership. Reset it the same way the Queue list resets:
     // a cached page still lists a series on the wrong side of the boundary.
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    // Container-level bulk actions derive removable/restorable members from a
+    // scoped excluded-member-status query; refresh it with the boundary change.
+    client.invalidateQueries({ queryKey: queryKeys.excluded.memberStatusAll() }),
   ])
 }
 
@@ -535,6 +538,13 @@ export async function invalidateReadingPlanReleaseSources(
       queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
     }),
   ])
+}
+
+export async function invalidateReadingPlanReader(
+  client: QueryClient,
+  planId: number,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.reader(planId) })
 }
 
 /**
@@ -933,6 +943,20 @@ export async function invalidateAfterCrossoverMutation(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.crossover.all })
+}
+
+/**
+ * Refresh the batched crossover-membership lookup for a specific thread set.
+ * Used to retry a failed overlap check without invalidating unrelated caches.
+ */
+export async function invalidateCrossoverGroupsForThreads(
+  client: QueryClient,
+  threadIds: number[],
+): Promise<void> {
+  if (threadIds.length === 0) return
+  await client.invalidateQueries({
+    queryKey: queryKeys.crossover.groups(threadIds),
+  })
 }
 
 /**

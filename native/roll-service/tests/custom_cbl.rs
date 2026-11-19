@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-//! Native HTTP regressions for GET /api/v1/custom-cbls/issue-search.
+//! Native HTTP regressions for GET /api/v2/reading-lists/issue-candidates.
 //!
 //! Exercises the mounted router against canonical disposable PostgreSQL rows:
 //! FastAPI-compatible 422 validation envelopes (limit bounds, malformed limit,
@@ -185,7 +185,7 @@ async fn valid_bounded_search_returns_only_owned_issues() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?q=saga&limit=10",
+        "/api/v2/reading-lists/issue-candidates?q=saga&limit=10",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -204,7 +204,7 @@ async fn valid_bounded_search_returns_only_owned_issues() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?limit=1",
+        "/api/v2/reading-lists/issue-candidates?limit=1",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -212,7 +212,7 @@ async fn valid_bounded_search_returns_only_owned_issues() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?limit=100",
+        "/api/v2/reading-lists/issue-candidates?limit=100",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -220,7 +220,7 @@ async fn valid_bounded_search_returns_only_owned_issues() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search",
+        "/api/v2/reading-lists/issue-candidates",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -234,7 +234,7 @@ async fn limit_zero_and_negative_return_fastapi_422_envelope() {
         let (status, body) = get(
             &fixture.state,
             &fixture.token,
-            &format!("/api/v1/custom-cbls/issue-search?limit={raw}"),
+            &format!("/api/v2/reading-lists/issue-candidates?limit={raw}"),
         )
         .await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -251,7 +251,7 @@ async fn limit_above_maximum_returns_fastapi_422_envelope() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?limit=101",
+        "/api/v2/reading-lists/issue-candidates?limit=101",
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -267,7 +267,7 @@ async fn malformed_limit_returns_fastapi_422_envelope() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?limit=abc",
+        "/api/v2/reading-lists/issue-candidates?limit=abc",
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -278,7 +278,7 @@ async fn malformed_limit_returns_fastapi_422_envelope() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?limit=99999999999999999999999999999",
+        "/api/v2/reading-lists/issue-candidates?limit=99999999999999999999999999999",
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -294,7 +294,7 @@ async fn overlong_q_returns_fastapi_422_envelope() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        &format!("/api/v1/custom-cbls/issue-search?q={q}"),
+        &format!("/api/v2/reading-lists/issue-candidates?q={q}"),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -306,7 +306,7 @@ async fn overlong_q_returns_fastapi_422_envelope() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        &format!("/api/v1/custom-cbls/issue-search?q={q}"),
+        &format!("/api/v2/reading-lists/issue-candidates?q={q}"),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -320,7 +320,7 @@ async fn combined_failures_report_all_query_errors() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        &format!("/api/v1/custom-cbls/issue-search?q={q}&limit=0"),
+        &format!("/api/v2/reading-lists/issue-candidates?q={q}&limit=0"),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -333,30 +333,64 @@ async fn combined_failures_report_all_query_errors() {
     assert_eq!(types, vec!["string_too_long", "greater_than_equal"]);
 }
 
+async fn put(
+    state: &Arc<AppState>,
+    token: &str,
+    csrf: &str,
+    uri: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    send(
+        state,
+        Request::builder()
+            .method("PUT")
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header("x-csrf-token", csrf)
+            .header(header::COOKIE, format!("csrf_token={csrf}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await
+}
+
 #[tokio::test]
 async fn structured_error_details_are_json_objects_not_strings() {
     let fixture = setup().await;
 
-    // A foreign issue must emit Python's structured 422, not a stringified
-    // JSON blob under `detail`.
+    // A foreign/unowned issue is rejected on v2 create.
     let (status, body) = post(
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({"name": "Foreign", "issue_ids": [910202]}),
     )
     .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
-    assert_eq!(body["detail"]["code"], "custom_cbl_issue_not_owned");
-    assert_eq!(body["detail"]["issue_ids"], json!([910202]));
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["detail"], "Issue not found");
 
-    // An out-of-membership checkpoint target is the same structured shape.
+    // An out-of-membership checkpoint target is rejected on update with a
+    // structured v2 error.
     let (status, body) = post(
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
+        json!({
+            "name": "Base",
+            "issue_ids": [910201]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let list_id = body["id"].as_i64().expect("list id");
+    let (status, body) = put(
+        &fixture.state,
+        &fixture.token,
+        &fixture.csrf,
+        &format!("/api/v2/reading-lists/{list_id}"),
         json!({
             "name": "Bad checkpoint",
             "issue_ids": [910201],
@@ -366,10 +400,7 @@ async fn structured_error_details_are_json_objects_not_strings() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
-    assert_eq!(
-        body["detail"]["code"],
-        "custom_cbl_invalid_checkpoint_targets"
-    );
+    assert_eq!(body["detail"], "custom_cbl_invalid_checkpoint_targets");
 }
 
 #[tokio::test]
@@ -389,7 +420,7 @@ async fn strict_list_reports_partial_coverage_warnings() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({
             "name": "Strict partial",
             "mode": "strict",
@@ -435,7 +466,7 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({
             "name": "Apply source",
             "mode": "strict",
@@ -451,7 +482,7 @@ async fn apply_rebuilds_membership_and_compiled_rules() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920001:apply"),
+        &format!("/api/v2/reading-lists/{list_id}/reading-plans/920001/applications"),
         json!({}),
     )
     .await;
@@ -531,7 +562,7 @@ async fn apply_preserves_authoritative_plan_membership() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({
             "name": "Apply membership source",
             "mode": "strict",
@@ -547,7 +578,7 @@ async fn apply_preserves_authoritative_plan_membership() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920002:apply"),
+        &format!("/api/v2/reading-lists/{list_id}/reading-plans/920002/applications"),
         json!({}),
     )
     .await;
@@ -597,7 +628,7 @@ async fn apply_does_not_duplicate_cross_lane_source_issues() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({
             "name": "Cross-lane source",
             "mode": "strict",
@@ -635,7 +666,7 @@ async fn apply_does_not_duplicate_cross_lane_source_issues() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920003:apply"),
+        &format!("/api/v2/reading-lists/{list_id}/reading-plans/920003/applications"),
         json!({"lane_id": "custom-cbl"}),
     )
     .await;
@@ -713,7 +744,7 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({
             "name": "Checkpoint reuse",
             "mode": "strict",
@@ -752,7 +783,7 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        &format!("/api/v1/custom-cbls/{list_id}/reading-plans/920004:apply"),
+        &format!("/api/v2/reading-lists/{list_id}/reading-plans/920004/applications"),
         json!({}),
     )
     .await;
@@ -834,7 +865,7 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
         &fixture.state,
         &fixture.token,
         &fixture.csrf,
-        "/api/v1/custom-cbls",
+        "/api/v2/reading-lists",
         json!({"name": "Overlap List", "mode": "loose", "issue_ids": []}),
     )
     .await;
@@ -867,7 +898,7 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        &format!("/api/v1/custom-cbls/{list_id}/overlap-decisions"),
+        &format!("/api/v2/reading-lists/{list_id}/overlap-decisions"),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -892,7 +923,7 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
         &fixture.state,
         Request::builder()
             .method("PUT")
-            .uri(format!("/api/v1/custom-cbls/{list_id}/overlap-decisions"))
+            .uri(format!("/api/v2/reading-lists/{list_id}/overlap-decisions"))
             .header(header::AUTHORIZATION, format!("Bearer {}", fixture.token))
             .header("x-csrf-token", &fixture.csrf)
             .header(header::COOKIE, format!("csrf_token={}", fixture.csrf))
@@ -944,7 +975,7 @@ async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_disti
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?q=Mutant%20X%20%231&limit=10",
+        "/api/v2/reading-lists/issue-candidates?q=Mutant%20X%20%231&limit=10",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -970,7 +1001,7 @@ async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_disti
     let (status, body) = get(
         &fixture.state,
         &fixture.token,
-        "/api/v1/custom-cbls/issue-search?q=Mutant%20X&limit=2",
+        "/api/v2/reading-lists/issue-candidates?q=Mutant%20X&limit=2",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");

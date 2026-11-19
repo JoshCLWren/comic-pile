@@ -31,6 +31,10 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: { get: vi.fn() },
 }))
 
+vi.mock('../components/ContainerQueueActions', () => ({
+  default: () => null,
+}))
+
 const mockedGroups = vi.mocked(dependencyGroupsApi)
 const mockedThreads = vi.mocked(threadsApi)
 const mockedIssues = vi.mocked(issuesApi)
