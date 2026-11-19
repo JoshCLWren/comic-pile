@@ -213,7 +213,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "list_creators_endpoint"
+    "name": "list_creators_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/summaries",
@@ -221,7 +222,8 @@
       "GET"
     ],
     "module": "app.api.creators",
-    "name": "get_creator_summaries_endpoint"
+    "name": "get_creator_summaries_endpoint",
+    "same_path_replacement": false
   },
   {
     "path": "/api/v1/creators/compare",

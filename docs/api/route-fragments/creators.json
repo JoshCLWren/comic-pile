@@ -1,7 +1,6 @@
 {
   "family": "creators",
   "owned_path_patterns": [
-    "^/api/v1/creators(?:/.*)?$",
     "^/api/v2/creators(?:/.*)?$",
     "^/api/v1/threads/[^/]+/issues/creators$"
   ],
