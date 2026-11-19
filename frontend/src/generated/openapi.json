@@ -16564,6 +16564,136 @@
         ],
         "type": "object"
       },
+      "UnsnoozeRequest": {
+        "additionalProperties": false,
+        "description": "Request body for unsnoozing a thread.",
+        "properties": {
+          "thread_id": {
+            "description": "The thread ID to unsnooze. Idempotent: an already-removed snooze succeeds.",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id"
+        ],
+        "type": "object"
+      },
+      "UnsnoozeResponse": {
+        "description": "Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate.",
+        "properties": {
+          "die_size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_rolled_result": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "restored": {
+            "description": "True when the pending roll and die were restored; false when only the\nsnooze was removed (older snooze, later die choice, or an already-removed\nsnooze replayed after a lost response).",
+            "type": "boolean"
+          },
+          "result": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snoozed_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "unsnoozed_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count",
+          "restored"
+        ],
+        "type": "object"
+      },
       "UpdateTagRequest": {
         "properties": {
           "color": {
@@ -27388,6 +27518,57 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll reset command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/unsnooze": {
+      "post": {
+        "operationId": "unsnooze_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsnoozeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsnoozeResponse"
+                }
+              }
+            },
+            "description": "Restored the previously snoozed roll"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "409": {
+            "description": "Reading session changed"
+          },
+          "500": {
+            "description": "Unsnooze projection unavailable"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll unsnooze command.",
         "tags": [
           "roll"
         ]

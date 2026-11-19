@@ -280,6 +280,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/offer", post(native_dispatch))
+        .route("/api/v2/roll/unsnooze", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
@@ -1762,6 +1763,45 @@ mod tests {
                 assert_eq!(body["thread_id"], 13);
                 assert_eq!(body["position"], 3);
                 assert_eq!(stored_order(user_id).await, vec![11, 12, 13]);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn roll_unsnooze_is_served_from_rust_ingress_against_postgres() {
+        // Regression for #4589 review: the inner router had the route but this
+        // Vercel entry did not, so browsers got the ingress 404 fallback.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("unsnooze-ingress-{}", std::process::id());
+                let (access, csrf, user_id) = register_session(&username).await;
+                seed_threads(user_id, &[(21, 1)]).await;
+                let request = |token: Option<&str>| {
+                    let mut builder = Request::builder()
+                        .method("POST")
+                        .uri("/api/v2/roll/unsnooze")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::COOKIE, format!("csrf_token={csrf}"))
+                        .header("x-csrf-token", csrf.as_str());
+                    if let Some(token) = token {
+                        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+                    }
+                    builder
+                        .body(Body::from(serde_json::json!({"thread_id": 21}).to_string()))
+                        .expect("unsnooze request")
+                };
+                // Unauthenticated reaches the dispatched handler's 401.
+                let (status, _, _, text) = call_app(request(None)).await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+                // Authenticated requests must reach the handler, never the
+                // ingress 404 fallback. This ingress schema is deliberately
+                // partial, so the handler may 5xx here; the full behavior is
+                // covered against the canonical schema in the inner-router
+                // tests (thread_ordering_v1_http).
+                let (status, _, _, text) = call_app(request(Some(&access))).await;
+                assert_ne!(status, StatusCode::NOT_FOUND, "{text}");
             })
             .await;
     }

@@ -169,6 +169,7 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
         },
         moveToFrontMutation: { mutate: moveToFront.mutate, isPending: moveToFront.isPending },
         moveToBackMutation: { mutate: moveToBack.mutate, isPending: moveToBack.isPending },
+        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
         shuffleQueueMutation: { mutate: shuffleQueue.mutate, isPending: shuffleQueue.isPending },
       },
       refetchBootstrap,

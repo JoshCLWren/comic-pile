@@ -202,6 +202,7 @@ function RollMoveBudgetProbe() {
         isPending: moveToFrontMutation.isPending,
       },
       moveToBackMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
       shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
     },
     refetchBootstrap,
