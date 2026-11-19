@@ -172,36 +172,71 @@ def _alembic_current(env: dict[str, str]) -> str | None:
     return None
 
 
-def _detect_new_migration_steps(base_ref: str | None) -> int | None:
-    """Return count of Alembic migration version files added/changed vs base ref."""
+def _git(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(REPO_ROOT),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _revision_from_migration_path(path: Path) -> str | None:
+    """Best-effort revision ID from an Alembic migration filename."""
+    name = path.name
+    if not name.endswith(".py"):
+        return None
+    return name.split("_", 1)[0] if "_" in name else name[:-3]
+
+
+def _down_revisions_in_file(path: Path) -> list[str]:
+    """Parse down_revision identifiers from a migration file (best effort)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return []
+    # Handles: down_revision = 'x', down_revision: str | None = "x",
+    # down_revision = ('a', 'b') / None
+    m = re.search(r"^down_revision\s*(?::[^=]+)?=\s*(.+)$", text, re.MULTILINE)
+    if not m:
+        return []
+    expr = m.group(1).split("#", 1)[0].strip()
+    if expr == "None":
+        return []
+    ids = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", expr)
+    return ids
+
+
+def _detect_pr_downgrade_base(base_ref: str | None) -> str | None:
+    """Return Alembic downgrade target for migrations introduced vs base ref.
+
+    If new migration files exist, return the down_revision of the earliest new
+    migration in that set (base revision of the PR) when unambiguous.
+    If no migration files changed, return None so caller can choose a safe
+    rollback (e.g. -1) or current-head behavior.
+    """
     if not base_ref:
         return None
-    try:
-        proc = subprocess.run(
-            ["git", "diff", "--name-status", f"{base_ref}...HEAD", "--", "alembic/versions"],
-            cwd=str(REPO_ROOT),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except Exception:
-        return None
+    proc = _git(["diff", "--name-only", "--diff-filter=AMR", f"{base_ref}...HEAD", "--", "alembic/versions"])
     if proc.returncode != 0:
         return None
-    count = 0
-    for line in proc.stdout.splitlines():
-        parts = line.split()
-        if not parts:
-            continue
-        status = parts[0]
-        path = parts[-1]
-        if not path.endswith(".py"):
-            continue
-        # Count added or modified migration files as steps to rehearse back over.
-        # Renames/copies are rare; treat as 1.
-        if status.startswith(("A", "M", "R", "C")):
-            count += 1
-    return count
+    added_paths = [REPO_ROOT / p.strip() for p in proc.stdout.splitlines() if p.strip().endswith(".py")]
+    if not added_paths:
+        return None
+    added_revs = {r for p in added_paths if (r := _revision_from_migration_path(p))}
+    if not added_revs:
+        return None
+    # Find down revisions that point outside the newly added set (PR base boundary).
+    bases: set[str] = set()
+    for path in added_paths:
+        for down in _down_revisions_in_file(path):
+            if down not in added_revs:
+                bases.add(down)
+    if len(bases) == 1:
+        return next(iter(bases))
+    # Fallback: downgrade by count of added migrations.
+    return f"-{len(added_revs)}"
 
 
 def _downgrade_target(
@@ -215,14 +250,12 @@ def _downgrade_target(
         return explicit_base
     if step_down > 0:
         return f"-{step_down}"
-    detected = _detect_new_migration_steps(base_ref)
-    if detected is not None:
-        # "base revision of the PR (or -1 per new revision)". When no migration
-        # files changed, step back one revision to exercise rollback of tip.
-        return f"-{detected}" if detected > 0 else "-1"
-    # Default: step back one revision. Downgrading to fixture_revision can
-    # cross irreversible historical migrations; PR/deploy callers should pass
-    # --base or --downgrade-steps explicitly when they know the safe target.
+    pr_base = _detect_pr_downgrade_base(base_ref)
+    if pr_base is not None:
+        return pr_base
+    # No new migrations vs base_ref, or no base_ref context: step back one
+    # revision to exercise rollback. Callers may pass --base/--downgrade-steps
+    # for merge heads or known-safe targets.
     return "-1"
 
 
@@ -251,7 +284,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--downgrade-steps",
         type=int,
         default=0,
-        help="Use alembic downgrade -N instead of fixture/base revision",
+        help="Use alembic downgrade -N instead of fixture/base/auto-detected revision",
+    )
+    parser.add_argument(
+        "--skip-downgrade-cycle",
+        action="store_true",
+        help="Run upgrade-head from fixture only (skip downgrade/upgrade-again); use when downgrade target is known-irreversible in context",
     )
     parser.add_argument(
         "--skip-reset",
@@ -330,20 +368,21 @@ def main(argv: list[str] | None = None) -> int:
                 f"upgrade_head_1 exceeded migration safety budget: "
                 f"{timings[-1].seconds:.3f}s > {args.migration_budget_seconds:.3f}s"
             )
-        downgrade_to = _downgrade_target(
-            fixture_revision=fixture_revision,
-            explicit_base=args.base,
-            base_ref=args.base_ref,
-            step_down=args.downgrade_steps,
-        )
-        print(f"[rehearsal] downgrade target: {downgrade_to}", flush=True)
-        timings.append(_run_timed("downgrade", [*_alembic_cmd(), "downgrade", downgrade_to], env=env))
-        timings.append(_run_timed("upgrade_head_2", [*_alembic_cmd(), "upgrade", "head"], env=env))
-        if timings[-1].seconds > args.migration_budget_seconds:
-            raise RuntimeError(
-                f"upgrade_head_2 exceeded migration safety budget: "
-                f"{timings[-1].seconds:.3f}s > {args.migration_budget_seconds:.3f}s"
+        if not args.skip_downgrade_cycle:
+            downgrade_to = _downgrade_target(
+                fixture_revision=fixture_revision,
+                explicit_base=args.base,
+                base_ref=args.base_ref,
+                step_down=args.downgrade_steps,
             )
+            print(f"[rehearsal] downgrade target: {downgrade_to}", flush=True)
+            timings.append(_run_timed("downgrade", [*_alembic_cmd(), "downgrade", downgrade_to], env=env))
+            timings.append(_run_timed("upgrade_head_2", [*_alembic_cmd(), "upgrade", "head"], env=env))
+            if timings[-1].seconds > args.migration_budget_seconds:
+                raise RuntimeError(
+                    f"upgrade_head_2 exceeded migration safety budget: "
+                    f"{timings[-1].seconds:.3f}s > {args.migration_budget_seconds:.3f}s"
+                )
         current = _alembic_current(env)
         if head and current != head:
             raise RuntimeError(f"Expected Alembic head {head!r} after rehearsal, got {current!r}")
