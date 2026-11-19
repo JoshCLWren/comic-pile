@@ -20,18 +20,31 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
 CHECKPOINT_PREFIX = "factory/work-checkpoints/"
 DEFAULT_AGE_DAYS = 14
 
+
+def _positive_int_env(name: str, default: int) -> int:
+    """Return a positive integer env setting or a safe default."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 # Match shared factory policy defaults: local leases default to 24h and are
 # stale only when there is verified inactivity older than the TTL. Unknown
-# activity must be treated as active (fail closed).
+# activity must be treated as active (fail closed). Invalid/non-positive values
+# must not weaken lease protection.
 LOCAL_LEASE_TTL = timedelta(
-    seconds=int(os.environ.get("FACTORY_LOCAL_LEASE_TTL_SECONDS", "86400"))
+    seconds=_positive_int_env("FACTORY_LOCAL_LEASE_TTL_SECONDS", 86400)
 )
 NUMBERED_LEASE_RECENT_ACTIVITY = timedelta(minutes=15)
 
@@ -195,7 +208,7 @@ def is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> bool
     return proc.returncode == 0
 
 
-def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, Any]]]:
+def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, object]]]:
     """Fetch open PR heads grouped by branch name.
 
     Raises on lookup failure so cleanup cannot proceed with incomplete safety data.
@@ -212,11 +225,12 @@ def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, Any]]]:
         raise RuntimeError(f"unable to parse open PR list: {exc}") from exc
     if not isinstance(prs, list):
         raise RuntimeError("open PR list response was not a list")
-    by_head: dict[str, list[dict[str, Any]]] = {}
+    by_head: dict[str, list[dict[str, object]]] = {}
     for pr in prs:
         if not isinstance(pr, dict):
             raise RuntimeError("open PR list contained a non-object entry")
-        head = str(pr.get("headRefName") or "")
+        head_obj = pr.get("headRefName")
+        head = head_obj if isinstance(head_obj, str) else ""
         if not head:
             continue
         by_head.setdefault(head, []).append(pr)
@@ -339,7 +353,7 @@ def evaluate_branch(
     *,
     default_branch: str,
     protected_names: set[str],
-    open_pr_heads: Mapping[str, Sequence[Mapping[str, Any]]],
+    open_pr_heads: Mapping[str, Sequence[Mapping[str, object]]],
     live_worktree_refs: set[str],
     now: datetime,
     age_days: int,
@@ -516,7 +530,7 @@ def decide_branches(
     *,
     default_branch: str,
     protected_names: set[str],
-    open_pr_heads: Mapping[str, Sequence[Mapping[str, Any]]],
+    open_pr_heads: Mapping[str, Sequence[Mapping[str, object]]],
     live_worktree_refs: set[str],
     now: datetime,
     age_days: int = DEFAULT_AGE_DAYS,
