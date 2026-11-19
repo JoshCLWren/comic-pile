@@ -10,6 +10,8 @@
 
 **Expected:** Exact canonical issue IDs/order remain, with no duplicate or unintended addition; an unchanged save doesn't change eligibility or reading state.
 
+**Issue search (owner issue #4725):** Searching the Reading List editor for an issue (e.g. `Mutant X #1`) lists each canonical issue once; the database already forbids a duplicate issue number within one series, so the only look-alike rows are distinct series sharing a title. Those stay separate rows (the editor groups them by series) and show a `Series ID` label so they can be told apart. Search deliberately remains click/Enter-driven ("Find issues"): live as-you-type suggestions are not offered, to avoid one request per keystroke against the issue table; revisit only with debounced, cancelled requests.
+
 ## MQA-LIST-002: Strict means earlier remaining entries first
 
 **Setup:** Strict QA list interleaving multiple series and a curated later annual.

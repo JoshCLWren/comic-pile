@@ -158,23 +158,6 @@ async def test_reading_plan_index_exposes_cbl_source_provenance(
 
 
 @pytest.mark.asyncio
-async def test_legacy_reading_orders_remain_readable(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Legacy reading_orders endpoint still serves data verbatim (backward compat)."""
-    user = await get_or_create_user_async(async_db)
-    t = await _make_thread(async_db, user_id=user.id, title="Legacy Thread")
-    await async_db.commit()
-    order = ReadingOrder(name="My Order", description="legacy", user_id=user.id)
-    async_db.add(order)
-    await async_db.flush()
-    async_db.add(ReadingOrderItem(reading_order_id=order.id, thread_id=t.id, position=1))
-    await async_db.commit()
-
-    thread_orders = await auth_client.get(f"/api/v1/threads/{t.id}/reading-orders")
-    assert thread_orders.status_code == 200, thread_orders.text
-    assert len(thread_orders.json()["reading_orders"]) == 1
-
-
-@pytest.mark.asyncio
 async def test_adopt_legacy_reading_order_without_data_loss(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

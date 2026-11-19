@@ -16,7 +16,6 @@ ROUTER_SUBMODULES = (
     "cbl_sources",
     "dependency",
     "dependency_group",
-    "dependency_group_batch",
     "health",
     "reading_order_projection",
 )
