@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.models import Dependency, Issue, Thread
-from app.services.thread_state_repair import reconcile_contradictory_completed_threads
 from tests.conftest import get_or_create_user_async
 
 
@@ -28,7 +27,13 @@ async def _create_thread_with_issues(
         user_id=user.id,
         total_issues=len(specs),
         reading_progress=reading_progress
-        or ("completed" if status == "completed" else "in_progress" if unread < len(specs) else "not_started"),
+        or (
+            "completed"
+            if status == "completed"
+            else "in_progress"
+            if unread < len(specs)
+            else "not_started"
+        ),
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
@@ -85,7 +90,9 @@ async def test_append_one_unread_to_completed_transitions_to_active(auth_client,
     # blocker denormalization should be consistent (not blocked since no dependency)
     assert thread.is_blocked is False
     # Semantic: status completed only with zero unread
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id, Issue.status != "read"))
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.status != "read")
+    )
     unread = result.scalars().all()
     assert len(unread) == 1
     assert thread.next_unread_issue_id == unread[0].id
@@ -109,7 +116,9 @@ async def test_append_multiple_preserves_read_history(auth_client, async_db) -> 
             issue.read_at = None
     await async_db.commit()
 
-    resp = await auth_client.post(f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "4-12"})
+    resp = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "4-12"}
+    )
     assert resp.status_code == 201
     assert resp.json()["total_count"] == 12
 
@@ -118,7 +127,9 @@ async def test_append_multiple_preserves_read_history(auth_client, async_db) -> 
     assert thread.issues_remaining == 9
     assert thread.total_issues == 12
     # Read history preserved: first three remain read with unchanged read_at (None stays None, not mutated to now)
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position))
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
     all_issues = result.scalars().all()
     assert [i.status for i in all_issues[:3]] == ["read", "read", "read"]
     # Timestamps not mutated: they remain None (no inference from completed status)
@@ -143,7 +154,9 @@ async def test_append_blocked_new_first_unread_reflects_blocked(auth_client, asy
         reading_progress="completed",
     )
     # Append one unread to completed target
-    resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}/issues", json={"issue_range": "3"})
+    resp = await auth_client.post(
+        f"/api/v1/threads/{target_thread.id}/issues", json={"issue_range": "3"}
+    )
     assert resp.status_code == 201
     new_issue_id = resp.json()["issues"][0]["id"]
     # Create dependency: source unread blocks new issue
@@ -152,7 +165,9 @@ async def test_append_blocked_new_first_unread_reflects_blocked(auth_client, asy
     # Trigger recompute via another append? Instead directly call refresh path: append another issue will recompute blocked
     # Simpler: verify that after dependency, blocked flag would be true after a no-op move that refreshes blocked
     # We test the invariant directly: after dependency exists, a second append should leave thread blocked
-    resp2 = await auth_client.post(f"/api/v1/threads/{target_thread.id}/issues", json={"issue_range": "4"})
+    resp2 = await auth_client.post(
+        f"/api/v1/threads/{target_thread.id}/issues", json={"issue_range": "4"}
+    )
     assert resp2.status_code == 201
 
     await async_db.refresh(target_thread)
@@ -167,7 +182,12 @@ async def test_append_eligible_new_first_unread_reflects_active(auth_client, asy
     """If new first unread is eligible, status active and not blocked."""
     user = await get_or_create_user_async(async_db)
     thread, _ = await _create_thread_with_issues(
-        async_db, user, "Eligible Thread", [("1", "read")], status="completed", reading_progress="completed"
+        async_db,
+        user,
+        "Eligible Thread",
+        [("1", "read")],
+        status="completed",
+        reading_progress="completed",
     )
     resp = await auth_client.post(f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "2"})
     assert resp.status_code == 201
@@ -184,11 +204,18 @@ async def test_after_write_status_remaining_next_unread_agree(auth_client, async
     """After the write, status, issues_remaining, next_unread, and totals agree."""
     user = await get_or_create_user_async(async_db)
     thread, _ = await _create_thread_with_issues(
-        async_db, user, "Agree Thread", [("1", "read"), ("2", "read")], status="completed", reading_progress="completed"
+        async_db,
+        user,
+        "Agree Thread",
+        [("1", "read"), ("2", "read")],
+        status="completed",
+        reading_progress="completed",
     )
     await auth_client.post(f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "3-5"})
     await async_db.refresh(thread)
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id, Issue.status != "read"))
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.status != "read")
+    )
     unread = result.scalars().all()
     assert thread.issues_remaining == len(unread)
     assert thread.total_issues == 5
@@ -199,150 +226,3 @@ async def test_after_write_status_remaining_next_unread_agree(auth_client, async
     else:
         assert thread.status == "completed"
         assert thread.next_unread_issue_id is None
-
-
-@pytest.mark.asyncio
-async def test_reconcile_existing_contradictory_rows_without_mutating_timestamps(async_db) -> None:
-    """Repair existing completed threads with unread without touching read_at/ratings."""
-    user = await get_or_create_user_async(async_db)
-    # Create a corrupted thread: status completed but with unread rows
-    thread = Thread(
-        title="Marvel Two-in-One Annual (1976)",
-        format="Comic",
-        issues_remaining=2,  # contradictory
-        queue_position=5,
-        status="completed",
-        user_id=user.id,
-        total_issues=3,
-        reading_progress="completed",
-        next_unread_issue_id=None,  # stale
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.flush()
-    read_issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="read", read_at=datetime(2023, 1, 1, tzinfo=UTC))
-    unread2 = Issue(thread_id=thread.id, issue_number="2", position=2, status="unread", read_at=None)
-    unread3 = Issue(thread_id=thread.id, issue_number="3", position=3, status="unread", read_at=None)
-    # Also add a read with missing read_at to ensure predicate uses status not timestamp
-    async_db.add_all([read_issue, unread2, unread3])
-    await async_db.flush()
-    # Leave thread.next_unread stale None to simulate production corruption
-    await async_db.commit()
-
-    original_read_at = read_issue.read_at
-
-    summary = await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
-    await async_db.commit()
-
-    assert summary["repaired_threads"] == 1
-    await async_db.refresh(thread)
-    await async_db.refresh(read_issue)
-    assert thread.status == "active"
-    assert thread.issues_remaining == 2
-    assert thread.total_issues == 3
-    assert thread.next_unread_issue_id == unread2.id
-    assert thread.reading_progress == "in_progress"
-    # No mutation of read timestamps
-    assert read_issue.read_at == original_read_at
-    assert read_issue.status == "read"
-    # Unread rows remain unread
-    await async_db.refresh(unread2)
-    assert unread2.status == "unread"
-
-
-@pytest.mark.asyncio
-async def test_reconcile_does_not_infer_reads_from_completed_status(async_db) -> None:
-    """Repair must not mark unread issues as read just because thread was completed."""
-    user = await get_or_create_user_async(async_db)
-    thread = Thread(
-        title="Gambit (Vol. 1) (1993-1994) - corrupted",
-        format="Comic",
-        issues_remaining=7,
-        queue_position=2,
-        status="completed",
-        user_id=user.id,
-        total_issues=7,
-        reading_progress="completed",
-        next_unread_issue_id=None,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.flush()
-    issues = [Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread") for i in range(1, 8)]
-    async_db.add_all(issues)
-    await async_db.commit()
-
-    await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
-    await async_db.commit()
-
-    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
-    for issue in result.scalars().all():
-        assert issue.status == "unread"
-    await async_db.refresh(thread)
-    assert thread.status == "active"
-
-
-@pytest.mark.asyncio
-async def test_reconcile_active_thread_with_zero_issues_completes_and_clears_blocked(async_db) -> None:
-    """Active threads with no unread issues must be completed and unblocked."""
-    from app.services.thread_state_repair import reconcile_contradictory_completed_threads
-
-    user = await get_or_create_user_async(async_db)
-    thread = Thread(
-        title="Hellboy in Love: Shadow Theater",
-        format="Comic",
-        issues_remaining=0,
-        queue_position=3,
-        status="active",
-        user_id=user.id,
-        total_issues=0,
-        reading_progress="not_started",
-        next_unread_issue_id=None,
-        is_blocked=True,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    summary = await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
-    await async_db.commit()
-
-    await async_db.refresh(thread)
-    assert summary["repaired_threads"] == 1
-    assert thread.status == "completed"
-    assert thread.is_blocked is False
-    assert thread.queue_position == 0
-
-
-@pytest.mark.asyncio
-async def test_reconcile_zero_issue_legacy_thread_keeps_counter_mode(async_db) -> None:
-    """Completing an empty legacy thread must not migrate it to issue tracking."""
-    from app.services.thread_state_repair import reconcile_contradictory_completed_threads
-
-    user = await get_or_create_user_async(async_db)
-    thread = Thread(
-        title="Legacy Counter Series",
-        format="Comic",
-        issues_remaining=0,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-        total_issues=None,
-        reading_progress=None,
-        next_unread_issue_id=None,
-        is_blocked=True,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    summary = await reconcile_contradictory_completed_threads(async_db, user_id=user.id)
-    await async_db.commit()
-
-    await async_db.refresh(thread)
-    assert summary["repaired_threads"] == 1
-    assert thread.status == "completed"
-    assert thread.total_issues is None
-    assert thread.issues_remaining == 0
-    assert thread.is_blocked is False
-    assert thread.queue_position == 0

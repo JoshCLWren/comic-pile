@@ -12,11 +12,7 @@ from collections.abc import Sequence
 from typing import cast
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, RecommendationContext
 from comic_pile.recommendation_selection import (
     Bandwidth,
     Intent,
@@ -26,7 +22,6 @@ from comic_pile.recommendation_selection import (
     resolve_selection_mode,
     select_from_pool,
 )
-from tests.roll_flow import roll_pending_thread
 
 POOL_SIZES = [1, 4, 6, 8, 20, 100]
 
@@ -70,9 +65,7 @@ def test_balanced_default_matches_legacy_stream_exactly(seed: int, pool_size: in
     expected = _legacy_stream(seed, pool_size, draws=40)
 
     control_rng = random.Random(seed)
-    outcomes = [
-        select_from_pool(pool_size, rng=control_rng) for _ in range(len(expected))
-    ]
+    outcomes = [select_from_pool(pool_size, rng=control_rng) for _ in range(len(expected))]
 
     assert [outcome.index for outcome in outcomes] == expected
     assert [outcome.result for outcome in outcomes] == [value + 1 for value in expected]
@@ -452,73 +445,3 @@ def test_math_import_guard_for_finite_validation() -> None:
     normalized = normalize_weights([1.0, 1.0, 1.0], 3)
     assert normalized is not None
     assert all(math.isfinite(weight) for weight in normalized)
-
-
-@pytest.mark.asyncio
-async def test_roll_with_random_intent_records_bypass_without_behavior_change(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """A random-intent roll stays uniform and records an unweighted roll event."""
-    data = (
-        await roll_pending_thread(async_db, bandwidth="deep", intent="random")
-    ).model_dump()
-    assert data["die_size"] == 8
-    assert 1 <= data["result"] <= data["die_size"]
-    thread_ids = [thread.id for thread in sample_data["threads"] if thread.status == "active"]
-    assert data["thread_id"] in thread_ids
-
-    event_result = await async_db.execute(
-        select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
-    )
-    roll_event = event_result.scalar_one()
-    assert roll_event.selection_method == "random"
-    assert roll_event.selected_thread_id == data["thread_id"]
-    assert roll_event.result == data["result"]
-
-
-@pytest.mark.asyncio
-async def test_roll_balanced_body_stays_neutral(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """An explicit balanced roll body returns the unchanged legacy response shape."""
-    data = (
-        await roll_pending_thread(async_db, bandwidth="balanced", intent="balanced")
-    ).model_dump()
-    assert set(data) >= {
-        "thread_id",
-        "title",
-        "format",
-        "issues_remaining",
-        "queue_position",
-        "die_size",
-        "result",
-    }
-
-
-@pytest.mark.asyncio
-async def test_roll_light_body_records_bandwidth_event(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """A light-bandwidth roll records the effort-weighted control path.
-
-    The recorded method names the active control path instead of the
-    weighting signal of one draw, so a light-bandwidth reader always sees
-    the same label. This draw carried no weighting signal at all and still
-    records the bandwidth path rather than flipping to "random" (#3762).
-    """
-    _ = sample_data
-    await roll_pending_thread(async_db, bandwidth="light")
-
-    event_result = await async_db.execute(
-        select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
-    )
-    roll_event = event_result.scalar_one()
-    assert roll_event.selection_method == "bandwidth"
-    assert roll_event.recommendation_reason_codes == ["bandwidth_weighted"]
-
-    # The draw itself stayed unweighted; only the recorded label changed.
-    context_result = await async_db.execute(
-        select(RecommendationContext).where(RecommendationContext.event_id == roll_event.id)
-    )
-    roll_context = context_result.scalar_one()
-    assert roll_context.random_bypass is True

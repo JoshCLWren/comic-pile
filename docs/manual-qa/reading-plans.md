@@ -105,3 +105,9 @@ Some currently deployed routes may still implement older Reading Plans behavior.
 **Test:** Attempt a list edit or CBL adoption that would create a prerequisite cycle.
 
 **Expected:** The write fails closed with a clear message before any change is committed; Roll and Queue remain usable. Source: P0 #4759.
+
+## MQA-PLAN-SYNC: Open plan detail follows a thread rename from another tab
+
+**Test:** Open a plan detail and a thread detail in separate tabs. Rename the thread in the thread tab, then switch back to the plan tab without reloading.
+
+**Expected:** The plan detail shows the new series title as soon as the tab regains focus, with no reload. Source: #5486 (part of #5264); related MQA-QUEUE-010.
