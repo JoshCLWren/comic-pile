@@ -8432,14 +8432,18 @@
         "type": "object"
       },
       "MigrateToIssuesRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
+        "description": "Schema for migrating thread to issue tracking.",
         "properties": {
           "last_issue_read": {
-            "format": "int32",
+            "description": "The issue number user just finished reading (e.g., 15)",
+            "minimum": 0.0,
+            "title": "Last Issue Read",
             "type": "integer"
           },
           "total_issues": {
-            "format": "int32",
+            "description": "Total number of issues in the series (e.g., 25)",
+            "minimum": 1.0,
+            "title": "Total Issues",
             "type": "integer"
           }
         },
@@ -8447,18 +8451,24 @@
           "last_issue_read",
           "total_issues"
         ],
+        "title": "MigrateToIssuesRequest",
         "type": "object"
       },
       "MigrateToIssuesSimpleRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
+        "description": "Schema for simplified migration (infers total_issues from current state).",
         "properties": {
           "issue_number": {
+            "description": "The issue number user just read (e.g., '5', 'Annual 1')",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Issue Number",
             "type": "string"
           }
         },
         "required": [
           "issue_number"
         ],
+        "title": "MigrateToIssuesSimpleRequest",
         "type": "object"
       },
       "MinimalReleaseResponse": {
@@ -8636,6 +8646,36 @@
         ],
         "type": "object"
       },
+      "NativeMigrateToIssuesRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
+        "properties": {
+          "last_issue_read": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_issue_read",
+          "total_issues"
+        ],
+        "type": "object"
+      },
+      "NativeMigrateToIssuesSimpleRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "type": "object"
+      },
       "NativeQueueSeriesMetadata": {
         "description": "Confirmed provider series metadata for one queue row.",
         "properties": {
@@ -8793,6 +8833,88 @@
         },
         "required": [
           "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "NativeSetCurrentIssueRequest": {
+        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
+        "properties": {
+          "issue_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativeSetCurrentIssueResponse": {
+        "description": "Python `SetCurrentIssueResponse`.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position"
         ],
         "type": "object"
       },
@@ -14565,76 +14687,110 @@
         "type": "object"
       },
       "SetCurrentIssueRequest": {
-        "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
+        "additionalProperties": false,
+        "description": "Schema for atomically correcting the current issue in an active thread.",
         "properties": {
           "issue_number": {
+            "description": "Target issue number to set as current",
+            "minLength": 1,
+            "title": "Issue Number",
             "type": "string"
           }
         },
         "required": [
           "issue_number"
         ],
+        "title": "SetCurrentIssueRequest",
         "type": "object"
       },
       "SetCurrentIssueResponse": {
-        "description": "Python `SetCurrentIssueResponse`.",
+        "description": "Response after atomically correcting the current issue.",
         "properties": {
           "format": {
+            "title": "Format",
             "type": "string"
           },
           "issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
           },
           "issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
           },
           "issues_remaining": {
-            "format": "int32",
+            "title": "Issues Remaining",
             "type": "integer"
           },
           "next_issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Id"
           },
           "next_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Issue Number"
           },
           "queue_position": {
-            "format": "int32",
+            "title": "Queue Position",
             "type": "integer"
           },
           "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading Progress"
           },
           "thread_id": {
-            "format": "int32",
+            "title": "Thread Id",
             "type": "integer"
           },
           "title": {
+            "title": "Title",
             "type": "string"
           },
           "total_issues": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Issues"
           }
         },
         "required": [
@@ -14644,6 +14800,7 @@
           "issues_remaining",
           "queue_position"
         ],
+        "title": "SetCurrentIssueResponse",
         "type": "object"
       },
       "SourceSyncFailure": {
@@ -24534,7 +24691,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesRequest"
               }
             }
           },
@@ -24597,7 +24754,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MigrateToIssuesSimpleRequest"
+                "$ref": "#/components/schemas/NativeMigrateToIssuesSimpleRequest"
               }
             }
           },
@@ -24660,7 +24817,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetCurrentIssueRequest"
+                "$ref": "#/components/schemas/NativeSetCurrentIssueRequest"
               }
             }
           },
@@ -24671,7 +24828,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetCurrentIssueResponse"
+                  "$ref": "#/components/schemas/NativeSetCurrentIssueResponse"
                 }
               }
             },
