@@ -16,6 +16,8 @@ test('audit ingress preserves production method/path routing and native priority
   assert(nginx.indexOf('auth/login') < nginx.indexOf('/restore'));
   assert.match(nginx, /proxy_pass \$audit_api_upstream;/);
   assert.match(nginx, /add_header X-ComicPile-API-Runtime \$audit_api_runtime always;/);
+  assert.match(nginx, /location = \/health/);
+  assert.match(nginx, /root \/usr\/share\/nginx\/html;/);
 });
 
 test('stale pre-regeneration Python exceptions are audited as Rust', () => {

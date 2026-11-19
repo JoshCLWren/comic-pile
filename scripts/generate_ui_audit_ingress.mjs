@@ -73,11 +73,14 @@ server {
         proxy_set_header Host $host;
         add_header X-ComicPile-API-Runtime $audit_api_runtime always;
     }
-    location / {
-        proxy_pass http://127.0.0.1:8010;
+    location = /health {
+        proxy_pass http://127.0.0.1:8010/health;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
     }
 }
 `;

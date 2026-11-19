@@ -72,6 +72,7 @@ services:
     network_mode: "service:api-test"
     volumes:
       - "${UI_AUDIT_INGRESS_CONF:?Run scripts/run_ui_audit.sh to generate ingress}:/etc/nginx/conf.d/default.conf:ro"
+      - ./static/react:/usr/share/nginx/html:ro
     depends_on:
       - native-roll-test
 
