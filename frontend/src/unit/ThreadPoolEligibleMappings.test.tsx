@@ -17,6 +17,27 @@ const baseProps = {
 }
 
 describe('ThreadPool eligible mappings', () => {
+  it('shows the shared representative series cover in the snoozed shelf', () => {
+    const onUnsnooze = vi.fn()
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[]}
+          snoozedThreads={[{ id: 8, title: 'B.P.R.D.', format: 'Comic' }]}
+          snoozedCovers={{ 8: 'https://example.test/bprd.jpg' }}
+          snoozedExpanded
+          onUnsnooze={onUnsnooze}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('img', { name: 'Cover for B.P.R.D.' })).toHaveAttribute(
+      'src', 'https://example.test/bprd.jpg',
+    )
+    screen.getByRole('button', { name: 'Unsnooze this comic' }).click()
+    expect(onUnsnooze).toHaveBeenCalledWith(8)
+  })
+
   it('labels each die face with the authoritative issue identity', () => {
     render(
       <MemoryRouter>
