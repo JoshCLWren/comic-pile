@@ -39,8 +39,6 @@ use utoipa::OpenApi;
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::list_documentation,
     crate::taste_discoveries::dismiss_documentation,
-    crate::creators::list_creators_documentation,
-    crate::creators::get_summaries_documentation,
 ))]
 struct SamePathApi;
 
@@ -179,6 +177,14 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn __regenerate_contract_tmp() {
+        let generated = same_path_openapi()
+            .to_pretty_json()
+            .expect("serializable contract");
+        std::fs::write("../../contracts/same-path-runtime.openapi.json", generated).expect("write");
     }
 
     /// The thread dependency operations moved to native Rust but their browser
