@@ -175,20 +175,6 @@
     {
       "bucket": "v1_operations",
       "exclude_from_inventory": true,
-      "method": "POST",
-      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
-      "runtime": "python-fastapi",
-      "status": "transitional",
-      "owning_issue": null,
-      "consumers": [
-        "frontend/src/services/api-reading-orders.ts"
-      ]
-    },
-    {
-      "bucket": "v1_operations",
-      "exclude_from_inventory": true,
       "method": "GET",
       "path": "/api/v1/continuity-plans/{plan_id}/release-sources/",
       "dest": "/api/native_roll.rs",

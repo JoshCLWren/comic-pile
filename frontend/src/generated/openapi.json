@@ -10968,6 +10968,352 @@
         ],
         "type": "object"
       },
+      "NativeReadingGraphBlocker": {
+        "properties": {
+          "explanation": {
+            "type": "string"
+          },
+          "gate_issue_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "waiting_on_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "waiting_on_issue_ids",
+          "explanation"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphChoiceEffect": {
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphSeriesNode"
+            },
+            "type": "array"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "choice",
+          "label",
+          "detail",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "series"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphCycleError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphIssueReference": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphBlocker"
+            },
+            "type": "array"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphOverlap": {
+        "properties": {
+          "blocked_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphChoiceEffect"
+            },
+            "type": "array"
+          },
+          "continuing_series": {
+            "$ref": "#/components/schemas/NativeReadingGraphSeriesReference"
+          },
+          "overlap_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "selected_choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_series": {
+            "$ref": "#/components/schemas/NativeReadingGraphSeriesReference"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "continuing_series",
+          "waiting_series",
+          "question",
+          "blocked_issue_ids",
+          "choices"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphOverlapChoice": {
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "overlap_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "choice"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphPreview": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "cycle_errors": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphCycleError"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphIssueReference"
+            },
+            "type": "array"
+          },
+          "overlaps": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphOverlap"
+            },
+            "type": "array"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphSeriesNode"
+            },
+            "type": "array"
+          },
+          "source_list_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "series",
+          "overlaps",
+          "issues",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "cycle_errors"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphPreviewRequest": {
+        "properties": {
+          "included_positions": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "overlap_choices": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphOverlapChoice"
+            },
+            "type": "array"
+          },
+          "target_list_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NativeReadingGraphSeriesNode": {
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "rollable_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "unread_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waits_for_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "year": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "state",
+          "unread_count",
+          "rollable_count",
+          "waiting_count",
+          "waits_for_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphSeriesReference": {
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "year": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name"
+        ],
+        "type": "object"
+      },
       "NativeReadingListEntryIntent": {
         "properties": {
           "gate": {
@@ -11305,6 +11651,140 @@
           "total_items",
           "completed_items",
           "items"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewCounts": {
+        "properties": {
+          "already_confirmed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded_special": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "needs_review_ambiguous": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "needs_review_conflict": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "safe_exact_match": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unresolved": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "already_confirmed",
+          "safe_exact_match",
+          "needs_review_ambiguous",
+          "needs_review_conflict",
+          "unresolved",
+          "excluded_special"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewRequest": {
+        "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
+        "properties": {
+          "origin_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_series_external_id": {
+            "type": "string"
+          },
+          "scope_mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin_issue_id",
+          "provider",
+          "provider_series_external_id"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/NativeSeriesMappingPreviewCounts"
+          },
+          "expires_at": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issued_at": {
+            "format": "double",
+            "type": "number"
+          },
+          "preview_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_series": {},
+          "rows": {
+            "items": {},
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NativeSeriesMappingPreviewScope"
+          }
+        },
+        "required": [
+          "scope",
+          "counts",
+          "rows",
+          "issued_at"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewScope": {
+        "properties": {
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "scope_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "origin_issue_id"
         ],
         "type": "object"
       },
@@ -21040,13 +21520,12 @@
     },
     "/api/v1/catalog/series-mappings/preview": {
       "post": {
-        "description": "Preview a series mapping with safe scoping and classification.\n\nThis endpoint provides a read-only preview of what issues would be mapped\nto a selected ComicVine series, with safe scoping rules and classification\nof each issue mapping status.\n\nArgs:\n    request: Preview request with origin issue, provider, and series ID.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    Preview response with scope information, counts, and classified rows.",
         "operationId": "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewRequest"
               }
             }
           },
@@ -21057,21 +21536,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
+                  "$ref": "#/components/schemas/NativeSeriesMappingPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Read-only series mapping preview"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -21079,10 +21554,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Series Mapping",
         "tags": [
-          "catalog",
-          "catalog"
+          "crate::catalog_series_mapping_preview"
         ]
       }
     },
@@ -22444,15 +22917,15 @@
     },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
       "post": {
-        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
         "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
         "parameters": [
           {
+            "description": "Continuity plan id",
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -22461,7 +22934,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/NativeReadingOrderProjectionRequest"
               }
             }
           },
@@ -22472,21 +22945,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                  "$ref": "#/components/schemas/NativeReadingOrderProjectionPreview"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Deterministic projection preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -22494,11 +22969,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Plan Projection",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-orders"
+          "crate::continuity_plans_project_preview"
         ]
       }
     },
@@ -24439,15 +24911,15 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "operationId": "cbl_adoption_preview_documentation",
+        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
         "parameters": [
           {
-            "description": "CBL source list identifier",
+            "description": "CBL source list id",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -24461,23 +24933,16 @@
                 }
               }
             },
-            "description": "Adoption preview for the active CBL list"
+            "description": "Read-only adoption preview"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "CBL source list not found or not active"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            },
-            "description": "Path failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -24485,23 +24950,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
         "tags": [
-          "issue-identity"
+          "crate::issue_identity_adoption_preview"
         ]
       }
     },
     "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
       "post": {
-        "description": "Preview the prospective reading graph for a CBL selection (read-only).\n\nThe graph comes from the same Option E evaluator and cycle validator that\nexecute the reader's saved lists. It never writes list membership, issue\nstatus, or an overlap decision.\n\nArgs:\n    list_id: Shared CBL source list being adopted or updated.\n    payload: Included source positions, prior answers, and optional list\n        to preview as updated instead of newly added.\n    current_user: Authenticated reader whose existing lists are included.\n    db: Async database session for the request.\n\nReturns:\n    Prospective series nodes, overlap questions with both choice effects,\n    the issue directory with active blockers, and any cycle rejection.",
         "operationId": "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
         "parameters": [
           {
+            "description": "CBL source list id",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -24510,7 +24974,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+                "$ref": "#/components/schemas/NativeReadingGraphPreviewRequest"
               }
             }
           },
@@ -24521,21 +24985,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingGraphPreview"
+                  "$ref": "#/components/schemas/NativeReadingGraphPreview"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Read-only graph preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
           }
         },
         "security": [
@@ -24543,11 +25006,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Cbl Reading Graph",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "issue-identity"
+          "crate::issue_identity_cbl_reading_graph_preview"
         ]
       }
     },

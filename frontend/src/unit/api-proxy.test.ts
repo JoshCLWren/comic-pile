@@ -43,7 +43,6 @@ describe('development API routing', () => {
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
     expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
-    expect(resolve('POST', '/api/v1/catalog/series-mappings/preview')).toBe('python')
     expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('native')
     expect(resolve('GET', '/api/not-a-route')).toBe('native')
     const ordered = createApiDestinationResolver([
@@ -76,8 +75,15 @@ describe('development API routing', () => {
     const gateway = createHttpServer(vite.middlewares)
     try {
       const base = await listen(gateway)
+      // One native route and one still-Python route. The series-mappings
+      // preview POST is native after #4842, and threads/check-duplicates was
+      // migrated on main, so use a route that is still a Python exception.
+      // Guard it explicitly so a future migration fails with a clear cause
+      // instead of a confusing proxy assertion.
+      const pythonPath = '/api/v1/reading-order-groups/'
+      expect(resolve('POST', pythonPath)).toBe('python')
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
-        const path = index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'
+        const path = index % 2 === 0 ? '/api/v2/auth/login' : pythonPath
         const response = await fetch(`${base}${path}?request=${index}`, {
           method: 'POST', body: JSON.stringify({ request: index }),
           headers: { 'Content-Type': 'application/json' },
@@ -88,7 +94,7 @@ describe('development API routing', () => {
         expect(result).toEqual({
           runtime: index % 2 === 0 ? 'native' : 'python',
           method: 'POST',
-          url: `${index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'}?request=${index}`,
+          url: `${index % 2 === 0 ? '/api/v2/auth/login' : pythonPath}?request=${index}`,
           body: JSON.stringify({ request: index }),
         })
       })

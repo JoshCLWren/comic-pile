@@ -1498,7 +1498,7 @@ fn cbl_series_group_id(entry: &serde_json::Map<String, JsonValue>) -> String {
 }
 
 // Minimal SHA-256 implementation for deterministic series_group_id parity with Python.
-fn sha256_hex(data: &[u8]) -> String {
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
     // Use a tiny pure-rust sha256 implementation inline to avoid new deps.
     // Constants
     const K: [u32; 64] = [
@@ -1582,18 +1582,18 @@ fn sha256_hex(data: &[u8]) -> String {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct CblListMeta {
-    id: i32,
+pub(crate) struct CblListMeta {
+    pub(crate) id: i32,
     source_repository: String,
     source_path: String,
-    content_hash: String,
-    revision_sha: String,
-    name: String,
+    pub(crate) content_hash: String,
+    pub(crate) revision_sha: String,
+    pub(crate) name: String,
     declared_issue_count: Option<i32>,
 }
 
-async fn load_active_cbl_list_meta(
-    pool: &deadpool_postgres::Object,
+pub(crate) async fn load_active_cbl_list_meta<E: DbExec>(
+    pool: &E,
     list_id: i32,
 ) -> Result<CblListMeta, ApiError> {
     let row = pool
@@ -1645,16 +1645,33 @@ pub async fn cbl_adoption_plan(
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
-    let pool = checkout(&state).await?;
-    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
-    // Build reconciliation entries (faithful port of core fields used by adoption plan).
-    let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
-    let planned = calculate_adoption_plan_entries(
-        &report_entries,
+    adoption_preview_for(
+        &state,
+        auth.id(),
+        list_id,
         &request.series_decisions,
         &request.entry_decisions,
-    );
-    Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
+    )
+    .await
+    .map(Json)
+}
+
+/// Shared read-only reconcile + adoption-plan calculation. Used by
+/// `POST .../adoption-plan` (explicit decisions) and
+/// `GET .../adoption-preview` (no decisions, Python `preview_cbl_adoption`).
+pub(crate) async fn adoption_preview_for(
+    state: &Arc<AppState>,
+    user_id: i32,
+    list_id: i32,
+    series_decisions: &HashMap<String, bool>,
+    entry_decisions: &HashMap<String, bool>,
+) -> Result<CblAdoptionPreviewResponse, IdentityError> {
+    let pool = checkout(state).await?;
+    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
+    let report_entries = reconcile_entries_for_adoption(&pool, user_id, &list_meta).await?;
+    let planned =
+        calculate_adoption_plan_entries(&report_entries, series_decisions, entry_decisions);
+    Ok(build_adoption_preview_response(&list_meta, &planned))
 }
 
 fn build_adoption_preview_response(
@@ -2001,7 +2018,7 @@ fn add_metadata_volumes(
     }
 }
 
-trait DbExec {
+pub(crate) trait DbExec {
     async fn run_query(
         &self,
         sql: &str,
@@ -2904,7 +2921,7 @@ async fn do_cbl_adoption_commit(
     Ok((status, resp))
 }
 
-async fn reconcile_entries_for_adoption<E: DbExec>(
+pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
     tx: &E,
     user_id: i32,
     list_meta: &CblListMeta,
