@@ -240,6 +240,7 @@ async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
         ("POST", "/api/v1/threads/1/issues"),
+        ("GET", "/api/v1/threads/1/issues/creators"),
         ("POST", "/api/v1/threads/1/issues:reorder"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
@@ -260,22 +261,6 @@ async fn every_operation_requires_authentication() {
             "{method} {path} -> {status}"
         );
     }
-
-    // Creators endpoint is not mounted on the public Rust router (vercel routes to
-    // Python), but the retained handler must still require authentication.
-    let (status, _) = send_router(
-        creators_test_router(&state),
-        Request::builder()
-            .method("GET")
-            .uri("/api/v1/threads/1/issues/creators")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    assert!(
-        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
-        "GET /api/v1/threads/1/issues/creators -> {status}"
-    );
 }
 
 #[tokio::test]
