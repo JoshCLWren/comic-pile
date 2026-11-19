@@ -121,7 +121,7 @@ export default function ExcludedThreadsSection({
                 onClick={() => onRestoreGroup(group.id)}
                 disabled={isRestoring}
                 aria-label={`Restore all series removed with ${group.source_name}`}
-                className="px-3 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                className="px-3 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
               >
                 Restore All to Queue
               </button>
@@ -141,7 +141,7 @@ export default function ExcludedThreadsSection({
                       onClick={() => onRestore(thread.id)}
                       disabled={isRestoring}
                       aria-label={`Restore ${thread.title} to queue`}
-                      className="px-3 py-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                      className="px-3 py-1.5 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                     >
                       Restore
                     </button>
@@ -175,7 +175,7 @@ export default function ExcludedThreadsSection({
                       onClick={() => onRestore(thread.id)}
                       disabled={isRestoring}
                       aria-label={`Restore ${thread.title} to queue`}
-                      className="px-3 py-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                      className="px-3 py-1.5 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                     >
                       Restore to Queue
                     </button>

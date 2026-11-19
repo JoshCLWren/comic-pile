@@ -67,6 +67,19 @@ pub struct BulkQueueRestoreResponse {
     pub restored_thread_ids: Vec<i32>,
 }
 
+/// Scoped excluded-status check for a set of threads.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ExcludedStatusCheckRequest {
+    pub thread_ids: Vec<i32>,
+}
+
+/// Scoped excluded-status check response.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ExcludedStatusCheckResponse {
+    /// Requested thread IDs currently excluded for the reader.
+    pub excluded_thread_ids: Vec<i32>,
+}
+
 fn bad_request(detail: &str) -> ApiError {
     ApiError::BadRequest(detail.to_string())
 }
@@ -364,6 +377,40 @@ pub async fn bulk_restore(
     let restored_thread_ids = restore_ids(&state, user.id(), request.thread_ids).await?;
     Ok(Json(BulkQueueRestoreResponse {
         restored_thread_ids,
+    }))
+}
+
+/// `POST /api/v2/queue-exclusions/status:check` — scoped excluded-status lookup.
+///
+/// Returns which of the requested thread IDs are currently excluded for the
+/// reader. Read-only and owner-scoped; used by container bulk actions instead of
+/// scanning the excluded library.
+pub async fn check_excluded_status(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<ExcludedStatusCheckRequest>,
+) -> Result<Json<ExcludedStatusCheckResponse>, ApiError> {
+    validate_thread_id_count(request.thread_ids.len())?;
+    let thread_ids = normalize_thread_ids(request.thread_ids);
+    if thread_ids.is_empty() {
+        return Err(bad_request(
+            "thread_ids must contain at least one positive id",
+        ));
+    }
+
+    let connection = db::checkout(&state).await?;
+    let rows = connection
+        .query(
+            "SELECT id FROM threads \
+             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'excluded' \
+             ORDER BY id",
+            &[&user.id(), &thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let excluded_thread_ids = rows.iter().map(|row| row.get(0)).collect();
+    Ok(Json(ExcludedStatusCheckResponse {
+        excluded_thread_ids,
     }))
 }
 

@@ -23,6 +23,13 @@
     {
       "bucket": "operations",
       "method": "POST",
+      "path": "/api/v2/queue-exclusions/status:check",
+      "dest": "/api/native_roll.rs",
+      "src": "/api/v2/queue-exclusions/status:check"
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
       "path": "/api/v2/queue-exclusions/restore",
       "dest": "/api/native_roll.rs",
       "src": "/api/v2/queue-exclusions/restore"

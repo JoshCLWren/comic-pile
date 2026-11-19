@@ -356,6 +356,9 @@ export async function invalidateAfterQueueMovement(
     // that changes membership. Reset it the same way the Queue list resets:
     // a cached page still lists a series on the wrong side of the boundary.
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    // Container-level bulk actions derive removable/restorable members from a
+    // scoped excluded-member-status query; refresh it with the boundary change.
+    client.invalidateQueries({ queryKey: ['excluded', 'member-status'] }),
   ])
 }
 

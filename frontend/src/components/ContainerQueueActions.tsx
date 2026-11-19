@@ -25,7 +25,7 @@ interface ContainerQueueActionsProps {
   memberThreads: MemberThread[]
 }
 
-const EXCLUDED_MEMBERSHIP_PAGE_SIZE = 50
+const BULK_MUTATION_CHUNK_SIZE = 1000
 
 function uniqueMembers(memberThreads: MemberThread[]): MemberThread[] {
   const byId = new Map<number, MemberThread>()
@@ -33,6 +33,14 @@ function uniqueMembers(memberThreads: MemberThread[]): MemberThread[] {
     if (thread.id > 0 && !byId.has(thread.id)) byId.set(thread.id, thread)
   }
   return Array.from(byId.values())
+}
+
+function chunkIds(ids: number[], size = BULK_MUTATION_CHUNK_SIZE): number[][] {
+  const chunks: number[][] = []
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size))
+  }
+  return chunks
 }
 
 export default function ContainerQueueActions({
@@ -50,23 +58,12 @@ export default function ContainerQueueActions({
   const members = useMemo(() => uniqueMembers(memberThreads), [memberThreads])
   const memberIds = useMemo(() => members.map((thread) => thread.id), [members])
 
-  // Resolve excluded status for every container member by paging through the
-  // excluded library (not just the first page).
+  // Resolve excluded status for every container member with a scoped lookup.
   const excludedMemberIdsQuery = useQuery({
     queryKey: queryKeys.excluded.memberStatus(memberIds),
     queryFn: async () => {
-      const memberSet = new Set(memberIds)
-      const found = new Set<number>()
-      let pageToken: string | null = null
-      do {
-        const page = await threadsApi.listExcluded(undefined, 'created', pageToken, EXCLUDED_MEMBERSHIP_PAGE_SIZE)
-        for (const thread of page.threads) {
-          if (memberSet.has(thread.id)) found.add(thread.id)
-        }
-        if (found.size === memberSet.size) break
-        pageToken = page.next_page_token ?? null
-      } while (pageToken)
-      return Array.from(found)
+      const result = await threadsApi.checkExcludedStatus(memberIds)
+      return result.excluded_thread_ids
     },
     enabled: memberIds.length > 0,
     staleTime: 30_000,
@@ -110,6 +107,7 @@ export default function ContainerQueueActions({
     enabled: removeOpen && memberIds.length > 0,
     staleTime: 30_000,
     retry: 1,
+    retryDelay: 0,
   })
 
   const {
@@ -141,11 +139,14 @@ export default function ContainerQueueActions({
   const overlapChecksErrored = removeOpen && memberIds.length > 0 && !overlapChecksPending && overlapChecksError
 
   const removeMutation = useMutation({
-    mutationFn: async (threadIds: number[]) =>
-      threadsApi.bulkExclude({
-        thread_ids: threadIds,
-        source: { kind: sourceKind, id: sourceId, name: sourceName },
-      }),
+    mutationFn: async (threadIds: number[]) => {
+      for (const chunk of chunkIds(threadIds)) {
+        await threadsApi.bulkExclude({
+          thread_ids: chunk,
+          source: { kind: sourceKind, id: sourceId, name: sourceName },
+        })
+      }
+    },
     onSuccess: async () => {
       await invalidateAfterQueueMutation(queryClient)
       setRemoveOpen(false)
@@ -158,7 +159,11 @@ export default function ContainerQueueActions({
   })
 
   const restoreMutation = useMutation({
-    mutationFn: async (threadIds: number[]) => threadsApi.bulkRestore(threadIds),
+    mutationFn: async (threadIds: number[]) => {
+      for (const chunk of chunkIds(threadIds)) {
+        await threadsApi.bulkRestore(chunk)
+      }
+    },
     onSuccess: async () => {
       await invalidateAfterQueueMutation(queryClient)
       setRestoreOpen(false)

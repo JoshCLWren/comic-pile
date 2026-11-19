@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest'
 
 import type { components } from '../generated/openapi'
-import type { Thread, ThreadListItem, ThreadListResponse } from '../types'
+import type { Thread, ThreadListItem, ThreadListResponse, ThreadQueueExclusionGroup } from '../types'
 
 type ThreadDetail = components['schemas']['ThreadResponse']
 type QueueThreadListItem = components['schemas']['QueueThreadListItem']
@@ -19,8 +19,10 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
     expectTypeOf<
       Omit<ThreadListItem, 'queue_exclusion_group' | 'series_cover_image_url'>
     >().toEqualTypeOf<QueueThreadListItem>()
-    expectTypeOf<ThreadListItem>().toHaveProperty('queue_exclusion_group')
-    expectTypeOf<ThreadListItem>().toHaveProperty('series_cover_image_url')
+    expectTypeOf<ThreadListItem['series_cover_image_url']>().toEqualTypeOf<string | null | undefined>()
+    expectTypeOf<ThreadListItem['queue_exclusion_group']>().toEqualTypeOf<
+      ThreadQueueExclusionGroup | null | undefined
+    >()
   })
 
   it('exports the paginated queue thread list response from OpenAPI', () => {

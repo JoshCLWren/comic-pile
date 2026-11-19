@@ -757,6 +757,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(queue_exclusions::bulk_exclude),
         )
         .route(
+            "/api/v2/queue-exclusions/status:check",
+            post(queue_exclusions::check_excluded_status),
+        )
+        .route(
             "/api/v2/queue-exclusions/restore",
             post(queue_exclusions::bulk_restore),
         )

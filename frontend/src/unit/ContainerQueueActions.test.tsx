@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ContainerQueueActions from '../components/ContainerQueueActions'
 
 const mocks = vi.hoisted(() => ({
-  listExcluded: vi.fn(),
+  checkExcludedStatus: vi.fn(),
   bulkExclude: vi.fn(),
   bulkRestore: vi.fn(),
   checkThreadMemberships: vi.fn(),
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
-    listExcluded: mocks.listExcluded,
+    checkExcludedStatus: mocks.checkExcludedStatus,
     bulkExclude: mocks.bulkExclude,
     bulkRestore: mocks.bulkRestore,
   },
@@ -62,7 +62,7 @@ function renderActions(props?: Partial<Parameters<typeof ContainerQueueActions>[
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.listExcluded.mockResolvedValue({ threads: [{ id: 3 }], next_page_token: null })
+  mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [3] })
   mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [2] })
   mocks.useCrossoverGroups.mockReturnValue({ groupsByThreadId: {}, isPending: false, error: null })
   mocks.bulkExclude.mockResolvedValue({ group: { id: 11 }, excluded_thread_ids: [1] })
@@ -89,7 +89,7 @@ describe('ContainerQueueActions', () => {
     const user = userEvent.setup()
     renderActions()
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalledWith([1, 2, 3]))
     await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
 
     expect(await screen.findByText(/Checking for series in other active lists/)).toBeInTheDocument()
@@ -146,7 +146,7 @@ describe('ContainerQueueActions', () => {
     const user = userEvent.setup()
     renderActions()
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalledWith([1, 2, 3]))
     await user.click(await screen.findByRole('button', { name: 'Restore all to Queue' }))
     await user.click(screen.getByRole('button', { name: 'Restore to Queue' }))
 
@@ -156,15 +156,15 @@ describe('ContainerQueueActions', () => {
   })
 
   it('shows member-status error and retries excluded lookup', async () => {
-    mocks.listExcluded.mockRejectedValueOnce(new Error('nope'))
-    mocks.listExcluded.mockResolvedValueOnce({ threads: [{ id: 3 }], next_page_token: null })
+    mocks.checkExcludedStatus.mockRejectedValueOnce(new Error('nope'))
+    mocks.checkExcludedStatus.mockResolvedValueOnce({ excluded_thread_ids: [3] })
     const user = userEvent.setup()
     renderActions()
 
     expect(await screen.findByText(/Could not determine which series are currently in the Queue/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.queryByText(/Could not determine which series are currently in the Queue/)).not.toBeInTheDocument())
   })
 
@@ -174,7 +174,7 @@ describe('ContainerQueueActions', () => {
     const user = userEvent.setup()
     renderActions()
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalled())
     await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
     const removeConfirm = await screen.findByRole('button', { name: 'Remove from Queue' })
     await waitFor(() => expect(removeConfirm).not.toBeDisabled())
@@ -190,18 +190,18 @@ describe('ContainerQueueActions', () => {
   })
 
   it('shows empty remove/restore states when all members are already in the opposite state', async () => {
-    mocks.listExcluded.mockResolvedValue({ threads: [{ id: 1 }, { id: 2 }], next_page_token: null })
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [1, 2] })
     const user = userEvent.setup()
     renderActions({ memberThreads: [{ id: 1, title: 'Alpha' }, { id: 2, title: 'Beta' }] })
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalledWith([1, 2]))
     expect(await screen.findByRole('button', { name: 'Remove all series from Queue' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Restore all to Queue' }))
     expect(await screen.findByText(/Restore every excluded series from this collection/)).toBeInTheDocument()
   })
 
   it('supports reading plan sources and crossover overlap keep toggles', async () => {
-    mocks.listExcluded.mockResolvedValue({ threads: [], next_page_token: null })
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
     mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
     mocks.useCrossoverGroups.mockReturnValue({
       groupsByThreadId: { 2: [{ id: 99, name: 'Other' }] },
@@ -211,7 +211,7 @@ describe('ContainerQueueActions', () => {
     const user = userEvent.setup()
     renderActions({ sourceKind: 'reading_plan', sourceId: 5, sourceName: 'Plan X' })
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalled())
     await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
     const removeConfirm = await screen.findByRole('button', { name: 'Remove from Queue' })
     await waitFor(() => expect(removeConfirm).not.toBeDisabled())
@@ -229,7 +229,7 @@ describe('ContainerQueueActions', () => {
   })
 
   it('does not treat the current crossover group as an external overlap', async () => {
-    mocks.listExcluded.mockResolvedValue({ threads: [], next_page_token: null })
+    mocks.checkExcludedStatus.mockResolvedValue({ excluded_thread_ids: [] })
     mocks.checkThreadMemberships.mockResolvedValue({ thread_ids: [] })
     mocks.useCrossoverGroups.mockReturnValue({
       groupsByThreadId: { 1: [{ id: 7, name: 'Same crossover' }] },
@@ -239,7 +239,7 @@ describe('ContainerQueueActions', () => {
     const user = userEvent.setup()
     renderActions({ sourceKind: 'crossover', sourceId: 7, sourceName: 'Same crossover' })
 
-    await waitFor(() => expect(mocks.listExcluded).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.checkExcludedStatus).toHaveBeenCalled())
     await user.click(await screen.findByRole('button', { name: 'Remove all series from Queue' }))
     const removeConfirm = await screen.findByRole('button', { name: 'Remove from Queue' })
     await waitFor(() => expect(removeConfirm).not.toBeDisabled())
@@ -254,7 +254,7 @@ describe('ContainerQueueActions', () => {
   })
 
   it('disables queue actions while member status is loading', () => {
-    mocks.listExcluded.mockReturnValue(new Promise(() => {}))
+    mocks.checkExcludedStatus.mockReturnValue(new Promise(() => {}))
     renderActions()
     expect(screen.getByRole('button', { name: 'Remove all series from Queue' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Restore all to Queue' })).toBeDisabled()

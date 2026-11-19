@@ -14,11 +14,15 @@ export default function CrossoverDetailPage() {
   const memberThreads = useMemo(() => {
     const byId = new Map<number, { id: number; title: string }>()
     for (const member of members) {
-      const threadId = member.membership.thread_id
+      const threadId =
+        member.membership.thread_id ??
+        member.thread?.id ??
+        member.issue?.thread_id ??
+        null
       if (threadId == null || threadId <= 0 || byId.has(threadId)) continue
       byId.set(threadId, {
         id: threadId,
-        title: member.thread?.title ?? `Series ${threadId}`,
+        title: member.thread?.title ?? member.membership.series_title ?? `Series ${threadId}`,
       })
     }
     return Array.from(byId.values())
