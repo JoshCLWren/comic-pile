@@ -22968,6 +22968,7 @@
         "operationId": "taste_discoveries_list",
         "parameters": [
           {
+            "description": "Maximum discoveries to return.",
             "in": "query",
             "name": "limit",
             "required": false,

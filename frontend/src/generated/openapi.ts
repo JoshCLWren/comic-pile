@@ -13651,6 +13651,7 @@ export interface operations {
     taste_discoveries_list: {
         parameters: {
             query?: {
+                /** @description Maximum discoveries to return. */
                 limit?: number;
             };
             header?: never;
