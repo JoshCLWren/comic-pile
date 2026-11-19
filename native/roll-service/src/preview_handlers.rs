@@ -447,7 +447,10 @@ pub async fn preview_series_mapping(
     let Some(origin) = origin_row else {
         return Ok(Json(build_preview_response(
             origin_issue_id,
+            &payload.provider,
+            &payload.provider_series_external_id,
             None,
+            &payload.scope_mode,
             vec![],
             &state,
             auth.id(),
@@ -650,7 +653,10 @@ pub async fn preview_series_mapping(
 
     build_preview_response(
         origin_issue_id,
+        &payload.provider,
+        &payload.provider_series_external_id,
         Some(provider_series),
+        &payload.scope_mode,
         issues_with_mappings,
         &state,
         auth.id(),

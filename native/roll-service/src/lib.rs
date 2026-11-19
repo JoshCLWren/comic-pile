@@ -38,6 +38,7 @@ pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
+pub mod preview_handlers;
 pub mod queue;
 pub mod reader_context;
 pub mod reading_blocker_projection;
@@ -624,6 +625,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(preview_handlers::preview_series_mapping),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
@@ -1014,6 +1019,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_identity::cbl_adoption_plan),
         )
         .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(preview_handlers::preview_reading_graph),
+        )
+        .route(
             "/api/v1/cbl/{list_id}/adoption-commit",
             post(issue_identity::cbl_adoption_commit),
         )
@@ -1183,6 +1192,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project",
             post(continuity_plans::confirm_plan_projection),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(preview_handlers::preview_plan_projection),
         )
         .route(
             "/api/v1/continuity-plans/{plan_id}/release-sources/",
