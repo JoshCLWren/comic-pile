@@ -280,6 +280,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/offer", post(native_dispatch))
+        .route("/api/v2/roll/unsnooze", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
@@ -614,7 +615,6 @@ fn app() -> Router {
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators", get(native_dispatch))
-        .route("/api/v2/creators/", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
         .route("/api/v2/creators/discoveries", get(native_dispatch))
@@ -639,6 +639,29 @@ fn app() -> Router {
         .route(
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
+        )
+        .route("/api/v1/custom-cbls", get(native_dispatch))
+        .route("/api/v1/custom-cbls", post(native_dispatch))
+        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
         )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
@@ -1788,6 +1811,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn roll_unsnooze_is_served_from_rust_ingress_against_postgres() {
+        // Regression for #4589 review: the inner router had the route but this
+        // Vercel entry did not, so browsers got the ingress 404 fallback.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("unsnooze-ingress-{}", std::process::id());
+                let (access, csrf, user_id) = register_session(&username).await;
+                seed_threads(user_id, &[(21, 1)]).await;
+                let request = |token: Option<&str>| {
+                    let mut builder = Request::builder()
+                        .method("POST")
+                        .uri("/api/v2/roll/unsnooze")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::COOKIE, format!("csrf_token={csrf}"))
+                        .header("x-csrf-token", csrf.as_str());
+                    if let Some(token) = token {
+                        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+                    }
+                    builder
+                        .body(Body::from(serde_json::json!({"thread_id": 21}).to_string()))
+                        .expect("unsnooze request")
+                };
+                // Unauthenticated reaches the dispatched handler's 401.
+                let (status, _, _, text) = call_app(request(None)).await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+                // Authenticated requests must reach the handler, never the
+                // ingress 404 fallback. This ingress schema is deliberately
+                // partial, so the handler may 5xx here; the full behavior is
+                // covered against the canonical schema in the inner-router
+                // tests (thread_ordering_v1_http).
+                let (status, _, _, text) = call_app(request(Some(&access))).await;
+                assert_ne!(status, StatusCode::NOT_FOUND, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
     async fn cbl_sources_discover_is_served_from_rust_ingress_against_postgres() {
         // Regression for #5449: the bare `GET /api/v1/issue-identity/cbl-sources`
         // discover path must be registered in this Vercel entry and dispatched
@@ -2135,5 +2197,50 @@ mod tests {
                 );
             })
             .await;
+    }
+
+    #[tokio::test]
+    async fn custom_cbl_overlap_decisions_ingress_reaches_rust_dispatch() {
+        // Both overlap-decision path shapes must be registered in the Vercel
+        // native_roll ingress (not just the inner service) so production
+        // requests do not fall through to the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
     }
 }

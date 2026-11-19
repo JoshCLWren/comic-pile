@@ -34,6 +34,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
+pub mod option_e_setting;
 pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
@@ -126,6 +127,9 @@ pub struct AppState {
     /// fake that never opens a socket, so no test can reach the network
     /// (#5339). See [`outbound`].
     pub outbound: Arc<dyn outbound::OutboundHttp>,
+    /// Effective Option E setting (see [`option_e_setting`]); injectable so
+    /// tests choose it per state instead of mutating process environment.
+    pub option_e: bool,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -210,6 +214,7 @@ impl AppState {
             environment: config.environment,
             connection_recovery: true,
             outbound,
+            option_e: config.option_e,
         })
     }
 
@@ -717,6 +722,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
+        .route("/api/v2/roll/unsnooze", post(roll_offer::unsnooze))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
         .route(
             "/api/v2/reading-boundaries",
@@ -800,10 +806,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues",
             post(thread_issues::create_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(thread_issues::list_thread_issue_creators),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
@@ -1103,7 +1105,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
-        .route("/api/v2/creators/", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
             get(creators_v2::get_summaries),

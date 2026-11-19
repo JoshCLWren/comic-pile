@@ -1114,7 +1114,7 @@ pub async fn bootstrap_v2(
         &legacy_excluded,
         &candidates,
     )?;
-    let option_e = crate::threads::option_e_enabled();
+    let option_e = state.option_e;
     let eligible_candidate_ids = if option_e {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {

@@ -9,6 +9,8 @@
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
+    routing::get as route_get,
+    Router,
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::{json, Value};
@@ -36,6 +38,20 @@ async fn setup_user(
     i32,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
+    setup_user_with(prefix, false).await
+}
+
+/// `option_e` is injected into the state's config; nothing touches the process env.
+async fn setup_user_with(
+    prefix: &str,
+    option_e: bool,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(
         AppState::new(
@@ -43,6 +59,8 @@ async fn setup_user(
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
                 "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
                 "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+                "OPTION_E_ENABLED" if option_e => Some("true".into()),
+                "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
                 _ => None,
             })
             .unwrap(),
@@ -190,6 +208,25 @@ fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
     authed("GET", path, token, csrf, None)
 }
 
+async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn creators_test_router(state: &Arc<AppState>) -> Router {
+    Router::new()
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
+        )
+        .with_state(state.clone())
+}
+
 async fn plain_thread(
     conn: &Conn,
     user_id: i32,
@@ -224,7 +261,6 @@ async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
         ("POST", "/api/v1/threads/1/issues"),
-        ("GET", "/api/v1/threads/1/issues/creators"),
         ("POST", "/api/v1/threads/1/issues:reorder"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
@@ -245,6 +281,22 @@ async fn every_operation_requires_authentication() {
             "{method} {path} -> {status}"
         );
     }
+
+    // Creators endpoint is not mounted on the public Rust router (vercel routes to
+    // Python), but the retained handler must still require authentication.
+    let (status, _) = send_router(
+        creators_test_router(&state),
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/threads/1/issues/creators")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
+        "GET /api/v1/threads/1/issues/creators -> {status}"
+    );
 }
 
 #[tokio::test]
@@ -602,7 +654,8 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     .await
     .unwrap();
     let path = format!("/api/v1/threads/{thread}/issues/creators");
-    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    let router = creators_test_router(&state);
+    let (status, body) = send_router(router.clone(), get(&path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["thread_id"], thread);
     assert_eq!(body["issues"].as_array().unwrap().len(), 1);
@@ -614,17 +667,17 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
             {"creator_id": null, "name": "Anon", "roles": ["colorist"]}
         ])
     );
-    let (status, body) = send(&state, get(&path, &other_token, &other_csrf)).await;
+    let (status, body) = send_router(router.clone(), get(&path, &other_token, &other_csrf)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
-    let (status, _) = send(
-        &state,
+    let (status, _) = send_router(
+        router.clone(),
         get("/api/v1/threads/987654/issues/creators", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    let (status, body) = send(
-        &state,
+    let (status, body) = send_router(
+        router,
         get("/api/v1/threads/abc/issues/creators", &token, &csrf),
     )
     .await;
@@ -1028,39 +1081,6 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
     assert_eq!(still, Some(ids[1]));
 }
 
-/// Scoped Option E activation for one serialized test. The handler reads the
-/// activation switch per request, so the guard restores the environment even
-/// on failure. The caller must enable this only while holding the DB reset
-/// guard and declare it after that guard, so the variables drop in the safe
-/// order and no other test in this process observes the temporary value.
-struct OptionEEnv {
-    enabled: Option<std::ffi::OsString>,
-    approval: Option<std::ffi::OsString>,
-}
-
-impl OptionEEnv {
-    fn enable() -> Self {
-        let enabled = std::env::var_os("OPTION_E_ENABLED");
-        let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
-        std::env::set_var("OPTION_E_ENABLED", "true");
-        std::env::set_var("OPTION_E_APPROVED_PREVIEW", "thread-issues-http-test");
-        Self { enabled, approval }
-    }
-}
-
-impl Drop for OptionEEnv {
-    fn drop(&mut self) {
-        match self.enabled.take() {
-            Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
-            None => std::env::remove_var("OPTION_E_ENABLED"),
-        }
-        match self.approval.take() {
-            Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
-            None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
-        }
-    }
-}
-
 async fn pending_pair(conn: &Conn, user_id: i32) -> (Option<i32>, Option<i32>) {
     let row = conn
         .query_one(
@@ -1075,10 +1095,7 @@ async fn pending_pair(conn: &Conn, user_id: i32) -> (Option<i32>, Option<i32>) {
 
 #[tokio::test]
 async fn set_current_issue_option_e_exercises_manual_pick_and_rollback() {
-    let (state, token, csrf, user_id, _guard) = setup_user("tiss-opte").await;
-    // Enable only while the DB reset guard is held (dropped before it), so no
-    // other test in this process can observe the process-global switch.
-    let _env = OptionEEnv::enable();
+    let (state, token, csrf, user_id, _guard) = setup_user_with("tiss-opte", true).await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "OptE", 4, 1).await;
     let ids = seed_issues(&conn, thread, &["1", "2", "3", "4"], "unread").await;

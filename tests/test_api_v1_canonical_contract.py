@@ -12,7 +12,7 @@ acceptance criteria that the generated OpenAPI document:
 
 The check reads the committed generated schema rather than importing the
 application, so it stays in the lightweight schema-validation tier and matches
-exactly what the frontend client consumes. ``scripts/generate_openapi_types.py``
+exactly what the frontend client consumes. ``scripts/generate_openapi_types.mjs``
 keeps this artifact current in CI.
 """
 
@@ -96,7 +96,7 @@ def _load_schema() -> dict:
     raise FileNotFoundError(
         "Generated OpenAPI schema missing. Tried: "
         f"{[str(p) for p in tried]}. "
-        "Run `python scripts/generate_openapi_types.py`."
+        "Run `node scripts/generate_openapi_types.mjs`."
     )
 
 

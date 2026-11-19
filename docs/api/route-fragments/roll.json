@@ -5,7 +5,8 @@
     "^/api/roll/override$",
     "^/api/v1/roll/switch-prerequisite$",
     "^/api/v1/roll/events/[^/]+/recommendation-explanation$",
-    "^/api/roll/events/[^/]+/recommendation-explanation$"
+    "^/api/roll/events/[^/]+/recommendation-explanation$",
+    "^/api/v2/roll/unsnooze$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -60,6 +61,16 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/roll/switch\\-prerequisite$",
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/roll/unsnooze",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/unsnooze$",
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
     }
   ]
 }
