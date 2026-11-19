@@ -96,3 +96,11 @@
 **Expected:** The series with a confirmed cover shows the provider cover image at the start of its row, using the provider URL unchanged and reserving its frame before load (no layout shift). The later-issue series shows the first confirmed cover by issue position. The series without a confirmed cover shows the shared "No cover" placeholder, not a broken image or an empty gap. Covers never come from unconfirmed candidates.
 
 **Tracking:** Part of the V2 covers work [#5433](https://github.com/JoshCLWren/comic-pile/issues/5433). Other views (Thread detail, History, Sessions, plans, CBL browser, Identity inbox, Creators, Crossovers) are not covered by this scenario yet.
+
+## MQA-QUEUE-013: Delete series removes events and related rows atomically
+
+**Setup:** QA account with a queued series that has roll events (for example, after a manual roll pick and a remove/restore cycle) and appears in a reading order.
+
+**Test:** From the Queue row menu choose "Delete series" and confirm "Delete Series" in the "Permanently delete …?" dialog. Reload Queue and reopen the reading order.
+
+**Expected:** The series disappears from Queue with no foreign-key error banner. Its issues, reading history, ratings, events and reading-order entries are removed atomically in one transaction, a delete audit event is recorded, and unrelated series are untouched. Source: #5461, fixed by #5468 (renumbered from MQA-QUEUE-012 after main added the covers scenario with that ID).
