@@ -10522,12 +10522,6 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
-            /**
-             * @description Derived series cover: the exact provider CDN URL of the thread's next
-             *     unread confirmed issue, falling back to the first confirmed issue with a
-             *     cover. Null when the series has no confirmed issue cover.
-             */
-            series_cover_image_url?: string | null;
             series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
             status: string;
             tags: components["schemas"]["ThreadTag"][];
