@@ -34,14 +34,13 @@ import {
   describePredecessorChange,
 } from '../utils/readingListAuthoring'
 import {
-  DEFAULT_GATE,
-  DEFAULT_MODE,
-  ENTRY_PAGE_SIZE,
+  buildWritePayload,
   checkpointTargetsFor,
   draftEntry,
+  messageFor,
   normalizePositions,
   sameEntries,
-} from '../utils/customCBLBuilderModel'
+} from './customCBLBuilderHelpers'
 
 interface CustomCBLBuilderProps {
   planId?: number
@@ -51,41 +50,9 @@ interface CustomCBLBuilderProps {
   onPendingChange?: (pending: boolean) => void
 }
 
-function buildWritePayload(
-  name: string,
-  description: string,
-  mode: ReadingListMode,
-  entries: CustomCBLEntry[],
-  confirmed: ReadingListPredecessorChange[] | null,
-  checkpointTargets: Record<number, number[]> | null = null,
-): CustomCBLWrite {
-  const issueIds: number[] = []
-  const checkpointIds: number[] = []
-  const entryIntents: Record<number, ReadingListEntryIntent> = {}
-  for (const entry of entries) {
-    issueIds.push(entry.issue_id)
-    if (entry.is_checkpoint) checkpointIds.push(entry.issue_id)
-    entryIntents[entry.issue_id] = { gate: entry.gate, skipped: entry.skipped }
-  }
-  const payload: CustomCBLWrite = {
-    name: name.trim(),
-    description: description.trim() || null,
-    mode,
-    issue_ids: issueIds,
-    entry_intents: entryIntents,
-    checkpoint_issue_ids: checkpointIds,
-  }
-  if (confirmed) payload.confirmed_predecessor_changes = confirmed
-  if (checkpointTargets) payload.checkpoint_targets = checkpointTargets
-  return payload
-}
-
-function messageFor(error: unknown, fallback: string): string {
-  const detail = decodeCustomCBLError(error)
-  if (detail.message) return detail.message
-  if (error instanceof Error && error.message) return error.message
-  return fallback
-}
+const DEFAULT_MODE: ReadingListMode = 'loose'
+const DEFAULT_GATE: ReadingListGate = 'none'
+const ENTRY_PAGE_SIZE = 30
 
 /**
  * Raised when the owned list changed after the reader opened the replacement
