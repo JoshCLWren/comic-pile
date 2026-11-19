@@ -58,12 +58,26 @@ def test_collect_routes_unions_methods_on_the_same_path() -> None:
     assert _collect_routes(app)["/api/v1/threads/"] == frozenset({"GET", "POST"})
 
 
-@pytest.mark.parametrize("family", ["threads", "sessions", "undo"])
+@pytest.mark.parametrize("family", ["threads"])
 def test_unused_unversioned_aliases_are_retired(family: str) -> None:
     """Bare aliases have no handlers; their existing versioned contracts survive."""
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     assert not any(path.startswith(f"/api/{family}/") for path in methods_by_path)
     assert any(path.startswith(f"/api/v1/{family}/") for path in methods_by_path)
+
+
+def test_python_session_routes_are_retired() -> None:
+    """Native Rust serves every session route; Python registers none."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    assert not any(
+        path.startswith(("/api/sessions/", "/api/v1/sessions/")) for path in methods_by_path
+    )
+
+
+def test_python_undo_routes_are_retired() -> None:
+    """Native Rust serves every undo route; Python registers none."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    assert not any(path.startswith(("/api/undo/", "/api/v1/undo/")) for path in methods_by_path)
 
 
 def test_retired_queue_routes_are_absent() -> None:
@@ -140,13 +154,12 @@ def test_pruned_admin_routes_are_absent() -> None:
 
 
 
-def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
-    """Canonical /api/v1/metrics alias reuses the same handler contract."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+def test_python_metrics_routes_are_retired() -> None:
+    """Native Rust serves /api/metrics and /api/v1/metrics; Python must not."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
 
-    assert "/api/v1/metrics" in methods_by_path
-    assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
+    assert "/api/metrics" not in methods_by_path
+    assert "/api/v1/metrics" not in methods_by_path
 
 
 def test_pruned_debug_routes_are_absent() -> None:
@@ -260,8 +273,8 @@ def test_pruned_python_analytics_routes_are_absent() -> None:
     The Python ``/api/analytics/metrics`` and ``/api/v1/analytics/metrics``
     handlers were deleted because no browser caller remains — the frontend
     uses the native Rust ``GET /api/v2/analytics/metrics`` resource (#4348).
-    Eager ``/api/metrics`` and ``/api/v1/metrics`` are a different,
-    retained surface covered by :func:`test_v1_metrics_alias_matches_legacy_route_methods`.
+    ``/api/metrics`` and ``/api/v1/metrics`` are native Rust routes; their Python
+    handlers are retired (:func:`test_python_metrics_routes_are_retired`).
     """
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     for path in ("/api/analytics/metrics", "/api/v1/analytics/metrics"):

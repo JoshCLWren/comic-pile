@@ -5,11 +5,11 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`, `AnalyticsApi`) with the v2 auth, bootstrap, dice, offer, reset
+//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset
 //! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
-//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
+//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.mjs`
 //! merges this runtime contract into the single generated frontend client.
 
 use utoipa::OpenApi;
@@ -17,7 +17,7 @@ use utoipa::OpenApi;
 /// The native `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
-/// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
+/// `QueueApi`, `ThreadsApi` and `IssueApi` already publish the
 /// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -41,13 +41,18 @@ use utoipa::OpenApi;
         crate::bootstrap::initialize_session_documentation,
         crate::dice_api::manual_die_documentation,
         crate::roll_offer::offer_documentation,
+        crate::roll_offer::unsnooze_documentation,
         crate::roll_reset::reset_documentation,
+        crate::roll_override::override_roll_documentation,
+        crate::roll_switch_prerequisite::switch_prerequisite_documentation,
+        crate::dismiss_pending::dismiss_pending_documentation,
+        crate::session_history::list_session_snapshots_documentation,
+        crate::session_details::get_session_details_documentation,
         crate::roll_resources::die_state_documentation,
         crate::roll_resources::eligible_issue_ids_documentation,
         crate::reading_boundary::reading_boundary_batch_documentation,
         crate::demo::read_demo_roll_documentation,
         crate::metrics::get_metrics_documentation,
-        crate::metrics::get_v1_metrics_documentation,
         crate::reading_graph::reading_graph_documentation,
         crate::reading_graph::repair_documentation,
         crate::dependencies::create_dependency_documentation,
@@ -138,6 +143,8 @@ use utoipa::OpenApi;
         crate::dice_api::DiceCommandReceipt,
         crate::roll_offer::RollOfferRequest,
         crate::roll_offer::RollOfferResponse,
+        crate::roll_offer::UnsnoozeRequest,
+        crate::roll_offer::UnsnoozeResponse,
         crate::roll_reset::ResetDiceRequest,
         crate::roll_reset::ResetDiceResponse,
         crate::roll_resources::RollDieStateResponse,
@@ -298,7 +305,6 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
-        .merge_from(crate::analytics::AnalyticsApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must

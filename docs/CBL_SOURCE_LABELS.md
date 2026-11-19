@@ -8,4 +8,4 @@ CBL candidate cards use the declared title with metadata tags removed. The Sourc
 
 Disclosures are separate from navigation/selection buttons, so opening provenance does not select a candidate or navigate away. Existing semantic typography, surfaces, spacing, and native disclosure behavior are retained under the frontend visual grammar.
 
-Focused tests cover index cards, candidates, reader summaries/rows, ownership isolation, source renames, malformed/overflow references, and read-only behavior. `frontend/src/test/cbl-source-labels.spec.ts` walks the real local API-to-browser flow at desktop and phone widths and checks provenance disclosure, hidden identifiers, and horizontal containment.
+Focused tests cover index cards, candidates, reader summaries/rows, ownership isolation, source renames, malformed/overflow references, and read-only behavior.

@@ -1,14 +1,10 @@
 """Tests linking rate events to their exact originating roll events."""
 
-
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
-from app.models import ReadingSession
-from tests.roll_flow import roll_pending_thread
 
 
 async def _latest_rate_event(async_db: AsyncSession, session_id: int) -> Event:
@@ -38,31 +34,6 @@ async def _create_thread(async_db: AsyncSession, user_id: int, title: str) -> Th
     await async_db.commit()
     await async_db.refresh(thread)
     return thread
-
-
-async def _roll_via_api(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> tuple[ReadingSession, Event]:
-    """Roll through the API and return the authoritative session and roll event."""
-    await roll_pending_thread(async_db)
-
-    session_result = await async_db.execute(
-        select(ReadingSession).where(ReadingSession.ended_at.is_(None))
-    )
-    session = session_result.scalars().first()
-    assert session is not None
-    assert session.pending_thread_id is not None
-
-    event_result = await async_db.execute(
-        select(Event)
-        .where(Event.session_id == session.id)
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id == session.pending_thread_id)
-        .order_by(Event.timestamp.desc(), Event.id.desc())
-    )
-    roll_event = event_result.scalars().first()
-    assert roll_event is not None
-    return session, roll_event
 
 
 @pytest.mark.asyncio

@@ -74,7 +74,7 @@ fn unauthorized(code: &str) -> ApiError {
     ApiError::Unauthorized(code.to_string())
 }
 
-fn now_f64() -> f64 {
+pub(crate) fn now_f64() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -95,7 +95,7 @@ fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
+pub(crate) fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
         .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
     mac.update(message.as_bytes());
@@ -136,7 +136,7 @@ fn python_json_string(value: &str) -> String {
     ascii
 }
 
-fn canonical_json(v: &Value) -> String {
+pub(crate) fn canonical_json(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
@@ -320,6 +320,7 @@ pub async fn commit_series_mapping_handler(
 
     // Rebuild plan and validate digest - delegate to plan builder
     let plan = build_plan_for_commit(
+        &state.outbound,
         &conn,
         user.id(),
         origin_issue_id,
@@ -553,7 +554,8 @@ async fn assert_no_confirmed_mapping_conflict(
 // Plan building - compatibility layer. This must produce the same state_digest
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
-async fn build_plan_for_commit(
+pub(crate) async fn build_plan_for_commit(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -566,6 +568,7 @@ async fn build_plan_for_commit(
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
     build_plan_db(
+        outbound,
         conn,
         user_id,
         origin_issue_id,
@@ -688,6 +691,7 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
 async fn build_plan_db(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -731,6 +735,7 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
+            outbound,
             conn,
             user_id,
             origin_issue_id,
@@ -830,8 +835,11 @@ async fn build_plan_db(
         if origin_confirmed || linked_thread {
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
-            if let Ok((provider_info, roster)) =
-                crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await
+            if let Ok((provider_info, roster)) = crate::comicvine_repair::catalog_volume_roster(
+                outbound,
+                provider_series_external_id,
+            )
+            .await
             {
                 if let (Some(local), Some(fetched)) = (
                     series_info.as_mut().and_then(Value::as_object_mut),
@@ -890,7 +898,8 @@ async fn build_plan_db(
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
         let (provider_series, fetched_roster) =
-            crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
+            crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
+                .await?;
         series_info = Some(provider_series);
         issues_with_mappings = fetched_roster.clone();
         roster_rows = fetched_roster;
@@ -1372,6 +1381,7 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
+    outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
     origin_issue_id: i32,
@@ -1392,7 +1402,8 @@ async fn build_queue_bootstrap_plan_db(
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
     let (series_info, roster) =
-        crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
+        crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
+            .await?;
     if roster.is_empty() {
         return Ok(unavailable_plan(
             origin_issue_id,
@@ -2248,7 +2259,10 @@ mod tests {
             )
             .await
             .expect("seed second valid mapping for origin issue");
+        let fake_outbound: std::sync::Arc<dyn crate::outbound::OutboundHttp> =
+            std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new());
         let plan = build_plan_db(
+            &fake_outbound,
             &connection,
             1,
             100,

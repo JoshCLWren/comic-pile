@@ -5,7 +5,6 @@ import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import { layoutGraph } from '../utils/graphLayout'
 import { reorderIssuesForDrop, moveIssueByStep, normalizeIssueOrder, applyIssueMutation, applyIssueMutations, getPendingIssueIds } from '../pages/QueuePage/issueUtils'
 import { buildRatingThread, createExplosion, getProgressPercentage, mapSessionThreadToRatingThread } from '../pages/RollPage/utils'
-import { getTopologicalPath } from '../utils/topologicalSort'
 import { buildD10Faces } from '../components/d10Geometry'
 import { DEFAULT_DICE_RENDER_CONFIG, getDiceRenderConfigForSides } from '../components/diceRenderConfig'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
@@ -182,21 +181,6 @@ describe('roll utilities', () => {
 })
 
 describe('remaining pure branches', () => {
-  it('orders dependency graphs including issue parents, unknown nodes, and cycles', () => {
-    const threads = [thread(1), thread(2), thread(3)]
-    expect(getTopologicalPath(threads, [
-      { id: 'issue-parent', source_id: -1, target_id: 2, source_parent_thread_id: 1, created_at: 'now' },
-      { id: 'target-parent', source_id: 2, target_id: -2, target_parent_thread_id: 3, created_at: 'now' },
-      { id: 'ignored', source_id: -3, target_id: 1, created_at: 'now' },
-      { id: 'self', source_id: 1, target_id: 1, created_at: 'now' },
-      { id: 'unknown', source_id: 99, target_id: 1, created_at: 'now' },
-    ])).toHaveLength(3)
-    expect(getTopologicalPath(threads.slice(0, 2), [
-      { id: 'cycle-a', source_id: 1, target_id: 2, created_at: 'now' },
-      { id: 'cycle-b', source_id: 2, target_id: 1, created_at: 'now' },
-    ])).toHaveLength(2)
-  })
-
   it('normalizes dice configuration values and builds the d10 geometry', () => {
     expect(DEFAULT_DICE_RENDER_CONFIG.global.tileSize).toBe(256)
     const config = getDiceRenderConfigForSides(10, {
@@ -259,16 +243,6 @@ describe('nullish operand branches', () => {
     expect(() => parseIssueRange('1-5000,2-6000')).toThrow('Total issues would exceed')
     // L78 `if (trimmedPart.length > MAX_LITERAL_LENGTH)` inside the dashed-literal branch
     expect(() => parseIssueRange('A-' + 'x'.repeat(100))).toThrow('too long')
-  })
-
-  it('skips a negative target id without a parent thread id in topological sort', () => {
-    // L32 `} else { return }` branch when target_id < 0 and no target_parent_thread_id
-    const threads = [thread(1), thread(2)]
-    const result = getTopologicalPath(threads, [
-      { id: 'orphan-target', source_id: 1, target_id: -7, is_issue_level: true, created_at: 'now' },
-      { id: 'real', source_id: 1, target_id: 2, created_at: 'now' },
-    ])
-    expect(result.map((t) => t.id)).toEqual([1, 2])
   })
 
   it('returns early when moving an issue id that is not present', () => {

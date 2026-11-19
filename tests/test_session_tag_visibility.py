@@ -16,11 +16,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, ReadingSession, TagAssignment, Thread, User
+from app.models import Event, ReadingSession, Thread, User
 from app.services.tag_service import TagService
 
 
@@ -91,63 +89,5 @@ async def _tag_and_assign(
     await TagService(db).assign_tag(user, created.tag.id, "Thread", thread.id)
 
 
-@pytest.mark.asyncio
-async def test_history_rows_expose_visible_thread_tags(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """A History row carries the rolled thread's direct tags."""
-    tagged = await _thread(async_db, default_user.id, "Spider-Man")
-    await _session_with_thread(async_db, default_user.id, tagged, pending=False)
-    await _tag_and_assign(async_db, default_user, tagged, "Physical")
-
-    response = await auth_client.get("/api/v1/sessions/")
-    assert response.status_code == 200, response.text
-    rows = response.json()["sessions"]
-    active = next(
-        row["active_thread"]
-        for row in rows
-        if row["active_thread"] and row["active_thread"]["id"] == tagged.id
-    )
-    assert [tag["name"] for tag in active["tags"]] == ["Physical"]
-    assert active["tags"][0]["scope"] == "private"
 
 
-@pytest.mark.asyncio
-async def test_history_rows_never_leak_another_users_private_tag(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """Another user's private tag stays invisible on a History row."""
-    from tests.conftest import get_or_create_user_async
-
-    other = await get_or_create_user_async(async_db, username="session_tag_visibility_other")
-    thread = await _thread(async_db, default_user.id, "Namor")
-    await _session_with_thread(async_db, default_user.id, thread, pending=False)
-
-    foreign_created = await TagService(async_db).create_tag(
-        other, "Other User Secret", color="blue", scope="private"
-    )
-    # Assigning a foreign private tag is not reachable through TagService, so the
-    # row is written directly to prove the read path filters it.
-    async_db.add(
-        TagAssignment(
-            tag_id=foreign_created.tag.id,
-            target_type="Thread",
-            target_id=thread.id,
-            created_at=datetime.now(UTC),
-        )
-    )
-    await async_db.commit()
-
-    response = await auth_client.get("/api/v1/sessions/")
-    assert response.status_code == 200, response.text
-    rows = response.json()["sessions"]
-    active = next(
-        row["active_thread"]
-        for row in rows
-        if row["active_thread"] and row["active_thread"]["id"] == thread.id
-    )
-    assert active["tags"] == []

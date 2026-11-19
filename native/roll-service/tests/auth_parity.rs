@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Router,
 };
-use comicpile_roll_service::{auth::AuthenticatedUser, config::Config, db, AppState};
+use comicpile_roll_service::{auth::AuthenticatedUser, config::Config, db, test_support, AppState};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde_json::{json, Value};
 use std::{
@@ -25,20 +25,17 @@ fn token(claims: &Value) -> String {
     .unwrap()
 }
 fn state(url: &str) -> Arc<AppState> {
-    Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-                "RUST_ROLL_JWT_SECRET" => Some(SECRET.into()),
-                "RUST_ROLL_POOL_SIZE" => Some("1".into()),
-                "RUST_ROLL_POOL_TIMEOUT_MS" => Some("1000".into()),
-                "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("2000".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+            "RUST_ROLL_JWT_SECRET" => Some(SECRET.into()),
+            "RUST_ROLL_POOL_SIZE" => Some("1".into()),
+            "RUST_ROLL_POOL_TIMEOUT_MS" => Some("1000".into()),
+            "RUST_ROLL_REQUEST_TIMEOUT_MS" => Some("2000".into()),
+            _ => None,
+        })
         .unwrap(),
-    )
+    ))
 }
 fn app(state: Arc<AppState>) -> Router {
     Router::new()

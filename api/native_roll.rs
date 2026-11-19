@@ -223,7 +223,6 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
-        .route("/api/v1/metrics", get(native_metrics))
         .route("/api/v1/identity-inbox", get(native_dispatch))
         .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
         .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
@@ -250,18 +249,12 @@ fn app() -> Router {
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
-        .route("/api/sessions/", get(native_dispatch))
-        .route("/api/sessions/{session_id}", get(native_dispatch))
-        .route("/api/v1/sessions/{session_id}", get(native_dispatch))
-        .route("/api/sessions/{session_id}/snapshots", get(native_dispatch))
         .route(
-            "/api/v1/sessions/{session_id}/snapshots",
+            "/api/v2/reading-sessions/{session_id}/snapshots",
             get(native_dispatch),
         )
-        .route("/api/v1/sessions/", get(native_dispatch))
-        .route("/api/sessions/{session_id}/details", get(native_dispatch))
         .route(
-            "/api/v1/sessions/{session_id}/details",
+            "/api/v2/reading-sessions/{session_id}/details",
             get(native_dispatch),
         )
         .route("/api/undo/{session_id}/snapshots", get(native_dispatch))
@@ -279,7 +272,24 @@ fn app() -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(native_dispatch),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(native_dispatch),
+        )
         .route("/api/v2/roll/offer", post(native_dispatch))
+        .route("/api/v2/roll/unsnooze", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
@@ -296,6 +306,16 @@ fn app() -> Router {
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
+        .route("/api/v2/queue-exclusions", post(native_dispatch))
+        .route(
+            "/api/v2/queue-exclusions/status:check",
+            post(native_dispatch),
+        )
+        .route("/api/v2/queue-exclusions/restore", post(native_dispatch))
+        .route(
+            "/api/v2/queue-exclusion-groups/{group_id}/restore",
+            post(native_dispatch),
+        )
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
@@ -317,6 +337,15 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/issues", post(native_dispatch))
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(native_dispatch),
+        )
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v1/threads/", post(native_dispatch))
@@ -332,6 +361,10 @@ fn app() -> Router {
         .route(
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(native_dispatch),
         )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
@@ -371,6 +404,10 @@ fn app() -> Router {
         )
         .route("/api/v2/reading-lists", get(native_dispatch))
         .route("/api/v2/reading-lists", post(native_dispatch))
+        .route(
+            "/api/v2/reading-lists/memberships:check",
+            post(native_dispatch),
+        )
         .route("/api/v2/reading-lists/{list_id}", get(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", delete(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", put(native_dispatch))
@@ -389,6 +426,7 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(native_dispatch),
@@ -396,6 +434,41 @@ fn app() -> Router {
         .route(
             "/api/v1/issue-identity/cbl-sources/folders",
             get(native_dispatch),
+        )
+        // Issue Identity / CBL Adoption ingress (#5484). PR #5451 cut these
+        // paths over to native-rust and removed the Python handlers, but only
+        // registered the discover/browse/folders/adoption-preview siblings in
+        // this Vercel entry. Unregistered paths fell through to
+        // native_not_found, so production source detail, list candidates and
+        // adoption commit returned 404 "Not Found". Keep this table in sync
+        // with the inner comicpile_roll_service::router() route table.
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(native_dispatch),
         )
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
@@ -465,7 +538,7 @@ fn app() -> Router {
             "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
             get(native_dispatch),
         )
-        .route("/api/v1/releases/", get(native_dispatch))
+        .route("/api/v2/releases", get(native_dispatch))
         .route("/api/v1/releases/", put(native_dispatch))
         .route("/api/v1/releases/source", get(native_dispatch))
         .route("/api/v1/releases/{release_id}", get(native_dispatch))
@@ -506,10 +579,8 @@ fn app() -> Router {
         )
         .route("/api/v1/tags/{tag_id}/unassign/", delete(native_dispatch))
         .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
-        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/v1/roll/override", post(native_dispatch))
-        .route("/api/roll/override", post(native_dispatch))
+        .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v2/roll/override", post(native_dispatch))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(native_dispatch),
@@ -518,7 +589,7 @@ fn app() -> Router {
             "/api/roll/events/{event_id}/recommendation-explanation",
             get(native_dispatch),
         )
-        .route("/api/v1/roll/switch-prerequisite", post(native_dispatch))
+        .route("/api/v2/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
         .route("/api/v1/users/me/preferences", patch(native_dispatch))
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))
@@ -561,7 +632,6 @@ fn app() -> Router {
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators", get(native_dispatch))
-        .route("/api/v2/creators/", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
         .route("/api/v2/creators/discoveries", get(native_dispatch))
@@ -587,6 +657,29 @@ fn app() -> Router {
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
         )
+        .route("/api/v1/custom-cbls", get(native_dispatch))
+        .route("/api/v1/custom-cbls", post(native_dispatch))
+        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
+        )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
@@ -594,6 +687,48 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
+        .route("/api/v1/reading-order-groups/", get(native_dispatch))
+        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(native_dispatch),
+        )
         .fallback(native_not_found)
 }
 
@@ -627,7 +762,7 @@ mod tests {
         comicpile_roll_service::metrics::record_startup_start();
         comicpile_roll_service::metrics::mark_startup_complete();
         let mut first = None;
-        for path in ["/api/metrics", "/api/v1/metrics"] {
+        for path in ["/api/metrics"] {
             let response = app()
                 .call(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
@@ -806,6 +941,165 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v1_cbl_adoption_preview_ingress_reaches_rust_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/issue-identity/cbl/1/adoption-preview")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "adoption-preview must reach Rust ingress, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
+    async fn cbl_adoption_paths_reach_rust_ingress_and_never_hit_json_404() {
+        // Regression for #5484: PR #5451 cut these adoption-path operations to
+        // native-rust and removed their Python handlers, but this Vercel entry
+        // only registered the discover/browse/folders/adoption-preview paths.
+        // Every unregistered path fell through to native_not_found, which is
+        // the production "Unable to load this CBL source" / 404 seen on source
+        // detail, list candidates and adoption commit. An authenticated-rust
+        // path must reach the dispatched handler's 401/503 (no DB state here),
+        // never the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/issue-identity/cbl-sources/26"),
+            (
+                "GET",
+                "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/4000-1",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl-sources/compare"),
+            (
+                "GET",
+                "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
+            ("POST", "/api/v1/cbl/26/adoption-commit"),
+            ("POST", "/api/v1/cbl/26/reading-plans/7/adoption-commit"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_ingress_reaches_rust_and_requires_auth() {
+        // The bare discover path must be registered in this Vercel entry like
+        // its /browse and /folders siblings; an unregistered path falls through
+        // to the Rust JSON 404 that production CBL source search hit (#5449).
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/issue-identity/cbl-sources?q=batman&limit=25")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "cbl-sources discover must reach Rust ingress, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text != r#"{"detail":"Not Found"}"#,
+            "cbl-sources discover must not hit the native 404 fallback: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
+        // The threads route fragment points this method/path at this Vercel
+        // entry. Without a matching outer route the regenerated ingress falls
+        // through to native_not_found before the inner router ever sees the
+        // handler (same failure class as #5484). No DB state is needed here:
+        // an anonymous mutation must reach the dispatched handler's 401 (or
+        // the 503 cold-start response), never the Rust JSON 404.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/threads/21/test-backdate?days_ago=5")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "test-backdate must reach Rust dispatch, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert_ne!(
+            text, r#"{"detail":"Not Found"}"#,
+            "test-backdate must not hit native_not_found: {text}"
+        );
+    }
+
+    #[tokio::test]
     async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
         let mut router = app();
         let response = router
@@ -879,8 +1173,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_detail_ingress_preserves_same_paths_and_requires_auth() {
-        for uri in ["/api/sessions/7", "/api/v1/sessions/7"] {
+    async fn v2_reading_session_ingress_reaches_rust_and_requires_auth() {
+        for uri in [
+            "/api/v2/reading-sessions/7/details",
+            "/api/v2/reading-sessions/7/snapshots",
+        ] {
             let mut router = app();
             let response = router
                 .call(
@@ -909,6 +1206,41 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric session ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn migrated_v2_roll_and_release_ingress_never_hits_json_404() {
+        // The Vercel ingress owns a route table separate from the library
+        // router. Every browser-facing path moved in this cutover must be
+        // registered here too, otherwise it falls through to native_not_found.
+        for (method, uri) in [
+            ("POST", "/api/v2/roll/override"),
+            ("POST", "/api/v2/roll/dismiss-pending"),
+            ("POST", "/api/v2/roll/switch-prerequisite"),
+            ("GET", "/api/v2/releases"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback"
             );
         }
     }
@@ -1013,6 +1345,47 @@ mod tests {
                      timestamp timestamptz NOT NULL DEFAULT now(),
                      user_id integer,
                      thread_id integer
+                 );
+                 CREATE TABLE {schema}.cbl_sources (
+                     id integer PRIMARY KEY,
+                     repository varchar(255) NOT NULL,
+                     revision_sha varchar(64) NOT NULL,
+                     synced_at timestamptz NOT NULL DEFAULT now(),
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.cbl_source_lists (
+                     id integer PRIMARY KEY,
+                     source_id integer NOT NULL,
+                     source_path varchar(1000) NOT NULL,
+                     name varchar(500) NOT NULL,
+                     declared_issue_count integer,
+                     content_hash varchar(64) NOT NULL,
+                     revision_sha varchar(64) NOT NULL,
+                     active boolean NOT NULL,
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.external_identities (
+                     id integer PRIMARY KEY,
+                     provider varchar(50) NOT NULL,
+                     entity_type varchar(20) NOT NULL,
+                     external_id varchar(100) NOT NULL,
+                     metadata_json jsonb NOT NULL DEFAULT '{{}}',
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.cbl_source_entries (
+                     id integer PRIMARY KEY,
+                     list_id integer NOT NULL,
+                     position integer NOT NULL,
+                     series_name varchar(500) NOT NULL,
+                     issue_number varchar(100) NOT NULL,
+                     volume_year integer,
+                     publication_year integer,
+                     external_series_identity_id integer,
+                     external_issue_identity_id integer,
+                     created_at timestamptz NOT NULL DEFAULT now()
                  );"
             ))
             .await
@@ -1046,7 +1419,7 @@ mod tests {
             .iter()
             .filter_map(|value| value.to_str().ok().map(str::to_owned))
             .collect::<Vec<_>>();
-        let body = to_bytes(response.into_body(), 8192)
+        let body = to_bytes(response.into_body(), 1024 * 1024)
             .await
             .expect("response body");
         let text = String::from_utf8_lossy(&body).into_owned();
@@ -1075,13 +1448,24 @@ mod tests {
         );
     }
 
+    /// Each DB-backed test registers its own user. The auth register limiter is
+    /// a process-global 5-per-minute bucket keyed by client IP, so a fixed IP
+    /// makes parallel tests race into 429 "Too many requests" flakes. Give every
+    /// registration a unique client IP so each test owns its own bucket.
+    static REGISTER_CLIENT_COUNTER: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(0);
+
     async fn register_session(username: &str) -> (String, String, i32) {
+        let client_ip = format!(
+            "198.51.100.{}",
+            REGISTER_CLIENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+        );
         let (status, body, cookies, text) = call_app(
             Request::builder()
                 .method("POST")
                 .uri("/api/v2/auth/register")
                 .header(header::CONTENT_TYPE, "application/json")
-                .header("x-forwarded-for", "198.51.100.20")
+                .header("x-forwarded-for", client_ip)
                 .body(Body::from(
                     serde_json::json!({
                         "username": username,
@@ -1521,5 +1905,439 @@ mod tests {
                 assert_eq!(stored_order(user_id).await, vec![11, 12, 13]);
             })
             .await;
+    }
+
+    #[tokio::test]
+    async fn roll_unsnooze_is_served_from_rust_ingress_against_postgres() {
+        // Regression for #4589 review: the inner router had the route but this
+        // Vercel entry did not, so browsers got the ingress 404 fallback.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("unsnooze-ingress-{}", std::process::id());
+                let (access, csrf, user_id) = register_session(&username).await;
+                seed_threads(user_id, &[(21, 1)]).await;
+                let request = |token: Option<&str>| {
+                    let mut builder = Request::builder()
+                        .method("POST")
+                        .uri("/api/v2/roll/unsnooze")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::COOKIE, format!("csrf_token={csrf}"))
+                        .header("x-csrf-token", csrf.as_str());
+                    if let Some(token) = token {
+                        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+                    }
+                    builder
+                        .body(Body::from(serde_json::json!({"thread_id": 21}).to_string()))
+                        .expect("unsnooze request")
+                };
+                // Unauthenticated reaches the dispatched handler's 401.
+                let (status, _, _, text) = call_app(request(None)).await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+                // Authenticated requests must reach the handler, never the
+                // ingress 404 fallback. This ingress schema is deliberately
+                // partial, so the handler may 5xx here; the full behavior is
+                // covered against the canonical schema in the inner-router
+                // tests (thread_ordering_v1_http).
+                let (status, _, _, text) = call_app(request(Some(&access))).await;
+                assert_ne!(status, StatusCode::NOT_FOUND, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_is_served_from_rust_ingress_against_postgres() {
+        // Regression for #5449: the bare `GET /api/v1/issue-identity/cbl-sources`
+        // discover path must be registered in this Vercel entry and dispatched
+        // to the Rust service, not fall through to the Rust JSON 404.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-discover-ingress-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (1, 1, 'DC/Batman (1940)/Batman.cbl', 'Batman 1940', 12, \
+                            'h-bat', 'abc123', TRUE), \
+                           (2, 1, 'DC/Batman (1940)/Batman Adventures.cbl', \
+                            'Batman Adventures', 6, 'h-adv', 'abc123', TRUE), \
+                           (3, 1, 'Marvel/X-Men.cbl', 'X-Men', 30, 'h-x', 'abc123', TRUE), \
+                           (4, 1, 'DC/Archived.cbl', 'Archived Batman', 1, \
+                            'h-arch', 'abc123', FALSE), \
+                           (5, 1, 'DC/Special/100% Complete.cbl', '100% Complete', 2, \
+                            'h-pct', 'abc123', TRUE), \
+                           (6, 1, 'DC/Special/100X Complete.cbl', '100X Complete', 2, \
+                            'h-pctx', 'abc123', TRUE), \
+                           (7, 1, 'DC/Special/Under_score.cbl', 'Under_score', 3, \
+                            'h-us', 'abc123', TRUE), \
+                           (8, 1, 'DC/Special/UnderXscore.cbl', 'UnderXscore', 3, \
+                            'h-usx', 'abc123', TRUE), \
+                           (9, 1, 'DC/Special/Back\\Slash.cbl', 'Back\\Slash', 4, \
+                            'h-bs', 'abc123', TRUE), \
+                           (10, 1, 'DC/Special/BackSlash.cbl', 'BackSlash', 4, \
+                            'h-bsx', 'abc123', TRUE);",
+                    )
+                    .await
+                    .expect("seed cbl catalog");
+                drop(connection);
+
+                // Without credentials the registered path must reach the
+                // dispatched handler's 401, not the ingress 404 fallback.
+                let (status, _, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources?q=batman")
+                        .body(Body::empty())
+                        .expect("unauthenticated cbl discover request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+
+                let request = |uri: String| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("cbl discover request")
+                };
+
+                let (status, body, _, text) =
+                    call_app(request("/api/v1/issue-identity/cbl-sources".into())).await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                let items = body.as_array().expect("discovery list");
+                assert_eq!(items.len(), 9, "inactive lists must be excluded: {text}");
+                assert!(
+                    items
+                        .iter()
+                        .all(|item| item["source_repository"] == "JoshCLWren/CBL-ReadingLists"),
+                    "mirror repositories must project to the public name: {text}"
+                );
+
+                // Regression for #5485: "Batman" (and case/substring variants) must
+                // match active CBL source lists by name or source path, while other
+                // terms continue to work. The inactive "Archived Batman" row must
+                // remain excluded so results come from active catalog entries only.
+                for query in ["batman", "Batman", "BATMAN", "Bat"] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        !items.is_empty(),
+                        "search for {query:?} must return Batman results (#5485): {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| {
+                            item["name"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_ascii_lowercase()
+                                .contains("bat")
+                                || item["source_path"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_ascii_lowercase()
+                                    .contains("bat")
+                        }),
+                        "all results for {query:?} must match the Batman term: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != "Archived Batman"),
+                        "inactive lists must stay excluded for {query:?}: {text}"
+                    );
+                }
+
+                // Literal LIKE metacharacters must be escaped so user terms match
+                // %, _, and \ characters exactly (not as SQL wildcards/escapes).
+                for (query, expected_name, excluded_name) in [
+                    ("100%25", "100% Complete", "100X Complete"),
+                    ("Under_score", "Under_score", "UnderXscore"),
+                    ("Back%5CSlash", "Back\\Slash", "BackSlash"),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        items.iter().any(|item| item["name"] == expected_name),
+                        "literal search {query:?} must match {expected_name:?}: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != excluded_name),
+                        "literal search {query:?} must not wildcard-match {excluded_name:?}: {text}"
+                    );
+                }
+
+                let (status, body, _, text) = call_app(request(
+                    "/api/v1/issue-identity/cbl-sources?q=batman&limit=1".into(),
+                ))
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                let items = body.as_array().expect("filtered discovery list");
+                assert_eq!(items.len(), 1, "limit must bound the search: {text}");
+                assert_eq!(items[0]["name"], "Batman 1940", "{text}");
+                assert_eq!(
+                    items[0]["source_path"], "DC/Batman (1940)/Batman.cbl",
+                    "discovery keeps the raw stored path: {text}"
+                );
+                assert_eq!(items[0]["declared_issue_count"], 12, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_high_volume_batman_catalog_returns_bounded_active_results() {
+        // Regression for #5485: a realistic catalog has hundreds of Batman
+        // sources, many inactive or with NULL entry counts. Searches for
+        // "Batman"/"batman"/"Bat" must still return a full page of ACTIVE
+        // matches while narrow terms ("Teen Titans", "X-Men") keep working.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-discover-volume-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT n, 1, 'DC/Batman/Batman Run ' || lpad(n::text, 3, '0') || '.cbl', \
+                                'Batman Run ' || lpad(n::text, 3, '0'), \
+                                CASE WHEN n % 7 = 0 THEN NULL ELSE n END, \
+                                'h' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 120) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 200 + n, 1, 'DC/Old/Batman Old ' || n || '.cbl', \
+                                'AAA Batman Archived ' || n, 3, 'ha' || n, 'abc123', FALSE \
+                         FROM generate_series(1, 60) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 300 + n, 1, 'DC/Batman/Crossovers/Event ' || n || '.cbl', \
+                                'Event ' || n, 5, 'hp' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 40) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (400, 1, 'DC/Teen Titans/Teen Titans.cbl', 'Teen Titans', 9, 'ht', 'abc123', TRUE), \
+                           (401, 1, 'Marvel/X-Men/X-Men 1963.cbl', 'X-Men 1963', 9, 'hx1', 'abc123', TRUE), \
+                           (402, 1, 'Marvel/X-Men/X-Men 1991.cbl', 'X-Men 1991', NULL, 'hx2', 'abc123', TRUE);",
+                    )
+                    .await
+                    .expect("seed high-volume cbl catalog");
+                drop(connection);
+
+                let request = |uri: String| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("cbl discover request")
+                };
+
+                for (query, limit, expected) in [
+                    ("Batman", 25, 25),
+                    ("batman", 25, 25),
+                    ("Bat", 25, 25),
+                    ("Batman", 100, 100),
+                    ("Teen%20Titans", 25, 1),
+                    ("X-Men", 25, 2),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}&limit={limit}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}/{limit}: {text}");
+                    let items = body.as_array().expect("discovery list");
+                    assert_eq!(items.len(), expected, "{query}/{limit}: {text}");
+                    assert!(
+                        items.iter().all(|item| !item["name"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .contains("Archived")),
+                        "inactive rows must be excluded for {query}: {text}"
+                    );
+                }
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_source_detail_is_served_from_rust_ingress_against_postgres() {
+        // Deterministic DB-backed regression for #5484: the source-detail path
+        // must be registered in this Vercel entry and dispatched to the Rust
+        // get_cbl_source_list handler (not fall through to native_not_found).
+        // Drive the real handler against a disposable schema and assert the
+        // projected detail plus ordered entries, including Comic Vine IDs.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-detail-ingress-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (26, 1, 'BPRD/Plague of Frogs/Omnibus Vol 3.cbl', \
+                            'B.P.R.D. Plague of Frogs Omnibus Vol. 3', 2, \
+                            'h-bprd', 'abc123', TRUE); \
+                         INSERT INTO external_identities \
+                           (id, provider, entity_type, external_id) \
+                         VALUES \
+                           (10, 'comicvine', 'issue', '4000-1'), \
+                           (11, 'comicvine', 'series', '4050-1'); \
+                         INSERT INTO cbl_source_entries \
+                           (id, list_id, position, series_name, issue_number, \
+                            volume_year, publication_year, \
+                            external_issue_identity_id, external_series_identity_id) \
+                         VALUES \
+                           (1, 26, 1, 'B.P.R.D.', '1', 2002, 2003, 10, 11), \
+                           (2, 26, 2, 'B.P.R.D.', '2', NULL, 2004, NULL, 11);",
+                    )
+                    .await
+                    .expect("seed cbl source detail");
+                drop(connection);
+
+                // Without credentials the registered path reaches the handler's
+                // 401, not the ingress 404 fallback.
+                let (status, _, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26")
+                        .body(Body::empty())
+                        .expect("unauthenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+
+                let (status, body, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26?limit=10")
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("authenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(body["id"], 26, "{text}");
+                assert_eq!(
+                    body["name"], "B.P.R.D. Plague of Frogs Omnibus Vol. 3",
+                    "{text}"
+                );
+                assert_eq!(
+                    body["source_repository"], "JoshCLWren/CBL-ReadingLists",
+                    "mirror repository must project to public name: {text}"
+                );
+                assert_eq!(
+                    body["source_path"], "BPRD/Plague of Frogs/Omnibus Vol 3.cbl",
+                    "detail keeps the raw source path: {text}"
+                );
+                assert_eq!(body["entries_total"], 2, "{text}");
+                let entries = body["entries"].as_array().expect("ordered entries");
+                assert_eq!(entries.len(), 2, "{text}");
+                assert_eq!(entries[0]["position"], 1, "{text}");
+                assert_eq!(entries[0]["comicvine_issue_id"], "4000-1", "{text}");
+                assert_eq!(entries[0]["comicvine_volume_id"], "4050-1", "{text}");
+                assert_eq!(entries[1]["position"], 2, "{text}");
+                assert!(
+                    entries[1]["comicvine_issue_id"].is_null(),
+                    "unmapped entry must have no comicvine issue id: {text}"
+                );
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn custom_cbl_overlap_decisions_ingress_reaches_rust_dispatch() {
+        // Both overlap-decision path shapes must be registered in the Vercel
+        // native_roll ingress (not just the inner service) so production
+        // requests do not fall through to the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
     }
 }

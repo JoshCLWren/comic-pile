@@ -10,7 +10,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -22,20 +22,17 @@ static NEXT_CLIENT: AtomicUsize = AtomicUsize::new(1);
 
 async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => {
-                    Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
-                }
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => {
+                Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
+            }
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
     let suffix = std::time::SystemTime::now()

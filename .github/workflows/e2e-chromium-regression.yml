@@ -111,8 +111,12 @@ jobs:
       - name: Build frontend
         run: pnpm --filter frontend run build
 
-      - name: Install Chromium
-        run: pnpm --filter frontend exec playwright install --with-deps chromium
+      - name: Install Chromium browser binaries
+        # No --with-deps: that path runs apt-get against security.ubuntu.com,
+        # whose 503s for fonts-*/xfonts-* broke this job. The hosted runner
+        # already provides the browser system libraries; only the pinned
+        # browser binaries are downloaded (from the Playwright CDN) here.
+        run: pnpm --filter frontend exec playwright install chromium
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -121,7 +125,8 @@ jobs:
 
       - name: Apply migrations
         # DATABASE_URL / TEST_DATABASE_URL come from the shared top-level env.
-        run: .venv/bin/alembic upgrade head
+        # Refinery runner (#5431); Alembic is frozen.
+        run: CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
 
       - name: Start backend and native v2 ingress
         run: |

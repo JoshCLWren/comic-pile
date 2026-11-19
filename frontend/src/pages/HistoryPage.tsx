@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import { useActivity } from '../hooks/useActivity'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import type { ActivityItem } from '../services/api-activity'
 import { formatDate, formatTime } from '../utils/dateFormat'
 
@@ -108,6 +111,14 @@ export default function HistoryPage() {
     isRetrying,
     refetch,
   } = useActivity()
+  // One bounded batch projection for the visible page of exact owned issues;
+  // never one request per rendered row.
+  const visibleIssueIds = useMemo(
+    () => (activity ?? []).map((item) => item.issue_id).filter((id): id is number => id != null),
+    [activity],
+  )
+  const cardsQuery = useIssueCards(visibleIssueIds)
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -191,6 +202,19 @@ export default function HistoryPage() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
                     {progression}
                   </p>
+                )}
+
+                {item.issue_id != null && (
+                  <div className="pt-1">
+                    <CompactIssueCardTrigger
+                      issueId={item.issue_id}
+                      threadTitle={item.thread_title ?? 'Deleted series'}
+                      issueNumber={item.issue_number ?? cardsByIssue.get(item.issue_id)?.issue_number ?? '?'}
+                      status={cardsByIssue.get(item.issue_id)?.status === 'read' ? 'read' : 'unread'}
+                      card={cardsByIssue.get(item.issue_id) ?? null}
+                      hideTitle
+                    />
+                  </div>
                 )}
               </div>
             </div>

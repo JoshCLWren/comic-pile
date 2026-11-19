@@ -2,17 +2,18 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod activity;
-pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_plans;
+pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
 pub mod creators;
 pub mod creators_v2;
@@ -21,6 +22,7 @@ pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
+pub mod dependency_groups;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
@@ -28,6 +30,8 @@ pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_identity;
+pub mod issue_identity_adoption_preview;
+pub mod issue_identity_cbl_reading_graph_preview;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_read_state;
@@ -35,10 +39,14 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
+pub mod option_e_setting;
 pub mod option_inputs;
+pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
+mod preview_validation;
 pub mod queue;
+pub mod queue_exclusions;
 pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -52,6 +60,7 @@ pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
+pub(crate) mod reading_preview_eval;
 pub mod reading_session;
 pub mod recommendation_explanation;
 pub mod releases;
@@ -65,12 +74,11 @@ pub mod roll_switch_prerequisite;
 pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
-pub mod session_detail;
 pub mod session_details;
 pub mod session_history;
-pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_issues;
 pub mod thread_lifecycle;
 pub mod thread_ordering;
 pub mod thread_validation;
@@ -111,12 +119,23 @@ pub struct AppState {
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
+    /// Deployment environment; used for environment-aware error sanitization
+    /// (e.g. validation details are omitted in production).
+    pub environment: config::Environment,
     /// Validate a checked-out socket with a read-only probe before a handler can
     /// use it, replacing one that cannot carry a statement (#4732).
     ///
     /// Production always enables this. The regression suite disables it to prove
     /// the first-statement failure it prevents; no environment variable can.
     pub connection_recovery: bool,
+    /// Outbound HTTPS seam (GitHub issue creation, ComicVine). Production
+    /// installs the real client; test builds/environments install a recording
+    /// fake that never opens a socket, so no test can reach the network
+    /// (#5339). See [`outbound`].
+    pub outbound: Arc<dyn outbound::OutboundHttp>,
+    /// Effective Option E setting (see [`option_e_setting`]); injectable so
+    /// tests choose it per state instead of mutating process environment.
+    pub option_e: bool,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -135,6 +154,33 @@ impl AppState {
     pub fn with_recycling(
         config: Config,
         recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound::default_transport())
+    }
+
+    /// Construct with an explicit outbound transport. Production callers use
+    /// [`Self::new`]; tests install a recording fake (#5339).
+    pub fn with_outbound(
+        config: Config,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, RecyclingMethod::Fast, outbound)
+    }
+
+    /// Construct with an explicit pool recycling method and outbound
+    /// transport; test-only combination.
+    pub fn with_recycling_and_outbound(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound)
+    }
+
+    fn build(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
     ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
@@ -171,8 +217,17 @@ impl AppState {
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
+            environment: config.environment,
             connection_recovery: true,
+            outbound,
+            option_e: config.option_e,
         })
+    }
+
+    /// The recording fake outbound client when one is installed (test
+    /// contexts), so tests can assert on recorded calls.
+    pub fn recording_fake(&self) -> Option<&outbound::RecordingFakeOutbound> {
+        self.outbound.as_any().downcast_ref()
     }
 }
 
@@ -580,6 +635,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_series_mapping_preview::preview_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(continuity_plans_project_preview::preview_plan_projection_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
@@ -601,14 +672,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/metrics", get(metrics::get_metrics))
-        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route("/api/v1/roll/override", post(roll_override::override_roll))
-        .route("/api/roll/override", post(roll_override::override_roll))
+        .route("/api/v2/roll/override", post(roll_override::override_roll))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(recommendation_explanation::get_recommendation_explanation),
@@ -618,39 +687,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(recommendation_explanation::get_recommendation_explanation),
         )
         .route(
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
         )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
         )
+        // Session reads moved to the resource-shaped v2 surface (#4335).
+        // The v1 single-session/list reads and the unversioned aliases are
+        // retired (#4343); only the snapshot and details reads remain.
         .route(
-            "/api/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/sessions/{session_id}/snapshots",
+            "/api/v2/reading-sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
         .route(
-            "/api/v1/sessions/{session_id}/snapshots",
-            get(session_history::list_session_snapshots),
-        )
-        // Session list (issue #4839)
-        .route("/api/sessions/", get(session_list::list_sessions))
-        .route("/api/v1/sessions/", get(session_list::list_sessions))
-        // Session details (issue #4839)
-        .route(
-            "/api/sessions/{session_id}/details",
-            get(session_details::get_session_details),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}/details",
+            "/api/v2/reading-sessions/{session_id}/details",
             get(session_details::get_session_details),
         )
         // Undo snapshots list (issue #4839)
@@ -673,6 +725,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
+        .route("/api/v2/roll/unsnooze", post(roll_offer::unsnooze))
         .route("/api/v2/roll/reset", post(roll_reset::reset))
         .route(
             "/api/v2/reading-boundaries",
@@ -707,6 +760,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             patch(queue::update_queue_entry),
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
+        .route(
+            "/api/v2/queue-exclusions",
+            post(queue_exclusions::bulk_exclude),
+        )
+        .route(
+            "/api/v2/queue-exclusions/status:check",
+            post(queue_exclusions::check_excluded_status),
+        )
+        .route(
+            "/api/v2/queue-exclusions/restore",
+            post(queue_exclusions::bulk_restore),
+        )
+        .route(
+            "/api/v2/queue-exclusion-groups/{group_id}/restore",
+            post(queue_exclusions::restore_group),
+        )
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
             "/api/v1/threads/{thread_id}",
@@ -752,6 +821,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(thread_issues::reorder_thread_issues),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:validateOrder",
@@ -807,12 +888,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_lifecycle::set_pending_thread),
         )
         .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(thread_lifecycle::backdate_thread_for_testing),
+        )
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )
         .route(
             "/api/v2/reading-lists",
             post(reading_list::create_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/memberships:check",
+            post(reading_list::check_thread_memberships),
         )
         .route(
             "/api/v2/reading-lists/{list_id}",
@@ -902,7 +991,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/dependencies/{dependency_id}",
             delete(legacy_dependencies::delete),
         )
-        .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
@@ -996,11 +1084,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(dependencies::get_thread_dependencies),
         )
         .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
+            "/api/v2/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
         .route(
@@ -1040,7 +1124,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
-        .route("/api/v2/creators/", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
             get(creators_v2::get_summaries),
@@ -1159,10 +1242,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route(
-            "/api/v1/releases/",
-            get(releases::list).put(releases::publish),
-        )
+        .route("/api/v1/releases/", put(releases::publish))
+        .route("/api/v2/releases", get(releases::list))
         .route("/api/v1/releases/source", get(releases::reconcile))
         .route("/api/v1/releases/{release_id}", get(releases::get))
         .route(
@@ -1213,6 +1294,54 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-mode/suggest",
             post(reading_mode::suggest_reading_mode),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            get(dependency_groups::list_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/",
+            post(dependency_groups::create_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(dependency_groups::list_thread_groups),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(dependency_groups::add_issue_range),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(dependency_groups::add_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(dependency_groups::remove_member),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(dependency_groups::set_group_order),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(dependency_groups::list_crossover_plans),
         )
         .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {

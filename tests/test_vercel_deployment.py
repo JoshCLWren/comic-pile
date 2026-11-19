@@ -526,7 +526,6 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("GET", "/api/v1/creators/summaries", "/api/native_roll.rs"),
         ("GET", "/api/v1/sessions/42", "/api/native_roll.rs"),
         ("GET", "/api/sessions/42", "/api/native_roll.rs"),
-        ("GET", "/api/v1/sessions/correction-examples", "/api/index.py"),
         ("GET", "/api/v1/sessions/42/snapshots", "/api/native_roll.rs"),
         ("GET", "/api/sessions/42/snapshots", "/api/native_roll.rs"),
         ("GET", "/api/v1/cron/release-sync", "/api/native_roll.rs"),

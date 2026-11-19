@@ -20,7 +20,6 @@ const {
   queueApi,
   rollApi,
   sessionApi,
-  tasksApi,
   threadsApi,
   undoApi,
 } = createApiServiceSet(client)
@@ -166,8 +165,6 @@ it('calls every remaining API resource endpoint', async () => {
   await dependenciesApi.getIssueDependencies(2)
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
-  await tasksApi.getMetrics()
-  expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   await preferencesApi.get()
@@ -182,7 +179,7 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses canonical v1 paths for session and undo resources', async () => {
+it('uses migrated v2 session paths and canonical v1 undo paths', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
   await sessionApi.getDetails(7)
@@ -192,8 +189,8 @@ it('uses canonical v1 paths for session and undo resources', async () => {
 
   expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
   expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
   expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
 })

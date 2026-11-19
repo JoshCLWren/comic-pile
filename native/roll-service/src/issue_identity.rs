@@ -314,6 +314,17 @@ fn public_cbl_source_ref(repository: &str, source_path: &str) -> String {
     )
 }
 
+/// Escape SQL `LIKE` metacharacters in a literal search term.
+///
+/// Mirrors `cbl_catalog::escape_like` so discover search matches literal `%`,
+/// `_`, and `\` characters the same way as catalog browsing (#5485).
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -344,7 +355,6 @@ pub async fn discover_cbl_source_lists(
 
     let pool = checkout(&state).await?;
     let term = params.q.as_deref().unwrap_or("").trim();
-    let pattern = format!("%{term}%");
 
     let sql = if term.is_empty() {
         r#"
@@ -363,7 +373,7 @@ pub async fn discover_cbl_source_lists(
         FROM cbl_source_lists csl
         JOIN cbl_sources cs ON cs.id = csl.source_id
         WHERE csl.active = true
-          AND (csl.name ILIKE $1 OR csl.source_path ILIKE $1)
+          AND (csl.name ILIKE $1 ESCAPE '\' OR csl.source_path ILIKE $1 ESCAPE '\')
         ORDER BY csl.name ASC, csl.source_path ASC, csl.id ASC
         LIMIT $2
         "#
@@ -372,6 +382,7 @@ pub async fn discover_cbl_source_lists(
     let rows = if term.is_empty() {
         pool.run_query(sql, &[&limit]).await
     } else {
+        let pattern = format!("%{}%", escape_like(term));
         pool.run_query(sql, &[&pattern, &limit]).await
     }
     .map_err(|error| {
@@ -1498,7 +1509,7 @@ fn cbl_series_group_id(entry: &serde_json::Map<String, JsonValue>) -> String {
 }
 
 // Minimal SHA-256 implementation for deterministic series_group_id parity with Python.
-fn sha256_hex(data: &[u8]) -> String {
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
     // Use a tiny pure-rust sha256 implementation inline to avoid new deps.
     // Constants
     const K: [u32; 64] = [
@@ -1582,18 +1593,18 @@ fn sha256_hex(data: &[u8]) -> String {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct CblListMeta {
-    id: i32,
+pub(crate) struct CblListMeta {
+    pub(crate) id: i32,
     source_repository: String,
     source_path: String,
-    content_hash: String,
-    revision_sha: String,
-    name: String,
+    pub(crate) content_hash: String,
+    pub(crate) revision_sha: String,
+    pub(crate) name: String,
     declared_issue_count: Option<i32>,
 }
 
-async fn load_active_cbl_list_meta(
-    pool: &deadpool_postgres::Object,
+pub(crate) async fn load_active_cbl_list_meta<E: DbExec>(
+    pool: &E,
     list_id: i32,
 ) -> Result<CblListMeta, ApiError> {
     let row = pool
@@ -1620,12 +1631,11 @@ async fn load_active_cbl_list_meta(
     })
 }
 
-#[instrument(skip(state, auth, request))]
-pub async fn cbl_adoption_plan(
+#[instrument(skip(state, auth))]
+pub async fn cbl_adoption_preview(
     State(state): State<Arc<AppState>>,
     auth: AuthenticatedUser,
     Path(list_id): Path<i32>,
-    Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
     let pool = checkout(&state).await?;
     let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
@@ -1633,10 +1643,46 @@ pub async fn cbl_adoption_plan(
     let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
     let planned = calculate_adoption_plan_entries(
         &report_entries,
-        &request.series_decisions,
-        &request.entry_decisions,
+        &std::collections::HashMap::new(),
+        &std::collections::HashMap::new(),
     );
     Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
+}
+
+#[instrument(skip(state, auth, request))]
+pub async fn cbl_adoption_plan(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+    Json(request): Json<CblAdoptionPlanRequest>,
+) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
+    adoption_preview_for(
+        &state,
+        auth.id(),
+        list_id,
+        &request.series_decisions,
+        &request.entry_decisions,
+    )
+    .await
+    .map(Json)
+}
+
+/// Shared read-only reconcile + adoption-plan calculation. Used by
+/// `POST .../adoption-plan` (explicit decisions) and
+/// `GET .../adoption-preview` (no decisions, Python `preview_cbl_adoption`).
+pub(crate) async fn adoption_preview_for(
+    state: &Arc<AppState>,
+    user_id: i32,
+    list_id: i32,
+    series_decisions: &HashMap<String, bool>,
+    entry_decisions: &HashMap<String, bool>,
+) -> Result<CblAdoptionPreviewResponse, IdentityError> {
+    let pool = checkout(state).await?;
+    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
+    let report_entries = reconcile_entries_for_adoption(&pool, user_id, &list_meta).await?;
+    let planned =
+        calculate_adoption_plan_entries(&report_entries, series_decisions, entry_decisions);
+    Ok(build_adoption_preview_response(&list_meta, &planned))
 }
 
 fn build_adoption_preview_response(
@@ -1983,7 +2029,7 @@ fn add_metadata_volumes(
     }
 }
 
-trait DbExec {
+pub(crate) trait DbExec {
     async fn run_query(
         &self,
         sql: &str,
@@ -2886,14 +2932,63 @@ async fn do_cbl_adoption_commit(
     Ok((status, resp))
 }
 
-async fn reconcile_entries_for_adoption<E: DbExec>(
+pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
     tx: &E,
     user_id: i32,
     list_meta: &CblListMeta,
 ) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
-    let rows = tx
-        .run_query(
-            r#"
+    reconcile_entries_impl(tx, user_id, list_meta, None).await
+}
+
+/// Reconcile only the requested source positions. Read-only preview callers use
+/// this variant so a short selection from a long list cannot fan out per-entry
+/// lookups across every row in the source list (#5342 review).
+pub(crate) async fn reconcile_entries_for_adoption_positions<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: &[i64],
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    // `cbl_source_entries.position` is int4; out-of-domain positions match no
+    // row and are reported as unknown by the caller's own position validation.
+    let positions: Vec<i32> = positions
+        .iter()
+        .filter_map(|position| i32::try_from(*position).ok())
+        .collect();
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    reconcile_entries_impl(tx, user_id, list_meta, Some(&positions)).await
+}
+
+async fn reconcile_entries_impl<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: Option<&[i32]>,
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    let rows = match positions {
+        Some(positions) => tx
+            .run_query(
+                r#"
+        SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
+               ei.external_id AS comicvine_issue_id,
+               cse.external_issue_identity_id, cse.external_series_identity_id,
+               ev.provider AS series_provider, ev.external_id AS series_external_id,
+               cse.volume_year, cse.publication_year
+        FROM cbl_source_entries cse
+        LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
+        LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
+        WHERE cse.list_id = $1 AND cse.position = ANY($2::int[])
+        ORDER BY cse.position ASC, cse.id ASC
+        "#,
+                &[&list_meta.id, &positions],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+        None => tx
+            .run_query(
+                r#"
         SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
                ei.external_id AS comicvine_issue_id,
                cse.external_issue_identity_id, cse.external_series_identity_id,
@@ -2905,10 +3000,12 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
         WHERE cse.list_id = $1
         ORDER BY cse.position ASC, cse.id ASC
         "#,
-            &[&list_meta.id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
+                &[&list_meta.id],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+    };
+    let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let cse_id: i32 = row.get(0);
@@ -2944,6 +3041,7 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
             } else {
                 None
             },
+            &fallback_index,
         )
         .await?;
         let mut entry = serde_json::Map::new();
@@ -3048,14 +3146,65 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
     Ok(out)
 }
 
-async fn title_number_fallback<E: DbExec>(
+#[derive(Clone)]
+struct OwnedIssueFallbackRow {
+    id: i32,
+    status: Option<String>,
+    read_at: Option<String>,
+    thread_id: i32,
+    series_norm: String,
+    issue_norm: String,
+}
+
+/// Preloaded owned-issue index for title/number fallback matching.
+/// Loading this once per reconciliation avoids repeating a whole-library scan
+/// for every unresolved entry (no SQL in row loops).
+struct OwnedIssueFallbackIndex {
+    rows: Vec<OwnedIssueFallbackRow>,
+}
+
+async fn load_owned_issue_fallback_index<E: DbExec>(
     tx: &E,
     user_id: i32,
+) -> Result<OwnedIssueFallbackIndex, ApiError> {
+    let rows = tx
+        .run_query(
+            r#"
+        SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
+        FROM issues i
+        JOIN threads t ON t.id = i.thread_id
+        WHERE t.user_id = $1
+        "#,
+            &[&user_id],
+        )
+        .await
+        .map_err(|e| tx_db_error(e, ""))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let ttitle: String = row.get(4);
+        let inum: String = row.get(5);
+        out.push(OwnedIssueFallbackRow {
+            id: row.get(0),
+            status: row.get(1),
+            read_at: row.get(2),
+            thread_id: row.get(3),
+            series_norm: normalize_title_number(&ttitle),
+            issue_norm: normalize_title_number(&inum),
+        });
+    }
+    Ok(OwnedIssueFallbackIndex { rows: out })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn title_number_fallback<E: DbExec>(
+    tx: &E,
+    _user_id: i32,
     _cvid: &str,
     series_name: &str,
     issue_number: &str,
     series_provider: Option<&str>,
     series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
 ) -> Result<
     (
         Option<i32>,
@@ -3080,31 +3229,15 @@ async fn title_number_fallback<E: DbExec>(
         ));
     }
 
-    let rows = tx
-        .run_query(
-            r#"
-        SELECT i.id, i.status::text, i.read_at::text, i.thread_id, t.title, i.issue_number
-        FROM issues i
-        JOIN threads t ON t.id = i.thread_id
-        WHERE t.user_id = $1
-        "#,
-            &[&user_id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
-
     let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = Vec::new();
-    for row in &rows {
-        let id: i32 = row.get(0);
-        let status: Option<String> = row.get(1);
-        let read_at: Option<String> = row.get(2);
-        let thread_id: i32 = row.get(3);
-        let ttitle: String = row.get(4);
-        let inum: String = row.get(5);
-        if normalize_title_number(&ttitle) == want_series
-            && normalize_title_number(&inum) == want_issue
-        {
-            matches.push((id, status, read_at, thread_id));
+    for row in &fallback_index.rows {
+        if row.series_norm == want_series && row.issue_norm == want_issue {
+            matches.push((
+                row.id,
+                row.status.clone(),
+                row.read_at.clone(),
+                row.thread_id,
+            ));
         }
     }
     if matches.is_empty() {
@@ -3245,6 +3378,7 @@ async fn resolve_canonical_for_entry<E: DbExec>(
     series_name: &str,
     issue_number: &str,
     series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
 ) -> Result<
     (
         Option<i32>,
@@ -3286,6 +3420,7 @@ async fn resolve_canonical_for_entry<E: DbExec>(
                     issue_number,
                     Some("comicvine"),
                     series_external_id,
+                    fallback_index,
                 )
                 .await;
             }
@@ -4414,6 +4549,23 @@ pub fn find_cbl_candidates_for_reading_list_documentation() {}
 
 /// Documentation-only operation for the CBL adoption preview.
 #[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    responses(
+        (status = 200, description = "Adoption preview for the active CBL list", body = CblAdoptionPreviewResponse),
+        (status = 404, description = "CBL source list not found or not active"),
+        (status = 422, description = "Path failed validation", body = crate::cbl_catalog::ValidationErrorResponse),
+        (status = 503, description = "Database temporarily unavailable"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn cbl_adoption_preview_documentation() {}
+
+/// Documentation-only operation for the CBL adoption plan.
+#[utoipa::path(
     post,
     path = "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
     tag = "issue-identity",
@@ -4481,6 +4633,7 @@ pub fn cbl_targeted_adoption_commit_documentation() {}
         find_cbl_sources_by_comicvine_issue_documentation,
         compare_cbl_sources_documentation,
         find_cbl_candidates_for_reading_list_documentation,
+        cbl_adoption_preview_documentation,
         cbl_adoption_plan_documentation,
         cbl_adoption_commit_documentation,
         cbl_targeted_adoption_commit_documentation,
