@@ -29,10 +29,6 @@ use utoipa::OpenApi;
     crate::session_list::list_sessions_v1_documentation,
     crate::session_details::get_session_details_documentation,
     crate::session_details::get_session_details_v1_documentation,
-    crate::undo_snapshots::list_undo_snapshots_documentation,
-    crate::undo_snapshots::list_undo_snapshots_v1_documentation,
-    crate::undo_apply::undo_to_snapshot_documentation,
-    crate::undo_apply::undo_to_snapshot_v1_documentation,
     crate::issue_read::get_issue_documentation,
     crate::issue_read::get_issue_dependencies_documentation,
     crate::threads::get_thread_detail_documentation,
@@ -80,13 +76,9 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(SamePathApi::openapi())
         .merge_from(crate::preferences::PreferencesApi::openapi())
         .merge_from(crate::bug_reports::BugReportsApi::openapi())
-        .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
-        .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::session_detail::SessionDetailApi::openapi())
         .merge_from(crate::session_list::SessionListApi::openapi())
         .merge_from(crate::session_details::SessionDetailsApi::openapi())
-        .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
-        .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
@@ -347,7 +339,7 @@ mod tests {
         let item = document
             .paths
             .paths
-            .get("/api/v1/reading-plan-sync/status")
+            .get("/api/v2/reading-plan-sync/status")
             .expect("native reading-plan-sync status operation in same-path contract");
         let operation = item.get.as_ref().expect("GET status operation");
         assert_eq!(

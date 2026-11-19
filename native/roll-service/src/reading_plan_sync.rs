@@ -4,8 +4,8 @@
 //! Preserves the Python `app/api/reading_plan_sync.py` wire contract at the
 //! same HTTP method and exact path:
 //!
-//! * `GET /api/v1/reading-plan-sync/status`
-//! * `POST /api/v1/reading-plan-sync/sync`
+//! * `GET /api/v2/reading-plan-sync/status`
+//! * `POST /api/v2/reading-plan-sync/runs`
 //!
 //! Status is a direct read of persisted release-source state. The sync POST
 //! mirrors the user-triggered `sync_released_issues` behavior: evaluate only
@@ -1486,7 +1486,7 @@ pub async fn sync_released_issues_for_user(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-plan-sync/sync",
+    path = "/api/v2/reading-plan-sync/runs",
     tag = "reading-plan-sync",
     operation_id = "reading_plan_sync",
     request_body = SyncRequest,
@@ -1503,7 +1503,7 @@ pub fn sync_released_issues_documentation() {}
 
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-plan-sync/status",
+    path = "/api/v2/reading-plan-sync/status",
     tag = "reading-plan-sync",
     operation_id = "reading_plan_sync_status",
     responses(
