@@ -76,9 +76,11 @@
 
 ## MQA-ROLL-010: Covers, high zoom, and action accessibility
 
-**Test:** View an unmapped QA series without cover art; inspect Roll at about 1280 px, 375 px, and 250-300% browser zoom. With keyboard and accessibility inspection, use the die buttons (d2-d20) through idle, saving, success, and failure.
+**Setup:** Include a roll-eligible issue with a confirmed ComicVine cover, an eligible unmapped issue without a cover, and a recently rated issue with a cover. They must have distinguishable issue numbers; where possible, include a nonstandard image aspect ratio.
 
-**Expected:** Missing art uses a purposeful accessible placeholder, not another title's cover. Navigation compacts before consuming the main reading surface; content and controls remain reachable at high zoom. Reading Mode Intent/Bandwidth controls are no longer part of Roll (#4405; UPDATE 2026-11-18). Interactive controls expose correct names, roles and pressed/checked state, with enabled state when usable and disabled/busy only for real pending operations. Keyboard focus and recoverable error feedback remain usable.
+**Test:** Open the idle Roll screen and inspect the cover beside each numbered die-face row. Roll/select an issue, rate it, and inspect the last-read summary. Check at about 1280 px, 375 px, and 250-300% browser zoom. With keyboard and accessibility inspection, use the die buttons (d2-d20) through idle, saving, success, and failure.
+
+**Expected:** Die-face rows show the **exact canonical issue cover** from the existing batch issue-card projection, consistent with other views, without additional per-row requests. The cover, title, and issue number agree even when bootstrap data is stale. An unmapped/missing-image issue uses the shared accessible no-cover placeholder, never another title's cover or a broken image. The last-read summary uses the same cover presentation and preserves its former `object-cover` crop without distorting odd-shaped art. Navigation compacts before consuming the main reading surface; content and controls remain reachable at high zoom. Reading Mode Intent/Bandwidth controls are no longer part of Roll (#4405; UPDATE 2026-11-18). Interactive controls expose correct names, roles and pressed/checked state, with enabled state when usable and disabled/busy only for real pending operations. Keyboard focus and recoverable error feedback remain usable.
 
 ## MQA-ROLL-011: Restored history is specific and truthful
 

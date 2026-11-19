@@ -96,9 +96,9 @@ describe('auxiliary route network budgets', () => {
     const ownRows = app.rows().filter(row => !isPeerRollRow(row))
     expect(ownRows).toEqual([
       'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
-      'GET /api/v1/users/me/preferences x1',
       'GET /api/v2/auth/csrf x1',
       'GET /api/v2/auth/me x1',
+      'GET /api/v2/users/me/preferences x1',
     ])
   })
 })

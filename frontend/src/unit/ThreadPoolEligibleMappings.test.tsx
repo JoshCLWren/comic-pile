@@ -113,6 +113,50 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('#7')).toBeVisible()
   })
 
+  it('renders the same shared cover as other issue surfaces using the already batched card', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'Stale title', format: 'Comic', issue_id: 55, issue_number: '6' }]}
+          issueCards={{
+            items: [{
+              issue_id: 55,
+              thread_id: 1,
+              thread_title: 'Canonical comic',
+              issue_number: '7',
+              cover_image_url: 'https://example.test/canonical-7.jpg',
+              status: 'unread',
+              has_confirmed_identity: true,
+              mapping_state: 'confirmed',
+            }],
+          }}
+        />
+      </MemoryRouter>,
+    )
+    const face = screen.getByRole('button', { name: /Die face 1: Canonical comic/i })
+    const cover = screen.getByRole('img', { name: 'Cover for Canonical comic #7' })
+    expect(face).toContainElement(cover)
+    expect(cover).toHaveAttribute('src', 'https://example.test/canonical-7.jpg')
+    expect(cover).toHaveAttribute('loading', 'lazy')
+    expect(face.querySelectorAll('[data-testid="comic-issue-cover"]')).toHaveLength(1)
+  })
+
+  it('uses the shared no-cover fallback when issue identity has no image', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'Unmapped comic', format: 'Comic', issue_id: 55, issue_number: '3' }]}
+        />
+      </MemoryRouter>,
+    )
+    const face = screen.getByRole('button', { name: /Die face 1: Unmapped comic/i })
+    expect(face.querySelector('[data-testid="comic-issue-cover-placeholder"]')).not.toBeNull()
+    expect(screen.getByLabelText('No cover for Unmapped comic #3')).toBeVisible()
+    expect(face.querySelector('img')).toBeNull()
+  })
+
   it('prefers the scoped card title and issue number over bootstrap identity', () => {
     render(
       <MemoryRouter>

@@ -55,28 +55,28 @@ DELEGATED_WRITE_TESTS = {
 # an Axum router request, and a success assertion.
 INTEGRATION_WRITE_TESTS = {
     ("tags", "create_tag"): (
-        "create_tag_writes_database_row", "POST", "/api/v1/tags/",
+        "create_tag_writes_database_row", "POST", "/api/v2/tags",
     ),
     ("tags", "update_tag"): (
-        "update_tag_persists_name_and_color", "PUT", "/api/v1/tags/{tag_id}/",
+        "update_tag_persists_name_and_color", "PATCH", "/api/v2/tags/{tag_id}",
     ),
     ("tags", "delete_tag"): (
-        "delete_tag_cascades_assignments", "DELETE", "/api/v1/tags/{tag_id}/",
+        "delete_tag_cascades_assignments", "DELETE", "/api/v2/tags/{tag_id}",
     ),
     ("tags", "assign_tag"): (
-        "assign_tag_inserts_assignment", "POST", "/api/v1/tags/{tag_id}/assign/",
+        "assign_tag_inserts_assignment", "POST", "/api/v2/tags/{tag_id}/assignments",
     ),
     ("tags", "unassign_tag"): (
         "unassign_tag_removes_assignment", "DELETE",
-        "/api/v1/tags/{tag_id}/unassign/",
+        "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
     ),
     ("tags", "bulk_assign_tag"): (
         "bulk_assign_tag_writes_unique_assignments", "POST",
-        "/api/v1/tags/{tag_id}/bulk-assign/",
+        "/api/v2/tags/{tag_id}/assignment-batches",
     ),
     ("tags", "bulk_unassign_tag"): (
         "bulk_unassign_tag_removes_assignments", "POST",
-        "/api/v1/tags/{tag_id}/bulk-unassign/",
+        "/api/v2/tags/{tag_id}/unassignment-batches",
     ),
 }
 
