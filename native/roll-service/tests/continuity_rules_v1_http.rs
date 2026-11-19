@@ -444,6 +444,32 @@ async fn continuity_rule_validation_uses_the_house_422_envelope() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["detail"], "Validation failed");
+
+    // Path ids follow the same rule: mistyped text is the house 422, while an
+    // integer outside the column range is an ordinary missing rule.
+    let (status, body) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-rules/not-an-id",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"], "Validation failed");
+
+    let (status, body) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-rules/99999999999",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["detail"], "Continuity rule 99999999999 not found");
 }
 
 #[tokio::test]

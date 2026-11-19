@@ -24,7 +24,7 @@ use crate::{
 };
 use axum::{
     body::Bytes,
-    extract::{Path, State},
+    extract::{rejection::PathRejection, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -610,8 +610,9 @@ pub async fn list(
 pub async fn get(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
+    raw_rule_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
+    let rule_id = rule_id_from_path(raw_rule_id)?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -631,6 +632,17 @@ pub async fn get(
 /// rejection, and no `Content-Type` header is required.
 fn parse_request(body: &[u8]) -> Result<ContinuityRuleRequest, ApiError> {
     serde_json::from_slice(body).map_err(|_| validation_failed())
+}
+
+/// Resolve a `{rule_id}` path segment the way FastAPI's `rule_id: int` does.
+///
+/// Non-integer text is the house 422; an integer outside PostgreSQL's `int`
+/// range can never name a stored rule, so it is the same 404 a valid but
+/// missing identifier produces.
+fn rule_id_from_path(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiError> {
+    let Path(raw) = raw.map_err(|_| validation_failed())?;
+    let value = crate::issue_read_state::parse_int_text(&raw).ok_or_else(validation_failed)?;
+    i32::try_from(value).map_err(|_| not_found(format!("Continuity rule {value} not found")))
 }
 
 pub async fn create(
@@ -715,9 +727,10 @@ pub async fn create(
 pub async fn update(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
+    raw_rule_id: Result<Path<String>, PathRejection>,
     body: Bytes,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
+    let rule_id = rule_id_from_path(raw_rule_id)?;
     // Field constraints first, then the pydantic `model_validator` dedupe.
     let mut request = parse_request(&body)?;
     validate_request(&request)?;
@@ -816,8 +829,9 @@ pub async fn update(
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
+    raw_rule_id: Result<Path<String>, PathRejection>,
 ) -> Result<Response, ApiError> {
+    let rule_id = rule_id_from_path(raw_rule_id)?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -985,6 +999,27 @@ mod tests {
         let parsed = parse_request(&serde_json::to_vec(&request("item_read")).unwrap())
             .expect("well-formed body parses");
         assert_eq!(parsed.source_id, 10);
+    }
+
+    #[test]
+    fn path_ids_follow_pydantic_lax_integer_rules() {
+        assert_eq!(
+            rule_id_from_path(Ok(Path("42".to_string()))).expect("plain id"),
+            42
+        );
+        assert_eq!(
+            rule_id_from_path(Ok(Path(" +7 ".to_string()))).expect("signed id"),
+            7
+        );
+        let error = rule_id_from_path(Ok(Path("abc".to_string())))
+            .expect_err("non-integer path segment is a validation error");
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(error.detail(), "Validation failed");
+
+        let error = rule_id_from_path(Ok(Path("99999999999".to_string())))
+            .expect_err("ids outside the int column range cannot exist");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert_eq!(error.detail(), "Continuity rule 99999999999 not found");
     }
 
     #[test]

@@ -66,7 +66,7 @@ fn issue_not_found(issue_id: impl std::fmt::Display) -> ApiError {
 
 /// Pydantic lax integer text: optional sign then ASCII digits (surrounding
 /// whitespace is ignored).
-fn parse_int_text(raw: &str) -> Option<i64> {
+pub(crate) fn parse_int_text(raw: &str) -> Option<i64> {
     let trimmed = raw.trim();
     let digits = trimmed.strip_prefix(['+', '-']).unwrap_or(trimmed);
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
