@@ -566,7 +566,7 @@ pub async fn unsnooze(
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-    let option_e = crate::threads::option_e_enabled();
+    let option_e = state.option_e;
     let eligible_ids = if option_e {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {
