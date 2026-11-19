@@ -789,6 +789,7 @@ export default function CustomCBLBuilder({
                         threadTitle={candidate.series_name}
                         issueNumber={candidate.issue_number}
                         variant="compact"
+                        imageClassName="h-full w-full object-cover"
                         altText=""
                       />
                       <span className="min-w-0 flex-1">{candidate.series_name} #{candidate.issue_number}{ambiguousSeriesNames.has(candidate.series_name.toLocaleLowerCase()) && <span className="ml-2 text-xs text-[var(--theme-text-dim)]">Series ID {candidate.thread_id}</span>}</span><span className="text-xs text-[var(--theme-text-dim)]">Add</span>
