@@ -68,11 +68,54 @@ fn default_scope_mode() -> String {
 pub struct SeriesMappingPreviewResponse {
     pub preview_token: Option<String>,
     pub scope: SeriesMappingPreviewScope,
-    pub provider_series: Option<Value>,
+    pub provider_series: Option<SeriesMappingPreviewProviderSeries>,
     pub counts: SeriesMappingPreviewCounts,
-    pub rows: Vec<Value>,
+    pub rows: Vec<SeriesMappingPreviewRow>,
     pub issued_at: f64,
     pub expires_at: Option<f64>,
+}
+
+/// Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.
+///
+/// Every field is always emitted, including the nullable ones and the two
+/// defaults (`metadata_refresh_required: false`, `reason: null`). Internal plan
+/// fields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,
+/// `_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the
+/// Python Pydantic model drops them, so a raw `Value` would leak them and omit
+/// the defaults.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SeriesMappingPreviewRow {
+    pub row_id: String,
+    pub issue_id: i32,
+    pub issue_number: String,
+    pub title: Option<String>,
+    pub classification: String,
+    pub thread_id: Option<i32>,
+    pub thread_title: Option<String>,
+    pub current_mapping_status: Option<String>,
+    pub provider: Option<String>,
+    pub external_id: Option<String>,
+    pub proposed_mapping: bool,
+    pub default_selected: bool,
+    pub metadata_refresh_required: bool,
+    pub reason: Option<String>,
+}
+
+/// Wire-exact mirror of
+/// `app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.
+///
+/// Pydantic coerces `start_year` and `count_of_issues` from strings to integers;
+/// the conversion helper below does the same so the generated contract types
+/// these as integers rather than `unknown`.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SeriesMappingPreviewProviderSeries {
+    pub id: String,
+    pub name: Option<String>,
+    pub publisher: Option<String>,
+    pub start_year: Option<i32>,
+    pub count_of_issues: Option<i32>,
+    pub site_detail_url: Option<String>,
+    pub image: Option<Value>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -186,6 +229,86 @@ fn count(plan: &Value, key: &str) -> i64 {
         .unwrap_or_default()
 }
 
+/// Reproduce Pydantic's `str | None = None` coercion: null/missing stays null,
+/// strings pass through, and scalars are stringified.
+fn pydantic_str(value: Option<&Value>) -> Option<String> {
+    match value {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => Some(text.clone()),
+        Some(Value::Bool(flag)) => Some(flag.to_string()),
+        Some(Value::Number(number)) => Some(number.to_string()),
+        Some(_) => None,
+    }
+}
+
+/// Reproduce Pydantic's `int | None = None` coercion, notably accepting numeric
+/// strings such as ComicVine's `"1980"` and `"700"`.
+fn pydantic_int(value: Option<&Value>) -> Option<i32> {
+    let raw = match value {
+        None | Some(Value::Null) => return None,
+        Some(Value::String(text)) => text.trim().parse::<i64>().ok()?,
+        Some(Value::Number(number)) => number.as_i64().or_else(|| {
+            number.as_f64().and_then(|value| {
+                if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX) {
+                    Some(value as i64)
+                } else {
+                    None
+                }
+            })
+        })?,
+        Some(Value::Bool(flag)) => i64::from(*flag),
+        Some(_) => return None,
+    };
+    i32::try_from(raw).ok()
+}
+
+fn pydantic_bool(value: Option<&Value>) -> bool {
+    value.and_then(Value::as_bool).unwrap_or(false)
+}
+
+/// Convert one internal plan row into the Python response model's shape,
+/// dropping internal metadata and applying its always-emitted defaults.
+fn typed_row(row: &Value, origin_issue_id: i32) -> SeriesMappingPreviewRow {
+    let issue_id = row
+        .get("issue_id")
+        .and_then(Value::as_i64)
+        .and_then(|id| i32::try_from(id).ok())
+        .unwrap_or(origin_issue_id);
+    let thread_id = pydantic_int(row.get("thread_id"));
+    SeriesMappingPreviewRow {
+        row_id: pydantic_str(row.get("row_id")).unwrap_or_default(),
+        issue_id,
+        issue_number: pydantic_str(row.get("issue_number")).unwrap_or_default(),
+        title: pydantic_str(row.get("title")),
+        classification: pydantic_str(row.get("classification")).unwrap_or_default(),
+        thread_id,
+        thread_title: pydantic_str(row.get("thread_title")),
+        current_mapping_status: pydantic_str(row.get("current_mapping_status")),
+        provider: pydantic_str(row.get("provider")),
+        external_id: pydantic_str(row.get("external_id")),
+        proposed_mapping: pydantic_bool(row.get("proposed_mapping")),
+        default_selected: pydantic_bool(row.get("default_selected")),
+        metadata_refresh_required: pydantic_bool(row.get("metadata_refresh_required")),
+        reason: pydantic_str(row.get("reason")),
+    }
+}
+
+fn typed_provider_series(value: Option<&Value>) -> Option<SeriesMappingPreviewProviderSeries> {
+    let value = value.filter(|value| !value.is_null())?;
+    Some(SeriesMappingPreviewProviderSeries {
+        id: pydantic_str(value.get("id")).unwrap_or_default(),
+        name: pydantic_str(value.get("name")),
+        publisher: pydantic_str(value.get("publisher")),
+        start_year: pydantic_int(value.get("start_year")),
+        count_of_issues: pydantic_int(value.get("count_of_issues")),
+        site_detail_url: pydantic_str(value.get("site_detail_url")),
+        image: value
+            .get("image")
+            .filter(|image| image.is_object())
+            .cloned(),
+    })
+}
+
 #[utoipa::path(
     post,
     path = "/api/v1/catalog/series-mappings/preview",
@@ -269,10 +392,7 @@ pub async fn preview_series_mapping_handler(
                 .and_then(Value::as_str)
                 .map(str::to_string),
         },
-        provider_series: plan
-            .get("provider_series")
-            .cloned()
-            .filter(|v| !v.is_null()),
+        provider_series: typed_provider_series(plan.get("provider_series")),
         counts: SeriesMappingPreviewCounts {
             already_confirmed: count(&plan, "already_confirmed"),
             safe_exact_match: count(&plan, "safe_exact_match"),
@@ -284,7 +404,11 @@ pub async fn preview_series_mapping_handler(
         rows: plan
             .get("rows")
             .and_then(Value::as_array)
-            .cloned()
+            .map(|rows| {
+                rows.iter()
+                    .map(|row| typed_row(row, request.origin_issue_id))
+                    .collect()
+            })
             .unwrap_or_default(),
         issued_at,
         expires_at,
@@ -350,6 +474,73 @@ mod tests {
         .await;
         let response = result.expect("preview returns a 200 body");
         assert!(response.scope.status == "available" || response.scope.status == "unavailable");
+    }
+
+    /// Golden measured from `app.schemas.catalog::SeriesMappingPreviewRow`
+    /// (`SeriesMappingPreviewResponse.model_validate(raw).model_dump()`).
+    /// The raw input deliberately includes internal plan metadata, omits
+    /// `reason`, and carries a `metadata_refresh_required` default.
+    #[test]
+    fn nonempty_preview_row_matches_python_response_model_golden() {
+        let raw = serde_json::json!({
+            "row_id": "issue:42",
+            "issue_id": 42,
+            "issue_number": "1",
+            "title": "Issue One",
+            "classification": "safe_exact_match",
+            "thread_id": 7,
+            "thread_title": "Thread",
+            "provider": "comicvine",
+            "external_id": "issue-42",
+            "confidence": 0.99,
+            "proposed_mapping": true,
+            "default_selected": true,
+            "_identity_metadata": { "volume": { "name": "Series" }, "issue_number": "1" },
+            "_provider_metadata": { "name": "Issue One" },
+            "_roster_verified": true,
+            "metadata_refresh_required": false,
+        });
+        let golden: Value = serde_json::from_str(
+            r#"{
+                "row_id": "issue:42", "issue_id": 42, "issue_number": "1",
+                "title": "Issue One", "classification": "safe_exact_match",
+                "thread_id": 7, "thread_title": "Thread",
+                "current_mapping_status": null, "provider": "comicvine",
+                "external_id": "issue-42", "proposed_mapping": true,
+                "default_selected": true, "metadata_refresh_required": false,
+                "reason": null
+            }"#,
+        )
+        .expect("golden JSON");
+        let actual = serde_json::to_value(typed_row(&raw, 42)).expect("serializable row");
+        assert_eq!(actual, golden);
+    }
+
+    /// Pydantic coerces ComicVine's string years to integers; the golden was
+    /// measured from `SeriesMappingPreviewResponse.model_validate(raw)`.
+    #[test]
+    fn nonempty_provider_series_matches_python_response_model_golden() {
+        let raw = serde_json::json!({
+            "id": "4050-1",
+            "name": "Series",
+            "publisher": "Pub",
+            "start_year": "1980",
+            "count_of_issues": "700",
+            "site_detail_url": "https://example/series",
+            "image": { "small_url": "https://img" },
+        });
+        let golden: Value = serde_json::from_str(
+            r#"{
+                "id": "4050-1", "name": "Series", "publisher": "Pub",
+                "start_year": 1980, "count_of_issues": 700,
+                "site_detail_url": "https://example/series",
+                "image": { "small_url": "https://img" }
+            }"#,
+        )
+        .expect("golden JSON");
+        let actual =
+            serde_json::to_value(typed_provider_series(Some(&raw))).expect("serializable series");
+        assert_eq!(actual, golden);
     }
 
     #[test]

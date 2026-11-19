@@ -17,7 +17,8 @@
       "method": "GET",
       "path": "/api/v1/taste/discoveries",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries$"
+      "src": "^/api/v1/taste/discoveries$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",

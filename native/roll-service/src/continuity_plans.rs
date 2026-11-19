@@ -864,6 +864,15 @@ pub(crate) async fn rebuild_plan_membership(
         }
     }
 
+    // Recovery relink records owned Reading List authority (`custom-cbl:<id>`)
+    // independently of plan nodes. Preserve that provenance across authoring
+    // saves: rebuilding only from node-carried paths would silently erase a
+    // former authority and make an orphaned plan look never-linked.
+    let authoritative_source =
+        "raw_source_path LIKE 'custom-cbl:%' OR custom_cbl_list_id IS NOT NULL";
+    // Placement rows are always rebuilt from the submitted nodes. Keeping any
+    // old row would duplicate a still-present tuple or leave a removed one
+    // behind, so clear all of them while preserving the source history itself.
     tx.execute(
         "DELETE FROM reading_plan_source_placements WHERE plan_id = $1",
         &[&plan_id],
@@ -871,7 +880,10 @@ pub(crate) async fn rebuild_plan_membership(
     .await
     .map_err(db::query_error)?;
     tx.execute(
-        "DELETE FROM reading_plan_sources WHERE plan_id = $1",
+        &format!(
+            "DELETE FROM reading_plan_sources WHERE plan_id = $1
+              AND NOT ({authoritative_source})"
+        ),
         &[&plan_id],
     )
     .await
@@ -913,8 +925,29 @@ pub(crate) async fn rebuild_plan_membership(
         }
     }
 
+    // One set-based read of preserved authority sources; never a query per
+    // node path (AGENTS.md: no SQL inside loops / no per-item round trips).
+    let preserved_sources: BTreeMap<String, i32> = tx
+        .query(
+            &format!(
+                "SELECT raw_source_path, id FROM reading_plan_sources
+                  WHERE plan_id=$1 AND ({authoritative_source})"
+            ),
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
     let mut source_ids: BTreeMap<String, i32> = BTreeMap::new();
     for path in source_paths.keys() {
+        // A preserved Reading List source already carries this path; reuse it
+        // so its (possibly now-removed) List identity survives the save.
+        if let Some(id) = preserved_sources.get(path) {
+            source_ids.insert(path.clone(), *id);
+            continue;
+        }
         let row = tx
             .query_one(
                 "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)

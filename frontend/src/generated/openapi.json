@@ -25,158 +25,6 @@
         },
         "type": "object"
       },
-      "ActiveThreadInfo": {
-        "description": "Schema for active thread information in session response.",
-        "properties": {
-          "format": {
-            "title": "Format",
-            "type": "string"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "DEPRECATED: Always equals next_issue_id. Use next_issue_id instead.",
-            "title": "Issue Id"
-          },
-          "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.",
-            "title": "Issue Number"
-          },
-          "issues_read": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issues Read"
-          },
-          "issues_remaining": {
-            "title": "Issues Remaining",
-            "type": "integer"
-          },
-          "last_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rating"
-          },
-          "last_rolled_result": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rolled Result"
-          },
-          "next_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The next unread issue ID to read",
-            "title": "Next Issue Id"
-          },
-          "next_issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The next unread issue number (e.g., '5', 'Annual 1')",
-            "title": "Next Issue Number"
-          },
-          "queue_position": {
-            "title": "Queue Position",
-            "type": "integer"
-          },
-          "reading_progress": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Progress"
-          },
-          "tags": {
-            "items": {
-              "$ref": "#/components/schemas/TagResponse"
-            },
-            "title": "Tags",
-            "type": "array"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "total_issues": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Issues"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "last_rolled_result"
-        ],
-        "title": "ActiveThreadInfo",
-        "type": "object"
-      },
       "ActivityItem": {
         "properties": {
           "die_after": {
@@ -347,33 +195,26 @@
         "type": "string"
       },
       "BlockingDependency": {
-        "description": "One unread Issue required by a list or explicit prerequisite.",
+        "description": "One blocking issue (Python `BlockingDependency`).",
         "properties": {
           "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "label": {
-            "title": "Label",
             "type": "string"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_title": {
-            "title": "Thread Title",
             "type": "string"
           }
         },
@@ -383,36 +224,32 @@
           "issue_number",
           "label"
         ],
-        "title": "BlockingDependency",
         "type": "object"
       },
       "BlockingExplanation": {
-        "description": "Schema for blocked thread explanation.",
+        "description": "Blocked status plus reader-language reasons (Python `BlockingExplanation`).",
         "properties": {
           "blocking_dependencies": {
             "items": {
               "$ref": "#/components/schemas/BlockingDependency"
             },
-            "title": "Blocking Dependencies",
             "type": "array"
           },
           "blocking_reasons": {
             "items": {
               "type": "string"
             },
-            "title": "Blocking Reasons",
             "type": "array"
           },
           "is_blocked": {
-            "title": "Is Blocked",
             "type": "boolean"
           }
         },
         "required": [
           "is_blocked",
-          "blocking_reasons"
+          "blocking_reasons",
+          "blocking_dependencies"
         ],
-        "title": "BlockingExplanation",
         "type": "object"
       },
       "Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post": {
@@ -1893,25 +1730,6 @@
           "direct_list_count",
           "total_list_count"
         ],
-        "type": "object"
-      },
-      "CBLPlacement": {
-        "description": "One ordered CBL observation with inseparable provenance.",
-        "properties": {
-          "position": {
-            "title": "Position",
-            "type": "integer"
-          },
-          "source_path": {
-            "title": "Source Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "source_path",
-          "position"
-        ],
-        "title": "CBLPlacement",
         "type": "object"
       },
       "CBLSourceFingerprintResponse": {
@@ -3723,48 +3541,23 @@
         "type": "object"
       },
       "ContinuityPlanLane": {
-        "description": "One visual lane in a continuity plan.",
+        "additionalProperties": false,
         "properties": {
           "id": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Id",
             "type": "string"
           },
           "inferred_gate_kind": {
-            "anyOf": [
-              {
-                "enum": [
-                  "thread_entry",
-                  "reading_order"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Inferred Gate Kind"
-          },
-          "migration_contract": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ExplicitReaderOrderMigrationContract"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
+          "migration_contract": {},
           "name": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Name",
             "type": "string"
           },
           "order": {
-            "minimum": 0.0,
-            "title": "Order",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -3773,7 +3566,6 @@
           "name",
           "order"
         ],
-        "title": "ContinuityPlanLane",
         "type": "object"
       },
       "ContinuityPlanListItem": {
@@ -3820,210 +3612,112 @@
         "type": "object"
       },
       "ContinuityPlanNode": {
-        "description": "One ordered reference in a continuity plan.",
+        "additionalProperties": false,
         "properties": {
           "checkpoint_target_ref_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Checkpoint Target Ref Id"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "checkpoint_target_ref_ids": {
             "items": {
-              "exclusiveMinimum": 0.0,
+              "format": "int32",
               "type": "integer"
             },
-            "maxItems": 1000,
-            "title": "Checkpoint Target Ref Ids",
             "type": "array"
           },
           "convergence_gate": {
-            "items": {
-              "$ref": "#/components/schemas/ConvergenceGateTarget"
-            },
-            "title": "Convergence Gate",
+            "items": {},
             "type": "array"
           },
           "id": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Id",
             "type": "string"
           },
           "is_checkpoint": {
-            "default": false,
-            "title": "Is Checkpoint",
             "type": "boolean"
           },
           "label": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lane_id": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Lane Id",
             "type": "string"
           },
           "node_type": {
-            "enum": [
-              "issue",
-              "crossover",
-              "thread"
-            ],
-            "title": "Node Type",
             "type": "string"
           },
           "position": {
-            "minimum": 0.0,
-            "title": "Position",
+            "format": "int32",
             "type": "integer"
           },
           "reader_optional": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Optional"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "reader_role": {
-            "anyOf": [
-              {
-                "enum": [
-                  "required/core",
-                  "recommended",
-                  "optional",
-                  "context/prelude",
-                  "aftermath/epilogue",
-                  "skipped/excluded"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Role"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "ref_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Ref Id",
+            "format": "int32",
             "type": "integer"
           },
           "source_cbl_placements": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/CBLPlacement"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Cbl Placements"
+            "items": {},
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "source_confidence": {
-            "anyOf": [
-              {
-                "enum": [
-                  "high",
-                  "medium",
-                  "low"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Confidence"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_explanation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Explanation"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_paths": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Paths"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "source_role": {
-            "anyOf": [
-              {
-                "enum": [
-                  "core",
-                  "context/prelude",
-                  "epilogue",
-                  "unknown"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Role"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_story_arc_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Story Arc Ids"
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "source_target_story_arc_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Target Story Arc Id"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4031,9 +3725,19 @@
           "node_type",
           "ref_id",
           "lane_id",
-          "position"
+          "position",
+          "label",
+          "source_role",
+          "source_confidence",
+          "source_explanation",
+          "source_paths",
+          "source_cbl_placements",
+          "source_story_arc_ids",
+          "source_target_story_arc_id",
+          "reader_role",
+          "reader_optional",
+          "convergence_gate"
         ],
-        "title": "ContinuityPlanNode",
         "type": "object"
       },
       "ContinuityPlanResponse": {
@@ -4047,7 +3751,7 @@
           },
           "lanes": {
             "items": {
-              "$ref": "#/components/schemas/NativeContinuityPlanLane"
+              "$ref": "#/components/schemas/ContinuityPlanLane"
             },
             "type": "array"
           },
@@ -4056,7 +3760,7 @@
           },
           "nodes": {
             "items": {
-              "$ref": "#/components/schemas/NativeContinuityPlanNode"
+              "$ref": "#/components/schemas/ContinuityPlanNode"
             },
             "type": "array"
           },
@@ -4135,7 +3839,7 @@
           },
           "lanes": {
             "items": {
-              "$ref": "#/components/schemas/NativeContinuityPlanLane"
+              "$ref": "#/components/schemas/ContinuityPlanLane"
             },
             "type": "array"
           },
@@ -4144,7 +3848,7 @@
           },
           "nodes": {
             "items": {
-              "$ref": "#/components/schemas/NativeContinuityPlanNode"
+              "$ref": "#/components/schemas/ContinuityPlanNode"
             },
             "type": "array"
           },
@@ -4346,32 +4050,6 @@
           "created_at",
           "updated_at"
         ],
-        "type": "object"
-      },
-      "ConvergenceGateTarget": {
-        "description": "A node a convergence gate waits for.",
-        "properties": {
-          "node_id": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Node Id",
-            "type": "string"
-          },
-          "node_type": {
-            "enum": [
-              "issue",
-              "crossover",
-              "thread"
-            ],
-            "title": "Node Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "node_type",
-          "node_id"
-        ],
-        "title": "ConvergenceGateTarget",
         "type": "object"
       },
       "ConvergenceTarget": {
@@ -6271,117 +5949,79 @@
         "type": "object"
       },
       "CustomCBLApplyRequest": {
-        "description": "Options for explicitly applying a custom CBL to an existing Reading Plan.",
         "properties": {
           "expected_updated_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``plan_version_conflict``, matching PUT.",
-            "title": "Expected Updated At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "lane_id": {
-            "anyOf": [
-              {
-                "maxLength": 80,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lane Id"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "title": "CustomCBLApplyRequest",
         "type": "object"
       },
       "CustomCBLApplyResponse": {
-        "description": "Updated Reading Plan after custom CBL material is merged into it.",
         "properties": {
           "added_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Added Issue Ids",
             "type": "array"
           },
           "created_at": {
-            "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "lanes": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityPlanLane"
-            },
-            "maxItems": 100,
-            "minItems": 0,
-            "title": "Lanes",
+            "items": {},
             "type": "array"
           },
           "name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
             "type": "string"
           },
           "nodes": {
-            "items": {
-              "$ref": "#/components/schemas/ContinuityPlanNode"
-            },
-            "maxItems": 1000,
-            "title": "Nodes",
+            "items": {},
             "type": "array"
           },
           "ordering_mode": {
-            "default": "informational",
-            "enum": [
-              "informational",
-              "strict_sequential"
-            ],
-            "title": "Ordering Mode",
             "type": "string"
           },
           "skipped_existing_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Skipped Existing Issue Ids",
             "type": "array"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "user_id": {
-            "title": "User Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
-          "name",
-          "lanes",
           "id",
           "user_id",
+          "name",
+          "ordering_mode",
+          "lanes",
+          "nodes",
           "created_at",
           "updated_at",
           "added_issue_ids",
           "skipped_existing_issue_ids"
         ],
-        "title": "CustomCBLApplyResponse",
         "type": "object"
       },
       "CustomCBLEntryIntent": {
@@ -6399,61 +6039,46 @@
         "type": "object"
       },
       "CustomCBLEntryResponse": {
-        "description": "One resolved custom CBL entry.",
         "properties": {
           "checkpoint_target_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Checkpoint Target Issue Ids",
             "type": "array"
           },
           "gate": {
-            "default": "none",
-            "enum": [
-              "none",
-              "hold",
-              "after_previous"
-            ],
-            "title": "Gate",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "is_checkpoint": {
-            "default": false,
-            "title": "Is Checkpoint",
             "type": "boolean"
           },
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "position": {
-            "title": "Position",
+            "format": "int32",
             "type": "integer"
           },
           "series_name": {
-            "title": "Series Name",
             "type": "string"
           },
           "skipped": {
-            "default": false,
-            "title": "Skipped",
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -6464,32 +6089,31 @@
           "thread_id",
           "series_name",
           "issue_number",
-          "status"
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids"
         ],
-        "title": "CustomCBLEntryResponse",
         "type": "object"
       },
       "CustomCBLIssueSearchResult": {
-        "description": "Owned canonical issue candidate available for custom CBL authoring.",
         "properties": {
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "series_name": {
-            "title": "Series Name",
             "type": "string"
           },
           "status": {
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -6500,58 +6124,41 @@
           "issue_number",
           "status"
         ],
-        "title": "CustomCBLIssueSearchResult",
         "type": "object"
       },
       "CustomCBLListItem": {
-        "description": "Compact list-row representation for the custom CBL picker.",
         "properties": {
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_count": {
-            "title": "Issue Count",
+            "format": "int32",
             "type": "integer"
           },
           "mode": {
-            "default": "loose",
-            "enum": [
-              "strict",
-              "loose"
-            ],
-            "title": "Mode",
             "type": "string"
           },
           "name": {
-            "title": "Name",
             "type": "string"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "description",
+          "mode",
           "issue_count",
           "updated_at"
         ],
-        "title": "CustomCBLListItem",
         "type": "object"
       },
       "CustomCBLPredecessorChange": {
@@ -6601,199 +6208,138 @@
         "type": "object"
       },
       "CustomCBLResponse": {
-        "description": "Full custom CBL including its ordered canonical issue references.",
         "properties": {
           "created_at": {
-            "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "entries": {
             "items": {
               "$ref": "#/components/schemas/CustomCBLEntryResponse"
             },
-            "title": "Entries",
             "type": "array"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_count": {
-            "title": "Issue Count",
+            "format": "int32",
             "type": "integer"
           },
           "mode": {
-            "default": "loose",
-            "enum": [
-              "strict",
-              "loose"
-            ],
-            "title": "Mode",
             "type": "string"
           },
           "name": {
-            "title": "Name",
             "type": "string"
           },
           "predecessor_changes": {
             "items": {
-              "$ref": "#/components/schemas/ReadingListPredecessorChange"
+              "$ref": "#/components/schemas/CustomCBLPredecessorChange"
             },
-            "title": "Predecessor Changes",
             "type": "array"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "user_id": {
-            "title": "User Id",
+            "format": "int32",
             "type": "integer"
           },
           "warnings": {
             "items": {
               "type": "string"
             },
-            "title": "Warnings",
             "type": "array"
           }
         },
         "required": [
           "id",
-          "name",
-          "description",
-          "issue_count",
-          "updated_at",
           "user_id",
+          "name",
+          "mode",
+          "issue_count",
           "created_at",
+          "updated_at",
           "entries"
         ],
-        "title": "CustomCBLResponse",
         "type": "object"
       },
       "CustomCBLWrite": {
-        "description": "Create or replace one custom CBL and its ordered issue membership.",
+        "additionalProperties": false,
         "properties": {
           "checkpoint_issue_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 1000,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Checkpoint Issue Ids"
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "checkpoint_targets": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "items": {
-                    "exclusiveMinimum": 0.0,
-                    "type": "integer"
-                  },
-                  "type": "array"
-                },
-                "type": "object"
+            "additionalProperties": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
               },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Checkpoint Targets"
+              "type": "array"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
-          "confirmed_predecessor_changes": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ReadingListPredecessorChange"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confirmed Predecessor Changes"
-          },
+          "confirmed_predecessor_changes": {},
           "description": {
-            "anyOf": [
-              {
-                "maxLength": 2000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "entry_intents": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/ReadingListEntryIntent"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Intents"
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CustomCBLEntryIntent"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "maxItems": 1000,
-            "title": "Issue Ids",
             "type": "array"
           },
           "mode": {
-            "anyOf": [
-              {
-                "enum": [
-                  "strict",
-                  "loose"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
             "type": "string"
           }
         },
         "required": [
           "name"
         ],
-        "title": "CustomCBLWrite",
         "type": "object"
       },
       "DemoRoll": {
@@ -7535,7 +7081,6 @@
         "description": "Screen diagnostic information (`pixelRatio` alias on the wire).",
         "properties": {
           "height": {
-            "format": "int32",
             "type": "integer"
           },
           "pixelRatio": {
@@ -7543,7 +7088,6 @@
             "type": "number"
           },
           "width": {
-            "format": "int32",
             "type": "integer"
           }
         },
@@ -7558,11 +7102,9 @@
         "description": "Scroll position diagnostic information.",
         "properties": {
           "x": {
-            "format": "int32",
             "type": "integer"
           },
           "y": {
-            "format": "int32",
             "type": "integer"
           }
         },
@@ -7576,11 +7118,9 @@
         "description": "Viewport diagnostic information.",
         "properties": {
           "height": {
-            "format": "int32",
             "type": "integer"
           },
           "width": {
-            "format": "int32",
             "type": "integer"
           }
         },
@@ -7674,215 +7214,6 @@
           "direct_tags",
           "effective_tags"
         ],
-        "type": "object"
-      },
-      "EventDetail": {
-        "description": "Schema for event detail in session details.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "die": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Die"
-          },
-          "die_after": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Die After"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Denormalized issue number captured at event time",
-            "title": "Issue Number"
-          },
-          "issues_read": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issues Read"
-          },
-          "queue_move": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Queue Move"
-          },
-          "rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rating"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Result"
-          },
-          "selection_method": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Selection Method"
-          },
-          "thread_deleted": {
-            "default": false,
-            "description": "True when the event referenced a thread that no longer exists. The title is the last known snapshot title when recoverable.",
-            "title": "Thread Deleted",
-            "type": "boolean"
-          },
-          "thread_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thread Title"
-          },
-          "timestamp": {
-            "title": "Timestamp",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "timestamp",
-          "thread_title"
-        ],
-        "title": "EventDetail",
-        "type": "object"
-      },
-      "ExplicitReaderOrderMigrationContract": {
-        "description": "Server-owned proof that a plan replaced classified reader-order edges.",
-        "properties": {
-          "classification_family_keys": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Classification Family Keys",
-            "type": "array"
-          },
-          "edge_fingerprint": {
-            "title": "Edge Fingerprint",
-            "type": "string"
-          },
-          "edges": {
-            "items": {
-              "maxItems": 2,
-              "minItems": 2,
-              "prefixItems": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "integer"
-                }
-              ],
-              "type": "array"
-            },
-            "title": "Edges",
-            "type": "array"
-          },
-          "issue_fingerprint": {
-            "title": "Issue Fingerprint",
-            "type": "string"
-          },
-          "issue_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Issue Ids",
-            "type": "array"
-          },
-          "kind": {
-            "const": "explicit_reader_order",
-            "title": "Kind",
-            "type": "string"
-          },
-          "selected_dependency_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Selected Dependency Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "kind",
-          "classification_family_keys",
-          "selected_dependency_ids",
-          "issue_ids",
-          "edges",
-          "issue_fingerprint",
-          "edge_fingerprint"
-        ],
-        "title": "ExplicitReaderOrderMigrationContract",
         "type": "object"
       },
       "ForgotPasswordRequest": {
@@ -9666,64 +8997,6 @@
         ],
         "type": "object"
       },
-      "NativeBlockingDependency": {
-        "description": "One blocking issue (Python `BlockingDependency`).",
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "label"
-        ],
-        "type": "object"
-      },
-      "NativeBlockingExplanation": {
-        "description": "Blocked status plus reader-language reasons (Python `BlockingExplanation`).",
-        "properties": {
-          "blocking_dependencies": {
-            "items": {
-              "$ref": "#/components/schemas/NativeBlockingDependency"
-            },
-            "type": "array"
-          },
-          "blocking_reasons": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "is_blocked": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "is_blocked",
-          "blocking_reasons",
-          "blocking_dependencies"
-        ],
-        "type": "object"
-      },
       "NativeComicVineMappingHealth": {
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
         "properties": {
@@ -9758,497 +9031,6 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
-        ],
-        "type": "object"
-      },
-      "NativeContinuityPlanLane": {
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "inferred_gate_kind": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "migration_contract": {},
-          "name": {
-            "type": "string"
-          },
-          "order": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "order"
-        ],
-        "type": "object"
-      },
-      "NativeContinuityPlanNode": {
-        "additionalProperties": false,
-        "properties": {
-          "checkpoint_target_ref_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "checkpoint_target_ref_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "convergence_gate": {
-            "items": {},
-            "type": "array"
-          },
-          "id": {
-            "type": "string"
-          },
-          "is_checkpoint": {
-            "type": "boolean"
-          },
-          "label": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "lane_id": {
-            "type": "string"
-          },
-          "node_type": {
-            "type": "string"
-          },
-          "position": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "reader_optional": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "reader_role": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "ref_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "source_cbl_placements": {
-            "items": {},
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "source_confidence": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_explanation": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "source_role": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source_story_arc_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "source_target_story_arc_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "node_type",
-          "ref_id",
-          "lane_id",
-          "position",
-          "label",
-          "source_role",
-          "source_confidence",
-          "source_explanation",
-          "source_paths",
-          "source_cbl_placements",
-          "source_story_arc_ids",
-          "source_target_story_arc_id",
-          "reader_role",
-          "reader_optional",
-          "convergence_gate"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLApplyRequest": {
-        "properties": {
-          "expected_updated_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "lane_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "NativeCustomCBLApplyResponse": {
-        "properties": {
-          "added_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "lanes": {
-            "items": {},
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          },
-          "nodes": {
-            "items": {},
-            "type": "array"
-          },
-          "ordering_mode": {
-            "type": "string"
-          },
-          "skipped_existing_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "user_id",
-          "name",
-          "ordering_mode",
-          "lanes",
-          "nodes",
-          "created_at",
-          "updated_at",
-          "added_issue_ids",
-          "skipped_existing_issue_ids"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLEntryResponse": {
-        "properties": {
-          "checkpoint_target_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "gate": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "is_checkpoint": {
-            "type": "boolean"
-          },
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "skipped": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "position",
-          "issue_id",
-          "thread_id",
-          "series_name",
-          "issue_number",
-          "status",
-          "is_checkpoint",
-          "gate",
-          "skipped",
-          "checkpoint_target_issue_ids"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLIssueSearchResult": {
-        "properties": {
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "series_name",
-          "issue_number",
-          "status"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLListItem": {
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "mode",
-          "issue_count",
-          "updated_at"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLResponse": {
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/NativeCustomCBLEntryResponse"
-            },
-            "type": "array"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "mode": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "predecessor_changes": {
-            "items": {
-              "$ref": "#/components/schemas/CustomCBLPredecessorChange"
-            },
-            "type": "array"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "user_id",
-          "name",
-          "mode",
-          "issue_count",
-          "created_at",
-          "updated_at",
-          "entries"
-        ],
-        "type": "object"
-      },
-      "NativeCustomCBLWrite": {
-        "additionalProperties": false,
-        "properties": {
-          "checkpoint_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "checkpoint_targets": {
-            "additionalProperties": {
-              "items": {
-                "format": "int32",
-                "type": "integer"
-              },
-              "type": "array"
-            },
-            "propertyNames": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "confirmed_predecessor_changes": {},
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "entry_intents": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/CustomCBLEntryIntent"
-            },
-            "propertyNames": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "mode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
         ],
         "type": "object"
       },
@@ -10440,108 +9222,6 @@
         },
         "required": [
           "issue_number"
-        ],
-        "type": "object"
-      },
-      "NativeOverlapDecisionItem": {
-        "properties": {
-          "continuing_volume_id": {
-            "type": "string"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "list_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "waiting_volume_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "list_id",
-          "continuing_volume_id",
-          "waiting_volume_id",
-          "created_at",
-          "updated_at"
-        ],
-        "type": "object"
-      },
-      "NativeOverlapDecisionSetResponse": {
-        "properties": {
-          "candidate_volumes": {
-            "items": {
-              "$ref": "#/components/schemas/NativeOverlapVolumeCandidate"
-            },
-            "type": "array"
-          },
-          "decisions": {
-            "items": {
-              "$ref": "#/components/schemas/NativeOverlapDecisionItem"
-            },
-            "type": "array"
-          },
-          "list_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "list_id",
-          "updated_at"
-        ],
-        "type": "object"
-      },
-      "NativeOverlapDecisionWrite": {
-        "properties": {
-          "continuing_volume_id": {
-            "type": "string"
-          },
-          "expected_updated_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "waiting_volume_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "continuing_volume_id",
-          "waiting_volume_id"
-        ],
-        "type": "object"
-      },
-      "NativeOverlapVolumeCandidate": {
-        "properties": {
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_title": {
-            "type": "string"
-          },
-          "volume_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "thread_id",
-          "thread_title",
-          "volume_id"
         ],
         "type": "object"
       },
@@ -11314,139 +9994,6 @@
         ],
         "type": "object"
       },
-      "NativeReadingListEntryIntent": {
-        "properties": {
-          "gate": {
-            "type": "string"
-          },
-          "skipped": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "gate"
-        ],
-        "type": "object"
-      },
-      "NativeReadingListPredecessorChange": {
-        "properties": {
-          "after_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "after_issue_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "before_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "before_issue_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "issue_name",
-          "before_issue_ids",
-          "before_issue_names",
-          "after_issue_ids",
-          "after_issue_names"
-        ],
-        "type": "object"
-      },
-      "NativeReadingListReaderEntry": {
-        "properties": {
-          "availability": {
-            "type": "string"
-          },
-          "checkpoint_target_issue_ids": {
-            "items": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "explanation": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "gate": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "is_checkpoint": {
-            "type": "boolean"
-          },
-          "issue_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "series_name": {
-            "type": "string"
-          },
-          "skipped": {
-            "type": "boolean"
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "position",
-          "issue_id",
-          "thread_id",
-          "series_name",
-          "issue_number",
-          "status",
-          "is_checkpoint",
-          "gate",
-          "skipped",
-          "checkpoint_target_issue_ids",
-          "availability"
-        ],
-        "type": "object"
-      },
       "NativeReadingOrderItemResponse": {
         "description": "Python `ReadingOrderItemResponse`.",
         "properties": {
@@ -11691,6 +10238,51 @@
         ],
         "type": "object"
       },
+      "NativeSeriesMappingPreviewProviderSeries": {
+        "description": "Wire-exact mirror of\n`app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.\n\nPydantic coerces `start_year` and `count_of_issues` from strings to integers;\nthe conversion helper below does the same so the generated contract types\nthese as integers rather than `unknown`.",
+        "properties": {
+          "count_of_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {},
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
       "NativeSeriesMappingPreviewRequest": {
         "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
         "properties": {
@@ -11737,9 +10329,20 @@
               "null"
             ]
           },
-          "provider_series": {},
+          "provider_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rows": {
-            "items": {},
+            "items": {
+              "$ref": "#/components/schemas/NativeSeriesMappingPreviewRow"
+            },
             "type": "array"
           },
           "scope": {
@@ -11751,6 +10354,86 @@
           "counts",
           "rows",
           "issued_at"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewRow": {
+        "description": "Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.\n\nEvery field is always emitted, including the nullable ones and the two\ndefaults (`metadata_refresh_required: false`, `reason: null`). Internal plan\nfields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,\n`_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the\nPython Pydantic model drops them, so a raw `Value` would leak them and omit\nthe defaults.",
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_selected": {
+            "type": "boolean"
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "metadata_refresh_required": {
+            "type": "boolean"
+          },
+          "proposed_mapping": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "row_id",
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected",
+          "metadata_refresh_required"
         ],
         "type": "object"
       },
@@ -11786,164 +10469,6 @@
           "status",
           "origin_issue_id"
         ],
-        "type": "object"
-      },
-      "NativeSessionBandwidthState": {
-        "description": "Canonical bandwidth state.",
-        "properties": {
-          "active_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "mode_version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "predicted_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "NativeSessionDetailsResponse": {
-        "description": "Full session details response with events and narrative summary.",
-        "properties": {
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/SessionEventDetail"
-            },
-            "type": "array"
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "narrative_summary": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "session_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "session_id",
-          "started_at",
-          "start_die",
-          "ladder_path",
-          "narrative_summary",
-          "current_die",
-          "events"
-        ],
-        "type": "object"
-      },
-      "NativeSessionHistoryListResponse": {
-        "description": "Paginated session history list response.",
-        "properties": {
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/SessionListItemResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "sessions"
-        ],
-        "type": "object"
-      },
-      "NativeSessionIntentState": {
-        "description": "Canonical intent state.",
-        "properties": {
-          "active_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "confidence": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "mode_version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "predicted_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
         "type": "object"
       },
       "NativeSetCurrentIssueRequest": {
@@ -12025,280 +10550,6 @@
           "format",
           "issues_remaining",
           "queue_position"
-        ],
-        "type": "object"
-      },
-      "NativeSourceSyncFailure": {
-        "properties": {
-          "error": {
-            "type": "string"
-          },
-          "plan_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "source_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "volume_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "source_id",
-          "plan_id",
-          "thread_id",
-          "volume_id",
-          "error"
-        ],
-        "type": "object"
-      },
-      "NativeSyncReport": {
-        "properties": {
-          "checked_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "conflicts": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "created_issues": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "enabled_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "excluded_issues": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "excluded_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "failed_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "failures": {
-            "items": {
-              "$ref": "#/components/schemas/NativeSourceSyncFailure"
-            },
-            "type": "array"
-          },
-          "future_skips": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issue_failures": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "issues_checked": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "reused_issues": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "skipped_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "successful_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "total_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "unknown_date_skips": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "total_sources",
-          "enabled_sources",
-          "checked_sources",
-          "successful_sources",
-          "failed_sources",
-          "issues_checked",
-          "created_issues",
-          "reused_issues",
-          "future_skips",
-          "unknown_date_skips",
-          "conflicts",
-          "issue_failures",
-          "failures"
-        ],
-        "type": "object"
-      },
-      "NativeSyncRequest": {
-        "properties": {
-          "as_of": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "refresh": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "as_of"
-        ],
-        "type": "object"
-      },
-      "NativeSyncResponse": {
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "result": {
-            "$ref": "#/components/schemas/NativeSyncReport"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "message",
-          "result"
-        ],
-        "type": "object"
-      },
-      "NativeSyncStatusResponse": {
-        "properties": {
-          "enabled_sources": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/NativeSyncStatusSource"
-            },
-            "type": "array"
-          },
-          "total_sources": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "total_sources",
-          "enabled_sources",
-          "sources"
-        ],
-        "type": "object"
-      },
-      "NativeSyncStatusSource": {
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "external_identity_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "last_synced_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "provider_volume_id": {
-            "type": "string"
-          },
-          "reading_plan_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "reading_plan_id",
-          "thread_id",
-          "external_identity_id",
-          "provider_volume_id",
-          "enabled"
-        ],
-        "type": "object"
-      },
-      "NativeTasteDiscovery": {
-        "description": "One prompt-eligible inferred taste pattern shown on Roll.",
-        "properties": {
-          "display_name": {
-            "type": "string"
-          },
-          "distinct_thread_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "evidence_count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "external_key": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "signal_type": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "signal_type",
-          "external_key",
-          "display_name",
-          "prompt",
-          "evidence_count",
-          "distinct_thread_count"
-        ],
-        "type": "object"
-      },
-      "NativeTasteDiscoveryListResponse": {
-        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
-        "properties": {
-          "discoveries": {
-            "items": {
-              "$ref": "#/components/schemas/NativeTasteDiscovery"
-            },
-            "type": "array"
-          },
-          "generated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "discoveries",
-          "generated_at"
         ],
         "type": "object"
       },
@@ -12473,7 +10724,7 @@
       },
       "OrderedExplanations": {
         "additionalProperties": {
-          "$ref": "#/components/schemas/NativeBlockingExplanation"
+          "$ref": "#/components/schemas/BlockingExplanation"
         },
         "description": "Ordered `thread_id -> explanation` object (Python `dict[int, ...]`).",
         "propertyNames": {
@@ -12482,65 +10733,57 @@
         "type": "object"
       },
       "OverlapDecisionItem": {
-        "description": "One stored reader-approved overlap choice inside one Reading List.",
         "properties": {
           "continuing_volume_id": {
-            "title": "Continuing Volume Id",
             "type": "string"
           },
           "created_at": {
-            "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_id": {
+            "format": "int32",
             "type": "integer"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "waiting_volume_id": {
-            "title": "Waiting Volume Id",
             "type": "string"
           }
         },
         "required": [
           "id",
+          "list_id",
           "continuing_volume_id",
           "waiting_volume_id",
           "created_at",
           "updated_at"
         ],
-        "title": "OverlapDecisionItem",
         "type": "object"
       },
       "OverlapDecisionSetResponse": {
-        "description": "One owned Reading List's overlap decisions and their version token.\n\n``updated_at`` is the version of this list's decision set. It changes only\nwhen an approved choice changes, so an ordinary membership upsert never\ninvalidates a stored choice.",
         "properties": {
           "candidate_volumes": {
             "items": {
               "$ref": "#/components/schemas/OverlapVolumeCandidate"
             },
-            "title": "Candidate Volumes",
             "type": "array"
           },
           "decisions": {
             "items": {
               "$ref": "#/components/schemas/OverlapDecisionItem"
             },
-            "title": "Decisions",
             "type": "array"
           },
           "list_id": {
-            "title": "List Id",
+            "format": "int32",
             "type": "integer"
           },
           "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           }
         },
@@ -12548,39 +10791,20 @@
           "list_id",
           "updated_at"
         ],
-        "title": "OverlapDecisionSetResponse",
         "type": "object"
       },
       "OverlapDecisionWrite": {
-        "description": "One reader-approved overlap choice for one owned Reading List.",
         "properties": {
           "continuing_volume_id": {
-            "description": "Exact Comic Vine volume allowed to keep progressing.",
-            "maxLength": 110,
-            "minLength": 11,
-            "pattern": "^comicvine:[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
-            "title": "Continuing Volume Id",
             "type": "string"
           },
           "expected_updated_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``reading_overlap_version_conflict``.",
-            "title": "Expected Updated At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "waiting_volume_id": {
-            "description": "Exact Comic Vine volume allowed to keep waiting.",
-            "maxLength": 110,
-            "minLength": 11,
-            "pattern": "^comicvine:[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
-            "title": "Waiting Volume Id",
             "type": "string"
           }
         },
@@ -12588,22 +10812,18 @@
           "continuing_volume_id",
           "waiting_volume_id"
         ],
-        "title": "OverlapDecisionWrite",
         "type": "object"
       },
       "OverlapVolumeCandidate": {
-        "description": "One owned Thread with the exact Comic Vine volume it resolves to.",
         "properties": {
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_title": {
-            "title": "Thread Title",
             "type": "string"
           },
           "volume_id": {
-            "title": "Volume Id",
             "type": "string"
           }
         },
@@ -12612,7 +10832,6 @@
           "thread_title",
           "volume_id"
         ],
-        "title": "OverlapVolumeCandidate",
         "type": "object"
       },
       "PasswordResetResponse": {
@@ -15159,64 +13378,52 @@
         "type": "object"
       },
       "ReadingListEntryIntent": {
-        "description": "Explicit positional intent for one stable member Issue.",
         "properties": {
           "gate": {
-            "default": "none",
-            "enum": [
-              "none",
-              "hold",
-              "after_previous"
-            ],
-            "title": "Gate",
             "type": "string"
           },
           "skipped": {
-            "default": false,
-            "title": "Skipped",
             "type": "boolean"
           }
         },
-        "title": "ReadingListEntryIntent",
+        "required": [
+          "gate"
+        ],
         "type": "object"
       },
       "ReadingListPredecessorChange": {
-        "description": "Named before/after requirements that the reader must acknowledge.",
         "properties": {
           "after_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "After Issue Ids",
             "type": "array"
           },
           "after_issue_names": {
             "items": {
               "type": "string"
             },
-            "title": "After Issue Names",
             "type": "array"
           },
           "before_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Before Issue Ids",
             "type": "array"
           },
           "before_issue_names": {
             "items": {
               "type": "string"
             },
-            "title": "Before Issue Names",
             "type": "array"
           },
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_name": {
-            "title": "Issue Name",
             "type": "string"
           }
         },
@@ -15228,14 +13435,13 @@
           "after_issue_ids",
           "after_issue_names"
         ],
-        "title": "ReadingListPredecessorChange",
         "type": "object"
       },
       "ReadingListReader": {
         "properties": {
           "entries": {
             "items": {
-              "$ref": "#/components/schemas/NativeReadingListReaderEntry"
+              "$ref": "#/components/schemas/ReadingListReaderEntry"
             },
             "type": "array"
           },
@@ -15263,32 +13469,21 @@
         "type": "object"
       },
       "ReadingListReaderEntry": {
-        "description": "One current list member with the execution authority's decision.",
         "properties": {
           "availability": {
-            "enum": [
-              "read",
-              "available",
-              "blocked",
-              "later",
-              "excluded",
-              "inactive",
-              "legacy"
-            ],
-            "title": "Availability",
             "type": "string"
           },
           "checkpoint_target_issue_ids": {
             "items": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Checkpoint Target Issue Ids",
             "type": "array"
           },
           "explanation": {
-            "anyOf": [
+            "oneOf": [
               {
-                "$ref": "#/components/schemas/BlockingExplanation"
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
               },
               {
                 "type": "null"
@@ -15296,51 +13491,37 @@
             ]
           },
           "gate": {
-            "default": "none",
-            "enum": [
-              "none",
-              "hold",
-              "after_previous"
-            ],
-            "title": "Gate",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "is_checkpoint": {
-            "default": false,
-            "title": "Is Checkpoint",
             "type": "boolean"
           },
           "issue_id": {
-            "title": "Issue Id",
+            "format": "int32",
             "type": "integer"
           },
           "issue_number": {
-            "title": "Issue Number",
             "type": "string"
           },
           "position": {
-            "title": "Position",
+            "format": "int32",
             "type": "integer"
           },
           "series_name": {
-            "title": "Series Name",
             "type": "string"
           },
           "skipped": {
-            "default": false,
-            "title": "Skipped",
             "type": "boolean"
           },
           "status": {
-            "title": "Status",
             "type": "string"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -15352,53 +13533,12 @@
           "series_name",
           "issue_number",
           "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids",
           "availability"
         ],
-        "title": "ReadingListReaderEntry",
-        "type": "object"
-      },
-      "ReadingListReaderResponse": {
-        "description": "Full current list order; never reconstructed from plan membership.",
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingListReaderEntry"
-            },
-            "title": "Entries",
-            "type": "array"
-          },
-          "execution_mode": {
-            "enum": [
-              "legacy",
-              "option_e"
-            ],
-            "title": "Execution Mode",
-            "type": "string"
-          },
-          "list_id": {
-            "title": "List Id",
-            "type": "integer"
-          },
-          "mode": {
-            "enum": [
-              "strict",
-              "loose"
-            ],
-            "title": "Mode",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "list_id",
-          "name",
-          "mode",
-          "execution_mode"
-        ],
-        "title": "ReadingListReaderResponse",
         "type": "object"
       },
       "ReadingListSummary": {
@@ -15477,7 +13617,7 @@
           },
           "entry_intents": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/NativeReadingListEntryIntent"
+              "$ref": "#/components/schemas/ReadingListEntryIntent"
             },
             "propertyNames": {
               "format": "int32",
@@ -17697,90 +15837,40 @@
         "type": "object"
       },
       "SessionBandwidthState": {
-        "description": "Canonical ephemeral bandwidth state for the active reading session.\n\nEvery field is always present but nullable so legacy sessions that predate\nbandwidth tracking serialize to a stable, safe shape instead of a missing\nor partially shaped object. This is the single canonical source consumed by\nlater weighting and UI work.",
+        "description": "Canonical bandwidth state.",
         "properties": {
           "active_bandwidth": {
-            "anyOf": [
-              {
-                "enum": [
-                  "light",
-                  "balanced",
-                  "deep"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Bandwidth"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "confidence": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence"
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "mode_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode Version"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "predicted_bandwidth": {
-            "anyOf": [
-              {
-                "enum": [
-                  "light",
-                  "balanced",
-                  "deep"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Bandwidth"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": [
-          "predicted_bandwidth",
-          "active_bandwidth",
-          "confidence",
-          "source",
-          "mode_version"
-        ],
-        "title": "SessionBandwidthState",
         "type": "object"
       },
       "SessionDetailResponse": {
@@ -17799,7 +15889,7 @@
           "bandwidth": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               },
               {
                 "type": "null"
@@ -17827,7 +15917,7 @@
           "intent": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
+                "$ref": "#/components/schemas/SessionIntentState"
               },
               {
                 "type": "null"
@@ -17945,32 +16035,25 @@
         "type": "object"
       },
       "SessionDetailsResponse": {
-        "description": "Schema for session details with all events.",
+        "description": "Full session details response with events and narrative summary.",
         "properties": {
           "current_die": {
-            "title": "Current Die",
+            "format": "int32",
             "type": "integer"
           },
           "ended_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "events": {
             "items": {
-              "$ref": "#/components/schemas/EventDetail"
+              "$ref": "#/components/schemas/SessionEventDetail"
             },
-            "title": "Events",
             "type": "array"
           },
           "ladder_path": {
-            "title": "Ladder Path",
             "type": "string"
           },
           "narrative_summary": {
@@ -17980,51 +16063,38 @@
               },
               "type": "array"
             },
-            "title": "Narrative Summary",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "session_id": {
-            "title": "Session Id",
+            "format": "int32",
             "type": "integer"
           },
           "start_die": {
-            "title": "Start Die",
+            "format": "int32",
             "type": "integer"
           },
           "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
+            "type": "string"
           },
           "timezone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timezone"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "session_id",
           "started_at",
-          "ended_at",
           "start_die",
           "ladder_path",
           "narrative_summary",
           "current_die",
           "events"
         ],
-        "title": "SessionDetailsResponse",
         "type": "object"
       },
       "SessionEventDetail": {
@@ -18118,263 +16188,61 @@
         "type": "object"
       },
       "SessionHistoryListResponse": {
-        "description": "Schema for paginated session history list response.",
+        "description": "Paginated session history list response.",
         "properties": {
           "next_page_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Page Token"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sessions": {
             "items": {
-              "$ref": "#/components/schemas/SessionListItem"
+              "$ref": "#/components/schemas/SessionListItemResponse"
             },
-            "title": "Sessions",
             "type": "array"
           }
         },
         "required": [
           "sessions"
         ],
-        "title": "SessionHistoryListResponse",
         "type": "object"
       },
       "SessionIntentState": {
-        "description": "Canonical ephemeral reading-intent state for the active reading session.\n\nSymmetric to :class:`SessionBandwidthState`. Every field is always present\nbut nullable so legacy sessions that predate intent tracking serialize to a\nstable, safe shape instead of a missing or partially shaped object. A fully\nnull object means the session defaults to the balanced intent.",
+        "description": "Canonical intent state.",
         "properties": {
           "active_intent": {
-            "anyOf": [
-              {
-                "enum": [
-                  "balanced",
-                  "momentum",
-                  "familiar",
-                  "explore",
-                  "random"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Intent"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence"
-          },
-          "mode_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode Version"
-          },
-          "predicted_intent": {
-            "anyOf": [
-              {
-                "enum": [
-                  "balanced",
-                  "momentum",
-                  "familiar",
-                  "explore",
-                  "random"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Intent"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          }
-        },
-        "required": [
-          "predicted_intent",
-          "active_intent",
-          "confidence",
-          "source",
-          "mode_version"
-        ],
-        "title": "SessionIntentState",
-        "type": "object"
-      },
-      "SessionListItem": {
-        "description": "Schema for a single session in the history list view.\n\nA deliberate subset of SessionResponse. The list view does not need\nsnoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,\nwhich reduces payload size for session history lists.",
-        "properties": {
-          "active_thread": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActiveThreadInfo"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
-          "current_die": {
-            "title": "Current Die",
-            "type": "integer"
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
-          "ended_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
+          "mode_version": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "has_restore_point": {
-            "title": "Has Restore Point",
-            "type": "boolean"
+          "predicted_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "ladder_path": {
-            "title": "Ladder Path",
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rolled Result"
-          },
-          "manual_die": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Manual Die"
-          },
-          "reading_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Bandwidth"
-          },
-          "reading_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Intent"
-          },
-          "reading_mode_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Mode Source"
-          },
-          "reading_mode_suggested": {
-            "default": false,
-            "title": "Reading Mode Suggested",
-            "type": "boolean"
-          },
-          "snapshot_count": {
-            "title": "Snapshot Count",
-            "type": "integer"
-          },
-          "start_die": {
-            "title": "Start Die",
-            "type": "integer"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": [
-          "id",
-          "started_at",
-          "ended_at",
-          "start_die",
-          "manual_die",
-          "user_id",
-          "ladder_path",
-          "active_thread",
-          "current_die",
-          "last_rolled_result",
-          "has_restore_point",
-          "snapshot_count"
-        ],
-        "title": "SessionListItem",
         "type": "object"
       },
       "SessionListItemResponse": {
@@ -18494,234 +16362,6 @@
             ]
           }
         },
-        "type": "object"
-      },
-      "SessionResponse": {
-        "description": "Schema for session response.",
-        "properties": {
-          "active_thread": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActiveThreadInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bandwidth": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionBandwidthState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Canonical ephemeral bandwidth state for the session. Null on endpoints that do not load bandwidth state."
-          },
-          "correction": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SnoozeCorrectionInfo"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Structured correction result from the most recent Snooze. Null when no correction was applied."
-          },
-          "current_die": {
-            "title": "Current Die",
-            "type": "integer"
-          },
-          "ended_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
-          },
-          "has_restore_point": {
-            "title": "Has Restore Point",
-            "type": "boolean"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "intent": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionIntentState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Canonical ephemeral reading-intent state for the session. Null on endpoints that do not load intent state."
-          },
-          "ladder_path": {
-            "title": "Ladder Path",
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rolled Result"
-          },
-          "manual_die": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Manual Die"
-          },
-          "pending_thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pending Thread Id"
-          },
-          "reading_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Bandwidth"
-          },
-          "reading_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Intent"
-          },
-          "reading_mode_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Mode Source"
-          },
-          "reading_mode_suggested": {
-            "default": false,
-            "title": "Reading Mode Suggested",
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Skipped Thread Ids",
-            "type": "array"
-          },
-          "skipped_threads": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SnoozedThreadInfo"
-            },
-            "title": "Skipped Threads",
-            "type": "array"
-          },
-          "snapshot_count": {
-            "title": "Snapshot Count",
-            "type": "integer"
-          },
-          "snoozed_thread_ids": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Snoozed Thread Ids",
-            "type": "array"
-          },
-          "snoozed_threads": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SnoozedThreadInfo"
-            },
-            "title": "Snoozed Threads",
-            "type": "array"
-          },
-          "start_die": {
-            "title": "Start Die",
-            "type": "integer"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "timezone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timezone"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "ended_at",
-          "start_die",
-          "manual_die",
-          "user_id",
-          "ladder_path",
-          "active_thread",
-          "current_die",
-          "last_rolled_result",
-          "has_restore_point",
-          "snapshot_count"
-        ],
-        "title": "SessionResponse",
         "type": "object"
       },
       "SessionSnapshotItem": {
@@ -18955,185 +16595,25 @@
         "title": "SetCurrentIssueResponse",
         "type": "object"
       },
-      "SnapshotResponse": {
-        "description": "Schema for snapshot response.",
-        "properties": {
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "event_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Id"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "session_id": {
-            "title": "Session Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "session_id",
-          "created_at",
-          "description"
-        ],
-        "title": "SnapshotResponse",
-        "type": "object"
-      },
-      "SnapshotsListResponse": {
-        "description": "Schema for snapshots list response.",
-        "properties": {
-          "session_id": {
-            "title": "Session Id",
-            "type": "integer"
-          },
-          "snapshots": {
-            "items": {
-              "$ref": "#/components/schemas/SnapshotResponse"
-            },
-            "title": "Snapshots",
-            "type": "array"
-          }
-        },
-        "required": [
-          "session_id",
-          "snapshots"
-        ],
-        "title": "SnapshotsListResponse",
-        "type": "object"
-      },
-      "SnoozeCorrectionInfo": {
-        "description": "Structured Snooze correction guidance for the client (#1726).\n\nReturned with every Snooze response so the frontend can later decide\nwhether to show a clarification sheet, without implementing modal UI in\nthis phase. Fields are compact codes and flags, never prose.",
-        "properties": {
-          "active_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Active bandwidth level after correction: light, balanced, or deep",
-            "title": "Active Bandwidth"
-          },
-          "active_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Confidence in the proposed active bandwidth (0.0-1.0)",
-            "title": "Active Confidence"
-          },
-          "bandwidth_changed": {
-            "description": "Whether the active bandwidth level changed after this snooze",
-            "title": "Bandwidth Changed",
-            "type": "boolean"
-          },
-          "predicted_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Original launch prediction bandwidth (unchanged)",
-            "title": "Predicted Bandwidth"
-          },
-          "reason_code": {
-            "description": "Compact reason code: heavy_snooze_shift, light_snooze_deflate, confidence_degrade, no_correction, or clarification_needed",
-            "enum": [
-              "heavy_snooze_shift",
-              "light_snooze_deflate",
-              "confidence_degrade",
-              "no_correction",
-              "clarification_needed"
-            ],
-            "title": "Reason Code",
-            "type": "string"
-          },
-          "suggest_clarification": {
-            "default": false,
-            "description": "True when repeated contradictory snoozes make the mode uncertain",
-            "title": "Suggest Clarification",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "bandwidth_changed",
-          "reason_code"
-        ],
-        "title": "SnoozeCorrectionInfo",
-        "type": "object"
-      },
-      "SnoozedThreadInfo": {
-        "description": "Schema for snoozed thread information in session response.",
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title"
-        ],
-        "title": "SnoozedThreadInfo",
-        "type": "object"
-      },
       "SourceSyncFailure": {
-        "description": "One source that could not be evaluated during a sync run.",
         "properties": {
           "error": {
-            "title": "Error",
             "type": "string"
           },
           "plan_id": {
-            "title": "Plan Id",
+            "format": "int32",
             "type": "integer"
           },
           "source_id": {
-            "title": "Source Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           },
           "volume_id": {
-            "title": "Volume Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -19144,7 +16624,6 @@
           "volume_id",
           "error"
         ],
-        "title": "SourceSyncFailure",
         "type": "object"
       },
       "StartupMetricsResponse": {
@@ -19204,76 +16683,71 @@
         "type": "object"
       },
       "SyncReport": {
-        "description": "Structured per-run counters for observability.",
         "properties": {
           "checked_sources": {
-            "title": "Checked Sources",
+            "format": "int64",
             "type": "integer"
           },
           "conflicts": {
-            "title": "Conflicts",
+            "format": "int64",
             "type": "integer"
           },
           "created_issues": {
-            "title": "Created Issues",
+            "format": "int64",
             "type": "integer"
           },
           "enabled_sources": {
-            "title": "Enabled Sources",
+            "format": "int64",
             "type": "integer"
           },
           "excluded_issues": {
-            "default": 0,
-            "title": "Excluded Issues",
+            "format": "int64",
             "type": "integer"
           },
           "excluded_sources": {
-            "default": 0,
-            "title": "Excluded Sources",
+            "format": "int64",
             "type": "integer"
           },
           "failed_sources": {
-            "title": "Failed Sources",
+            "format": "int64",
             "type": "integer"
           },
           "failures": {
             "items": {
               "$ref": "#/components/schemas/SourceSyncFailure"
             },
-            "title": "Failures",
             "type": "array"
           },
           "future_skips": {
-            "title": "Future Skips",
+            "format": "int64",
             "type": "integer"
           },
           "issue_failures": {
-            "title": "Issue Failures",
+            "format": "int64",
             "type": "integer"
           },
           "issues_checked": {
-            "title": "Issues Checked",
+            "format": "int64",
             "type": "integer"
           },
           "reused_issues": {
-            "title": "Reused Issues",
+            "format": "int64",
             "type": "integer"
           },
           "skipped_sources": {
-            "default": 0,
-            "title": "Skipped Sources",
+            "format": "int64",
             "type": "integer"
           },
           "successful_sources": {
-            "title": "Successful Sources",
+            "format": "int64",
             "type": "integer"
           },
           "total_sources": {
-            "title": "Total Sources",
+            "format": "int64",
             "type": "integer"
           },
           "unknown_date_skips": {
-            "title": "Unknown Date Skips",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -19292,43 +16766,32 @@
           "issue_failures",
           "failures"
         ],
-        "title": "SyncReport",
         "type": "object"
       },
       "SyncRequest": {
-        "description": "Request one release-source sync run for the authenticated user.",
         "properties": {
           "as_of": {
-            "description": "UTC timestamp defining the release boundary. Only issues whose ComicVine store_date is on or before this instant are adopted.",
             "format": "date-time",
-            "title": "As Of",
             "type": "string"
           },
           "refresh": {
-            "default": true,
-            "description": "Force live provider requests instead of reading the ComicVine cache.",
-            "title": "Refresh",
             "type": "boolean"
           }
         },
         "required": [
           "as_of"
         ],
-        "title": "SyncRequest",
         "type": "object"
       },
       "SyncResponse": {
-        "description": "Response of a completed release-source sync run.",
         "properties": {
           "message": {
-            "title": "Message",
             "type": "string"
           },
           "result": {
             "$ref": "#/components/schemas/SyncReport"
           },
           "success": {
-            "title": "Success",
             "type": "boolean"
           }
         },
@@ -19337,25 +16800,22 @@
           "message",
           "result"
         ],
-        "title": "SyncResponse",
         "type": "object"
       },
       "SyncStatusResponse": {
-        "description": "Sync state for every release source owned by the authenticated user.",
         "properties": {
           "enabled_sources": {
-            "title": "Enabled Sources",
+            "format": "int64",
             "type": "integer"
           },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/SyncStatusSource"
             },
-            "title": "Sources",
             "type": "array"
           },
           "total_sources": {
-            "title": "Total Sources",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -19364,46 +16824,36 @@
           "enabled_sources",
           "sources"
         ],
-        "title": "SyncStatusResponse",
         "type": "object"
       },
       "SyncStatusSource": {
-        "description": "One release source's persisted sync state.",
         "properties": {
           "enabled": {
-            "title": "Enabled",
             "type": "boolean"
           },
           "external_identity_id": {
-            "title": "External Identity Id",
+            "format": "int32",
             "type": "integer"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "last_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider_volume_id": {
-            "title": "Provider Volume Id",
             "type": "string"
           },
           "reading_plan_id": {
-            "title": "Reading Plan Id",
+            "format": "int32",
             "type": "integer"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -19413,10 +16863,8 @@
           "thread_id",
           "external_identity_id",
           "provider_volume_id",
-          "enabled",
-          "last_synced_at"
+          "enabled"
         ],
-        "title": "SyncStatusSource",
         "type": "object"
       },
       "Tag": {
@@ -19635,34 +17083,27 @@
         "description": "One prompt-eligible inferred taste pattern shown on Roll.",
         "properties": {
           "display_name": {
-            "title": "Display Name",
             "type": "string"
           },
           "distinct_thread_count": {
-            "minimum": 0.0,
-            "title": "Distinct Thread Count",
+            "format": "int32",
             "type": "integer"
           },
           "evidence_count": {
-            "minimum": 0.0,
-            "title": "Evidence Count",
+            "format": "int32",
             "type": "integer"
           },
           "external_key": {
-            "minLength": 1,
-            "title": "External Key",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "prompt": {
-            "title": "Prompt",
             "type": "string"
           },
           "signal_type": {
-            "title": "Signal Type",
             "type": "string"
           }
         },
@@ -19675,22 +17116,18 @@
           "evidence_count",
           "distinct_thread_count"
         ],
-        "title": "TasteDiscovery",
         "type": "object"
       },
       "TasteDiscoveryListResponse": {
-        "description": "Ranked prompt-eligible discoveries for the authenticated user.",
+        "description": "Ranked prompt-eligible discoveries for the authenticated reader.",
         "properties": {
           "discoveries": {
             "items": {
               "$ref": "#/components/schemas/TasteDiscovery"
             },
-            "title": "Discoveries",
             "type": "array"
           },
           "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
             "type": "string"
           }
         },
@@ -19698,7 +17135,6 @@
           "discoveries",
           "generated_at"
         ],
-        "title": "TasteDiscoveryListResponse",
         "type": "object"
       },
       "TasteDismissResponse": {
@@ -20242,6 +17678,13 @@
             "format": "int32",
             "type": "integer"
           },
+          "series_cover_image_url": {
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "series_metadata": {
             "oneOf": [
               {
@@ -20716,7 +18159,7 @@
           "bandwidth": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeSessionBandwidthState"
+                "$ref": "#/components/schemas/SessionBandwidthState"
               },
               {
                 "type": "null"
@@ -20743,7 +18186,7 @@
           "intent": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/NativeSessionIntentState"
+                "$ref": "#/components/schemas/SessionIntentState"
               },
               {
                 "type": "null"
@@ -23351,7 +20794,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/NativeCustomCBLListItem"
+                    "$ref": "#/components/schemas/CustomCBLListItem"
                   },
                   "type": "array"
                 }
@@ -23382,7 +20825,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeCustomCBLWrite"
+                "$ref": "#/components/schemas/CustomCBLWrite"
               }
             }
           },
@@ -23393,7 +20836,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
+                  "$ref": "#/components/schemas/CustomCBLResponse"
                 }
               }
             },
@@ -23450,7 +20893,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/NativeCustomCBLIssueSearchResult"
+                    "$ref": "#/components/schemas/CustomCBLIssueSearchResult"
                   },
                   "type": "array"
                 }
@@ -23506,7 +20949,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
+                  "$ref": "#/components/schemas/CustomCBLResponse"
                 }
               }
             },
@@ -23550,7 +20993,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeCustomCBLWrite"
+                "$ref": "#/components/schemas/CustomCBLWrite"
               }
             }
           },
@@ -23561,7 +21004,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCustomCBLResponse"
+                  "$ref": "#/components/schemas/CustomCBLResponse"
                 }
               }
             },
@@ -23658,7 +21101,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
                 }
               }
             },
@@ -23702,7 +21145,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeOverlapDecisionWrite"
+                "$ref": "#/components/schemas/OverlapDecisionWrite"
               }
             }
           },
@@ -23713,7 +21156,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
                 }
               }
             },
@@ -23785,7 +21228,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeOverlapDecisionSetResponse"
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
                 }
               }
             },
@@ -23894,7 +21337,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeCustomCBLApplyRequest"
+                "$ref": "#/components/schemas/CustomCBLApplyRequest"
               }
             }
           },
@@ -23905,7 +21348,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeCustomCBLApplyResponse"
+                  "$ref": "#/components/schemas/CustomCBLApplyResponse"
                 }
               }
             },
@@ -26368,7 +23811,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSyncStatusResponse"
+                  "$ref": "#/components/schemas/SyncStatusResponse"
                 }
               }
             },
@@ -26398,7 +23841,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NativeSyncRequest"
+                "$ref": "#/components/schemas/SyncRequest"
               }
             }
           },
@@ -26409,7 +23852,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSyncResponse"
+                  "$ref": "#/components/schemas/SyncResponse"
                 }
               }
             },
@@ -26727,7 +24170,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSessionHistoryListResponse"
+                  "$ref": "#/components/schemas/SessionHistoryListResponse"
                 }
               }
             },
@@ -26818,7 +24261,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSessionDetailsResponse"
+                  "$ref": "#/components/schemas/SessionDetailsResponse"
                 }
               }
             },
@@ -27462,7 +24905,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeTasteDiscoveryListResponse"
+                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
                 }
               }
             },
@@ -28898,7 +26341,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeBlockingExplanation"
+                  "$ref": "#/components/schemas/BlockingExplanation"
                 }
               }
             },

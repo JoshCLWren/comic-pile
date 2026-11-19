@@ -12730,16 +12730,14 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "pixelRatio": {
             "type": "number",
             "format": "double"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -12752,12 +12750,10 @@
         ],
         "properties": {
           "x": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "y": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -12770,12 +12766,10 @@
         ],
         "properties": {
           "height": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           },
           "width": {
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -17867,6 +17861,51 @@
           }
         }
       },
+      "SeriesMappingPreviewProviderSeries": {
+        "type": "object",
+        "description": "Wire-exact mirror of\n`app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.\n\nPydantic coerces `start_year` and `count_of_issues` from strings to integers;\nthe conversion helper below does the same so the generated contract types\nthese as integers rather than `unknown`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "count_of_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {},
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SeriesMappingPreviewRequest": {
         "type": "object",
         "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
@@ -17920,13 +17959,104 @@
               "null"
             ]
           },
-          "provider_series": {},
+          "provider_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rows": {
             "type": "array",
-            "items": {}
+            "items": {
+              "$ref": "#/components/schemas/SeriesMappingPreviewRow"
+            }
           },
           "scope": {
             "$ref": "#/components/schemas/SeriesMappingPreviewScope"
+          }
+        }
+      },
+      "SeriesMappingPreviewRow": {
+        "type": "object",
+        "description": "Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.\n\nEvery field is always emitted, including the nullable ones and the two\ndefaults (`metadata_refresh_required: false`, `reason: null`). Internal plan\nfields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,\n`_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the\nPython Pydantic model drops them, so a raw `Value` would leak them and omit\nthe defaults.",
+        "required": [
+          "row_id",
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected",
+          "metadata_refresh_required"
+        ],
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_selected": {
+            "type": "boolean"
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "metadata_refresh_required": {
+            "type": "boolean"
+          },
+          "proposed_mapping": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -19743,6 +19873,13 @@
           "queue_position": {
             "type": "integer",
             "format": "int32"
+          },
+          "series_cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
           },
           "series_metadata": {
             "oneOf": [

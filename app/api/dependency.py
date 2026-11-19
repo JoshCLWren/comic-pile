@@ -30,7 +30,6 @@ def mount_subrouters() -> None:
         return
 
     from app.api import cbl_sources
-    from app.api import custom_cbl
     from app.api import dependency_group
     from app.api import dependency_group_batch
     from app.api import reading_order_projection
@@ -42,6 +41,5 @@ def mount_subrouters() -> None:
     # Python handler has been removed from reading_order_projection.router.
     router.include_router(reading_order_projection.router)
     router.include_router(cbl_sources.router)
-    router.include_router(custom_cbl.router)
 
     _subrouters_mounted = True
