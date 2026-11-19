@@ -610,7 +610,6 @@ fn app() -> Router {
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators", get(native_dispatch))
-        .route("/api/v2/creators/", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
         .route("/api/v2/creators/discoveries", get(native_dispatch))
@@ -635,6 +634,29 @@ fn app() -> Router {
         .route(
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
+        )
+        .route("/api/v1/custom-cbls", get(native_dispatch))
+        .route("/api/v1/custom-cbls", post(native_dispatch))
+        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
         )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
@@ -2092,5 +2114,50 @@ mod tests {
                 );
             })
             .await;
+    }
+
+    #[tokio::test]
+    async fn custom_cbl_overlap_decisions_ingress_reaches_rust_dispatch() {
+        // Both overlap-decision path shapes must be registered in the Vercel
+        // native_roll ingress (not just the inner service) so production
+        // requests do not fall through to the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
+            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                    || response.status() == StatusCode::FORBIDDEN,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
     }
 }
