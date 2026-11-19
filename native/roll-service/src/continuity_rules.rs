@@ -42,7 +42,7 @@ const MAX_REQUEST_ITEMS: usize = 250;
 /// Pydantic `Field(max_length=500)` on the optional note.
 const MAX_NOTE_CHARS: usize = 500;
 
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ConvergenceTarget {
     #[serde(rename = "type")]
@@ -1049,7 +1049,7 @@ mod tests {
                 ..request("item_read")
             })
         };
-        create(State(state.clone()), user, body())
+        let _first = create(State(state.clone()), user, body())
             .await
             .expect("first create");
         let error = create(State(state), user, body())
@@ -1061,7 +1061,7 @@ mod tests {
     #[tokio::test]
     async fn cycle_returns_the_structured_cycle_conflict() {
         let (state, user, _guard) = database_fixture().await;
-        create(
+        let _first = create(
             State(state.clone()),
             user,
             Json(ContinuityRuleRequest {
