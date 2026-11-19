@@ -8,6 +8,7 @@ pub mod bug_reports;
 pub mod catalog_commit;
 pub mod catalog_preview;
 pub mod cbl_catalog;
+pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -1013,6 +1014,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(issue_identity::cbl_adoption_preview),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(reading_graph_preview::preview_reading_graph_handler),
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
