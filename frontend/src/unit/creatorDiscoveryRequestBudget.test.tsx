@@ -543,6 +543,8 @@ describe('comparison and CBL discovery request budgets', () => {
         'GET /api/v2/threads': () => ({
           data: { threads: [], next_page_token: null, active_count: 0 },
         }),
+        'GET /api/v2/auth/csrf': () => ({ data: { csrf_token: 'test-csrf' } }),
+        'POST /api/v2/issues/cards': () => ({ data: { items: [] } }),
       },
       'cold crossovers',
     )
@@ -555,13 +557,19 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
-    await waitFor(() => expect(ledger.requests).toHaveLength(1))
-    expect(ledger.requests[0]?.url).toBe('GET /api/v1/reading-order-groups/')
+    // Cold load: the group list plus exactly one bounded issue-card batch
+    // (CSRF bootstrap precedes the POST); never one request per member row.
+    await waitFor(() => expect(ledger.requests).toHaveLength(3))
+    expect(ledger.requests.map((request) => request.url)).toEqual([
+      'GET /api/v1/reading-order-groups/',
+      'GET /api/v2/auth/csrf',
+      'POST /api/v2/issues/cards',
+    ])
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
-    await waitFor(() => expect(ledger.requests).toHaveLength(2))
-    expect(ledger.requests[1]?.url).toBe('GET /api/v2/threads?page_size=100')
+    await waitFor(() => expect(ledger.requests).toHaveLength(4))
+    expect(ledger.requests[3]?.url).toBe('GET /api/v2/threads?page_size=100')
   })
 })
