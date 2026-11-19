@@ -322,6 +322,8 @@ describe('CustomCBLBuilder', () => {
     mocks.searchIssues.mockResolvedValue([
       { issue_id: 30002, thread_id: 9002, series_name: 'Fantastic Four', issue_number: '1', status: 'unread' },
     ])
+    // SAFETY: this owner-scoped test card supplies the exact issue identity, confirmed image,
+    // read state and mapping fields consumed by the shared cover view.
     fetchCards.mockImplementation(async (ids) => ids.includes(30002) ? [{
       issue_id: 30002,
       thread_id: 9002,
