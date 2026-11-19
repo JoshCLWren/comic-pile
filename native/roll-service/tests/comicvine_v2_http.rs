@@ -113,7 +113,9 @@ async fn register_extra_user(state: &Arc<AppState>, prefix: &str) -> (String, St
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
     let response = router(state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
-    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .unwrap();
     (
         status,
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),
@@ -522,9 +524,15 @@ async fn identity_mutations_are_owner_scoped() {
 async fn concurrent_confirms_leave_exactly_one_confirmed_identity() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-race").await;
     set_key(false);
-    let conn = state.pool.get().await.unwrap();
-    let t = thread(&conn, user_id, "Race").await;
-    let i = issue(&conn, t, "1", 1).await;
+    // Scope the seeding connection: a checked-out connection would otherwise
+    // starve the two-connection pool and serialize the "concurrent" requests.
+    let (t, i) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Race").await;
+        let i = issue(&conn, t, "1", 1).await;
+        (t, i)
+    };
+    let _ = t;
     let path = format!("/api/v2/comicvine/issues/{i}/identity:confirm");
     let mut handles = Vec::new();
     for cv in [7001, 7002, 7003, 7004] {
@@ -559,6 +567,7 @@ async fn concurrent_confirms_leave_exactly_one_confirmed_identity() {
         }
     }
     assert_eq!(ok, 1, "exactly one concurrent confirm may win");
+    let conn = state.pool.get().await.unwrap();
     let confirmed: i64 = conn
         .query_one(
             "SELECT count(*) FROM issue_external_identity_mappings WHERE issue_id = $1 AND status = 'confirmed'",
@@ -1412,4 +1421,355 @@ async fn identity_removal_and_readd_leave_thread_series_metadata_untouched() {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(snapshot(state.pool.get().await.unwrap()).await, before);
     }
+}
+
+/// Holds the reader's queue advisory lock in one session and proves a request
+/// is blocked on it BEFORE it takes any thread/issue row lock (lock order:
+/// queue lock first, then row locks; #5398/#5419). While the request waits, a
+/// second session must still be able to `FOR UPDATE NOWAIT` the issue row.
+async fn assert_queue_lock_precedes_row_locks(
+    state: &Arc<AppState>,
+    user_id: i32,
+    issue_id: i32,
+    request: Request<Body>,
+) -> (StatusCode, Value) {
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = holder.transaction().await.unwrap();
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&699001_i32, &user_id],
+    )
+    .await
+    .unwrap();
+    let pending = tokio::spawn({
+        let state = state.clone();
+        async move { send(&state, request).await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!pending.is_finished(), "writer must wait on the queue lock");
+    tx.query_one(
+        "SELECT id FROM issues WHERE id = $1 FOR UPDATE NOWAIT",
+        &[&issue_id],
+    )
+    .await
+    .expect("writer took an issue row lock before the queue lock");
+    tx.commit().await.unwrap();
+    drop(holder);
+    tokio::time::timeout(std::time::Duration::from_secs(10), pending)
+        .await
+        .expect("writer resumes once the queue lock is released")
+        .unwrap()
+}
+
+#[tokio::test]
+async fn identity_and_import_writers_take_the_queue_lock_before_row_locks() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-lockorder").await;
+    set_key(false);
+    let (t, i) = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Locks").await;
+        (t, issue(&conn, t, "1", 1).await)
+    };
+    let _ = t;
+    let (status, body) = assert_queue_lock_precedes_row_locks(
+        &state,
+        user_id,
+        i,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9101})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (status, body) = assert_queue_lock_precedes_row_locks(
+        &state,
+        user_id,
+        i,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9102, "reason": "wrong"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    // import_issue creates a thread at the queue tail: the queue lock must
+    // serialize the duplicate check and position assignment.
+    let mut holder = state.pool.get().await.unwrap();
+    let tx = holder.transaction().await.unwrap();
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&699001_i32, &user_id],
+    )
+    .await
+    .unwrap();
+    let pending = tokio::spawn({
+        let state = state.clone();
+        let request = call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"title": "Imported", "comicvine_issue_id": 9103})),
+        );
+        async move { send(&state, request).await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!pending.is_finished(), "import must wait on the queue lock");
+    tx.commit().await.unwrap();
+    drop(holder);
+    let (status, body) = pending.await.unwrap();
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+}
+
+#[tokio::test]
+async fn confirmation_reopens_finished_refresh_jobs_instead_of_failing() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-refresh").await;
+    set_key(false);
+    for (n, finished) in ["failed", "completed", "no_credits"]
+        .into_iter()
+        .enumerate()
+    {
+        let cv = 9200 + n as i32;
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, &format!("Refresh {finished}")).await;
+        let i = issue(&conn, t, "1", 1).await;
+        let identity: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, \
+                 metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, 'https://comicvine.gamespot.com/', '{}'::jsonb, now(), now()) \
+                 RETURNING id",
+                &[&cv.to_string()],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, last_error, completed_at, \
+                 created_at, updated_at) \
+             VALUES ($1, $2, 4, now() + interval '1 day', 'old', now(), now(), now())",
+            &[&identity, &finished],
+        )
+        .await
+        .unwrap();
+        drop(conn);
+        let (status, body) = send(
+            &state,
+            call(
+                "POST",
+                &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+                &token,
+                &csrf,
+                Some(json!({"comicvine_issue_id": cv})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{finished}: {body:?}");
+        assert_eq!(body["has_confirmed_identity"], true);
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT state, attempts, last_error, completed_at IS NULL \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .unwrap();
+        assert_eq!(row.get::<_, String>(0), "pending", "{finished}");
+        assert_eq!(row.get::<_, i32>(1), 0);
+        assert_eq!(row.get::<_, Option<String>>(2), None);
+        assert!(row.get::<_, bool>(3));
+    }
+}
+
+#[tokio::test]
+async fn malformed_requests_use_the_production_validation_contract() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-validation").await;
+    set_key(false);
+    let i = {
+        let conn = state.pool.get().await.unwrap();
+        let t = thread(&conn, user_id, "Validation").await;
+        issue(&conn, t, "1", 1).await
+    };
+    let expected = json!({"detail": "Validation failed"});
+    for (method, path, body) in [
+        (
+            "POST",
+            format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            Some(json!({})),
+        ),
+        (
+            "POST",
+            format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            Some(json!({"comicvine_issue_id": "x"})),
+        ),
+        (
+            "POST",
+            "/api/v2/comicvine/issues/abc/identity:confirm".to_owned(),
+            Some(json!({"comicvine_issue_id": 1})),
+        ),
+        (
+            "GET",
+            "/api/v2/comicvine/issues/abc/identity".to_owned(),
+            None,
+        ),
+        (
+            "POST",
+            "/api/v2/comicvine/issues:import".to_owned(),
+            Some(json!({"title": "", "comicvine_issue_id": 1})),
+        ),
+        (
+            "POST",
+            "/api/v2/comicvine/series:import".to_owned(),
+            Some(json!({"comicvine_volume_id": 0})),
+        ),
+        ("GET", "/api/v2/comicvine/search/series".to_owned(), None),
+        (
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&limit=0".to_owned(),
+            None,
+        ),
+        (
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&limit=51".to_owned(),
+            None,
+        ),
+        (
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&offset=-1".to_owned(),
+            None,
+        ),
+        (
+            "GET",
+            "/api/v2/comicvine/search/series?q=saga&limit=x".to_owned(),
+            None,
+        ),
+        ("GET", "/api/v2/comicvine/resolve".to_owned(), None),
+    ] {
+        let (status, got) = send(&state, call(method, &path, &token, &csrf, body)).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{method} {path}: {got:?}"
+        );
+        assert_eq!(got, expected, "{method} {path}");
+    }
+}
+
+fn roster_page(volume: i32, first_id: i32, count: i32, total: Option<i32>) -> Value {
+    let results: Vec<Value> = (first_id..first_id + count)
+        .map(|id| json!({"id": id, "issue_number": id.to_string(), "volume": {"id": volume}}))
+        .collect();
+    let mut page = json!({ "results": results });
+    if let Some(total) = total {
+        page["number_of_total_results"] = json!(total);
+    }
+    page
+}
+
+#[tokio::test]
+async fn rosters_beyond_one_thousand_rows_are_fetched_completely() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-roster").await;
+    set_key(true);
+    // 1250 rows with a reported total: 13 pages, not 10.
+    for page in 0..13 {
+        let count = if page == 12 { 50 } else { 100 };
+        provider_ok(&state, roster_page(77, page * 100 + 1, count, Some(1250)));
+    }
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/77/issues?series_name=Big",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issues"].as_array().unwrap().len(), 1250);
+    // Omitted total: walk forward until a short page.
+    provider_ok(&state, roster_page(78, 1, 100, None));
+    provider_ok(&state, roster_page(78, 101, 30, None));
+    let (status, body) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/series/78/issues?series_name=NoTotal",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issues"].as_array().unwrap().len(), 130);
+}
+
+#[tokio::test]
+async fn browser_provider_calls_are_cached_and_honor_throttle_cooldowns() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-limits").await;
+    set_key(true);
+    provider_ok(
+        &state,
+        json!({"number_of_total_results": 1, "results": [{"id": 1, "name": "Saga"}]}),
+    );
+    let search = "/api/v2/comicvine/search/series?q=saga&limit=10&offset=0";
+    for _ in 0..3 {
+        let (status, body) = send(&state, call("GET", search, &token, &csrf, None)).await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(body["results"][0]["name"], "Saga");
+    }
+    assert_eq!(
+        fake(&state).calls().len(),
+        1,
+        "repeat searches reuse the cached payload"
+    );
+
+    // A 429 starts a cooldown on the bucket: later distinct searches do not
+    // reach ComicVine until the requested wait has passed.
+    let mut headers = http::HeaderMap::new();
+    headers.insert("retry-after", "120".parse().unwrap());
+    fake(&state).push_ok(http::StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
+    let (status, _) = send(
+        &state,
+        call(
+            "GET",
+            "/api/v2/comicvine/search/series?q=one",
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    let calls = fake(&state).calls().len();
+    for q in ["two", "three"] {
+        let (status, _) = send(
+            &state,
+            call(
+                "GET",
+                &format!("/api/v2/comicvine/search/series?q={q}"),
+                &token,
+                &csrf,
+                None,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    }
+    assert_eq!(
+        fake(&state).calls().len(),
+        calls,
+        "cooldown blocks provider calls"
+    );
 }

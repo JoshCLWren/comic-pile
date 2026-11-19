@@ -26,7 +26,7 @@ const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 const COMPLETE_FRESH_DAYS: i64 = 30;
 const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
-const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
+pub(crate) const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests

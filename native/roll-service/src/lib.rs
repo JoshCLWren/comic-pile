@@ -8,6 +8,7 @@ pub mod bug_reports;
 pub mod catalog_commit;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
+pub mod comicvine_limits;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod comicvine_v2;
@@ -131,6 +132,8 @@ pub struct AppState {
     /// Effective Option E setting (see [`option_e_setting`]); injectable so
     /// tests choose it per state instead of mutating process environment.
     pub option_e: bool,
+    /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
+    pub comicvine_limits: comicvine_limits::ComicVineLimits,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -216,6 +219,7 @@ impl AppState {
             connection_recovery: true,
             outbound,
             option_e: config.option_e,
+            comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }
 
@@ -491,6 +495,10 @@ impl IntoResponse for ApiError {
 fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
     match path {
         "/api/v2/maintenance/comicvine-metadata-repairs" => Duration::from_secs(50),
+        // Series import fetches the volume plus every roster page before its
+        // transaction; the frontend allows 120s (api-comicvine.ts), so the
+        // server deadline must not cancel it at the 10s default.
+        "/api/v2/comicvine/series:import" => Duration::from_secs(120),
         "/api/v1/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
@@ -1360,6 +1368,10 @@ mod tests {
         assert_eq!(
             request_timeout_for("/api/v2/maintenance/comicvine-metadata-repairs", default),
             Duration::from_secs(50)
+        );
+        assert_eq!(
+            request_timeout_for("/api/v2/comicvine/series:import", default),
+            Duration::from_secs(120)
         );
         assert_eq!(
             request_timeout_for("/api/v1/roll/bootstrap", default),

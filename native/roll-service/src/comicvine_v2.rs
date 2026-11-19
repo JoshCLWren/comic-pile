@@ -10,15 +10,14 @@
 //! with the shared credential and all persistence is executed here.
 
 use crate::{
-    auth::AuthenticatedUser,
-    comicvine_repair::{provider_issue, provider_response, ProviderFailure},
-    db,
-    outbound::OutboundHttp,
-    thread_issues::natural_issue_order,
-    ApiError, AppState,
+    auth::AuthenticatedUser, comicvine_repair::ProviderFailure, db,
+    thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{
+        rejection::{JsonRejection, PathRejection, QueryRejection},
+        Path, Query, State,
+    },
     http::StatusCode,
     Json,
 };
@@ -286,8 +285,16 @@ fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError::NotFound(detail.into())
 }
 
-fn unprocessable(detail: &'static str) -> ApiError {
-    ApiError::Unprocessable(detail.to_owned())
+/// Production `RequestValidationError` body (`app/exception_handlers.py`):
+/// every 422 is the generic `{"detail": "Validation failed"}`; the specific
+/// reason is only logged.
+fn unprocessable(reason: &'static str) -> ApiError {
+    tracing::debug!(reason, "comicvine request validation failed");
+    ApiError::Unprocessable("Validation failed".to_owned())
+}
+
+fn validation_failed() -> ApiError {
+    unprocessable("extractor rejection")
 }
 
 /// Coerce a provider value to an integer. ComicVine returns some numbers as
@@ -671,13 +678,19 @@ async fn enqueue_hydration_if_needed(
     if !crate::comicvine_repair::needs_provider_fetch(&metadata, chrono::Utc::now()) {
         return Ok(());
     }
+    // One row per identity (uq_comicvine_metadata_refresh_identity): create it,
+    // or reopen a finished (completed / no_credits / failed) row. A row that is
+    // already pending, running or deferred is left untouched.
     tx.execute(
         "INSERT INTO comicvine_metadata_refresh_requests \
             (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-         SELECT $1, 'pending', 0, now(), now(), now() \
-         WHERE NOT EXISTS (SELECT 1 FROM comicvine_metadata_refresh_requests r \
-                           WHERE r.external_identity_id = $1 \
-                             AND r.state IN ('pending', 'running', 'deferred'))",
+         VALUES ($1, 'pending', 0, now(), now(), now()) \
+         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity \
+         DO UPDATE SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                       lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                       updated_at = now() \
+         WHERE comicvine_metadata_refresh_requests.state \
+               NOT IN ('pending', 'running', 'deferred')",
         &[&identity_id],
     )
     .await
@@ -704,8 +717,9 @@ fn volume_name(value: &Value) -> Option<String> {
 pub async fn get_issue_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
+    issue_id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
@@ -717,14 +731,18 @@ pub async fn get_issue_identity(
 pub async fn confirm_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
-    Json(request): Json<ConfirmIdentityRequest>,
+    issue_id: Result<Path<i32>, PathRejection>,
+    request: Result<Json<ConfirmIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
     if request.comicvine_issue_id <= 0 {
         return Err(bad_request("comicvine_issue_id must be positive"));
     }
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
+    // Lock order: queue advisory lock first, then issue row locks.
+    crate::queue::lock_queue(&tx, user.id()).await?;
     link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
@@ -735,18 +753,26 @@ pub async fn confirm_identity(
 pub async fn replace_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
-    Json(request): Json<ReplaceIdentityRequest>,
+    issue_id: Result<Path<i32>, PathRejection>,
+    request: Result<Json<ReplaceIdentityRequest>, JsonRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
     if request.comicvine_issue_id <= 0 {
         return Err(bad_request("comicvine_issue_id must be positive"));
     }
-    if request.reason.as_deref().is_some_and(|r| r.len() > 500) {
+    if request
+        .reason
+        .as_deref()
+        .is_some_and(|r| r.chars().count() > 500)
+    {
         return Err(unprocessable("reason is too long"));
     }
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    owned_issue(&tx, user.id(), issue_id).await?;
+    // Lock order: queue advisory lock first, then issue row locks.
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    lock_owned_issue(&tx, user.id(), issue_id).await?;
     let reason = request
         .reason
         .filter(|r| !r.is_empty())
@@ -771,8 +797,9 @@ pub async fn replace_identity(
 pub async fn remove_identity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
+    issue_id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<IssueIdentityResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
@@ -802,8 +829,9 @@ pub async fn remove_identity(
 pub async fn list_corrections(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
+    issue_id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let response = corrections_list(&tx, user.id(), issue_id).await?;
@@ -815,9 +843,11 @@ pub async fn list_corrections(
 pub async fn apply_correction(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
-    Json(request): Json<MetadataCorrectionRequest>,
+    issue_id: Result<Path<i32>, PathRejection>,
+    request: Result<Json<MetadataCorrectionRequest>, JsonRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
     if request.field_name.is_empty() || request.field_name.len() > 100 {
         return Err(unprocessable("Invalid field name"));
     }
@@ -866,9 +896,11 @@ pub async fn apply_correction(
 pub async fn revert_correction(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
-    Json(request): Json<MetadataCorrectionRevertRequest>,
+    issue_id: Result<Path<i32>, PathRejection>,
+    request: Result<Json<MetadataCorrectionRevertRequest>, JsonRejection>,
 ) -> Result<Json<MetadataCorrectionsResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
+    let Json(request) = request.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
@@ -898,8 +930,9 @@ pub async fn revert_correction(
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(issue_id): Path<i32>,
+    issue_id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<MetadataRefreshResponse>, ApiError> {
+    let Path(issue_id) = issue_id.map_err(|_| validation_failed())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     owned_issue(&tx, user.id(), issue_id).await?;
@@ -1020,10 +1053,11 @@ async fn insert_into_reading_order(
 pub async fn import_issue(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(request): Json<ImportIssueRequest>,
+    request: Result<Json<ImportIssueRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let Json(request) = request.map_err(|_| validation_failed())?;
     let title = request.title.trim();
-    if title.is_empty() || title.len() > 200 {
+    if title.is_empty() || request.title.chars().count() > 200 {
         return Err(unprocessable("Invalid title"));
     }
     if request.comicvine_issue_id <= 0 {
@@ -1032,7 +1066,7 @@ pub async fn import_issue(
     if request
         .issue_number
         .as_deref()
-        .is_some_and(|n| n.len() > 50)
+        .is_some_and(|n| n.chars().count() > 50)
     {
         return Err(unprocessable("Invalid issue number"));
     }
@@ -1051,6 +1085,9 @@ pub async fn import_issue(
 
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
+    // Lock order: queue advisory lock first, then thread/issue row locks; it
+    // also serializes the duplicate check and queue-position assignment.
+    crate::queue::lock_queue(&tx, user.id()).await?;
     let external_id = request.comicvine_issue_id.to_string();
     if let Some(order_id) = request.reading_order_id {
         owned_reading_order(&tx, user.id(), order_id).await?;
@@ -1312,8 +1349,9 @@ struct SimEntry {
 pub async fn import_series(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(request): Json<ImportSeriesRequest>,
+    request: Result<Json<ImportSeriesRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportSeriesResponse>), ApiError> {
+    let Json(request) = request.map_err(|_| validation_failed())?;
     if request.comicvine_volume_id <= 0 {
         return Err(unprocessable("Invalid comicvine_volume_id"));
     }
@@ -1340,23 +1378,25 @@ pub async fn import_series(
         ));
     };
     let volume_id = request.comicvine_volume_id;
-    let volume = provider_response(
-        &state.outbound,
-        &format!("volume/4050-{volume_id}"),
-        "",
-        &key,
-    )
-    .await
-    .map_err(|failure| {
-        series_import_error(
-            StatusCode::BAD_GATEWAY,
-            "provider_failure",
-            format!(
-                "Failed to fetch ComicVine series: {}",
-                provider_failure_name(&failure)
-            ),
+    let volume = state
+        .comicvine_limits
+        .call_fresh(
+            &state.outbound,
+            &format!("volume/4050-{volume_id}"),
+            "",
+            &key,
         )
-    })?;
+        .await
+        .map_err(|failure| {
+            series_import_error(
+                StatusCode::BAD_GATEWAY,
+                "provider_failure",
+                format!(
+                    "Failed to fetch ComicVine series: {}",
+                    provider_failure_name(&failure)
+                ),
+            )
+        })?;
     let Some(volume_data) = volume.get("results").filter(|value| value.is_object()) else {
         return Err(series_import_error(
             StatusCode::BAD_GATEWAY,
@@ -1376,7 +1416,7 @@ pub async fn import_series(
             "ComicVine series has no name",
         ));
     };
-    let rows = provider_roster(&state.outbound, volume_id, &key)
+    let rows = provider_roster(&state, volume_id, &key, true)
         .await
         .map_err(|failure| {
             series_import_error(
@@ -2000,10 +2040,20 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
 pub async fn search_series(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    Query(query): Query<SearchQuery>,
+    query: Result<Query<SearchQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
-    let limit = query.limit.clamp(1, 50);
-    let offset = query.offset.max(0);
+    let Query(query) = query.map_err(|_| validation_failed())?;
+    // Python `Query(min_length=1, max_length=200)`, `limit` ge=1 le=50, `offset` ge=0.
+    if query.q.is_empty() || query.q.chars().count() > 200 {
+        return Err(unprocessable("q length out of range"));
+    }
+    if !(1..=50).contains(&query.limit) {
+        return Err(unprocessable("limit out of range"));
+    }
+    if query.offset < 0 {
+        return Err(unprocessable("offset out of range"));
+    }
+    let (limit, offset) = (query.limit, query.offset);
     let page = offset / limit + 1;
     if query.q.trim().is_empty() {
         return Ok(Json(ComicVineSeriesSearchResponse {
@@ -2032,7 +2082,9 @@ pub async fn search_series(
          &field_list=id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         encode_query(query.q.trim())
     );
-    let payload = provider_response(&state.outbound, "search", &extra, &key)
+    let payload = state
+        .comicvine_limits
+        .call(&state.outbound, "search", &extra, &key)
         .await
         .map_err(map_provider_failure)?;
     let results: Vec<ComicVineSeriesResult> = payload
@@ -2061,9 +2113,11 @@ pub async fn search_series(
 pub async fn series_issues(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    Path(comicvine_volume_id): Path<i32>,
-    Query(query): Query<SeriesIssuesQuery>,
+    comicvine_volume_id: Result<Path<i32>, PathRejection>,
+    query: Result<Query<SeriesIssuesQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineSeriesIssuesResponse>, ApiError> {
+    let Path(comicvine_volume_id) = comicvine_volume_id.map_err(|_| validation_failed())?;
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let mut series_name = query.series_name;
     let Some(key) = provider_key() else {
         return Ok(Json(ComicVineSeriesIssuesResponse {
@@ -2076,12 +2130,12 @@ pub async fn series_issues(
             issues: Vec::new(),
         }));
     };
-    let roster = provider_roster(&state.outbound, comicvine_volume_id, &key)
+    let roster = provider_roster(&state, comicvine_volume_id, &key, false)
         .await
         .unwrap_or_default();
     let issues: Vec<ComicVineIssueCandidate> = roster.iter().filter_map(issue_candidate).collect();
     if series_name.is_empty() {
-        series_name = provider_issue_volume(&state.outbound, comicvine_volume_id, &key)
+        series_name = provider_issue_volume(&state, comicvine_volume_id, &key)
             .await
             .unwrap_or_else(|| format!("Volume {comicvine_volume_id}"));
     }
@@ -2097,45 +2151,68 @@ pub async fn series_issues(
 /// response whose rows do not belong to the requested volume (the Python
 /// provider applies the same guard so a bad filter cannot import mixed data).
 const ROSTER_PAGE_SIZE: usize = 100;
-const MAX_ROSTER_PAGES: usize = 10;
+/// Safety bound on roster pagination (100 rows/page). Python's provider walks
+/// every page; Rust stops at this many pages and fails loudly rather than
+/// returning a truncated roster that an import would commit as complete.
+const MAX_ROSTER_PAGES: usize = 100;
+
+fn roster_rows(page: &Value) -> Vec<Value> {
+    page.get("results")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
 
 async fn provider_roster(
-    outbound: &Arc<dyn OutboundHttp>,
+    state: &AppState,
     volume_id: i32,
     key: &str,
+    fresh: bool,
 ) -> Result<Vec<Value>, ProviderFailure> {
     async fn fetch_page(
-        outbound: &Arc<dyn OutboundHttp>,
+        state: &AppState,
         volume_id: i32,
         key: &str,
         offset: usize,
+        fresh: bool,
     ) -> Result<Value, ProviderFailure> {
         let extra = format!(
             "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
              &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
         );
-        provider_response(outbound, "issues", &extra, key).await
+        let limits = &state.comicvine_limits;
+        if fresh {
+            limits
+                .call_fresh(&state.outbound, "issues", &extra, key)
+                .await
+        } else {
+            limits.call(&state.outbound, "issues", &extra, key).await
+        }
     }
-    let first = fetch_page(outbound, volume_id, key, 0).await?;
-    let mut rows: Vec<Value> = first
-        .get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let total = coerce_provider_int(first.get("number_of_total_results")).unwrap_or(0);
-    let mut offset = rows.len();
-    while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
-    {
-        let page = fetch_page(outbound, volume_id, key, offset).await?;
-        let page_rows: Vec<Value> = page
-            .get("results")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        if page_rows.is_empty() {
+    let first = fetch_page(state, volume_id, key, 0, fresh).await?;
+    let total = first
+        .get("number_of_total_results")
+        .and_then(|value| coerce_provider_int(Some(value)))
+        .map(|total| total.max(0) as usize);
+    let mut rows = roster_rows(&first);
+    // Mirrors Python `fetch_volume_issues`: a known total is walked to the end;
+    // an omitted total walks forward until a short page.
+    let mut pages = 1usize;
+    let mut last_page_len = rows.len();
+    loop {
+        let more = match total {
+            Some(total) => rows.len() < total && last_page_len > 0,
+            None => last_page_len >= ROSTER_PAGE_SIZE,
+        };
+        if !more {
             break;
         }
-        offset += page_rows.len();
+        if pages >= MAX_ROSTER_PAGES {
+            return Err(ProviderFailure::InvalidPayload);
+        }
+        let page_rows = roster_rows(&fetch_page(state, volume_id, key, rows.len(), fresh).await?);
+        pages += 1;
+        last_page_len = page_rows.len();
         rows.extend(page_rows);
     }
     for row in &rows {
@@ -2154,12 +2231,15 @@ async fn provider_roster(
 
 /// Fetch a volume's canonical display name. Returns the raw name so callers
 /// can apply their own empty-name fallback.
-async fn provider_issue_volume(
-    outbound: &Arc<dyn OutboundHttp>,
-    volume_id: i32,
-    key: &str,
-) -> Option<String> {
-    let payload = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", key)
+async fn provider_issue_volume(state: &AppState, volume_id: i32, key: &str) -> Option<String> {
+    let payload = state
+        .comicvine_limits
+        .call(
+            &state.outbound,
+            &format!("volume/4050-{volume_id}"),
+            "",
+            key,
+        )
         .await
         .ok()?;
     volume_name(&payload)
@@ -2169,9 +2249,10 @@ async fn provider_issue_volume(
 pub async fn resolve_input(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    Query(query): Query<ResolveQuery>,
+    query: Result<Query<ResolveQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineResolveResponse>, ApiError> {
-    if query.input.is_empty() || query.input.len() > 1000 {
+    let Query(query) = query.map_err(|_| validation_failed())?;
+    if query.input.is_empty() || query.input.chars().count() > 1000 {
         return Err(unprocessable("Invalid resolve input"));
     }
     let trimmed = query.input.trim();
@@ -2225,7 +2306,22 @@ pub async fn resolve_input(
     };
     match parsed {
         ParsedResource::Issue(id) => {
-            let Ok(result) = provider_issue(&state.outbound, id as u32, &key).await else {
+            let Ok(result) = state
+                .comicvine_limits
+                .call(
+                    &state.outbound,
+                    &format!("issue/4000-{id}"),
+                    &format!("&field_list={}", crate::comicvine_repair::FIELDS),
+                    &key,
+                )
+                .await
+                .and_then(|payload| {
+                    payload
+                        .get("results")
+                        .cloned()
+                        .ok_or(ProviderFailure::InvalidPayload)
+                })
+            else {
                 return Ok(failure());
             };
             let volume = result.get("volume").and_then(Value::as_object);
@@ -2260,8 +2356,10 @@ pub async fn resolve_input(
             }))
         }
         ParsedResource::Volume(id) => {
-            let Ok(payload) =
-                provider_response(&state.outbound, &format!("volume/4050-{id}"), "", &key).await
+            let Ok(payload) = state
+                .comicvine_limits
+                .call(&state.outbound, &format!("volume/4050-{id}"), "", &key)
+                .await
             else {
                 return Ok(failure());
             };
@@ -2270,7 +2368,7 @@ pub async fn resolve_input(
             else {
                 return Ok(failure());
             };
-            let roster = provider_roster(&state.outbound, id, &key)
+            let roster = provider_roster(&state, id, &key, false)
                 .await
                 .unwrap_or_default();
             let issues: Vec<ComicVineIssueCandidate> =
@@ -2291,8 +2389,9 @@ pub async fn resolve_input(
 pub async fn series_import_status(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(comicvine_volume_id): Path<i32>,
+    comicvine_volume_id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<SeriesImportStatusResponse>, ApiError> {
+    let Path(comicvine_volume_id) = comicvine_volume_id.map_err(|_| validation_failed())?;
     let connection = db::checkout(&state).await?;
     let volume_id = comicvine_volume_id.to_string();
     let row = connection
