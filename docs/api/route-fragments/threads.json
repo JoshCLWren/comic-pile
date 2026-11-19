@@ -214,8 +214,11 @@
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
