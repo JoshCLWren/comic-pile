@@ -152,6 +152,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Reject nested lockfiles in workspace packages
+        run: bash scripts/check_nested_lockfiles.sh
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
