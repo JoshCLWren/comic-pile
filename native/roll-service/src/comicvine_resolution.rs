@@ -7,7 +7,8 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{rejection::QueryRejection, Path, Query, State},
+    http::StatusCode,
     Json,
 };
 use http_body_util::BodyExt;
