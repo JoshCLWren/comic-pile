@@ -3450,7 +3450,7 @@ fn title_number_fallback(
     ))
 }
 
-async fn resolve_canonical_for_entry(
+fn resolve_canonical_for_entry(
     comicvine_issue_id: Option<&str>,
     series_name: &str,
     issue_number: &str,
@@ -3458,120 +3458,86 @@ async fn resolve_canonical_for_entry(
     canonical_issues: &CanonicalIssueIndex,
     fallback_index: Option<&OwnedIssueFallbackIndex>,
 ) -> Result<EntryResolution, ApiError> {
-    if let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) {
-        let eid = tx.run_query_opt(
-            "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
-            &[&cvid]
-        ).await.map_err(|e| tx_db_error(e, ""))?;
-        if let Some(eid_row) = eid {
-            let eid: i32 = eid_row.get(0);
-            let issues = tx
-                .run_query(
-                    r#"
-                SELECT i.id, i.status::text, i.read_at::text
-                FROM issue_external_identity_mappings m
-                JOIN issues i ON i.id = m.issue_id
-                JOIN threads t ON t.id = i.thread_id
-                WHERE m.external_identity_id = $1 AND m.status = 'confirmed' AND t.user_id = $2
-                ORDER BY i.id
-                "#,
-                    &[&eid, &user_id],
-                )
-                .await
-                .map_err(|e| tx_db_error(e, ""))?;
-            if issues.is_empty() {
-                return title_number_fallback(
-                    tx,
-                    user_id,
-                    cvid,
-                    series_name,
-                    issue_number,
-                    Some("comicvine"),
-                    series_external_id,
-                    fallback_index,
-                )
-                .await;
-            }
-            if issues.len() == 1 {
-                let r = &issues[0];
-                return Ok((
-                    Some(r.get(0)),
-                    Some(r.get(0)),
-                    "resolved_via_comicvine_canonical".to_string(),
-                    false,
-                    r.get(1),
-                    r.get(2),
-                ));
-            }
-            let mut read_rows: Vec<(i32, Option<String>, Option<String>)> = Vec::new();
-            let mut all_unread = true;
-            for r in &issues {
-                let st: Option<String> = r.get(1);
-                if st.as_deref() == Some("read") {
-                    all_unread = false;
-                    read_rows.push((r.get(0), st, r.get(2)));
-                }
-            }
-            let canonical = if !all_unread {
-                read_rows.sort_by(|a, b| {
-                    a.2.as_deref()
-                        .unwrap_or("9999")
-                        .cmp(b.2.as_deref().unwrap_or("9999"))
-                        .then(a.0.cmp(&b.0))
-                });
-                read_rows
-                    .first()
-                    .map(|r| r.0)
-                    .unwrap_or_else(|| issues[0].get(0))
-            } else {
-                issues
-                    .iter()
-                    .map(|r| r.get::<_, i32>(0))
-                    .min()
-                    .unwrap_or_else(|| issues[0].get(0))
-            };
-            let canon_row = issues
-                .iter()
-                .find(|r| r.get::<_, i32>(0) == canonical)
-                .unwrap_or(&issues[0]);
-            let has_read = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() == Some("read"));
-            let has_unread = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() != Some("read"));
-            let ambiguous_div = has_read && has_unread;
-            let status_str = if ambiguous_div {
-                "resolved_via_comicvine_canonical_ambiguous"
-            } else {
-                "resolved_via_comicvine_canonical"
-            };
-            return Ok((
-                Some(canonical),
-                Some(canonical),
-                status_str.to_string(),
-                true,
-                canon_row.get(1),
-                canon_row.get(2),
-            ));
-        } else {
-            return Ok((
-                None,
-                None,
-                "comicvine_identity_not_known".to_string(),
-                false,
-                None,
-                None,
-            ));
-        }
+    let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok((
+            None,
+            None,
+            "ambiguous_no_comicvine_id".to_string(),
+            false,
+            None,
+            None,
+        ));
+    };
+    let Some(issues) = canonical_issues.get(cvid) else {
+        return Ok((
+            None,
+            None,
+            "comicvine_identity_not_known".to_string(),
+            false,
+            None,
+            None,
+        ));
+    };
+    if issues.is_empty() {
+        let fallback = fallback_index.ok_or_else(|| {
+            ApiError::Internal("Missing lazy title/number fallback evidence".to_string())
+        })?;
+        return title_number_fallback(
+            series_name,
+            issue_number,
+            series_external_id,
+            fallback,
+        );
     }
+    if issues.len() == 1 {
+        let issue = &issues[0];
+        return Ok((
+            Some(issue.id),
+            Some(issue.id),
+            "resolved_via_comicvine_canonical".to_string(),
+            false,
+            issue.status.clone(),
+            issue.read_at.clone(),
+        ));
+    }
+
+    let mut read_rows: Vec<&CanonicalIssueRow> = issues
+        .iter()
+        .filter(|issue| issue.status.as_deref() == Some("read"))
+        .collect();
+    let canonical = if read_rows.is_empty() {
+        issues.iter().map(|issue| issue.id).min().unwrap_or(issues[0].id)
+    } else {
+        read_rows.sort_by(|a, b| {
+            a.read_at
+                .as_deref()
+                .unwrap_or("9999")
+                .cmp(b.read_at.as_deref().unwrap_or("9999"))
+                .then(a.id.cmp(&b.id))
+        });
+        read_rows[0].id
+    };
+    let canonical_row = issues
+        .iter()
+        .find(|issue| issue.id == canonical)
+        .unwrap_or(&issues[0]);
+    let has_read = issues
+        .iter()
+        .any(|issue| issue.status.as_deref() == Some("read"));
+    let has_unread = issues
+        .iter()
+        .any(|issue| issue.status.as_deref() == Some("unread"));
     Ok((
-        None,
-        None,
-        "ambiguous_no_comicvine_id".to_string(),
-        false,
-        None,
-        None,
+        Some(canonical),
+        Some(canonical),
+        if has_read && has_unread {
+            "resolved_via_comicvine_canonical_ambiguous".to_string()
+        } else {
+            "resolved_via_comicvine_canonical".to_string()
+        },
+        true,
+        canonical_row.status.clone(),
+        canonical_row.read_at.clone(),
     ))
 }
 
