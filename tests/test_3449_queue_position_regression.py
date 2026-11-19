@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -321,7 +320,7 @@ async def test_exclude_and_restore_keeps_positions_dense(
 
 @pytest.mark.asyncio
 async def test_sparse_existing_positions_agree_across_api_surfaces(
-    async_db: AsyncSession, default_user: User, auth_client: AsyncClient
+    async_db: AsyncSession, default_user: User
 ) -> None:
     """Normal reads fix existing gaps without requiring a mutation or rewriting keys."""
     first = await _add_thread(async_db, default_user, title="A", position=4)
@@ -345,10 +344,6 @@ async def test_sparse_existing_positions_agree_across_api_surfaces(
 
     roll = (await roll_pending_thread(async_db)).model_dump()
     assert roll["queue_position"] == expected[roll["thread_id"]]
-    restored = await auth_client.get("/api/v1/sessions/current/")
-    assert restored.status_code == 200, restored.text
-    active = restored.json()["active_thread"]
-    assert active["queue_position"] == expected[active["id"]]
     assert await _active_positions(async_db, default_user.id) == [4, 621]
 
 

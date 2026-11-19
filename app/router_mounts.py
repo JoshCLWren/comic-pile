@@ -1,6 +1,6 @@
 """Per-resource router mounts for deferred cold-start registration (#3479).
 
-The Vercel function registers only the lightweight ping/metrics/keepalive routes
+The Vercel function registers only the lightweight ping route
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
 ``/api/v1/undo`` tap pulled in catalog and delivery even though the
@@ -29,9 +29,10 @@ from fastapi import FastAPI
 RegisterMount = Callable[[FastAPI], None]
 
 #: Path segments that are registered eagerly and never need deferred loading:
-#: ping, metrics and keepalive are mounted by ``app.main`` before this registry
-#: is consulted.
-EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics", "keepalive"})
+#: ping is mounted by ``app.main`` before this registry is consulted. The
+#: former metrics and keepalive eager routers were retired with their Python
+#: handlers (served by native Rust v2).
+EAGER_SEGMENTS: frozenset[str] = frozenset({"ping"})
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,7 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
 
 
 def _register_health(app: FastAPI) -> None:
-    """Register bounded health probes."""
+    """Register the bounded warm-up probe."""
     from app.api import health
 
     app.include_router(health.router, prefix="/api", tags=["health"])
@@ -123,18 +124,6 @@ def _register_comicvine_resolution(app: FastAPI) -> None:
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
 
 
-def _register_creators(app: FastAPI) -> None:
-    """Register creator routers (absolute ``/api/v1`` paths)."""
-    from app.api import creators
-
-    app.include_router(creators.router, tags=["creators"])
-
-
-def _register_taste(app: FastAPI) -> None:
-    """Register taste-discovery routers."""
-    from app.api import taste
-
-    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
 
 
 def _register_reading_orders(app: FastAPI) -> None:
@@ -142,20 +131,6 @@ def _register_reading_orders(app: FastAPI) -> None:
     from app.api import reading_orders
 
     app.include_router(reading_orders.router, tags=["reading-orders"])
-
-
-def _register_reading_boundary(app: FastAPI) -> None:
-    """Register versioned Reading Boundaries explanation routers."""
-    from app.api import reading_boundary
-
-    app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
-
-
-def _register_reading_plan_sync(app: FastAPI) -> None:
-    """Register reading-plan sync routers."""
-    from app.api import reading_plan_sync
-
-    app.include_router(reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"])
 
 
 def _register_sessions(app: FastAPI) -> None:
@@ -167,27 +142,6 @@ def _register_sessions(app: FastAPI) -> None:
     # shared router so its literal paths resolve ahead of /{session_id}.
     app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-
-
-def _register_undo(app: FastAPI) -> None:
-    """Register versioned undo routers."""
-    from app.api import undo
-
-    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-
-
-def _register_traffic_metrics(app: FastAPI) -> None:
-    """Register traffic-metrics routers."""
-    from app.api import traffic_metrics
-
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-
-
-def _register_bootstrap_telemetry(app: FastAPI) -> None:
-    """Register bootstrap-alias telemetry routers."""
-    from app.api import bootstrap_telemetry
-
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
 
 
 def _register_dependencies(app: FastAPI) -> None:
@@ -216,13 +170,6 @@ def _register_issue_identity(app: FastAPI) -> None:
     app.include_router(issue_identity.router, tags=["issue-identity"])
 
 
-def _register_cbl_adoption(app: FastAPI) -> None:
-    """Register CBL adoption-commit routers (absolute ``/api/v1`` paths)."""
-    from app.api import cbl_plan_adoption
-
-    app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
@@ -235,31 +182,17 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         frozenset({"comicvine"}),
         _register_comicvine_resolution,
     ),
-    RouterMount("creators", frozenset({"creators"}), _register_creators),
-    RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
         _register_reading_orders,
     ),
-    RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
-    RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
-    RouterMount("undo", frozenset({"undo"}), _register_undo),
-    RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
-    RouterMount(
-        "bootstrap-telemetry",
-        frozenset({"bootstrap-alias-metrics"}),
-        _register_bootstrap_telemetry,
-    ),
     RouterMount(
         "dependencies",
         frozenset(
             {
-                "collection-exclusions",
                 "continuity-plans",
-                "continuity-rules",
-                "custom-cbls",
                 "dependencies",
                 "issue-identity",
                 "issues",
@@ -271,7 +204,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     ),
     RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
-    RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
 )
 
 

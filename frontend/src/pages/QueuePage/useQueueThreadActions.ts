@@ -11,7 +11,7 @@ import {
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
 import { rollApi } from '../../services/api-roll'
-import { removeRollSnooze } from '../../services/api-roll'
+
 import { useToast } from '../../contexts/useToast'
 import {
   invalidateAfterQueueMovement,

@@ -117,30 +117,41 @@ async fn offer_metadata(
     conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
     thread_id: i32,
+    option_e: bool,
+    candidates: Vec<i32>,
 ) -> Result<OfferMetadata, ApiError> {
+    // The pending Roll view must show the same canonical display position as
+    // the Queue list and Thread Detail, not the raw stored `queue_position`.
+    let position = crate::threads::display_position_expr("$2", "$1", "$3", "$4");
+    let sql = format!(
+        "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+                t.total_issues,t.reading_progress,
+                {position} AS computed_position,
+                t.next_unread_issue_id,
+                i.issue_number
+          FROM threads t
+          LEFT JOIN issues i ON i.id = t.next_unread_issue_id AND i.thread_id = t.id
+          WHERE t.id=$1 AND t.user_id=$2",
+    );
     let row = conn
-        .query_opt(
-            "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
-               t.total_issues,t.reading_progress,t.next_unread_issue_id,
-               i.issue_number
-             FROM threads t
-             LEFT JOIN issues i ON i.id = t.next_unread_issue_id AND i.thread_id = t.id
-             WHERE t.id=$1 AND t.user_id=$2",
-            &[&thread_id, &user.id()],
-        )
+        .query_opt(&sql, &[&thread_id, &user.id(), &option_e, &candidates])
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::Internal("Roll offer unavailable".to_string()))?;
+    // SQL NULL means the thread is outside the active queue; fall back to the
+    // stored value instead of panicking on a NULL -> i32 read.
+    let computed_position: Option<i32> = row.try_get(7).map_err(db::query_error)?;
+    let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
     Ok(OfferMetadata {
         thread_id: row.try_get(0).map_err(db::query_error)?,
         title: row.try_get(1).map_err(db::query_error)?,
         format: row.try_get(2).map_err(db::query_error)?,
         issues_remaining: row.try_get(3).map_err(db::query_error)?,
-        queue_position: row.try_get(4).map_err(db::query_error)?,
+        queue_position: computed_position.unwrap_or(stored_position),
         total_issues: row.try_get(5).map_err(db::query_error)?,
         reading_progress: row.try_get(6).map_err(db::query_error)?,
-        next_unread_issue_id: row.try_get(7).map_err(db::query_error)?,
-        next_unread_issue_number: row.try_get(8).map_err(db::query_error)?,
+        next_unread_issue_id: row.try_get(8).map_err(db::query_error)?,
+        next_unread_issue_number: row.try_get(9).map_err(db::query_error)?,
     })
 }
 
@@ -320,6 +331,14 @@ pub async fn offer(
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    // The canonical position shown for a pending Roll comes from the same
+    // Option E ordering the Queue list and Thread Detail use.
+    let option_e = crate::threads::option_e_enabled();
+    let eligible_ids = if option_e {
+        crate::threads::eligible_candidate_ids(&validated)?
+    } else {
+        Vec::new()
+    };
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
@@ -355,7 +374,14 @@ pub async fn offer(
 
     if let Some(stored) = existing_offer(tx.client(), user, &request.idempotency_key).await? {
         tx.rollback().await.map_err(db::query_error)?;
-        let metadata = offer_metadata(&*pending.connection(), user, stored.thread_id).await?;
+        let metadata = offer_metadata(
+            &*pending.connection(),
+            user,
+            stored.thread_id,
+            option_e,
+            eligible_ids.clone(),
+        )
+        .await?;
         return Ok(Json(response(
             metadata,
             stored.issue_id,
@@ -473,7 +499,14 @@ pub async fn offer(
     )
     .await?;
     tx.commit().await.map_err(db::query_error)?;
-    let metadata = offer_metadata(&*pending.connection(), user, selected.thread_id).await?;
+    let metadata = offer_metadata(
+        &*pending.connection(),
+        user,
+        selected.thread_id,
+        option_e,
+        eligible_ids,
+    )
+    .await?;
     pending.release();
     Ok(Json(response(
         metadata,
@@ -530,6 +563,16 @@ pub async fn unsnooze(
         SessionPolicy::default(),
     )
     .await?;
+
+    // Compute the read-only Option E snapshot before taking the write
+    // connection so this request never nests two pool checkouts.
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let option_e = crate::threads::option_e_enabled();
+    let eligible_ids = if option_e {
+        crate::threads::eligible_candidate_ids(&validated)?
+    } else {
+        Vec::new()
+    };
 
     let mut pending = crate::dice_api::Pending::new(db::checkout(&state).await?);
     let tx = pending
@@ -634,7 +677,7 @@ pub async fn unsnooze(
     tx.commit().await.map_err(db::query_error)?;
 
     // Fetch metadata for the restored thread.
-    let metadata = offer_metadata(&*pending.connection(), user, snoozed_thread).await?;
+    let metadata = offer_metadata(&*pending.connection(), user, snoozed_thread, option_e, eligible_ids).await?;
     pending.release();
 
     Ok(Json(UnsnoozeResponse {
@@ -906,10 +949,47 @@ mod tests {
             .unwrap()
             .is_none());
 
-        let metadata = offer_metadata(&client, owner, 10).await.unwrap();
+        let metadata = offer_metadata(&client, owner, 10, false, Vec::new())
+            .await
+            .unwrap();
         assert_eq!(metadata.thread_id, 10);
         assert_eq!(metadata.title, "Saga");
-        assert!(offer_metadata(&client, other, 10).await.is_err());
+        assert!(offer_metadata(&client, other, 10, false, Vec::new())
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn offer_metadata_uses_canonical_display_position() {
+        let _admin = crate::test_support::required_test_admin_url();
+        let url = crate::test_support::database_url().await;
+        let (client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Late', 'Comic', 0, 'active', 30),
+                        (11, 1, 'Early', 'Comic', 0, 'active', 10),
+                        (12, 1, 'Middle', 'Comic', 0, 'active', 20);"#,
+        )
+        .await;
+        let owner = AuthenticatedUser::for_test(1);
+
+        // All stored is_blocked flags are false, so the canonical ranking is
+        // purely queue_position: Early -> 1, Middle -> 2, Late -> 3. The old
+        // code forwarded the raw stored positions (10/20/30) instead.
+        let late = offer_metadata(&client, owner, 10, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(late.queue_position, 3);
+        let middle = offer_metadata(&client, owner, 12, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(middle.queue_position, 2);
+        let early = offer_metadata(&client, owner, 11, false, Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(early.queue_position, 1);
     }
 
     #[tokio::test]
