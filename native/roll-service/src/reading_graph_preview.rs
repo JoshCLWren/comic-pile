@@ -457,7 +457,6 @@ fn build_series_nodes(
         aggregate.rollable.extend(rollable);
         aggregate.waiting.extend(waiting);
         aggregate.waits_for.extend(waits_for);
-        aggregate.waits_for.extend(waits_for);
     }
 
     let mut nodes: Vec<ReadingGraphSeriesNode> = grouped
