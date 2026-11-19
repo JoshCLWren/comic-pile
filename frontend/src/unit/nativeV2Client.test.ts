@@ -24,6 +24,84 @@ function clientWithTransport() {
 
 const clientCases: ClientCase[] = [
   {
+    name: 'applies a custom CBL plan by encoded list and plan ids',
+    invoke: (client) =>
+      client.applyCustomCbl({
+        path: { list_id: 5, plan_id: 9 },
+        body: { lane_id: 'lane-1' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/reading-lists/5/reading-plans/9/applications',
+      { lane_id: 'lane-1' },
+    ],
+  },
+  {
+    name: 'commits a custom CBL adoption',
+    invoke: (client) =>
+      client.cblAdoptionCommit({
+        path: { list_id: 5 },
+        body: { content_hash: 'hash-1', revision_sha: 'rev-1' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/reading-lists/5/adoption-commits',
+      { content_hash: 'hash-1', revision_sha: 'rev-1' },
+    ],
+  },
+  {
+    name: 'commits a targeted custom CBL adoption',
+    invoke: (client) =>
+      client.cblTargetedAdoptionCommit({
+        path: { list_id: 5, plan_id: 9 },
+        body: { content_hash: 'hash-1', revision_sha: 'rev-1' },
+      }),
+    method: 'post',
+    expectedArgs: [
+      '/v2/reading-lists/5/reading-plans/9/adoption-commits',
+      { content_hash: 'hash-1', revision_sha: 'rev-1' },
+    ],
+  },
+  {
+    name: 'deletes an overlap decision by encoded id',
+    invoke: (client) =>
+      client.deleteOverlapDecision({ path: { list_id: 5, decision_id: 9 } }),
+    method: 'delete',
+    expectedArgs: ['/v2/reading-lists/5/overlap-decisions/9', { params: undefined }],
+  },
+  {
+    name: 'exports a custom CBL list',
+    invoke: (client) => client.exportCustomCbl({ path: { list_id: 5 } }).then(() => null),
+    method: 'get',
+    expectedArgs: ['/v2/reading-lists/5/export'],
+  },
+  {
+    name: 'reads overlap decisions for a reading list',
+    invoke: (client) => client.getOverlapDecisions({ path: { list_id: 5 } }),
+    method: 'get',
+    expectedArgs: ['/v2/reading-lists/5/overlap-decisions'],
+  },
+  {
+    name: 'saves an overlap decision for a reading list',
+    invoke: (client) =>
+      client.saveOverlapDecision({
+        path: { list_id: 5 },
+        body: { continuing_volume_id: '4050-1', waiting_volume_id: '4050-2' },
+      }),
+    method: 'put',
+    expectedArgs: [
+      '/v2/reading-lists/5/overlap-decisions',
+      { continuing_volume_id: '4050-1', waiting_volume_id: '4050-2' },
+    ],
+  },
+  {
+    name: 'searches custom CBL issue candidates',
+    invoke: (client) =>
+      client.searchCustomCblIssues({ query: { q: 'bat', limit: 5 } }),
+    method: 'get',
+    expectedArgs: ['/v2/reading-lists/issue-candidates', { params: { q: 'bat', limit: 5 } }],
+  },
+  {
     name: 'bootstraps with the optional timezone query',
     invoke: (client) => client.bootstrap({ query: { timezone: 'UTC' } }),
     method: 'get',
