@@ -268,6 +268,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
+        .route("/api/v2/series-mapping-commits", post(native_dispatch))
         .route(
             "/api/v1/catalog/series-mappings/commit",
             post(native_dispatch),
@@ -415,6 +416,38 @@ fn app() -> Router {
             "/api/v2/reading-lists/{list_id}/reader",
             get(native_dispatch),
         )
+        .route(
+            "/api/v2/reading-lists/issue-candidates",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/export",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/adoption-commits",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
+            post(native_dispatch),
+        )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
@@ -460,14 +493,6 @@ fn app() -> Router {
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/cbl/{list_id}/adoption-commit",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
             post(native_dispatch),
         )
         .route(
@@ -656,29 +681,6 @@ fn app() -> Router {
         .route(
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
-        )
-        .route("/api/v1/custom-cbls", get(native_dispatch))
-        .route("/api/v1/custom-cbls", post(native_dispatch))
-        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
-        .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-            put(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-            delete(native_dispatch),
         )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
@@ -987,8 +989,11 @@ mod tests {
                 "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
             ),
             ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
-            ("POST", "/api/v1/cbl/26/adoption-commit"),
-            ("POST", "/api/v1/cbl/26/reading-plans/7/adoption-commit"),
+            ("POST", "/api/v2/reading-lists/26/adoption-commits"),
+            (
+                "POST",
+                "/api/v2/reading-lists/26/reading-plans/7/adoption-commits",
+            ),
         ];
         for (method, uri) in cases {
             let mut router = app();
@@ -2302,9 +2307,9 @@ mod tests {
         // native_roll ingress (not just the inner service) so production
         // requests do not fall through to the Rust JSON 404 fallback.
         let cases = [
-            ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
-            ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
-            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
+            ("GET", "/api/v2/reading-lists/26/overlap-decisions"),
+            ("PUT", "/api/v2/reading-lists/26/overlap-decisions"),
+            ("DELETE", "/api/v2/reading-lists/26/overlap-decisions/7"),
         ];
         for (method, uri) in cases {
             let mut router = app();

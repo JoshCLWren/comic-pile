@@ -12535,6 +12535,12 @@
           "user_id": {
             "format": "int32",
             "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -18221,51 +18227,6 @@
         ]
       }
     },
-    "/api/v1/catalog/series-mappings/commit": {
-      "post": {
-        "operationId": "commit_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CommitResponse"
-                }
-              }
-            },
-            "description": "Commit result"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "409": {
-            "description": "preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict"
-          },
-          "422": {
-            "description": "invalid_approved_row"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "OpenAPI path documentation for the series-mapping commit endpoint.",
-        "tags": [
-          "catalog"
-        ]
-      }
-    },
     "/api/v1/catalog/series-mappings/preview": {
       "post": {
         "operationId": "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
@@ -18304,130 +18265,6 @@
         ],
         "tags": [
           "crate::catalog_series_mapping_preview"
-        ]
-      }
-    },
-    "/api/v1/cbl/{list_id}/adoption-commit": {
-      "post": {
-        "operationId": "cbl_adoption_commit_documentation",
-        "parameters": [
-          {
-            "description": "CBL source list identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
-                }
-              }
-            },
-            "description": "Reading Plan created with adopted CBL issues"
-          },
-          "409": {
-            "description": "Stale source fingerprint"
-          },
-          "422": {
-            "description": "Request failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for committing an adoption plan.",
-        "tags": [
-          "issue-identity"
-        ]
-      }
-    },
-    "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit": {
-      "post": {
-        "operationId": "cbl_targeted_adoption_commit_documentation",
-        "parameters": [
-          {
-            "description": "CBL source list identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Owned continuity plan identifier",
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
-                }
-              }
-            },
-            "description": "Reading Plan updated with adopted CBL issues"
-          },
-          "409": {
-            "description": "Stale source fingerprint"
-          },
-          "422": {
-            "description": "Request failed validation or plan not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for targeted adoption into an existing plan.",
-        "tags": [
-          "issue-identity"
         ]
       }
     },
@@ -20094,602 +19931,6 @@
         "summary": "Document native creator summaries with the mounted query and response types.",
         "tags": [
           "creators"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls": {
-      "get": {
-        "operationId": "list_custom_cbls_documentation",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CustomCBLListItem"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Editable custom CBL lists owned by the reader"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the custom CBL list.",
-        "tags": [
-          "custom-cbls"
-        ]
-      },
-      "post": {
-        "operationId": "create_custom_cbl_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomCBLWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
-                }
-              }
-            },
-            "description": "Custom CBL created from real issues"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request body failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for custom CBL creation.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/issue-search": {
-      "get": {
-        "operationId": "search_custom_cbl_issues_documentation",
-        "parameters": [
-          {
-            "description": "Case-insensitive title or issue-number filter, max 200 characters",
-            "in": "query",
-            "name": "q",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Maximum results, 1-100 (default 30)",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CustomCBLIssueSearchResult"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Matching owned issues"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            },
-            "description": "Query failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for custom CBL issue search.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}": {
-      "get": {
-        "operationId": "get_custom_cbl_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
-                }
-              }
-            },
-            "description": "The owned custom CBL"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for one custom CBL.",
-        "tags": [
-          "custom-cbls"
-        ]
-      },
-      "put": {
-        "operationId": "update_custom_cbl_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomCBLWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomCBLResponse"
-                }
-              }
-            },
-            "description": "The updated custom CBL"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "422": {
-            "description": "Request body failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for custom CBL replacement.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}/export": {
-      "get": {
-        "operationId": "export_custom_cbl_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/xml": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Portable .cbl XML document"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for custom CBL export.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}/overlap-decisions": {
-      "get": {
-        "operationId": "get_overlap_decisions_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
-                }
-              }
-            },
-            "description": "Saved overlap decisions and version token"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for overlap decisions read.",
-        "tags": [
-          "custom-cbls"
-        ]
-      },
-      "put": {
-        "operationId": "save_overlap_decision_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OverlapDecisionWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
-                }
-              }
-            },
-            "description": "Updated overlap decisions and version token"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "409": {
-            "description": "Stale version token"
-          },
-          "422": {
-            "description": "Unusable or cyclic choice"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for overlap decision save.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}": {
-      "delete": {
-        "operationId": "delete_overlap_decision_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Overlap decision identifier",
-            "in": "path",
-            "name": "decision_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Decision version token the client last read",
-            "in": "query",
-            "name": "expected_updated_at",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
-                }
-              }
-            },
-            "description": "Updated overlap decisions and version token"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "409": {
-            "description": "Stale version token"
-          },
-          "422": {
-            "description": "Cycle conflict"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for overlap decision removal.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}/reader": {
-      "get": {
-        "operationId": "read_custom_cbl_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingListReader"
-                }
-              }
-            },
-            "description": "Reader with canonical availability"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the custom CBL reader.",
-        "tags": [
-          "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply": {
-      "post": {
-        "operationId": "apply_custom_cbl_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Continuity plan identifier",
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomCBLApplyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomCBLApplyResponse"
-                }
-              }
-            },
-            "description": "Reading Plan updated with the custom CBL merged into one lane"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Reading List not found"
-          },
-          "409": {
-            "description": "Stale plan version token"
-          },
-          "422": {
-            "description": "Empty list, unknown lane, or cycle conflict"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for Reading Plan application.",
-        "tags": [
-          "custom-cbls"
         ]
       }
     },
@@ -27703,6 +26944,72 @@
         ]
       }
     },
+    "/api/v2/reading-lists/issue-candidates": {
+      "get": {
+        "operationId": "search_custom_cbl_issues_documentation",
+        "parameters": [
+          {
+            "description": "Case-insensitive title or issue-number filter, max 200 characters",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results, 1-100 (default 30)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CustomCBLIssueSearchResult"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Matching owned issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            },
+            "description": "Query failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for custom CBL issue search.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
     "/api/v2/reading-lists/{list_id}": {
       "delete": {
         "operationId": "delete_reading_list_documentation",
@@ -27845,6 +27152,290 @@
         ]
       }
     },
+    "/api/v2/reading-lists/{list_id}/adoption-commits": {
+      "post": {
+        "operationId": "cbl_adoption_commit_documentation",
+        "parameters": [
+          {
+            "description": "CBL source list identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
+                }
+              }
+            },
+            "description": "Reading Plan created with adopted CBL issues"
+          },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
+          "422": {
+            "description": "Request failed validation"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for committing an adoption plan.",
+        "tags": [
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/export": {
+      "get": {
+        "operationId": "export_custom_cbl_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Portable .cbl XML document"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for custom CBL export.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/overlap-decisions": {
+      "get": {
+        "operationId": "get_overlap_decisions_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Saved overlap decisions and version token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for overlap decisions read.",
+        "tags": [
+          "reading-lists"
+        ]
+      },
+      "put": {
+        "operationId": "save_overlap_decision_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverlapDecisionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Updated overlap decisions and version token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale version token"
+          },
+          "422": {
+            "description": "Unusable or cyclic choice"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for overlap decision save.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}": {
+      "delete": {
+        "operationId": "delete_overlap_decision_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Overlap decision identifier",
+            "in": "path",
+            "name": "decision_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Decision version token the client last read",
+            "in": "query",
+            "name": "expected_updated_at",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            },
+            "description": "Updated overlap decisions and version token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale version token"
+          },
+          "422": {
+            "description": "Cycle conflict"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for overlap decision removal.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
     "/api/v2/reading-lists/{list_id}/reader": {
       "get": {
         "operationId": "read_reading_list_documentation",
@@ -27887,6 +27478,146 @@
           }
         ],
         "summary": "Documentation-only operation for the live Reading List reader.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits": {
+      "post": {
+        "operationId": "cbl_targeted_adoption_commit_documentation",
+        "parameters": [
+          {
+            "description": "CBL source list identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owned continuity plan identifier",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionCommitResponseWire"
+                }
+              }
+            },
+            "description": "Reading Plan updated with adopted CBL issues"
+          },
+          "409": {
+            "description": "Stale source fingerprint"
+          },
+          "422": {
+            "description": "Request failed validation or plan not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for targeted adoption into an existing plan.",
+        "tags": [
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications": {
+      "post": {
+        "operationId": "apply_custom_cbl_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Continuity plan identifier",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomCBLApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomCBLApplyResponse"
+                }
+              }
+            },
+            "description": "Reading Plan updated with the custom CBL merged into one lane"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "409": {
+            "description": "Stale plan version token"
+          },
+          "422": {
+            "description": "Empty list, unknown lane, or cycle conflict"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for Reading Plan application.",
         "tags": [
           "reading-lists"
         ]
@@ -28512,6 +28243,51 @@
         "summary": "Documentation-only operation for the mounted v2 Roll unsnooze command.",
         "tags": [
           "roll"
+        ]
+      }
+    },
+    "/api/v2/series-mapping-commits": {
+      "post": {
+        "operationId": "commit_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitResponse"
+                }
+              }
+            },
+            "description": "Commit result"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict"
+          },
+          "422": {
+            "description": "invalid_approved_row"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "OpenAPI path documentation for the series-mapping commit endpoint.",
+        "tags": [
+          "catalog"
         ]
       }
     },
