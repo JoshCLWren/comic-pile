@@ -1,6 +1,4 @@
-//! Native cutover of the manual Roll pick:
-//! `POST /api/v1/roll/override` and its shared-handler alias
-//! `POST /api/roll/override`.
+//! Native cutover of the manual Roll pick: `POST /api/v2/roll/override`.
 //!
 //! The Python handler chain (`app/api/roll.py:override_roll` ->
 //! `RollService.execute_override`) is the behavioral oracle. This module keeps

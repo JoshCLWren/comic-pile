@@ -1,4 +1,4 @@
-//! Native same-path session-history reads.
+//! Native resource-shaped session-history read: snapshots of an owned session.
 //!
 //! The snapshot list is deliberately isolated from the rest of the session
 //! projection so this first browser-called slice can be deployed and reviewed

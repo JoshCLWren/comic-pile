@@ -1,5 +1,4 @@
-//! Native cutover of `POST /api/v1/roll/dismiss-pending` and its shared-handler alias
-//! `POST /api/roll/dismiss-pending`.
+//! Native cutover of `POST /api/v2/roll/dismiss-pending`.
 //!
 //! The Python handler is the behavioral oracle. This module preserves the same
 //! request contract (no body), authenticated owner scope, status/error JSON,

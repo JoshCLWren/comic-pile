@@ -219,19 +219,28 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
 test('real session and undo fragments retain native-only supported operations', () => {
   const sessions = liveFragment('sessions');
   const undo = liveFragment('undo');
-  const expected = [
-    ['GET', '/api/sessions/'],
-    ['GET', '/api/v1/sessions/'],
-    ['GET', '/api/sessions/{session_id}/details'],
-    ['GET', '/api/v1/sessions/{session_id}/details'],
+  // Session details/snapshots moved to the resource-shaped v2 surface; the
+  // legacy v1/unversioned single-session and list reads are retired (#4343,
+  // #4839). Undo keeps its native same-path contracts.
+  const expectedSessions = [
+    ['GET', '/api/v2/reading-sessions/{session_id}/details'],
+    ['GET', '/api/v2/reading-sessions/{session_id}/snapshots'],
+  ];
+  const expectedUndo = [
     ['GET', '/api/undo/{session_id}/snapshots'],
     ['POST', '/api/undo/{session_id}/undo/{snapshot_id}'],
     ['GET', '/api/v1/undo/{session_id}/snapshots'],
     ['POST', '/api/v1/undo/{session_id}/undo/{snapshot_id}'],
   ];
-  for (const [method, route] of expected) {
-    const fragment = route.includes('/undo/') ? undo : sessions;
-    const op = liveOperation(fragment, method, route);
+  assert.equal(sessions.operations.length, expectedSessions.length);
+  for (const [method, route] of expectedSessions) {
+    const op = liveOperation(sessions, method, route);
+    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.bucket, 'operations', route);
+    assert.ok(op.consumers.includes('frontend/src/services/api-sessions.ts'), route);
+  }
+  for (const [method, route] of expectedUndo) {
+    const op = liveOperation(undo, method, route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
     assert.equal(op.exclude_from_inventory, true, route);
     assert.equal(op.owning_issue, 4839, route);
@@ -239,12 +248,15 @@ test('real session and undo fragments retain native-only supported operations', 
   assert.ok(![...sessions.operations, ...undo.operations].some(
     op => op.path.includes('current-session') || op.path.includes('restore-session-start'),
   ));
+  assert.ok(!sessions.operations.some(
+    op => op.path.startsWith('/api/v1/sessions') || op.path.startsWith('/api/sessions'),
+  ));
 });
 
 test('real releases and dependency fragments retain declared browser routes', () => {
   const releases = liveFragment('releases');
   const expectedReleases = [
-    ['GET', '/api/v1/releases/'],
+    ['GET', '/api/v2/releases'],
     ['PUT', '/api/v1/releases/'],
     ['GET', '/api/v1/releases/source'],
     ['GET', '/api/v1/releases/{release_id}'],
@@ -254,7 +266,12 @@ test('real releases and dependency fragments retain declared browser routes', ()
   for (const [method, route] of expectedReleases) {
     const op = liveOperation(releases, method, route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
-    assert.equal(op.exclude_from_inventory, true, route);
+    if (route === '/api/v2/releases') {
+      assert.equal(op.bucket, 'operations', route);
+      assert.ok(op.consumers.includes('frontend/src/services/api-releases.ts'), route);
+    } else {
+      assert.equal(op.exclude_from_inventory, true, route);
+    }
   }
   const dependencies = liveFragment('dependencies');
   assert.deepEqual(new Set(dependencies.operations.map(op => op.bucket)), new Set(['operations', 'v1_operations']));

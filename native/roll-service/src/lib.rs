@@ -1194,10 +1194,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route(
-            "/api/v1/releases/",
-            put(releases::publish),
-        )
+        .route("/api/v1/releases/", put(releases::publish))
         .route("/api/v2/releases", get(releases::list))
         .route("/api/v1/releases/source", get(releases::reconcile))
         .route("/api/v1/releases/{release_id}", get(releases::get))

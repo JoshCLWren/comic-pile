@@ -1,8 +1,8 @@
-//! Native same-path session details read (#4839, parent #4335).
+//! Native resource-shaped session details read (#4839, parent #4335).
 //!
-//! Migrates `GET /api/sessions/{session_id}/details` and
-//! `GET /api/v2/reading-sessions/{session_id}/details` to the native Rust router with
-//! identical method/path and wire contract.
+//! Serves `GET /api/v2/reading-sessions/{session_id}/details` from the native
+//! Rust router with the same wire contract as the retired v1/unversioned
+//! session details paths.
 //!
 //! Wire parity with Python `get_session_details` (`app/api/session.py`):
 //!
@@ -770,8 +770,7 @@ mod tests {
 
     #[test]
     fn session_details_openapi_covers_the_v2_path() {
-        let document =
-            serde_json::to_value(crate::openapi::canonical_openapi()).expect("openapi");
+        let document = serde_json::to_value(crate::openapi::canonical_openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
         assert!(paths.contains_key("/api/v2/reading-sessions/{session_id}/details"));
         assert!(!paths.contains_key("/api/v1/sessions/{session_id}/details"));
