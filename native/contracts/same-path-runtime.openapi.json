@@ -6322,6 +6322,68 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/test-backdate": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Backdate an owned thread's last activity in a test environment.",
+        "operationId": "backdate_thread_for_testing_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "The thread ID to backdate",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "days_ago",
+            "in": "query",
+            "description": "Number of days to backdate the thread",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 3650,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backdated thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Only available in a test environment"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}:getBlockingInfo": {
       "post": {
         "tags": [
