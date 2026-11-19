@@ -2191,28 +2191,44 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
 }
 
 // ---------------------------------------------------------------------------
-// retired
+// PUT /api/v1/threads/{thread_id}/test-backdate
 // ---------------------------------------------------------------------------
 
+static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct EnvRestore(Option<std::ffi::OsString>);
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        if let Some(value) = self.0.take() {
+            std::env::set_var("TEST_ENVIRONMENT", value);
+        } else {
+            std::env::remove_var("TEST_ENVIRONMENT");
+        }
+    }
+}
+
 #[tokio::test]
-async fn test_backdate_is_retired_and_unrouted() {
+async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() {
+    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
     let ctx = setup("lcbackdate").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
-    let (status, _) = call(
+
+    let before = chrono::Utc::now();
+    let (status, body) = call(
         &ctx,
         "PUT",
         &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
         None,
     )
     .await;
-    assert!(
-        matches!(
-            status,
-            StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
-        ),
-        "test-backdate must not be served natively, got {status}"
-    );
-    let activity: Option<chrono::DateTime<chrono::Utc>> = ctx
+
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["id"], thread);
+    assert!(body["last_activity_at"].is_string(), "{body:?}");
+
+    let activity: chrono::DateTime<chrono::Utc> = ctx
         .state
         .pool
         .get()
@@ -2225,5 +2241,90 @@ async fn test_backdate_is_retired_and_unrouted() {
         .await
         .unwrap()
         .get(0);
-    assert!(activity.is_none());
+    let expected = before - chrono::Duration::days(5);
+    let delta = (activity - expected).num_seconds().abs();
+    assert!(
+        delta <= 30,
+        "expected last_activity_at near {expected}, got {activity}"
+    );
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_forbidden_without_test_environment() {
+    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::remove_var("TEST_ENVIRONMENT");
+    let ctx = setup("lcbackdateforbid").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+    assert_eq!(
+        body["detail"],
+        "This endpoint is only available in test environment"
+    );
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_not_found_for_other_user() {
+    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup("lcbackdatenotfound").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    let thread = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    assert_eq!(body["detail"], format!("Thread {thread} not found"));
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_validates_days_ago() {
+    let _env_guard = TEST_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup("lcbackdatevalidate").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
+
+    let (status, _body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=0"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=3651"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
