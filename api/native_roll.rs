@@ -499,14 +499,8 @@ fn app() -> Router {
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
         )
-        .route(
-            "/api/v1/comicvine/search/series",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/comicvine/resolve",
-            get(native_dispatch),
-        )
+        .route("/api/v1/comicvine/search/series", get(native_dispatch))
+        .route("/api/v1/comicvine/resolve", get(native_dispatch))
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
             get(native_dispatch),

@@ -204,7 +204,9 @@ pub struct SeriesIssuesQuery {
 // ---------------------------------------------------------------------------
 
 fn env_api_key() -> Option<String> {
-    std::env::var("COMICVINE_API_KEY").ok().filter(|s| !s.trim().is_empty())
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
 }
 
 /// Python-parity 422: FastAPI rejects an invalid query with
@@ -215,7 +217,9 @@ fn validation_failed() -> ApiError {
 
 /// Rejected query extractor (missing or malformed parameter) maps to the same
 /// 422 body the retired FastAPI route emitted.
-fn query_or_validation_failed<T>(query: Result<Query<T>, QueryRejection>) -> Result<Query<T>, ApiError> {
+fn query_or_validation_failed<T>(
+    query: Result<Query<T>, QueryRejection>,
+) -> Result<Query<T>, ApiError> {
     query.map_err(|_| validation_failed())
 }
 
@@ -232,9 +236,7 @@ const RESOLVE_INPUT_MAX_CHARS: usize = 1000;
 /// Validate the search query against the retired FastAPI parameter contract.
 ///
 /// Returns the clamped-free (Python already validated) page inputs.
-fn validated_search_query(
-    q: &SearchQuery,
-) -> Result<(String, i32, i32), ApiError> {
+fn validated_search_query(q: &SearchQuery) -> Result<(String, i32, i32), ApiError> {
     if q.q.trim().is_empty() || q.q.chars().count() > SEARCH_QUERY_MAX_CHARS {
         return Err(validation_failed());
     }
@@ -261,10 +263,7 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
-async fn fetch_json(
-    state: &AppState,
-    url: &str,
-) -> Option<Value> {
+async fn fetch_json(state: &AppState, url: &str) -> Option<Value> {
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
     let request = crate::outbound::OutboundRequest {
@@ -362,17 +361,28 @@ pub async fn search_comicvine_series(
                     name: name.unwrap().to_string(),
                     publisher,
                     start_year: row.get("start_year").and_then(|v| {
-                        v.as_i64().map(|x| x as i32).or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                        v.as_i64()
+                            .map(|x| x as i32)
+                            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
                     }),
                     issue_count: row.get("count_of_issues").and_then(|v| {
-                        v.as_i64().map(|x| x as i32).or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                        v.as_i64()
+                            .map(|x| x as i32)
+                            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
                     }),
-                    site_detail_url: row.get("site_detail_url").and_then(|v| v.as_str()).map(str::to_string),
+                    site_detail_url: row
+                        .get("site_detail_url")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string),
                     image_url,
                 });
             }
         }
-        total_available = p.get("number_of_total_results").and_then(|v| v.as_i64()).map(|x| x as i32).unwrap_or(results.len() as i32);
+        total_available = p
+            .get("number_of_total_results")
+            .and_then(|v| v.as_i64())
+            .map(|x| x as i32)
+            .unwrap_or(results.len() as i32);
     }
     let loaded = offset + results.len() as i32;
     let has_more = loaded < total_available;
@@ -428,7 +438,11 @@ pub async fn get_comicvine_series_issues(
             );
             match fetch_json(&state, &url).await {
                 Some(p) => {
-                    let arr = p.get("results").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                    let arr = p
+                        .get("results")
+                        .and_then(|v| v.as_array())
+                        .cloned()
+                        .unwrap_or_default();
                     if arr.is_empty() {
                         break;
                     }
@@ -448,13 +462,26 @@ pub async fn get_comicvine_series_issues(
                         issues.push(ComicVineIssueCandidate {
                             comicvine_issue_id: id.unwrap(),
                             issue_number: row.get("issue_number").map(|v| {
-                                if let Some(s) = v.as_str() { s.to_string() } else { v.to_string() }
+                                if let Some(s) = v.as_str() {
+                                    s.to_string()
+                                } else {
+                                    v.to_string()
+                                }
                             }),
                             name: row.get("name").and_then(|v| v.as_str()).map(str::to_string),
-                            cover_date: row.get("cover_date").and_then(|v| v.as_str()).map(str::to_string),
-                            store_date: row.get("store_date").and_then(|v| v.as_str()).map(str::to_string),
+                            cover_date: row
+                                .get("cover_date")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
+                            store_date: row
+                                .get("store_date")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
                             image_url,
-                            site_detail_url: row.get("site_detail_url").and_then(|v| v.as_str()).map(str::to_string),
+                            site_detail_url: row
+                                .get("site_detail_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
                         });
                     }
                     if arr.len() < 100 {
@@ -539,23 +566,49 @@ pub async fn resolve_comicvine_input(
                 if let Some(p) = fetch_json(&state, &url).await {
                     let r = p.get("results");
                     if let Some(r) = r {
-                        let volume_id = r.get("volume").and_then(|v| v.get("id")).and_then(|x| x.as_i64()).map(|x| x as i32);
-                        let series_name = r.get("volume").and_then(|v| v.get("name")).and_then(|x| x.as_str()).map(str::to_string);
+                        let volume_id = r
+                            .get("volume")
+                            .and_then(|v| v.get("id"))
+                            .and_then(|x| x.as_i64())
+                            .map(|x| x as i32);
+                        let series_name = r
+                            .get("volume")
+                            .and_then(|v| v.get("name"))
+                            .and_then(|x| x.as_str())
+                            .map(str::to_string);
                         let image_url = r.get("image").and_then(|v| {
                             v.as_object().and_then(|o| {
-                                o.get("medium_url").or_else(|| o.get("small_url")).and_then(|x| x.as_str()).map(str::to_string)
+                                o.get("medium_url")
+                                    .or_else(|| o.get("small_url"))
+                                    .and_then(|x| x.as_str())
+                                    .map(str::to_string)
                             })
                         });
                         let issue = ComicVineResolvedIssue {
                             comicvine_issue_id: id,
                             series_name,
                             volume_id,
-                            issue_number: r.get("issue_number").map(|v| if let Some(s)=v.as_str(){s.to_string()} else {v.to_string()}),
+                            issue_number: r.get("issue_number").map(|v| {
+                                if let Some(s) = v.as_str() {
+                                    s.to_string()
+                                } else {
+                                    v.to_string()
+                                }
+                            }),
                             name: r.get("name").and_then(|v| v.as_str()).map(str::to_string),
-                            cover_date: r.get("cover_date").and_then(|v| v.as_str()).map(str::to_string),
-                            store_date: r.get("store_date").and_then(|v| v.as_str()).map(str::to_string),
+                            cover_date: r
+                                .get("cover_date")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
+                            store_date: r
+                                .get("store_date")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
                             image_url,
-                            site_detail_url: r.get("site_detail_url").and_then(|v| v.as_str()).map(str::to_string),
+                            site_detail_url: r
+                                .get("site_detail_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
                         };
                         return Ok(Json(ComicVineResolveResponse {
                             input,
@@ -598,14 +651,40 @@ pub async fn resolve_comicvine_input(
                     if let Some(r) = p.get("results") {
                         volume = Some(ComicVineSeriesResult {
                             comicvine_volume_id: id,
-                            name: r.get("name").and_then(|v| v.as_str()).unwrap_or(&format!("Volume {id}")).to_string(),
+                            name: r
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(&format!("Volume {id}"))
+                                .to_string(),
                             publisher: r.get("publisher").and_then(|v| {
-                                if let Some(o)=v.as_object(){o.get("name").and_then(|x|x.as_str()).map(str::to_string)} else {v.as_str().map(str::to_string)}
+                                if let Some(o) = v.as_object() {
+                                    o.get("name").and_then(|x| x.as_str()).map(str::to_string)
+                                } else {
+                                    v.as_str().map(str::to_string)
+                                }
                             }),
-                            start_year: r.get("start_year").and_then(|v| v.as_i64().map(|x|x as i32).or_else(|| v.as_str().and_then(|s|s.parse().ok()))),
-                            issue_count: r.get("count_of_issues").and_then(|v| v.as_i64().map(|x|x as i32).or_else(|| v.as_str().and_then(|s|s.parse().ok()))),
-                            site_detail_url: r.get("site_detail_url").and_then(|v| v.as_str()).map(str::to_string),
-                            image_url: r.get("image").and_then(|v| v.as_object().and_then(|o| o.get("medium_url").or_else(||o.get("small_url")).and_then(|x|x.as_str()).map(str::to_string))),
+                            start_year: r.get("start_year").and_then(|v| {
+                                v.as_i64()
+                                    .map(|x| x as i32)
+                                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                            }),
+                            issue_count: r.get("count_of_issues").and_then(|v| {
+                                v.as_i64()
+                                    .map(|x| x as i32)
+                                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                            }),
+                            site_detail_url: r
+                                .get("site_detail_url")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
+                            image_url: r.get("image").and_then(|v| {
+                                v.as_object().and_then(|o| {
+                                    o.get("medium_url")
+                                        .or_else(|| o.get("small_url"))
+                                        .and_then(|x| x.as_str())
+                                        .map(str::to_string)
+                                })
+                            }),
                         });
                     }
                 }
@@ -618,23 +697,58 @@ pub async fn resolve_comicvine_input(
                     );
                     match fetch_json(&state, &url).await {
                         Some(p) => {
-                            let arr = p.get("results").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-                            if arr.is_empty() { break; }
+                            let arr = p
+                                .get("results")
+                                .and_then(|v| v.as_array())
+                                .cloned()
+                                .unwrap_or_default();
+                            if arr.is_empty() {
+                                break;
+                            }
                             for row in &arr {
                                 let iid = row.get("id").and_then(|v| v.as_i64()).map(|x| x as i32);
-                                if iid.is_none() { continue; }
-                                let image_url = row.get("image").and_then(|v| v.as_object().and_then(|o| o.get("small_url").or_else(||o.get("thumb_url")).and_then(|x|x.as_str()).map(str::to_string)));
+                                if iid.is_none() {
+                                    continue;
+                                }
+                                let image_url = row.get("image").and_then(|v| {
+                                    v.as_object().and_then(|o| {
+                                        o.get("small_url")
+                                            .or_else(|| o.get("thumb_url"))
+                                            .and_then(|x| x.as_str())
+                                            .map(str::to_string)
+                                    })
+                                });
                                 issues.push(ComicVineIssueCandidate {
                                     comicvine_issue_id: iid.unwrap(),
-                                    issue_number: row.get("issue_number").map(|v| if let Some(s)=v.as_str(){s.to_string()} else {v.to_string()}),
-                                    name: row.get("name").and_then(|v| v.as_str()).map(str::to_string),
-                                    cover_date: row.get("cover_date").and_then(|v| v.as_str()).map(str::to_string),
-                                    store_date: row.get("store_date").and_then(|v| v.as_str()).map(str::to_string),
+                                    issue_number: row.get("issue_number").map(|v| {
+                                        if let Some(s) = v.as_str() {
+                                            s.to_string()
+                                        } else {
+                                            v.to_string()
+                                        }
+                                    }),
+                                    name: row
+                                        .get("name")
+                                        .and_then(|v| v.as_str())
+                                        .map(str::to_string),
+                                    cover_date: row
+                                        .get("cover_date")
+                                        .and_then(|v| v.as_str())
+                                        .map(str::to_string),
+                                    store_date: row
+                                        .get("store_date")
+                                        .and_then(|v| v.as_str())
+                                        .map(str::to_string),
                                     image_url,
-                                    site_detail_url: row.get("site_detail_url").and_then(|v| v.as_str()).map(str::to_string),
+                                    site_detail_url: row
+                                        .get("site_detail_url")
+                                        .and_then(|v| v.as_str())
+                                        .map(str::to_string),
                                 });
                             }
-                            if arr.len() < 100 { break; }
+                            if arr.len() < 100 {
+                                break;
+                            }
                             offset += arr.len() as i32;
                         }
                         None => break,
@@ -776,7 +890,10 @@ pub async fn confirm_identity(
 
     // upsert external identity
     let external_id = req.comicvine_issue_id.to_string();
-    let url = format!("https://comicvine.gamespot.com/issue/4000-{}/", req.comicvine_issue_id);
+    let url = format!(
+        "https://comicvine.gamespot.com/issue/4000-{}/",
+        req.comicvine_issue_id
+    );
     let row = tx
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
@@ -800,7 +917,9 @@ pub async fn confirm_identity(
         .map_err(db::query_error)?;
     if conflict.is_some() {
         tx.rollback().await.ok();
-        return Err(ApiError::BadRequest("issue already has a confirmed comicvine identity".to_string()));
+        return Err(ApiError::BadRequest(
+            "issue already has a confirmed comicvine identity".to_string(),
+        ));
     }
 
     // upsert mapping: if existing mapping for this issue+identity update status, else insert
@@ -876,7 +995,15 @@ pub async fn replace_identity(
     tx.commit().await.map_err(db::query_error)?;
 
     // now confirm new
-    confirm_identity(State(state), user, Path(issue_id), Json(ConfirmIdentityRequest { comicvine_issue_id: req.comicvine_issue_id })).await
+    confirm_identity(
+        State(state),
+        user,
+        Path(issue_id),
+        Json(ConfirmIdentityRequest {
+            comicvine_issue_id: req.comicvine_issue_id,
+        }),
+    )
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -920,7 +1047,10 @@ pub async fn remove_identity(
         Some(r) => r.get(0),
         None => {
             tx.rollback().await.ok();
-            return Err(ApiError::BadRequest(format!("No confirmed ComicVine identity mapping found for issue {}", issue_id)));
+            return Err(ApiError::BadRequest(format!(
+                "No confirmed ComicVine identity mapping found for issue {}",
+                issue_id
+            )));
         }
     };
     tx.execute(
@@ -997,7 +1127,10 @@ pub async fn list_corrections(
             created_at: row.get(6),
         });
     }
-    Ok(Json(MetadataCorrectionsResponse { issue_id, corrections }))
+    Ok(Json(MetadataCorrectionsResponse {
+        issue_id,
+        corrections,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -1331,10 +1464,16 @@ mod tests {
 
     #[test]
     fn parse_url_issue() {
-        assert_eq!(parse_comicvine_url("https://comicvine.gamespot.com/x/4000-5/"), Some(("issue".to_string(), 5)));
+        assert_eq!(
+            parse_comicvine_url("https://comicvine.gamespot.com/x/4000-5/"),
+            Some(("issue".to_string(), 5))
+        );
     }
     #[test]
     fn parse_url_volume() {
-        assert_eq!(parse_comicvine_url("https://comicvine.gamespot.com/x/4050-9/"), Some(("volume".to_string(), 9)));
+        assert_eq!(
+            parse_comicvine_url("https://comicvine.gamespot.com/x/4050-9/"),
+            Some(("volume".to_string(), 9))
+        );
     }
 }
