@@ -147,6 +147,33 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             "/api/v1/sessions/{session_id}/snapshots",
             "/api/sessions/{session_id}/snapshots",
         ),
+        // Creator API: v2 routes aliased to v1 paths (issue #4836)
+        ("/api/v2/creators", "/api/v1/creators"),
+        ("/api/v2/creators/summaries", "/api/v1/creators/summaries"),
+        ("/api/v2/creators/compare", "/api/v1/creators/compare"),
+        ("/api/v2/creators/discoveries", "/api/v1/creators/discoveries"),
+        ("/api/v2/creators/team-chemistry", "/api/v1/creators/team-chemistry"),
+        ("/api/v2/creators/{creator_key}", "/api/v1/creators/{creator_key}"),
+        (
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+            "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+        ),
+        (
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+        ),
+        (
+            "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+        ),
+        (
+            "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+            "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+        ),
+        (
+            "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+            "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+        ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {
             document

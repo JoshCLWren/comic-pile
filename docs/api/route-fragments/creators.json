@@ -25,7 +25,9 @@
       "path": "/api/v1/creators",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/creators$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4836
     },
     {
       "bucket": "v1_operations",
@@ -33,7 +35,39 @@
       "path": "/api/v1/creators/summaries",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/creators/summaries$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4836
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/compare",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/compare$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4836
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/discoveries",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/discoveries$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4836
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/team-chemistry",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/team\\-chemistry$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4836
     },
     {
       "bucket": "v1_operations",
