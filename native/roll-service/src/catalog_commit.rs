@@ -6,6 +6,8 @@
 use crate::{auth::AuthenticatedUser, comicvine_repair, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
     Json,
 };
 use hmac::{digest::KeyInit, Hmac, Mac};
@@ -17,6 +19,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use tracing::instrument;
 use unicode_casefold::UnicodeCaseFold;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -2061,6 +2064,287 @@ async fn persist_commit_series_mapping_handler(
     tx.commit().await.map_err(db::query_error)?;
     Ok(response)
 }
+
+// ---------------------------------------------------------------------------
+// Series-mapping preview (read-only) - mirrors app/services/catalog.py
+// `preview_series_mapping` / `build_series_mapping_plan`.
+// Preserves the Python wire contract at POST /api/v1/catalog/series-mappings/preview.
+// ---------------------------------------------------------------------------
+
+/// Token lifetime for a signed series-mapping preview token (10 minutes).
+const PREVIEW_TOKEN_TTL_SECONDS: f64 = 600.0;
+
+/// Read-only preview request. Provider/scope_mode validated to match Python's
+/// `SeriesMappingPreviewRequest` field validators (422 on invalid values).
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewRequest {
+    pub origin_issue_id: i32,
+    pub provider: String,
+    pub provider_series_external_id: String,
+    #[serde(default)]
+    pub scope_mode: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewScope {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope_key: Option<String>,
+    pub origin_issue_id: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub basis: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewCounts {
+    pub already_confirmed: i32,
+    pub safe_exact_match: i32,
+    pub needs_review_ambiguous: i32,
+    pub needs_review_conflict: i32,
+    pub unresolved: i32,
+    pub excluded_special: i32,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewRow {
+    pub row_id: String,
+    pub issue_id: i32,
+    pub issue_number: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub classification: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_mapping_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_id: Option<String>,
+    pub proposed_mapping: bool,
+    pub default_selected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata_refresh_required: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewProviderSeries {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_year: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count_of_issues: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site_detail_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<Value>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SeriesMappingPreviewResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_token: Option<String>,
+    pub scope: SeriesMappingPreviewScope,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_series: Option<SeriesMappingPreviewProviderSeries>,
+    pub counts: SeriesMappingPreviewCounts,
+    pub rows: Vec<SeriesMappingPreviewRow>,
+    pub issued_at: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<f64>,
+}
+
+fn counts_from_plan(plan: &Value) -> SeriesMappingPreviewCounts {
+    let get = |key: &str| plan.get("counts").and_then(|c| c.get(key)).and_then(Value::as_i64).unwrap_or(0) as i32;
+    SeriesMappingPreviewCounts {
+        already_confirmed: get("already_confirmed"),
+        safe_exact_match: get("safe_exact_match"),
+        needs_review_ambiguous: get("needs_review_ambiguous"),
+        needs_review_conflict: get("needs_review_conflict"),
+        unresolved: get("unresolved"),
+        excluded_special: get("excluded_special"),
+    }
+}
+
+fn row_from_plan(row: &Value) -> SeriesMappingPreviewRow {
+    SeriesMappingPreviewRow {
+        row_id: row.get("row_id").and_then(Value::as_str).unwrap_or("").to_string(),
+        issue_id: row.get("issue_id").and_then(Value::as_i64).unwrap_or(0) as i32,
+        issue_number: row.get("issue_number").and_then(Value::as_str).unwrap_or("").to_string(),
+        title: row.get("title").and_then(Value::as_str).map(|s| s.to_string()),
+        classification: row.get("classification").and_then(Value::as_str).unwrap_or("").to_string(),
+        thread_id: row.get("thread_id").and_then(Value::as_i64).map(|v| v as i32),
+        thread_title: row.get("thread_title").and_then(Value::as_str).map(|s| s.to_string()),
+        current_mapping_status: row.get("current_mapping_status").and_then(Value::as_str).map(|s| s.to_string()),
+        provider: row.get("provider").and_then(Value::as_str).map(|s| s.to_string()),
+        external_id: row.get("external_id").and_then(Value::as_str).map(|s| s.to_string()),
+        proposed_mapping: row.get("proposed_mapping").and_then(Value::as_bool).unwrap_or(false),
+        default_selected: row.get("default_selected").and_then(Value::as_bool).unwrap_or(false),
+        metadata_refresh_required: row.get("metadata_refresh_required").and_then(Value::as_bool),
+        reason: row.get("reason").and_then(Value::as_str).map(|s| s.to_string()),
+    }
+}
+
+fn provider_series_from_plan(plan: &Value) -> Option<SeriesMappingPreviewProviderSeries> {
+    let ps = plan.get("provider_series")?;
+    Some(SeriesMappingPreviewProviderSeries {
+        id: ps.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
+        name: ps.get("name").and_then(Value::as_str).map(|s| s.to_string()),
+        publisher: ps.get("publisher").and_then(Value::as_str).map(|s| s.to_string()),
+        start_year: ps.get("start_year").cloned(),
+        count_of_issues: ps.get("count_of_issues").cloned(),
+        site_detail_url: ps.get("site_detail_url").and_then(Value::as_str).map(|s| s.to_string()),
+        image: ps.get("image").cloned(),
+    })
+}
+
+fn scope_from_plan(plan: &Value) -> SeriesMappingPreviewScope {
+    let scope = plan.get("scope").and_then(Value::as_object).cloned().unwrap_or_default();
+    SeriesMappingPreviewScope {
+        status: scope.get("status").and_then(Value::as_str).unwrap_or("unavailable").to_string(),
+        scope_key: scope.get("scope_key").and_then(Value::as_str).map(|s| s.to_string()),
+        origin_issue_id: scope.get("origin_issue_id").and_then(Value::as_i64).unwrap_or(0) as i32,
+        series_label: scope.get("series_label").and_then(Value::as_str).map(|s| s.to_string()),
+        basis: scope.get("basis").and_then(Value::as_str).map(|s| s.to_string()),
+    }
+}
+
+/// Generate an HMAC-signed preview token matching Python's `_generate_preview_token`.
+/// Payload is serialized with `json.dumps(payload, sort_keys=True)` default separators,
+/// so `canonical_json` is used for byte-identical output.
+fn generate_preview_token(
+    secret: &str,
+    user_id: i32,
+    provider: &str,
+    provider_series_external_id: &str,
+    origin_issue_id: i32,
+    scope_key: &str,
+    issue_numbers: &[String],
+    classification_digest: &str,
+    scope_mode: &str,
+    issued_at: f64,
+    expires_at: f64,
+) -> Result<String, ApiError> {
+    let payload = serde_json::json!({
+        "user_id": user_id,
+        "provider": provider,
+        "provider_series_external_id": provider_series_external_id,
+        "origin_issue_id": origin_issue_id,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "classification_digest": classification_digest,
+        "scope_mode": scope_mode,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+    });
+    let payload_json = canonical_json(&payload);
+    let signature = hmac_sha256_hex(secret, &payload_json)?;
+    let token_data = serde_json::json!({ "payload": payload, "signature": signature });
+    serde_json::to_string(&token_data).map_err(|_| ApiError::Internal("preview token encoding failed".to_string()))
+}
+
+/// `POST /api/v1/catalog/series-mappings/preview`
+#[instrument(skip(state, _auth, payload))]
+pub async fn preview_series_mapping_handler(
+    State(state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
+    Json(payload): Json<SeriesMappingPreviewRequest>,
+) -> Result<Json<SeriesMappingPreviewResponse>, ApiError> {
+    if payload.origin_issue_id < 1 {
+        return Err(ApiError::Unprocessable("origin_issue_id must be >= 1".to_string()));
+    }
+    if payload.provider != "comicvine" {
+        return Err(ApiError::Unprocessable(format!("unsupported provider: {}", payload.provider)));
+    }
+    if payload.scope_mode != "confirmed_origin" && payload.scope_mode != "queue_thread_bootstrap" {
+        return Err(ApiError::Unprocessable(format!("unsupported scope_mode: {}", payload.scope_mode)));
+    }
+
+    let issued_at = now_f64();
+    let expires_at = issued_at + PREVIEW_TOKEN_TTL_SECONDS;
+
+    let conn = db::checkout(&state).await?;
+    let plan = build_plan_db(
+        &state.outbound,
+        &conn,
+        _auth.id(),
+        payload.origin_issue_id,
+        &payload.provider,
+        &payload.provider_series_external_id,
+        &payload.scope_mode,
+    )
+    .await?;
+
+    let scope = scope_from_plan(&plan);
+    let scope_available = scope.status == "available";
+
+    let preview_token = if scope_available {
+        let scope_key = scope.scope_key.as_deref().unwrap_or("");
+        let issue_numbers: Vec<String> = plan
+            .get("issue_numbers")
+            .and_then(Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some(generate_preview_token(
+            &state.preview_token_secret,
+            _auth.id(),
+            &payload.provider,
+            &payload.provider_series_external_id,
+            payload.origin_issue_id,
+            scope_key,
+            &issue_numbers,
+            &plan.get("state_digest").and_then(Value::as_str).unwrap_or(""),
+            &payload.scope_mode,
+            issued_at,
+            expires_at,
+        )?)
+    } else {
+        None
+    };
+
+    Ok(Json(SeriesMappingPreviewResponse {
+        preview_token,
+        scope,
+        provider_series: provider_series_from_plan(&plan),
+        counts: counts_from_plan(&plan),
+        rows: plan
+            .get("rows")
+            .and_then(Value::as_array)
+            .map(|arr| arr.iter().map(row_from_plan).collect())
+            .unwrap_or_default(),
+        issued_at,
+        expires_at: if scope_available { Some(expires_at) } else { None },
+    }))
+}
+
+/// OpenAPI path documentation for the series-mapping preview endpoint.
+#[utoipa::path(
+    post,
+    path = "/api/v1/catalog/series-mappings/preview",
+    request_body = SeriesMappingPreviewRequest,
+    responses(
+        (status = 200, description = "Series mapping preview", body = SeriesMappingPreviewResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 422, description = "Invalid provider or scope_mode"),
+    ),
+    tag = "catalog",
+    security(("HTTPBearer" = []))
+)]
+pub fn preview_documentation() {}
 
 #[cfg(test)]
 mod tests {
