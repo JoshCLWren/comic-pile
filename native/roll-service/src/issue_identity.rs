@@ -314,6 +314,17 @@ fn public_cbl_source_ref(repository: &str, source_path: &str) -> String {
     )
 }
 
+/// Escape SQL `LIKE` metacharacters in a literal search term.
+///
+/// Mirrors `cbl_catalog::escape_like` so discover search matches literal `%`,
+/// `_`, and `\` characters the same way as catalog browsing (#5485).
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -344,7 +355,6 @@ pub async fn discover_cbl_source_lists(
 
     let pool = checkout(&state).await?;
     let term = params.q.as_deref().unwrap_or("").trim();
-    let pattern = format!("%{term}%");
 
     let sql = if term.is_empty() {
         r#"
@@ -363,7 +373,7 @@ pub async fn discover_cbl_source_lists(
         FROM cbl_source_lists csl
         JOIN cbl_sources cs ON cs.id = csl.source_id
         WHERE csl.active = true
-          AND (csl.name ILIKE $1 OR csl.source_path ILIKE $1)
+          AND (csl.name ILIKE $1 ESCAPE '\' OR csl.source_path ILIKE $1 ESCAPE '\')
         ORDER BY csl.name ASC, csl.source_path ASC, csl.id ASC
         LIMIT $2
         "#
@@ -372,6 +382,7 @@ pub async fn discover_cbl_source_lists(
     let rows = if term.is_empty() {
         pool.run_query(sql, &[&limit]).await
     } else {
+        let pattern = format!("%{}%", escape_like(term));
         pool.run_query(sql, &[&pattern, &limit]).await
     }
     .map_err(|error| {

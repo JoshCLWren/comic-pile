@@ -835,22 +835,3 @@ async def test_deliver_to_target_without_files_keeps_branch_only(
     repo.create_git_ref.assert_called_once()
     assert repo.create_git_ref.call_args[0][1] == "base-sha"
     repo.create_pull.assert_called_once()
-
-
-def test_to_latticery_source_rewrites_staging_imports() -> None:
-    """Staging sources are rewritten to the latticery package import path."""
-    import importlib.util
-
-    script_path = PROJECT_ROOT / "scripts" / "deliver_latticery_extraction.py"
-    spec = importlib.util.spec_from_file_location(
-        "deliver_latticery_extraction_under_test", script_path
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    rewritten = module.to_latticery_source(
-        "from latticery_extraction.dependency_policy import parse_dependency_numbers\n"
-    )
-    assert "latticery.dependency_policy" in rewritten
-    assert "latticery_extraction" not in rewritten

@@ -423,6 +423,41 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl-sources/folders",
             get(native_dispatch),
         )
+        // Issue Identity / CBL Adoption ingress (#5484). PR #5451 cut these
+        // paths over to native-rust and removed the Python handlers, but only
+        // registered the discover/browse/folders/adoption-preview siblings in
+        // this Vercel entry. Unregistered paths fell through to
+        // native_not_found, so production source detail, list candidates and
+        // adoption commit returned 404 "Not Found". Keep this table in sync
+        // with the inner comicpile_roll_service::router() route table.
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(native_dispatch),
+        )
         .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(native_dispatch),
@@ -857,6 +892,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cbl_adoption_paths_reach_rust_ingress_and_never_hit_json_404() {
+        // Regression for #5484: PR #5451 cut these adoption-path operations to
+        // native-rust and removed their Python handlers, but this Vercel entry
+        // only registered the discover/browse/folders/adoption-preview paths.
+        // Every unregistered path fell through to native_not_found, which is
+        // the production "Unable to load this CBL source" / 404 seen on source
+        // detail, list candidates and adoption commit. An authenticated-rust
+        // path must reach the dispatched handler's 401/503 (no DB state here),
+        // never the Rust JSON 404 fallback.
+        let cases = [
+            ("GET", "/api/v1/issue-identity/cbl-sources/26"),
+            (
+                "GET",
+                "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/4000-1",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl-sources/compare"),
+            (
+                "GET",
+                "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
+            ),
+            ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
+            ("POST", "/api/v1/cbl/26/adoption-commit"),
+            ("POST", "/api/v1/cbl/26/reading-plans/7/adoption-commit"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn cbl_sources_discover_ingress_reaches_rust_and_requires_auth() {
         // The bare discover path must be registered in this Vercel entry like
         // its /browse and /folders siblings; an unregistered path falls through
@@ -1120,6 +1214,27 @@ mod tests {
                      active boolean NOT NULL,
                      created_at timestamptz NOT NULL DEFAULT now(),
                      updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.external_identities (
+                     id integer PRIMARY KEY,
+                     provider varchar(50) NOT NULL,
+                     entity_type varchar(20) NOT NULL,
+                     external_id varchar(100) NOT NULL,
+                     metadata_json jsonb NOT NULL DEFAULT '{{}}',
+                     created_at timestamptz NOT NULL DEFAULT now(),
+                     updated_at timestamptz NOT NULL DEFAULT now()
+                 );
+                 CREATE TABLE {schema}.cbl_source_entries (
+                     id integer PRIMARY KEY,
+                     list_id integer NOT NULL,
+                     position integer NOT NULL,
+                     series_name varchar(500) NOT NULL,
+                     issue_number varchar(100) NOT NULL,
+                     volume_year integer,
+                     publication_year integer,
+                     external_series_identity_id integer,
+                     external_issue_identity_id integer,
+                     created_at timestamptz NOT NULL DEFAULT now()
                  );"
             ))
             .await
@@ -1153,7 +1268,7 @@ mod tests {
             .iter()
             .filter_map(|value| value.to_str().ok().map(str::to_owned))
             .collect::<Vec<_>>();
-        let body = to_bytes(response.into_body(), 8192)
+        let body = to_bytes(response.into_body(), 1024 * 1024)
             .await
             .expect("response body");
         let text = String::from_utf8_lossy(&body).into_owned();
@@ -1182,13 +1297,24 @@ mod tests {
         );
     }
 
+    /// Each DB-backed test registers its own user. The auth register limiter is
+    /// a process-global 5-per-minute bucket keyed by client IP, so a fixed IP
+    /// makes parallel tests race into 429 "Too many requests" flakes. Give every
+    /// registration a unique client IP so each test owns its own bucket.
+    static REGISTER_CLIENT_COUNTER: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(0);
+
     async fn register_session(username: &str) -> (String, String, i32) {
+        let client_ip = format!(
+            "198.51.100.{}",
+            REGISTER_CLIENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+        );
         let (status, body, cookies, text) = call_app(
             Request::builder()
                 .method("POST")
                 .uri("/api/v2/auth/register")
                 .header(header::CONTENT_TYPE, "application/json")
-                .header("x-forwarded-for", "198.51.100.20")
+                .header("x-forwarded-for", client_ip)
                 .body(Body::from(
                     serde_json::json!({
                         "username": username,
@@ -1663,7 +1789,19 @@ mod tests {
                             'Batman Adventures', 6, 'h-adv', 'abc123', TRUE), \
                            (3, 1, 'Marvel/X-Men.cbl', 'X-Men', 30, 'h-x', 'abc123', TRUE), \
                            (4, 1, 'DC/Archived.cbl', 'Archived Batman', 1, \
-                            'h-arch', 'abc123', FALSE);",
+                            'h-arch', 'abc123', FALSE), \
+                           (5, 1, 'DC/Special/100% Complete.cbl', '100% Complete', 2, \
+                            'h-pct', 'abc123', TRUE), \
+                           (6, 1, 'DC/Special/100X Complete.cbl', '100X Complete', 2, \
+                            'h-pctx', 'abc123', TRUE), \
+                           (7, 1, 'DC/Special/Under_score.cbl', 'Under_score', 3, \
+                            'h-us', 'abc123', TRUE), \
+                           (8, 1, 'DC/Special/UnderXscore.cbl', 'UnderXscore', 3, \
+                            'h-usx', 'abc123', TRUE), \
+                           (9, 1, 'DC/Special/Back\\Slash.cbl', 'Back\\Slash', 4, \
+                            'h-bs', 'abc123', TRUE), \
+                           (10, 1, 'DC/Special/BackSlash.cbl', 'BackSlash', 4, \
+                            'h-bsx', 'abc123', TRUE);",
                     )
                     .await
                     .expect("seed cbl catalog");
@@ -1694,13 +1832,72 @@ mod tests {
                     call_app(request("/api/v1/issue-identity/cbl-sources".into())).await;
                 assert_eq!(status, StatusCode::OK, "{text}");
                 let items = body.as_array().expect("discovery list");
-                assert_eq!(items.len(), 3, "inactive lists must be excluded: {text}");
+                assert_eq!(items.len(), 9, "inactive lists must be excluded: {text}");
                 assert!(
                     items
                         .iter()
                         .all(|item| item["source_repository"] == "JoshCLWren/CBL-ReadingLists"),
                     "mirror repositories must project to the public name: {text}"
                 );
+
+                // Regression for #5485: "Batman" (and case/substring variants) must
+                // match active CBL source lists by name or source path, while other
+                // terms continue to work. The inactive "Archived Batman" row must
+                // remain excluded so results come from active catalog entries only.
+                for query in ["batman", "Batman", "BATMAN", "Bat"] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        !items.is_empty(),
+                        "search for {query:?} must return Batman results (#5485): {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| {
+                            item["name"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_ascii_lowercase()
+                                .contains("bat")
+                                || item["source_path"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_ascii_lowercase()
+                                    .contains("bat")
+                        }),
+                        "all results for {query:?} must match the Batman term: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != "Archived Batman"),
+                        "inactive lists must stay excluded for {query:?}: {text}"
+                    );
+                }
+
+                // Literal LIKE metacharacters must be escaped so user terms match
+                // %, _, and \ characters exactly (not as SQL wildcards/escapes).
+                for (query, expected_name, excluded_name) in [
+                    ("100%25", "100% Complete", "100X Complete"),
+                    ("Under_score", "Under_score", "UnderXscore"),
+                    ("Back%5CSlash", "Back\\Slash", "BackSlash"),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        items.iter().any(|item| item["name"] == expected_name),
+                        "literal search {query:?} must match {expected_name:?}: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != excluded_name),
+                        "literal search {query:?} must not wildcard-match {excluded_name:?}: {text}"
+                    );
+                }
 
                 let (status, body, _, text) = call_app(request(
                     "/api/v1/issue-identity/cbl-sources?q=batman&limit=1".into(),
@@ -1715,6 +1912,196 @@ mod tests {
                     "discovery keeps the raw stored path: {text}"
                 );
                 assert_eq!(items[0]["declared_issue_count"], 12, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_high_volume_batman_catalog_returns_bounded_active_results() {
+        // Regression for #5485: a realistic catalog has hundreds of Batman
+        // sources, many inactive or with NULL entry counts. Searches for
+        // "Batman"/"batman"/"Bat" must still return a full page of ACTIVE
+        // matches while narrow terms ("Teen Titans", "X-Men") keep working.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-discover-volume-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT n, 1, 'DC/Batman/Batman Run ' || lpad(n::text, 3, '0') || '.cbl', \
+                                'Batman Run ' || lpad(n::text, 3, '0'), \
+                                CASE WHEN n % 7 = 0 THEN NULL ELSE n END, \
+                                'h' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 120) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 200 + n, 1, 'DC/Old/Batman Old ' || n || '.cbl', \
+                                'AAA Batman Archived ' || n, 3, 'ha' || n, 'abc123', FALSE \
+                         FROM generate_series(1, 60) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 300 + n, 1, 'DC/Batman/Crossovers/Event ' || n || '.cbl', \
+                                'Event ' || n, 5, 'hp' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 40) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (400, 1, 'DC/Teen Titans/Teen Titans.cbl', 'Teen Titans', 9, 'ht', 'abc123', TRUE), \
+                           (401, 1, 'Marvel/X-Men/X-Men 1963.cbl', 'X-Men 1963', 9, 'hx1', 'abc123', TRUE), \
+                           (402, 1, 'Marvel/X-Men/X-Men 1991.cbl', 'X-Men 1991', NULL, 'hx2', 'abc123', TRUE);",
+                    )
+                    .await
+                    .expect("seed high-volume cbl catalog");
+                drop(connection);
+
+                let request = |uri: String| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("cbl discover request")
+                };
+
+                for (query, limit, expected) in [
+                    ("Batman", 25, 25),
+                    ("batman", 25, 25),
+                    ("Bat", 25, 25),
+                    ("Batman", 100, 100),
+                    ("Teen%20Titans", 25, 1),
+                    ("X-Men", 25, 2),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}&limit={limit}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}/{limit}: {text}");
+                    let items = body.as_array().expect("discovery list");
+                    assert_eq!(items.len(), expected, "{query}/{limit}: {text}");
+                    assert!(
+                        items.iter().all(|item| !item["name"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .contains("Archived")),
+                        "inactive rows must be excluded for {query}: {text}"
+                    );
+                }
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_source_detail_is_served_from_rust_ingress_against_postgres() {
+        // Deterministic DB-backed regression for #5484: the source-detail path
+        // must be registered in this Vercel entry and dispatched to the Rust
+        // get_cbl_source_list handler (not fall through to native_not_found).
+        // Drive the real handler against a disposable schema and assert the
+        // projected detail plus ordered entries, including Comic Vine IDs.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-detail-ingress-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (26, 1, 'BPRD/Plague of Frogs/Omnibus Vol 3.cbl', \
+                            'B.P.R.D. Plague of Frogs Omnibus Vol. 3', 2, \
+                            'h-bprd', 'abc123', TRUE); \
+                         INSERT INTO external_identities \
+                           (id, provider, entity_type, external_id) \
+                         VALUES \
+                           (10, 'comicvine', 'issue', '4000-1'), \
+                           (11, 'comicvine', 'series', '4050-1'); \
+                         INSERT INTO cbl_source_entries \
+                           (id, list_id, position, series_name, issue_number, \
+                            volume_year, publication_year, \
+                            external_issue_identity_id, external_series_identity_id) \
+                         VALUES \
+                           (1, 26, 1, 'B.P.R.D.', '1', 2002, 2003, 10, 11), \
+                           (2, 26, 2, 'B.P.R.D.', '2', NULL, 2004, NULL, 11);",
+                    )
+                    .await
+                    .expect("seed cbl source detail");
+                drop(connection);
+
+                // Without credentials the registered path reaches the handler's
+                // 401, not the ingress 404 fallback.
+                let (status, _, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26")
+                        .body(Body::empty())
+                        .expect("unauthenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::UNAUTHORIZED, "{text}");
+
+                let (status, body, _, text) = call_app(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/v1/issue-identity/cbl-sources/26?limit=10")
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("authenticated cbl detail request"),
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK, "{text}");
+                assert_eq!(body["id"], 26, "{text}");
+                assert_eq!(
+                    body["name"], "B.P.R.D. Plague of Frogs Omnibus Vol. 3",
+                    "{text}"
+                );
+                assert_eq!(
+                    body["source_repository"], "JoshCLWren/CBL-ReadingLists",
+                    "mirror repository must project to public name: {text}"
+                );
+                assert_eq!(
+                    body["source_path"], "BPRD/Plague of Frogs/Omnibus Vol 3.cbl",
+                    "detail keeps the raw source path: {text}"
+                );
+                assert_eq!(body["entries_total"], 2, "{text}");
+                let entries = body["entries"].as_array().expect("ordered entries");
+                assert_eq!(entries.len(), 2, "{text}");
+                assert_eq!(entries[0]["position"], 1, "{text}");
+                assert_eq!(entries[0]["comicvine_issue_id"], "4000-1", "{text}");
+                assert_eq!(entries[0]["comicvine_volume_id"], "4050-1", "{text}");
+                assert_eq!(entries[1]["position"], 2, "{text}");
+                assert!(
+                    entries[1]["comicvine_issue_id"].is_null(),
+                    "unmapped entry must have no comicvine issue id: {text}"
+                );
             })
             .await;
     }
