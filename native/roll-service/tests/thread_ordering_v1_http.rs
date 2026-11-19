@@ -36,12 +36,28 @@ async fn setup_user(
     i32,
     tokio::sync::MutexGuard<'static, ()>,
 ) {
+    setup_user_with(prefix, false).await
+}
+
+/// `option_e` is injected into the state's config; nothing touches the process env.
+async fn setup_user_with(
+    prefix: &str,
+    option_e: bool,
+) -> (
+    Arc<AppState>,
+    String,
+    String,
+    i32,
+    tokio::sync::MutexGuard<'static, ()>,
+) {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            "OPTION_E_ENABLED" if option_e => Some("true".into()),
+            "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
@@ -743,32 +759,6 @@ async fn thread_detail_queue_position_matches_queue_list_position() {
     }
 }
 
-/// Restore the Option E switches after a test that enables the preview.
-struct OptionEEnv(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
-
-impl OptionEEnv {
-    fn enable() -> Self {
-        let enabled = std::env::var_os("OPTION_E_ENABLED");
-        let approval = std::env::var_os("OPTION_E_APPROVED_PREVIEW");
-        std::env::set_var("OPTION_E_ENABLED", "true");
-        std::env::set_var("OPTION_E_APPROVED_PREVIEW", "regression-5263");
-        Self(enabled, approval)
-    }
-}
-
-impl Drop for OptionEEnv {
-    fn drop(&mut self) {
-        match self.0.take() {
-            Some(value) => std::env::set_var("OPTION_E_ENABLED", value),
-            None => std::env::remove_var("OPTION_E_ENABLED"),
-        }
-        match self.1.take() {
-            Some(value) => std::env::set_var("OPTION_E_APPROVED_PREVIEW", value),
-            None => std::env::remove_var("OPTION_E_APPROVED_PREVIEW"),
-        }
-    }
-}
-
 #[tokio::test]
 async fn thread_detail_completed_thread_keeps_stored_position() {
     // A completed thread is outside the active queue, so the canonical
@@ -815,10 +805,7 @@ async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
     // With the Option E preview active the Queue list groups by evaluated
     // eligibility, not the stored is_blocked flag. Thread Detail must use that
     // same expression or the two views disagree for the same thread.
-    // Take the global DB lock first so the temporary env change cannot leak
-    // into another test in this binary while it waits for the lock.
-    let (state, token, csrf, user_id, _guard) = setup_user("tord-blk").await;
-    let _option_e = OptionEEnv::enable();
+    let (state, token, csrf, user_id, _guard) = setup_user_with("tord-blk", true).await;
     let conn = state.pool.get().await.unwrap();
 
     // Stored blocked, but actually eligible (has an unread issue).
