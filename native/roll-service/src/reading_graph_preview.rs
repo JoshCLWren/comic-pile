@@ -39,7 +39,7 @@ pub struct ReadingGraphPreviewRequest {
     pub target_list_id: Option<i32>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, Clone)]
 pub struct ReadingGraphSeriesReference {
     pub comicvine_volume_id: String,
     pub series_name: String,
@@ -784,16 +784,18 @@ fn build_overlaps(
             }
         });
 
+        let continuing_name = continuing_ref.series_name.clone();
+        let waiting_name = waiting_ref.series_name.clone();
+
         overlaps.push(ReadingGraphOverlap {
             overlap_id: format!(
                 "overlap-{:x}",
-                simple_hash(&format!("{continuing_volume}\0{waiting_volume}"))[..24]
+                simple_hash_u64(&format!("{continuing_volume}\0{waiting_volume}"))
             ),
             continuing_series: continuing_ref,
             waiting_series: waiting_ref,
             question: format!(
-                "Should {} continue while {} waits?",
-                continuing_ref.series_name, waiting_ref.series_name
+                "Should {continuing_name} continue while {waiting_name} waits?",
             ),
             blocked_issue_ids: {
                 let mut v: Vec<i32> = blocked_by_pair
@@ -839,12 +841,12 @@ fn build_overlaps(
     (overlaps, blocked_by_pair)
 }
 
-fn simple_hash(input: &str) -> String {
+fn simple_hash_u64(input: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
-    use std::hash::Hash;
+    use std::hash::{Hash, Hasher};
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
-    format!("{:016x}", h.finish())
+    h.finish()
 }
 
 fn build_issue_references(
