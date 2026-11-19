@@ -292,8 +292,8 @@ async fn build_series_mapping_plan(
         if provider_series.is_some() {
             // series_info = provider_series;
         }
-        roster_rows = roster;
-        issues_with_mappings = roster_rows;
+        roster_rows = roster.clone();
+        issues_with_mappings = roster;
     } else if origin_has_confirmed_series {
         // Local catalog answers, roster is best-effort
         if let Ok((provider_series, roster)) = load_provider_volume_roster(&payload.provider_series_external_id, Vec::new()).await {
