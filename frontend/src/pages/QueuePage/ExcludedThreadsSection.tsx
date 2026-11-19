@@ -68,11 +68,11 @@ export default function ExcludedThreadsSection({
         <div className="min-w-0">
           <h2
             id="removed-from-queue-heading"
-            className="text-lg md:text-xl font-black uppercase text-stone-300"
+            className="text-lg md:text-xl font-black uppercase text-[var(--theme-text-primary)]"
           >
             Removed from Queue
           </h2>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
             {threads.length} series kept out of the queue with history intact
           </p>
         </div>
@@ -81,7 +81,7 @@ export default function ExcludedThreadsSection({
           onClick={() => setIsExpanded((expanded) => !expanded)}
           aria-expanded={isExpanded}
           aria-controls="excluded-thread-list"
-          className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+          className="h-8 md:h-10 px-3 md:px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)]"
         >
           {isExpanded ? 'Hide Removed' : `Show Removed (${threads.length})`}
         </button>
@@ -91,7 +91,7 @@ export default function ExcludedThreadsSection({
         {error && (
           <p
             role="alert"
-            className="px-2 text-sm text-red-400"
+            className="px-2 text-sm text-[var(--theme-error)]"
             data-testid="excluded-threads-error"
           >
             {error}
@@ -108,11 +108,11 @@ export default function ExcludedThreadsSection({
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                <p className="text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
                   {sourceKindLabel(group.source_kind)}
                 </p>
-                <p className="text-sm font-black text-stone-200 truncate">{group.source_name}</p>
-                <p className="text-xs text-stone-500">
+                <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{group.source_name}</p>
+                <p className="text-xs text-[var(--theme-text-dim)]">
                   {groupThreads.length} series removed together
                 </p>
               </div>
@@ -121,18 +121,18 @@ export default function ExcludedThreadsSection({
                 onClick={() => onRestoreGroup(group.id)}
                 disabled={isRestoring}
                 aria-label={`Restore all series removed with ${group.source_name}`}
-                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+                className="px-3 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
               >
                 Restore All to Queue
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {groupThreads.map((thread) => (
-                <div key={thread.id} className="rounded-xl border border-white/10 bg-black/10 p-3 space-y-2">
+                <div key={thread.id} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
-                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                      <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{thread.title}</p>
+                      <p className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">
                         {thread.format}
                       </p>
                     </div>
@@ -141,12 +141,12 @@ export default function ExcludedThreadsSection({
                       onClick={() => onRestore(thread.id)}
                       disabled={isRestoring}
                       aria-label={`Restore ${thread.title} to queue`}
-                      className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+                      className="px-3 py-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                     >
                       Restore
                     </button>
                   </div>
-                  <p className="text-xs text-stone-500">{thread.issues_remaining} unread preserved</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">{thread.issues_remaining} unread preserved</p>
                 </div>
               ))}
             </div>
@@ -156,7 +156,7 @@ export default function ExcludedThreadsSection({
         {ungrouped.length > 0 && (
           <div className="space-y-3" data-testid="excluded-ungrouped">
             {groups.length > 0 && (
-              <p className="px-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+              <p className="px-2 text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest">
                 Individually removed series
               </p>
             )}
@@ -165,8 +165,8 @@ export default function ExcludedThreadsSection({
                 <div key={thread.id} className="surface-panel p-4 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
-                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
+                      <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{thread.title}</p>
+                      <p className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">
                         {thread.format}
                       </p>
                     </div>
@@ -175,12 +175,12 @@ export default function ExcludedThreadsSection({
                       onClick={() => onRestore(thread.id)}
                       disabled={isRestoring}
                       aria-label={`Restore ${thread.title} to queue`}
-                      className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+                      className="px-3 py-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
                     >
                       Restore to Queue
                     </button>
                   </div>
-                  <p className="text-xs text-stone-500">{thread.issues_remaining} unread preserved</p>
+                  <p className="text-xs text-[var(--theme-text-dim)]">{thread.issues_remaining} unread preserved</p>
                 </div>
               ))}
             </div>

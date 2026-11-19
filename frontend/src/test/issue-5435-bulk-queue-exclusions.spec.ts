@@ -7,6 +7,7 @@ async function getCsrf(page: Parameters<typeof getAuthToken>[0], token: string |
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the auth endpoint supplies the CSRF token for these authenticated fixture writes.
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeTruthy()
   return data.csrf_token!
@@ -27,6 +28,7 @@ async function firstIssueId(page: Parameters<typeof getAuthToken>[0], threadId: 
   const headers = await authHeaders(page)
   const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, { headers })
   expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the thread issues endpoint returns issue IDs used to build the reading-list fixture.
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues[0].id
@@ -52,11 +54,12 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
 
     const headers = await authHeaders(page)
     const listName = `Bulk Queue List ${Date.now()}`
-    const createList = await page.request.post('/v2/reading-lists', {
+    const createList = await page.request.post('/api/v2/reading-lists', {
       headers,
       data: { name: listName, issue_ids: [alphaIssue, betaIssue] },
     })
     expect(createList.ok(), await createList.text()).toBeTruthy()
+    // SAFETY: the reading-list create response provides the id/name used to open the container page.
     const list = (await createList.json()) as { id: number; name: string }
 
     await page.goto(`/reading-lists/${list.id}`)
@@ -72,8 +75,9 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
 
     await gotoQueue(page)
     await waitForQueueReady(page)
-    await expect(page.getByText('Bulk Exclusion Alpha')).toHaveCount(0)
-    await expect(page.getByText('Bulk Exclusion Beta')).toHaveCount(0)
+    const activeQueue = page.locator('[data-testid="queue-thread-item"]')
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Alpha' })).toHaveCount(0)
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Beta' })).toHaveCount(0)
 
     const removedSection = page.getByTestId('excluded-threads-section')
     await expect(removedSection).toBeVisible()
@@ -85,7 +89,7 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
 
     await group.getByRole('button', { name: `Restore all series removed with ${listName}` }).click()
     await expect(group).toHaveCount(0, { timeout: 15000 })
-    await expect(page.getByText('Bulk Exclusion Alpha')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Bulk Exclusion Beta')).toBeVisible({ timeout: 15000 })
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Alpha' })).toBeVisible({ timeout: 15000 })
+    await expect(activeQueue.filter({ hasText: 'Bulk Exclusion Beta' })).toBeVisible({ timeout: 15000 })
   })
 })

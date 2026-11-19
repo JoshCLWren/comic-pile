@@ -3,10 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Modal from './Modal'
 import { threadsApi } from '../services/api-threads'
 import { customCBLApi } from '../services/api-custom-cbl'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { useExcludedThreads } from '../hooks/useQueue'
-import { invalidateAfterQueueMutation } from '../query/cacheEffects'
-import { getApiErrorDetail } from '../utils/apiError'
+import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
+import {
+  invalidateAfterQueueMutation,
+  invalidateCrossoverGroupsForThreads,
+} from '../query/cacheEffects'
+import { queryKeys } from '../query/queryKeys'
+import { getApiErrorDetail } from '../utils/apiError' 
 
 type SourceKind = 'reading_list' | 'reading_plan' | 'crossover'
 
@@ -21,6 +24,8 @@ interface ContainerQueueActionsProps {
   sourceName: string
   memberThreads: MemberThread[]
 }
+
+const EXCLUDED_MEMBERSHIP_PAGE_SIZE = 50
 
 function uniqueMembers(memberThreads: MemberThread[]): MemberThread[] {
   const byId = new Map<number, MemberThread>()
@@ -45,13 +50,34 @@ export default function ContainerQueueActions({
   const members = useMemo(() => uniqueMembers(memberThreads), [memberThreads])
   const memberIds = useMemo(() => members.map((thread) => thread.id), [members])
 
-  const { threads: excludedThreads } = useExcludedThreads(true)
+  // Resolve excluded status for every container member by paging through the
+  // excluded library (not just the first page).
+  const excludedMemberIdsQuery = useQuery({
+    queryKey: queryKeys.excluded.memberStatus(memberIds),
+    queryFn: async () => {
+      const memberSet = new Set(memberIds)
+      const found = new Set<number>()
+      let pageToken: string | null = null
+      do {
+        const page = await threadsApi.listExcluded(undefined, 'created', pageToken, EXCLUDED_MEMBERSHIP_PAGE_SIZE)
+        for (const thread of page.threads) {
+          if (memberSet.has(thread.id)) found.add(thread.id)
+        }
+        if (found.size === memberSet.size) break
+        pageToken = page.next_page_token ?? null
+      } while (pageToken)
+      return Array.from(found)
+    },
+    enabled: memberIds.length > 0,
+    staleTime: 30_000,
+  })
+
   const excludedIdSet = useMemo(
-    () => new Set(excludedThreads.map((thread) => thread.id)),
-    [excludedThreads],
+    () => new Set(excludedMemberIdsQuery.data ?? []),
+    [excludedMemberIdsQuery.data],
   )
 
-  // Members currently in the active queue are candidates for removal.
+  // Members not currently excluded are candidates for removal from the queue.
   const removable = useMemo(
     () => members.filter((thread) => !excludedIdSet.has(thread.id)),
     [members, excludedIdSet],
@@ -62,59 +88,57 @@ export default function ContainerQueueActions({
     [members, excludedIdSet],
   )
 
-  // Best-effort detection: series that belong to another active container.
+  // Batched, scoped overlap checks: only run while the remove dialog is open.
+  const excludeListId = sourceKind === 'reading_list' ? sourceId : undefined
   const otherListsQuery = useQuery({
-    queryKey: ['other-reading-list-memberships', sourceKind, sourceId, memberIds],
+    queryKey: queryKeys.customCBLs.threadMemberships(memberIds, excludeListId),
     queryFn: async () => {
-      const lists = await customCBLApi.list()
-      const others = lists.filter((list) => !(sourceKind === 'reading_list' && list.id === sourceId))
-      const details = await Promise.all(
-        others.map(async (list) => {
-          try {
-            const detail = await customCBLApi.get(list.id)
-            return detail.entries.map((entry) => entry.thread_id)
-          } catch {
-            return [] as number[]
-          }
-        }),
+      const chunkSize = 1000
+      const chunks: number[][] = []
+      for (let index = 0; index < memberIds.length; index += chunkSize) {
+        chunks.push(memberIds.slice(index, index + chunkSize))
+      }
+      const results = await Promise.all(
+        chunks.map((chunk) => customCBLApi.checkThreadMemberships(chunk, excludeListId)),
       )
       const inOtherList = new Set<number>()
-      for (const ids of details) {
-        for (const id of ids) inOtherList.add(id)
+      for (const result of results) {
+        for (const id of result.thread_ids) inOtherList.add(id)
       }
       return inOtherList
     },
     enabled: removeOpen && memberIds.length > 0,
     staleTime: 30_000,
+    retry: 1,
   })
 
-  const otherCrossoversQuery = useQuery({
-    queryKey: ['other-crossover-memberships', sourceKind, sourceId, memberIds],
-    queryFn: async () => {
-      const groupsByThread = await dependencyGroupsApi.listForThreads(memberIds)
-      const inOtherCrossover = new Set<number>()
-      for (const [threadId, groups] of Object.entries(groupsByThread)) {
-        const threadNum = Number(threadId)
-        if (
-          groups.some(
-            (group) => !(sourceKind === 'crossover' && group.id === sourceId),
-          )
-        ) {
-          inOtherCrossover.add(threadNum)
-        }
+  const {
+    groupsByThreadId,
+    isPending: otherCrossoversPending,
+    error: otherCrossoversError,
+  } = useCrossoverGroups(removeOpen ? memberIds : [])
+
+  const otherCrossoversSet = useMemo(() => {
+    const inOtherCrossover = new Set<number>()
+    for (const [threadId, groups] of Object.entries(groupsByThreadId)) {
+      const threadNum = Number(threadId)
+      if (groups.some((group) => !(sourceKind === 'crossover' && group.id === sourceId))) {
+        inOtherCrossover.add(threadNum)
       }
-      return inOtherCrossover
-    },
-    enabled: removeOpen && memberIds.length > 0,
-    staleTime: 30_000,
-  })
+    }
+    return inOtherCrossover
+  }, [groupsByThreadId, sourceKind, sourceId])
 
   const inAnotherActiveList = useMemo(() => {
     const set = new Set<number>()
     for (const id of otherListsQuery.data ?? []) set.add(id)
-    for (const id of otherCrossoversQuery.data ?? []) set.add(id)
+    for (const id of otherCrossoversSet) set.add(id)
     return set
-  }, [otherListsQuery.data, otherCrossoversQuery.data])
+  }, [otherListsQuery.data, otherCrossoversSet])
+
+  const overlapChecksPending = otherListsQuery.isPending || otherCrossoversPending
+  const overlapChecksError = otherListsQuery.isError || otherCrossoversError != null
+  const overlapChecksErrored = removeOpen && memberIds.length > 0 && !overlapChecksPending && overlapChecksError
 
   const removeMutation = useMutation({
     mutationFn: async (threadIds: number[]) =>
@@ -149,7 +173,12 @@ export default function ContainerQueueActions({
 
   const selectedForRemoval = removable.filter((thread) => !keptIds.has(thread.id))
   const isBusy = removeMutation.isPending || restoreMutation.isPending
-  const keepToggleVisible = inAnotherActiveList.size > 0
+  const keepToggleVisible = !overlapChecksPending && !overlapChecksError && inAnotherActiveList.size > 0
+  const canConfirmRemove =
+    !isBusy &&
+    selectedForRemoval.length > 0 &&
+    !overlapChecksPending &&
+    !overlapChecksError
 
   const openRemove = () => {
     setActionError(null)
@@ -171,6 +200,14 @@ export default function ContainerQueueActions({
     })
   }
 
+  const retryOverlapChecks = () => {
+    void otherListsQuery.refetch()
+    void invalidateCrossoverGroupsForThreads(queryClient, memberIds)
+  }
+
+  const memberStatusPending = excludedMemberIdsQuery.isPending
+  const memberStatusError = excludedMemberIdsQuery.isError
+
   return (
     <section
       aria-label="Queue actions for this collection"
@@ -182,12 +219,26 @@ export default function ContainerQueueActions({
           <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
             Remove or restore every series in this collection in one action. Reading progress and membership stay intact.
           </p>
+          {memberStatusError && (
+            <p role="alert" className="mt-2 text-sm text-[var(--theme-error)]">
+              Could not determine which series are currently in the Queue.{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  void excludedMemberIdsQuery.refetch()
+                }}
+              >
+                Try again
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={openRemove}
-            disabled={isBusy || removable.length === 0}
+            disabled={isBusy || memberStatusPending || memberStatusError || removable.length === 0}
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           >
             Remove all series from Queue
@@ -195,7 +246,7 @@ export default function ContainerQueueActions({
           <button
             type="button"
             onClick={openRestore}
-            disabled={isBusy || restorable.length === 0}
+            disabled={isBusy || memberStatusPending || memberStatusError || restorable.length === 0}
             className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-50"
           >
             Restore all to Queue
@@ -212,6 +263,17 @@ export default function ContainerQueueActions({
           <p className="text-sm text-[var(--theme-text-muted)]">
             These series will be removed from your Queue as one group. Reads, ratings, and list membership are kept and this can be undone.
           </p>
+          {overlapChecksPending && (
+            <p className="text-sm text-[var(--theme-text-dim)]">Checking for series in other active lists…</p>
+          )}
+          {overlapChecksErrored && (
+            <p role="alert" className="text-sm text-[var(--theme-error)]">
+              Could not check whether these series belong to other active lists.{' '}
+              <button type="button" className="underline" onClick={retryOverlapChecks}>
+                Try again
+              </button>
+            </p>
+          )}
           {removable.length === 0 ? (
             <p className="text-sm text-[var(--theme-text-dim)]">No series from this collection are currently in your Queue.</p>
           ) : (
@@ -233,7 +295,7 @@ export default function ContainerQueueActions({
                       <span className="min-w-0 truncate text-sm font-medium text-[var(--theme-text-primary)]">
                         {thread.title}
                       </span>
-                      {alsoInOther ? (
+                      {alsoInOther && !overlapChecksPending && !overlapChecksError ? (
                         <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--theme-text-muted)]">
                           <input
                             type="checkbox"
@@ -253,7 +315,7 @@ export default function ContainerQueueActions({
             </>
           )}
           {actionError && (
-            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+            <p role="alert" className="text-sm text-[var(--theme-error)]">
               {actionError}
             </p>
           )}
@@ -269,7 +331,7 @@ export default function ContainerQueueActions({
             <button
               type="button"
               onClick={() => removeMutation.mutate(selectedForRemoval.map((thread) => thread.id))}
-              disabled={isBusy || selectedForRemoval.length === 0}
+              disabled={!canConfirmRemove}
               className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50"
             >
               {isBusy ? 'Removing…' : 'Remove from Queue'}
@@ -302,7 +364,7 @@ export default function ContainerQueueActions({
             </ul>
           )}
           {actionError && (
-            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+            <p role="alert" className="text-sm text-[var(--theme-error)]">
               {actionError}
             </p>
           )}

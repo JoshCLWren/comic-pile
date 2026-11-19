@@ -880,6 +880,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_list::create_reading_list),
         )
         .route(
+            "/api/v2/reading-lists/memberships:check",
+            post(reading_list::check_thread_memberships),
+        )
+        .route(
             "/api/v2/reading-lists/{list_id}",
             get(reading_list::get_reading_list),
         )

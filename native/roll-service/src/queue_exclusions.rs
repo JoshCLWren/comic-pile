@@ -15,6 +15,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+/// Maximum thread IDs accepted in one bulk queue exclusion/restore request.
+const MAX_BULK_THREAD_IDS: usize = 1000;
+
 /// Source container that produced a bulk queue exclusion.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct QueueExclusionSource {
@@ -69,7 +72,10 @@ fn bad_request(detail: &str) -> ApiError {
 }
 
 fn validate_source(source: &QueueExclusionSource) -> Result<(), ApiError> {
-    if !matches!(source.kind.as_str(), "reading_list" | "reading_plan" | "crossover") {
+    if !matches!(
+        source.kind.as_str(),
+        "reading_list" | "reading_plan" | "crossover"
+    ) {
         return Err(bad_request(
             "source.kind must be reading_list, reading_plan, or crossover",
         ));
@@ -86,6 +92,18 @@ fn validate_source(source: &QueueExclusionSource) -> Result<(), ApiError> {
     Ok(())
 }
 
+fn validate_thread_id_count(count: usize) -> Result<(), ApiError> {
+    if count == 0 {
+        return Err(bad_request("thread_ids must contain at least one id"));
+    }
+    if count > MAX_BULK_THREAD_IDS {
+        return Err(bad_request(&format!(
+            "thread_ids must contain at most {MAX_BULK_THREAD_IDS} ids"
+        )));
+    }
+    Ok(())
+}
+
 /// Normalize a requested thread-id set: drop non-positive ids and de-duplicate
 /// in ascending order (stable, bounded, no per-row SQL).
 fn normalize_thread_ids(ids: Vec<i32>) -> Vec<i32> {
@@ -95,75 +113,10 @@ fn normalize_thread_ids(ids: Vec<i32>) -> Vec<i32> {
     ids
 }
 
-/// Bulk-exclude active threads from the queue in one set-based write.
-///
-/// Only owned threads currently in `active` queue status are excluded; ids that
-/// are missing, foreign, already excluded, or not active are ignored so the
-/// operation is tolerant of stale selections. When no active threads remain to
-/// exclude, no group is created and an empty result is returned.
-pub async fn bulk_exclude(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Json(request): Json<BulkQueueExclusionRequest>,
-) -> Result<Json<BulkQueueExclusionResponse>, ApiError> {
-    validate_source(&request.source)?;
-    let thread_ids = normalize_thread_ids(request.thread_ids);
-    if thread_ids.is_empty() {
-        return Err(bad_request("thread_ids must contain at least one positive id"));
-    }
-
-    let mut connection = db::checkout(&state).await?;
-    let transaction = connection.transaction().await.map_err(db::query_error)?;
-    queue::lock_queue(&transaction, user.id()).await?;
-
-    // Lock the owned active candidates so concurrent writers serialize on the
-    // same rows after the per-reader queue advisory lock.
-    let rows = transaction
-        .query(
-            "SELECT id FROM threads \
-             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'active' \
-             ORDER BY id FOR UPDATE",
-            &[&user.id(), &thread_ids],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let excluded_thread_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
-
-    if excluded_thread_ids.is_empty() {
-        transaction.commit().await.map_err(db::query_error)?;
-        return Ok(Json(BulkQueueExclusionResponse {
-            group: None,
-            excluded_thread_ids,
-        }));
-    }
-
-    let group_row = transaction
-        .query_one(
-            "INSERT INTO queue_exclusion_groups (user_id, source_kind, source_id, source_name) \
-             VALUES ($1, $2, $3, $4) \
-             RETURNING id, source_kind, source_id, source_name, \
-                       to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
-            &[
-                &user.id(),
-                &request.source.kind,
-                &request.source.id,
-                &request.source.name.trim(),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    transaction
-        .execute(
-            "UPDATE threads SET status = 'excluded', queue_position = 0, \
-                    queue_position_is_manual = false, queue_exclusion_group_id = $3 \
-             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'active'",
-            &[&user.id(), &excluded_thread_ids, &group_row.get::<_, i32>(0)],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    // Renormalize remaining active queue positions to stay dense.
+async fn renormalize_active_queue(
+    transaction: &deadpool_postgres::Transaction<'_>,
+    user_id: i32,
+) -> Result<(), ApiError> {
     transaction
         .execute(
             "WITH ranked AS ( \
@@ -173,52 +126,22 @@ pub async fn bulk_exclude(
              ) \
              UPDATE threads t SET queue_position = ranked.pos \
              FROM ranked WHERE t.id = ranked.id AND t.queue_position <> ranked.pos",
-            &[&user.id()],
+            &[&user_id],
         )
         .await
         .map_err(db::query_error)?;
-
-    transaction.commit().await.map_err(db::query_error)?;
-
-    Ok(Json(BulkQueueExclusionResponse {
-        group: Some(QueueExclusionGroup {
-            id: group_row.get(0),
-            source_kind: group_row.get(1),
-            source_id: group_row.get(2),
-            source_name: group_row.get(3),
-            created_at: group_row.get(4),
-        }),
-        excluded_thread_ids,
-    }))
+    Ok(())
 }
 
-/// Restore a set of excluded threads to the queue in one set-based write.
-async fn restore_ids(
-    state: &AppState,
+/// Recompute issue counters for the given excluded thread IDs and restore them
+/// to active/completed in one set-based write. Caller must hold the per-reader
+/// queue advisory lock and have locked the candidate rows.
+async fn restore_locked_excluded_ids(
+    transaction: &deadpool_postgres::Transaction<'_>,
     user_id: i32,
-    thread_ids: Vec<i32>,
+    excluded_ids: &[i32],
 ) -> Result<Vec<i32>, ApiError> {
-    let thread_ids = normalize_thread_ids(thread_ids);
-    if thread_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut connection = db::checkout(state).await?;
-    let transaction = connection.transaction().await.map_err(db::query_error)?;
-    queue::lock_queue(&transaction, user_id).await?;
-
-    let rows = transaction
-        .query(
-            "SELECT id, total_issues, issues_remaining FROM threads \
-             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'excluded' \
-             ORDER BY id FOR UPDATE",
-            &[&user_id, &thread_ids],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let excluded_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
     if excluded_ids.is_empty() {
-        transaction.commit().await.map_err(db::query_error)?;
         return Ok(Vec::new());
     }
 
@@ -302,24 +225,133 @@ async fn restore_ids(
         .map_err(db::query_error)?;
 
     let restored_thread_ids: Vec<i32> = restored_rows.iter().map(|row| row.get(0)).collect();
+    renormalize_active_queue(transaction, user_id).await?;
+    Ok(restored_thread_ids)
+}
 
-    // Renormalize active queue positions (keeps dense ordering consistent).
-    transaction
-        .execute(
-            "WITH ranked AS ( \
-                 SELECT id, row_number() OVER (ORDER BY queue_position, id)::int AS pos \
-                 FROM threads \
-                 WHERE user_id = $1 AND status = 'active' AND queue_position >= 1 \
-             ) \
-             UPDATE threads t SET queue_position = ranked.pos \
-             FROM ranked WHERE t.id = ranked.id AND t.queue_position <> ranked.pos",
-            &[&user_id],
+/// Bulk-exclude active threads from the queue in one set-based write.
+///
+/// Only owned threads currently in `active` queue status are excluded; ids that
+/// are missing, foreign, already excluded, or not active are ignored so the
+/// operation is tolerant of stale selections. When no active threads remain to
+/// exclude, no group is created and an empty result is returned.
+pub async fn bulk_exclude(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<BulkQueueExclusionRequest>,
+) -> Result<Json<BulkQueueExclusionResponse>, ApiError> {
+    validate_source(&request.source)?;
+    validate_thread_id_count(request.thread_ids.len())?;
+    let thread_ids = normalize_thread_ids(request.thread_ids);
+    if thread_ids.is_empty() {
+        return Err(bad_request(
+            "thread_ids must contain at least one positive id",
+        ));
+    }
+
+    let mut connection = db::checkout(&state).await?;
+    let transaction = connection.transaction().await.map_err(db::query_error)?;
+    queue::lock_queue(&transaction, user.id()).await?;
+
+    // Lock the owned active candidates so concurrent writers serialize on the
+    // same rows after the per-reader queue advisory lock.
+    let rows = transaction
+        .query(
+            "SELECT id FROM threads \
+             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'active' \
+             ORDER BY id FOR UPDATE",
+            &[&user.id(), &thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let excluded_thread_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
+
+    if excluded_thread_ids.is_empty() {
+        transaction.commit().await.map_err(db::query_error)?;
+        return Ok(Json(BulkQueueExclusionResponse {
+            group: None,
+            excluded_thread_ids,
+        }));
+    }
+
+    let group_row = transaction
+        .query_one(
+            "INSERT INTO queue_exclusion_groups (user_id, source_kind, source_id, source_name) \
+             VALUES ($1, $2, $3, $4) \
+             RETURNING id, source_kind, source_id, source_name, \
+                       to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
+            &[
+                &user.id(),
+                &request.source.kind,
+                &request.source.id,
+                &request.source.name.trim(),
+            ],
         )
         .await
         .map_err(db::query_error)?;
 
+    transaction
+        .execute(
+            "UPDATE threads SET status = 'excluded', queue_position = 0, \
+                    queue_position_is_manual = false, queue_exclusion_group_id = $3 \
+             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'active'",
+            &[
+                &user.id(),
+                &excluded_thread_ids,
+                &group_row.get::<_, i32>(0),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    renormalize_active_queue(&transaction, user.id()).await?;
     transaction.commit().await.map_err(db::query_error)?;
-    Ok(restored_thread_ids)
+
+    Ok(Json(BulkQueueExclusionResponse {
+        group: Some(QueueExclusionGroup {
+            id: group_row.get(0),
+            source_kind: group_row.get(1),
+            source_id: group_row.get(2),
+            source_name: group_row.get(3),
+            created_at: group_row.get(4),
+        }),
+        excluded_thread_ids,
+    }))
+}
+
+/// Restore a set of excluded threads to the queue in one set-based write.
+async fn restore_ids(
+    state: &AppState,
+    user_id: i32,
+    thread_ids: Vec<i32>,
+) -> Result<Vec<i32>, ApiError> {
+    let thread_ids = normalize_thread_ids(thread_ids);
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut connection = db::checkout(state).await?;
+    let transaction = connection.transaction().await.map_err(db::query_error)?;
+    queue::lock_queue(&transaction, user_id).await?;
+
+    let rows = transaction
+        .query(
+            "SELECT id FROM threads \
+             WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'excluded' \
+             ORDER BY id FOR UPDATE",
+            &[&user_id, &thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let excluded_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
+    if excluded_ids.is_empty() {
+        transaction.commit().await.map_err(db::query_error)?;
+        return Ok(Vec::new());
+    }
+
+    let restored = restore_locked_excluded_ids(&transaction, user_id, &excluded_ids).await?;
+    transaction.commit().await.map_err(db::query_error)?;
+    Ok(restored)
 }
 
 /// `POST /api/v2/queue-exclusions/restore` — restore an explicit set of threads.
@@ -328,11 +360,18 @@ pub async fn bulk_restore(
     user: AuthenticatedUser,
     Json(request): Json<BulkQueueRestoreRequest>,
 ) -> Result<Json<BulkQueueRestoreResponse>, ApiError> {
+    validate_thread_id_count(request.thread_ids.len())?;
     let restored_thread_ids = restore_ids(&state, user.id(), request.thread_ids).await?;
-    Ok(Json(BulkQueueRestoreResponse { restored_thread_ids }))
+    Ok(Json(BulkQueueRestoreResponse {
+        restored_thread_ids,
+    }))
 }
 
 /// `POST /api/v2/queue-exclusion-groups/{group_id}/restore` — restore a whole group.
+///
+/// Member selection and restore run in one locked transaction with the group
+/// constraint enforced on selection/write to avoid restoring threads re-excluded
+/// into a different group between selection and restore.
 pub async fn restore_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -341,20 +380,34 @@ pub async fn restore_group(
     if group_id <= 0 {
         return Err(bad_request("group_id must be positive"));
     }
-    // Resolve member thread IDs for this owned group in one query, then restore.
-    let connection = db::checkout(&state).await?;
-    let rows = connection
+
+    let mut connection = db::checkout(&state).await?;
+    let transaction = connection.transaction().await.map_err(db::query_error)?;
+    queue::lock_queue(&transaction, user.id()).await?;
+
+    let rows = transaction
         .query(
             "SELECT t.id FROM threads t \
              JOIN queue_exclusion_groups g ON g.id = t.queue_exclusion_group_id \
-             WHERE g.id = $1 AND g.user_id = $2 AND t.status = 'excluded' \
-             ORDER BY t.id",
+             WHERE g.id = $1 AND g.user_id = $2 AND t.user_id = $2 \
+               AND t.status = 'excluded' AND t.queue_exclusion_group_id = $1 \
+             ORDER BY t.id FOR UPDATE OF t",
             &[&group_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?;
-    drop(connection);
     let thread_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
-    let restored_thread_ids = restore_ids(&state, user.id(), thread_ids).await?;
-    Ok(Json(BulkQueueRestoreResponse { restored_thread_ids }))
+    if thread_ids.is_empty() {
+        transaction.commit().await.map_err(db::query_error)?;
+        return Ok(Json(BulkQueueRestoreResponse {
+            restored_thread_ids: Vec::new(),
+        }));
+    }
+
+    let restored_thread_ids =
+        restore_locked_excluded_ids(&transaction, user.id(), &thread_ids).await?;
+    transaction.commit().await.map_err(db::query_error)?;
+    Ok(Json(BulkQueueRestoreResponse {
+        restored_thread_ids,
+    }))
 }

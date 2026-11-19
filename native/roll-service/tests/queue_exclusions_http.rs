@@ -191,22 +191,40 @@ async fn bulk_exclude_and_restore_manage_grouped_queue_membership() {
     // Excluded listing exposes provenance and groups the removed threads.
     let (status, body) = send(
         &ctx.state,
-        authed("GET", "/api/v1/threads/excluded/threads", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v1/threads/excluded/threads",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let threads = body["threads"].as_array().unwrap();
     assert_eq!(threads.len(), 2, "{body:?}");
     for thread in threads {
-        assert_eq!(thread["queue_exclusion_group"]["id"].as_i64().unwrap() as i32, group_id);
-        assert_eq!(thread["queue_exclusion_group"]["source_kind"], "reading_list");
+        assert_eq!(
+            thread["queue_exclusion_group"]["id"].as_i64().unwrap() as i32,
+            group_id
+        );
+        assert_eq!(
+            thread["queue_exclusion_group"]["source_kind"],
+            "reading_list"
+        );
         assert_eq!(thread["queue_exclusion_group"]["source_name"], "My List");
     }
 
     // Roll eligibility / active queue membership: only the untouched thread remains.
     let (status, body) = send(
         &ctx.state,
-        authed("GET", "/api/v2/threads?page_size=50", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -243,7 +261,13 @@ async fn bulk_exclude_and_restore_manage_grouped_queue_membership() {
 
     let (status, body) = send(
         &ctx.state,
-        authed("GET", "/api/v1/threads/excluded/threads", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v1/threads/excluded/threads",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -251,7 +275,13 @@ async fn bulk_exclude_and_restore_manage_grouped_queue_membership() {
 
     let (status, body) = send(
         &ctx.state,
-        authed("GET", "/api/v2/threads?page_size=50", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -296,9 +326,339 @@ async fn bulk_exclude_and_restore_manage_grouped_queue_membership() {
 
     let (status, body) = send(
         &ctx.state,
-        authed("GET", "/api/v2/threads?page_size=50", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["active_count"].as_i64(), Some(3), "{body:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bulk_requests_enforce_thread_id_count_limits() {
+    let ctx = setup("qexlim").await;
+    let too_many: Vec<i32> = (1..=1001).collect();
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "thread_ids": too_many,
+                "source": { "kind": "reading_list", "id": 1, "name": "Big" }
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"].as_str().unwrap_or("").contains("at most"),
+        "{body:?}"
+    );
+
+    let too_many_restore: Vec<i32> = (1..=1001).collect();
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions/restore",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({ "thread_ids": too_many_restore })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"].as_str().unwrap_or("").contains("at most"),
+        "{body:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_bulk_exclude_and_single_exclude_serialize_consistently() {
+    let ctx = setup("qexc").await;
+    let t1 = insert_thread(&ctx, "A", 1, "active").await;
+    let t2 = insert_thread(&ctx, "B", 2, "active").await;
+    let t3 = insert_thread(&ctx, "C", 3, "active").await;
+
+    let bulk = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    "/api/v2/queue-exclusions",
+                    &token,
+                    &csrf,
+                    Some(json!({
+                        "thread_ids": [t1, t2],
+                        "source": { "kind": "reading_list", "id": 10, "name": "L1" }
+                    })),
+                ),
+            )
+            .await
+        })
+    };
+    let single = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{t3}/exclude"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+
+    let (r1, r2) = tokio::join!(bulk, single);
+    let (s1, b1) = r1.unwrap();
+    let (s2, b2) = r2.unwrap();
+    assert_eq!(s1, StatusCode::OK, "{b1:?}");
+    assert!(s2.is_success(), "{s2:?} {b2:?}");
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["active_count"].as_i64(), Some(0), "{body:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_group_restore_and_bulk_exclude_do_not_cross_groups() {
+    let ctx = setup("qexr").await;
+    let t1 = insert_thread(&ctx, "A", 1, "active").await;
+    let t2 = insert_thread(&ctx, "B", 2, "active").await;
+
+    // Create initial exclusion group containing both threads.
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "thread_ids": [t1, t2],
+                "source": { "kind": "reading_list", "id": 1, "name": "Old" }
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let group_id = body["group"]["id"].as_i64().unwrap() as i32;
+
+    // Race: restore old group vs exclude the same threads into a new group.
+    let restore = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v2/queue-exclusion-groups/{group_id}/restore"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    let exclude_new = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    "/api/v2/queue-exclusions",
+                    &token,
+                    &csrf,
+                    Some(json!({
+                        "thread_ids": [t1, t2],
+                        "source": { "kind": "reading_list", "id": 2, "name": "New" }
+                    })),
+                ),
+            )
+            .await
+        })
+    };
+
+    let (r1, r2) = tokio::join!(restore, exclude_new);
+    let (s1, b1) = r1.unwrap();
+    let (s2, b2) = r2.unwrap();
+    assert_eq!(s1, StatusCode::OK, "{b1:?}");
+    assert_eq!(s2, StatusCode::OK, "{b2:?}");
+
+    // Invariant: no thread remains excluded under the old group after a
+    // concurrent restore/exclude-new race. Depending on serialization order,
+    // threads are either active or excluded under the new group.
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v1/threads/excluded/threads",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    for thread in body["threads"].as_array().unwrap() {
+        let gid = thread["queue_exclusion_group"]["id"].as_i64().unwrap() as i32;
+        assert_ne!(
+            gid, group_id,
+            "thread must not remain in old group: {thread:?}"
+        );
+        assert_eq!(
+            thread["queue_exclusion_group"]["source_name"], "New",
+            "excluded threads must belong to the newer group: {thread:?}"
+        );
+    }
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let active_count = body["active_count"].as_i64().unwrap();
+    assert!(active_count == 0 || active_count == 2, "{body:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_bulk_restore_and_single_restore_serialize_consistently() {
+    let ctx = setup("qexs").await;
+    let t1 = insert_thread(&ctx, "A", 1, "active").await;
+    let t2 = insert_thread(&ctx, "B", 2, "active").await;
+
+    let (status, _body) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/queue-exclusions",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "thread_ids": [t1, t2],
+                "source": { "kind": "crossover", "id": 3, "name": "X" }
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let bulk_restore = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    "/api/v2/queue-exclusions/restore",
+                    &token,
+                    &csrf,
+                    Some(json!({ "thread_ids": [t1, t2] })),
+                ),
+            )
+            .await
+        })
+    };
+    let single_restore = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{t1}/restore"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+
+    let (r1, r2) = tokio::join!(bulk_restore, single_restore);
+    let (s1, b1) = r1.unwrap();
+    let (s2, b2) = r2.unwrap();
+    assert_eq!(s1, StatusCode::OK, "{b1:?}");
+    // Single restore may see thread already restored by bulk op.
+    assert!(
+        s2.is_success() || s2 == StatusCode::CONFLICT || s2 == StatusCode::BAD_REQUEST,
+        "{s2:?} {b2:?}"
+    );
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/threads?page_size=50",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["active_count"].as_i64(), Some(2), "{body:?}");
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v1/threads/excluded/threads",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["threads"].as_array().unwrap().len(), 0, "{body:?}");
 }

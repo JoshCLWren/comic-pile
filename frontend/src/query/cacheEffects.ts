@@ -932,6 +932,20 @@ export async function invalidateAfterCrossoverMutation(
 }
 
 /**
+ * Refresh the batched crossover-membership lookup for a specific thread set.
+ * Used to retry a failed overlap check without invalidating unrelated caches.
+ */
+export async function invalidateCrossoverGroupsForThreads(
+  client: QueryClient,
+  threadIds: number[],
+): Promise<void> {
+  if (threadIds.length === 0) return
+  await client.invalidateQueries({
+    queryKey: queryKeys.crossover.groups(threadIds),
+  })
+}
+
+/**
  * Apply a migrated thread to the cache and invalidate thread list.
  * Used after a thread is migrated to issue tracking.
  */

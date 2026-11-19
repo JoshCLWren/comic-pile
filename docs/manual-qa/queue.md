@@ -87,3 +87,11 @@
 **Test:** Open Queue, expand Finished Series, reload and navigate away and back.
 
 **Expected:** Completed series remain listed (read from the completed collection, not the active-only Queue rows). Source: #5171, fixed by #5297.
+
+## MQA-QUEUE-012: Bulk remove and restore container series from Queue
+
+**Setup:** A reading list, reading plan, or crossover containing multiple active series in the Queue. Include a case where at least one member also belongs to another active list/crossover when possible.
+
+**Test:** From the container page, choose "Remove all series from Queue" (or equivalent bulk action), review the affected series list, keep any series that should remain in another active context when offered, and confirm. Inspect Queue active rows, the Removed from Queue section, and Roll eligibility. Then restore the whole removal group from Queue and/or restore all from the container action.
+
+**Expected:** The action removes the selected container series from the active Queue in one operation without deleting issues, read history, ratings, mappings, or list/plan/crossover membership. Removed series appear grouped by the removal source in Queue with group and individual restore available. Restoring returns eligible series to the active Queue and updates Roll eligibility accordingly. The confirmation waits for overlap checks to complete and does not proceed if those checks fail; series intentionally kept in Queue remain active.
