@@ -144,7 +144,12 @@ async fn seed_issue(state: &Arc<AppState>, thread_id: i32, issue_id: i32, number
     .expect("seed issue");
 }
 
-async fn seed_thread_issues(state: &Arc<AppState>, user_id: i32, thread_id: i32, issue_ids: &[i32]) {
+async fn seed_thread_issues(
+    state: &Arc<AppState>,
+    user_id: i32,
+    thread_id: i32,
+    issue_ids: &[i32],
+) {
     seed_thread(state, user_id, thread_id).await;
     for (index, issue_id) in issue_ids.iter().enumerate() {
         seed_issue(state, thread_id, *issue_id, &format!("{}", index + 1)).await;
@@ -235,11 +240,15 @@ async fn continuity_rule_crud_wire_contract_and_canonical_edges() {
     assert_eq!(created["selected_member_issue_ids"], json!([]), "{created}");
     assert!(created["note"].is_null(), "{created}");
     assert!(
-        created["created_at"].as_str().is_some_and(|value| !value.is_empty()),
+        created["created_at"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()),
         "{created}"
     );
     assert!(
-        created["updated_at"].as_str().is_some_and(|value| !value.is_empty()),
+        created["updated_at"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()),
         "{created}"
     );
     // item_read issue->issue compiles to the canonical source->target edge.
@@ -376,10 +385,13 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
     assert_eq!(body["detail"], "Invalid satisfaction_type");
 
     // Self-target -> 400.
-    let mut self_target = item_read_rule(820011, 820011);
+    let self_target = item_read_rule(820011, 820011);
     let (status, body) = authed_json(&state, "POST", uri, &token, &csrf, Some(self_target)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-    assert_eq!(body["detail"], "A continuity rule cannot target its own source node");
+    assert_eq!(
+        body["detail"],
+        "A continuity rule cannot target its own source node"
+    );
 
     // Checkpoint rule without checkpoint_issue_id -> 400.
     let mut checkpoint = item_read_rule(820011, 820012);
@@ -402,7 +414,7 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
     );
 
     // Rule referencing another user's issue -> 404.
-    let mut unowned = item_read_rule(820011, 820021);
+    let unowned = item_read_rule(820011, 820021);
     let (status, body) = authed_json(&state, "POST", uri, &token, &csrf, Some(unowned)).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(body["detail"], "Issue 820021 not found");
