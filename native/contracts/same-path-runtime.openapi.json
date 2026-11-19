@@ -5786,30 +5786,6 @@
   },
   "components": {
     "schemas": {
-      "ActionRequest": {
-        "type": "object",
-        "properties": {
-          "external_identity_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "rejection_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search_query": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "ActivityItem": {
         "type": "object",
         "required": [
@@ -12023,6 +11999,19 @@
           }
         }
       },
+      "IdentityInboxConfirmRequest": {
+        "type": "object",
+        "description": "Body for confirming an identity inbox candidate.",
+        "required": [
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "IdentityInboxItem": {
         "type": "object",
         "required": [
@@ -12089,6 +12078,25 @@
           },
           "why_stopped": {
             "type": "string"
+          }
+        }
+      },
+      "IdentityInboxRejectRequest": {
+        "type": "object",
+        "description": "Body for rejecting an identity inbox candidate.",
+        "required": [
+          "external_identity_id",
+          "rejection_reason"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rejection_reason": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
           }
         }
       },

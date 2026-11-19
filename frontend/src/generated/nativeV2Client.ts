@@ -78,7 +78,7 @@ export interface ConfirmRequest {
   path: {
     mapping_id: number
   }
-  body: components['schemas']['ActionRequest']
+  body: components['schemas']['IdentityInboxConfirmRequest']
 }
 
 export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
@@ -495,6 +495,13 @@ export interface IssueReadStateReaderContextRequest {
 
 export type IssueReadStateReaderContextResponse = components['schemas']['ReaderContextResponse']
 
+export interface ListRequest {
+  query?: {
+    offset?: number
+    limit?: number
+  }
+}
+
 export type ListResponse = components['schemas']['IdentityInboxResponse']
 
 export interface ListActivityRequest {
@@ -649,7 +656,7 @@ export interface RejectRequest {
   path: {
     mapping_id: number
   }
-  body: components['schemas']['ActionRequest']
+  body: components['schemas']['IdentityInboxRejectRequest']
 }
 
 export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
@@ -791,6 +798,14 @@ export interface SaveOverlapDecisionRequest {
 }
 
 export type SaveOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
+
+export interface SearchRequest {
+  query: {
+    q: string
+    limit?: number
+    issue_id?: number
+  }
+}
 
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
 
@@ -959,7 +974,7 @@ export interface NativeV2Client {
   issueReadStateMarkUnread(args: IssueReadStateMarkUnreadRequest): Promise<IssueReadStateMarkUnreadResponse>
   issueReadStateMove(args: IssueReadStateMoveRequest): Promise<IssueReadStateMoveResponse>
   issueReadStateReaderContext(args: IssueReadStateReaderContextRequest): Promise<IssueReadStateReaderContextResponse>
-  list(): Promise<ListResponse>
+  list(args?: ListRequest): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
@@ -999,7 +1014,7 @@ export interface NativeV2Client {
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   role(args: RoleRequest): Promise<RoleResponse>
   saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
-  search(): Promise<SearchResponse>
+  search(args: SearchRequest): Promise<SearchResponse>
   searchCustomCblIssues(args?: SearchCustomCblIssuesRequest): Promise<SearchCustomCblIssuesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
@@ -1349,8 +1364,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/reader-context`,
       )
     },
-    list() {
-      return client.get<ListResponse>("/v2/identity-inbox")
+    list(args: ListRequest = {}) {
+      return client.get<ListResponse>(
+        "/v2/identity-inbox",
+        { params: compactQuery(args.query) },
+      )
     },
     listActivity(args: ListActivityRequest = {}) {
       return client.get<ListActivityResponse>(
@@ -1562,8 +1580,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    search() {
-      return client.get<SearchResponse>("/v2/identity-inbox/issue-matches")
+    search(args: SearchRequest) {
+      return client.get<SearchResponse>(
+        "/v2/identity-inbox/issue-matches",
+        { params: compactQuery(args.query) },
+      )
     },
     searchCustomCblIssues(args: SearchCustomCblIssuesRequest = {}) {
       return client.get<SearchCustomCblIssuesResponse>(

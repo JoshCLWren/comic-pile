@@ -2652,6 +2652,31 @@
           "identity-inbox"
         ],
         "operationId": "list_documentation",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Items to skip (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "ok",
@@ -2677,6 +2702,41 @@
           "identity-inbox"
         ],
         "operationId": "search_documentation",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Non-blank search text (required)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results, 1-50 (default 10)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 50,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "query",
+            "description": "Issue id echoed back in the response (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "ok",
@@ -2755,7 +2815,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActionRequest"
+                "$ref": "#/components/schemas/IdentityInboxConfirmRequest"
               }
             }
           },
@@ -2839,7 +2899,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActionRequest"
+                "$ref": "#/components/schemas/IdentityInboxRejectRequest"
               }
             }
           },
@@ -5381,30 +5441,6 @@
   },
   "components": {
     "schemas": {
-      "ActionRequest": {
-        "type": "object",
-        "properties": {
-          "external_identity_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "rejection_reason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "search_query": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "ActivityItem": {
         "type": "object",
         "required": [
@@ -9672,6 +9708,19 @@
           }
         }
       },
+      "IdentityInboxConfirmRequest": {
+        "type": "object",
+        "description": "Body for confirming an identity inbox candidate.",
+        "required": [
+          "external_identity_id"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "IdentityInboxItem": {
         "type": "object",
         "required": [
@@ -9738,6 +9787,25 @@
           },
           "why_stopped": {
             "type": "string"
+          }
+        }
+      },
+      "IdentityInboxRejectRequest": {
+        "type": "object",
+        "description": "Body for rejecting an identity inbox candidate.",
+        "required": [
+          "external_identity_id",
+          "rejection_reason"
+        ],
+        "properties": {
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rejection_reason": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
           }
         }
       },

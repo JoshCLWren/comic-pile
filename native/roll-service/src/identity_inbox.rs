@@ -79,6 +79,24 @@ pub struct IdentityInboxResponse {
     pub limit: i64,
 }
 
+// OpenAPI-only body schema: `confirm` deserializes the shared `ActionRequest`
+// and answers 400 when `external_identity_id` is missing.
+/// Body for confirming an identity inbox candidate.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxConfirmRequest {
+    pub external_identity_id: i32,
+}
+
+// OpenAPI-only body schema: `reject` answers 400 when `external_identity_id`
+// is missing or `rejection_reason` is missing or blank.
+/// Body for rejecting an identity inbox candidate.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxRejectRequest {
+    pub external_identity_id: i32,
+    #[schema(min_length = 1, pattern = r"\S")]
+    pub rejection_reason: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct IdentityInboxActionRequest {
     pub external_identity_id: Option<i32>,
@@ -1113,6 +1131,10 @@ pub async fn skip(
     get,
     path = "/api/v2/identity-inbox",
     tag = "identity-inbox",
+    params(
+        ("offset" = Option<i64>, Query, minimum = 0, description = "Items to skip (default 0)"),
+        ("limit" = Option<i64>, Query, minimum = 1, maximum = 100, description = "Page size, 1-100 (default 50)")
+    ),
     responses((status = 200, description = "ok", body = IdentityInboxResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1123,6 +1145,11 @@ pub fn list_documentation() {}
     get,
     path = "/api/v2/identity-inbox/issue-matches",
     tag = "identity-inbox",
+    params(
+        ("q" = String, Query, min_length = 1, max_length = 200, description = "Non-blank search text (required)"),
+        ("limit" = Option<i64>, Query, minimum = 1, maximum = 50, description = "Maximum results, 1-50 (default 10)"),
+        ("issue_id" = Option<i32>, Query, description = "Issue id echoed back in the response (default 0)")
+    ),
     responses((status = 200, description = "ok", body = IdentityInboxSearchResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1145,7 +1172,7 @@ pub fn get_documentation() {}
     path = "/api/v2/identity-inbox/{mapping_id}/confirmations",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = ActionRequest,
+    request_body = IdentityInboxConfirmRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]
@@ -1168,7 +1195,7 @@ pub fn defer_documentation() {}
     path = "/api/v2/identity-inbox/{mapping_id}/rejections",
     tag = "identity-inbox",
     params(("mapping_id" = i32, Path, description = "Mapping id")),
-    request_body = ActionRequest,
+    request_body = IdentityInboxRejectRequest,
     responses((status = 200, description = "ok", body = IdentityInboxActionResponse)),
     security(("HTTPBearer" = []))
 )]

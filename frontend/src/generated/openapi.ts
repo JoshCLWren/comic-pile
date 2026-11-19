@@ -3712,12 +3712,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ActionRequest: {
-            /** Format: int32 */
-            external_identity_id?: number | null;
-            rejection_reason?: string | null;
-            search_query?: string | null;
-        };
         ActivityItem: {
             /** Format: int32 */
             die_after?: number | null;
@@ -5823,6 +5817,11 @@ export interface components {
             rejection_reason?: string | null;
             status: string;
         };
+        /** @description Body for confirming an identity inbox candidate. */
+        IdentityInboxConfirmRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+        };
         IdentityInboxItem: {
             candidates: components["schemas"]["IdentityInboxCandidate"][];
             /** Format: double */
@@ -5841,6 +5840,12 @@ export interface components {
             /** Format: double */
             updated_at?: number | null;
             why_stopped: string;
+        };
+        /** @description Body for rejecting an identity inbox candidate. */
+        IdentityInboxRejectRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+            rejection_reason: string;
         };
         IdentityInboxResponse: {
             items: components["schemas"]["IdentityInboxItem"][];
@@ -15751,7 +15756,12 @@ export interface operations {
     };
     list_documentation: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Items to skip (default 0) */
+                offset?: number;
+                /** @description Page size, 1-100 (default 50) */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -15771,7 +15781,14 @@ export interface operations {
     };
     search_documentation: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Non-blank search text (required) */
+                q: string;
+                /** @description Maximum results, 1-50 (default 10) */
+                limit?: number;
+                /** @description Issue id echoed back in the response (default 0) */
+                issue_id?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -15824,7 +15841,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ActionRequest"];
+                "application/json": components["schemas"]["IdentityInboxConfirmRequest"];
             };
         };
         responses: {
@@ -15874,7 +15891,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ActionRequest"];
+                "application/json": components["schemas"]["IdentityInboxRejectRequest"];
             };
         };
         responses: {
