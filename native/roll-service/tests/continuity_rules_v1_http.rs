@@ -341,22 +341,12 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
     let user_id = user_id_for(&state, "cr-errors").await;
     seed_thread_issue(&state, user_id, 820001, 820011, "1").await;
     seed_thread_issue(&state, user_id, 820001, 820012, "2").await;
+    seed_thread_issue(&state, user_id, 820001, 820013, "3").await;
 
-    // A second user owns a foreign issue and a foreign rule.
+    // A second user owns foreign issues and a foreign rule.
     let (foreign_token, foreign_csrf) = register_and_login(&state, "cr-foreign").await;
     let foreign_user_id = user_id_for(&state, "cr-foreign").await;
     seed_thread_issue(&state, foreign_user_id, 820002, 820021, "1").await;
-    let (status, foreign_rule) = authed_json(
-        &state,
-        "POST",
-        "/api/v1/continuity-rules/",
-        &foreign_token,
-        &foreign_csrf,
-        Some(item_read_rule(820021, 820021 + 1)),
-    )
-    .await;
-    // 820022 does not exist, so this 404s; seed it properly first instead.
-    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign_rule}");
     seed_thread_issue(&state, foreign_user_id, 820002, 820022, "2").await;
     let (status, foreign_rule) = authed_json(
         &state,
