@@ -20,7 +20,7 @@ use crate::{
     option_inputs::{
         load_option_diagnostics, OptionInputs, Prerequisite, ReadingEntry, ReadingList,
     },
-    reading_constraints::{ThreadEligibility, ValidatedReadingInputs},
+    reading_constraints::{ThreadEligibility, ValidatedReadingInputs, ValidationError},
     reading_eligibility::evaluate,
     reading_inputs::{
         self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
@@ -445,7 +445,7 @@ fn build_series_nodes(
             .entry(node_key)
             .or_insert_with(|| SeriesAggregate {
                 thread_id: *thread_id,
-                volume_id: volume_id.cloned(),
+                volume_id: volume_id.map(|s| s.to_string()),
                 unread: unread_count,
                 rollable,
                 waiting,
