@@ -109,6 +109,28 @@ async fn authed_json(
     (status, value)
 }
 
+/// Send an authenticated raw body exactly as given (used to prove malformed
+/// JSON keeps the FastAPI-shaped 422 envelope instead of an axum rejection).
+async fn authed_raw(
+    state: &Arc<AppState>,
+    method: &str,
+    uri: &str,
+    token: &str,
+    csrf: &str,
+    raw: &str,
+) -> (StatusCode, Value) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"))
+        .body(Body::from(raw.to_string()))
+        .unwrap();
+    let (status, value, _) = send(state, request).await;
+    (status, value)
+}
+
 async fn user_id_for(state: &Arc<AppState>, username: &str) -> i32 {
     let conn = db::checkout(state).await.expect("user lookup connection");
     let row = conn
@@ -393,6 +415,33 @@ async fn continuity_rule_validation_uses_the_house_422_envelope() {
     let mut oversized_note = item_rule(830011, 830012);
     oversized_note["note"] = json!("x".repeat(501));
     let (status, body) = create_rule(&state, &token, &csrf, oversized_note).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"], "Validation failed");
+
+    // A malformed body is the same house envelope, never axum's plain-text
+    // `Json` rejection (FastAPI parses the raw body itself).
+    let (status, body) = authed_raw(
+        &state,
+        "POST",
+        "/api/v1/continuity-rules/",
+        &token,
+        &csrf,
+        "{not json",
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"], "Validation failed");
+
+    // A mistyped field is rejected the same way.
+    let (status, body) = authed_raw(
+        &state,
+        "POST",
+        "/api/v1/continuity-rules/",
+        &token,
+        &csrf,
+        r#"{"source_type":"issue","source_id":"abc"}"#,
+    )
+    .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["detail"], "Validation failed");
 }

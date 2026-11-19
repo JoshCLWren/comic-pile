@@ -51,7 +51,7 @@ pub struct ConvergenceTarget {
     pub id: i32,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ContinuityRuleRequest {
     pub source_type: String,
@@ -908,6 +908,10 @@ mod tests {
         }
     }
 
+    fn json_body(request: &ContinuityRuleRequest) -> Bytes {
+        Bytes::from(serde_json::to_vec(request).expect("serialize request body"))
+    }
+
     fn assert_structured(error: ApiError, status: StatusCode, code: &str) -> Value {
         assert_eq!(error.status(), status, "{error}");
         let detail = error
@@ -956,6 +960,31 @@ mod tests {
             assert_eq!(error.detail(), "Validation failed");
             assert!(error.structured_detail().is_none());
         }
+    }
+
+    #[test]
+    fn malformed_bodies_map_to_the_house_validation_envelope() {
+        // FastAPI parses the body itself, so empty, malformed, mistyped and
+        // incomplete bodies are all `{"detail":"Validation failed"}` 422.
+        for raw in [
+            "",
+            "{not json",
+            "[]",
+            r#"{"source_type":"issue"}"#,
+            r#"{"source_type":"issue","source_id":"abc"}"#,
+        ] {
+            let error = parse_request(raw.as_bytes()).expect_err("malformed body is rejected");
+            assert_eq!(
+                error.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "raw={raw:?}"
+            );
+            assert_eq!(error.detail(), "Validation failed", "raw={raw:?}");
+            assert!(error.structured_detail().is_none(), "raw={raw:?}");
+        }
+        let parsed = parse_request(&serde_json::to_vec(&request("item_read")).unwrap())
+            .expect("well-formed body parses");
+        assert_eq!(parsed.source_id, 10);
     }
 
     #[test]
@@ -1010,7 +1039,7 @@ mod tests {
         let (status, Json(response)) = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
@@ -1039,7 +1068,7 @@ mod tests {
         let error = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 satisfaction_type: "not-a-satisfaction".to_string(),
@@ -1057,7 +1086,7 @@ mod tests {
     async fn duplicate_rule_returns_the_structured_exists_conflict() {
         let (state, user, _guard) = database_fixture().await;
         let body = || {
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
@@ -1078,7 +1107,7 @@ mod tests {
         let _first = create(
             State(state.clone()),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
@@ -1089,7 +1118,7 @@ mod tests {
         let error = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3002,
                 target_id: 3001,
                 ..request("item_read")
@@ -1106,7 +1135,7 @@ mod tests {
         let error = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 selected_member_issue_ids: vec![3001],
@@ -1144,7 +1173,7 @@ mod tests {
         let error = create(
             State(state),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
@@ -1167,7 +1196,7 @@ mod tests {
         let (_, Json(created)) = create(
             State(state.clone()),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
@@ -1180,7 +1209,7 @@ mod tests {
             State(state),
             user,
             Path(created.id),
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3002,
                 target_id: 3001,
                 note: Some("updated".to_string()),
@@ -1202,7 +1231,7 @@ mod tests {
         let (_, Json(created)) = create(
             State(state.clone()),
             user,
-            Json(ContinuityRuleRequest {
+            json_body(&ContinuityRuleRequest {
                 source_id: 3001,
                 target_id: 3002,
                 ..request("item_read")
