@@ -164,13 +164,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/taste/discoveries$",
-      "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/issues/creators$",
       "methods": [
         "GET",
