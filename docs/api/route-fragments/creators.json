@@ -8,7 +8,7 @@
   "defaults": {
     "runtime": "native-rust",
     "status": "native",
-    "owning_issue": null,
+    "owning_issue": 4836,
     "consumers": [
       "frontend/src/services/api-creators.ts",
       "frontend/src/services/creatorComparisonApi.ts",
@@ -24,88 +24,77 @@
       "method": "GET",
       "path": "/api/v1/creators",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/summaries",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/summaries$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/summaries$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/compare",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/compare$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/compare$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/discoveries",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/discoveries$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/discoveries$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/team-chemistry",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/team\\-chemistry$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/team\\-chemistry$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/(?!compare$|discoveries$|summaries$|team\\-chemistry$)[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/[^/]+/series/[^/]+/issues$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/[^/]+/series/[^/]+/issues$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/[^/]+/metrics/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/[^/]+/metrics/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/[^/]+/metrics/rating\\-distribution/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/[^/]+/metrics/rating\\-distribution/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/[^/]+/metrics/role\\-stats/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/[^/]+/metrics/role\\-stats/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/[^/]+/metrics/series\\-stats/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators/[^/]+/metrics/series\\-stats/[^/]+$"
     },
     {
       "bucket": "v1_operations",
