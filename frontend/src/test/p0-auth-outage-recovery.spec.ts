@@ -34,7 +34,7 @@ test.describe('Auth Outage Recovery', () => {
    * Mock every non-auth request the authenticated shell fires on `/` and
    * `/queue`: Queue reads (active/completed/excluded), the Roll bootstrap
    * chain (CSRF setup, reading-session resolution, bootstrap, die-state,
-   * eligible ids), prefs, taste, identity inbox and the reading graph.
+   * eligible ids, issue cards), prefs, taste, identity inbox and the reading graph.
    *
    * Any request left unmocked reaches the real backend with the fake token,
    * answers 401, and triggers a token refresh — which both breaks the
@@ -58,7 +58,43 @@ test.describe('Auth Outage Recovery', () => {
     })
     mockApi.get('/api/v2/auth/csrf').as('csrf').replyAlways(200, { csrf_token: 'test-csrf-token' })
     mockApi.post('/api/v2/reading-sessions').as('readingSession').replyAlways(200, { session_id: 1, created: true })
-    mockApi.get('/api/v2/roll/bootstrap').as('rollBootstrap').replyAlways(404, { detail: 'No active session' })
+    mockApi.get('/api/v2/roll/bootstrap').as('rollBootstrap').replyAlways(200, {
+      session_id: 1,
+      user_id: 1,
+      pending_thread_id: null,
+      last_rolled_result: null,
+      session_mode: {
+        active_bandwidth: 'balanced',
+        predicted_bandwidth: 'balanced',
+        bandwidth_confidence: null,
+        bandwidth_source: 'manual',
+        bandwidth_version: null,
+        active_intent: 'random',
+        predicted_intent: 'random',
+        intent_confidence: null,
+        intent_source: 'manual',
+        intent_version: null,
+        session_mode_correction_guidance: null,
+      },
+      active_thread: null,
+      roll_recovery: null,
+      bandwidth: {
+        predicted_bandwidth: 'balanced',
+        active_bandwidth: 'balanced',
+        confidence: null,
+        source: 'manual',
+        mode_version: null,
+      },
+      rollable: [],
+      pool_reason: 'no_series',
+      last_read: null,
+      snoozed_threads: [],
+      snoozed_count: 0,
+      snoozed_thread_ids: [],
+      skipped_thread_ids: [],
+      skipped_threads: [],
+      timezone: null,
+    })
     mockApi.get('/api/v2/roll/die-state').as('dieState').replyAlways(200, {
       die: 6,
       ladder: [4, 6, 8, 10, 12, 20],
@@ -66,6 +102,7 @@ test.describe('Auth Outage Recovery', () => {
       last_roll: null,
     })
     mockApi.get('/api/v2/roll/eligible-issue-ids').as('eligibleIssueIds').replyAlways(200, { die: 6, issue_ids: [] })
+    mockApi.post('/api/v2/issues/cards').as('issueCards').replyAlways(200, { cards: [] })
     mockApi.get('/api/v1/users/me/preferences').as('preferences').replyAlways(200, { theme: 'classic', user_id: 1 })
     mockApi.get('/api/v1/taste/discoveries').as('tasteDiscoveries').replyAlways(200, { discoveries: [], generated_at: '' })
   }
