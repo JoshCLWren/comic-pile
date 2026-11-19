@@ -607,9 +607,35 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+        // Creator API: v1 routes now route to native Rust v2 handlers (issue #4836)
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v1/creators/compare", get(native_dispatch))
+        .route("/api/v1/creators/discoveries", get(native_dispatch))
+        .route("/api/v1/creators/team-chemistry", get(native_dispatch))
+        .route("/api/v1/creators/{creator_key}", get(native_dispatch))
+        .route(
+            "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(native_dispatch),
+        )
+        // v2 routes (canonical API version)
         .route("/api/v2/creators", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
