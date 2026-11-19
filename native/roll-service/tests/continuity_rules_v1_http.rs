@@ -284,7 +284,9 @@ async fn continuity_rule_crud_is_native_wire_compatible() {
     );
 
     // Deleting the rule retires its compiled canonical edge.
-    let conn = db::checkout(&state).await.expect("edge retirement connection");
+    let conn = db::checkout(&state)
+        .await
+        .expect("edge retirement connection");
     let remaining: i64 = conn
         .query_one(
             "SELECT count(*) FROM dependencies
@@ -347,7 +349,9 @@ async fn continuity_rule_domain_errors_keep_python_structured_details() {
     // A historical inert cbl-order row must not be silently shadowed.
     seed_thread_issue(&state, user_id, 820003, 820021, "Collision", "1").await;
     seed_thread_issue(&state, user_id, 820004, 820022, "Collision", "2").await;
-    let conn = db::checkout(&state).await.expect("collision seed connection");
+    let conn = db::checkout(&state)
+        .await
+        .expect("collision seed connection");
     conn.batch_execute(
         "INSERT INTO dependencies (created_at, source_issue_id, target_issue_id, note)
          VALUES (NOW(), 820021, 820022, 'cbl-order:legacy-materialization');",
@@ -399,24 +403,8 @@ async fn continuity_rule_unowned_references_return_python_404_detail() {
     let (token, csrf) = register_and_login(&state, "cr-owner").await;
     register_and_login(&state, "cr-foreign").await;
     let foreign_user_id = user_id_for(&state, "cr-foreign").await;
-    seed_thread_issue(
-        &state,
-        foreign_user_id,
-        840001,
-        840011,
-        "Foreign",
-        "1",
-    )
-    .await;
-    seed_thread_issue(
-        &state,
-        foreign_user_id,
-        840002,
-        840012,
-        "Foreign",
-        "2",
-    )
-    .await;
+    seed_thread_issue(&state, foreign_user_id, 840001, 840011, "Foreign", "1").await;
+    seed_thread_issue(&state, foreign_user_id, 840002, 840012, "Foreign", "2").await;
 
     let (status, body) = create_rule(&state, &token, &csrf, item_rule(840011, 840012)).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");

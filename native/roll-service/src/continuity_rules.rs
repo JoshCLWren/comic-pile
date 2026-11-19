@@ -174,10 +174,9 @@ fn validate_request(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
     }
     if request.checkpoint_issue_id.is_some_and(|id| id <= 0)
         || request.selected_member_issue_ids.iter().any(|id| *id <= 0)
-        || request
-            .convergence_targets
-            .iter()
-            .any(|target| !matches!(target.node_type.as_str(), "issue" | "crossover") || target.id <= 0)
+        || request.convergence_targets.iter().any(|target| {
+            !matches!(target.node_type.as_str(), "issue" | "crossover") || target.id <= 0
+        })
     {
         return Err(validation_failed());
     }
@@ -1015,7 +1014,11 @@ mod tests {
         assert_eq!(response.target_id, 3002);
         assert_eq!(response.convergence_targets, Vec::new());
         assert!(response.created_at.contains('T'), "{}", response.created_at);
-        assert!(response.created_at.ends_with('Z'), "{}", response.created_at);
+        assert!(
+            response.created_at.ends_with('Z'),
+            "{}",
+            response.created_at
+        );
         assert_eq!(response.created_at, response.updated_at);
     }
 
@@ -1138,11 +1141,7 @@ mod tests {
         )
         .await
         .expect_err("inert cbl-order row cannot be silently shadowed");
-        let detail = assert_structured(
-            error,
-            StatusCode::CONFLICT,
-            "continuity_cbl_collision",
-        );
+        let detail = assert_structured(error, StatusCode::CONFLICT, "continuity_cbl_collision");
         assert!(
             detail["message"]
                 .as_str()
@@ -1284,8 +1283,10 @@ mod tests {
             "continuity_rule_not_compilable",
         );
         assert!(
-            detail["message"].as_str().is_some_and(|message| message
-                .starts_with("Converged rule has 1 non-issue prerequisite(s);")),
+            detail["message"]
+                .as_str()
+                .is_some_and(|message| message
+                    .starts_with("Converged rule has 1 non-issue prerequisite(s);")),
             "{detail}"
         );
     }
