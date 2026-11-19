@@ -959,5 +959,45 @@
     ],
     "module": "app.api.custom_cbl",
     "name": "delete_custom_cbl_overlap_decision"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:migrateToIssues",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "migrate_thread_to_issues"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "migrate_thread_to_issues_simple"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.thread",
+    "name": "set_current_issue"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue",
+    "name": "create_issues"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issues:reorder",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.issue",
+    "name": "reorder_issues"
   }
 ]

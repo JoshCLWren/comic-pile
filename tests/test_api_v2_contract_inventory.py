@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from scripts.generate_native_client import _method_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -197,6 +196,12 @@ def _service_callers(path: str, method_name: str | None) -> set[str]:
         if path_marker.search(source) or (method_marker and method_marker in source):
             callers.add(service.relative_to(ROOT).as_posix())
     return callers
+
+
+def _method_name(operation_id: str) -> str:
+    """Mirror scripts/generate_native_client.mjs method-name derivation."""
+    words = [word for word in operation_id.removesuffix("_documentation").split("_") if word]
+    return words[0] + "".join(word[:1].upper() + word[1:] for word in words[1:])
 
 
 def _native_method_names() -> dict[tuple[str, str], str]:

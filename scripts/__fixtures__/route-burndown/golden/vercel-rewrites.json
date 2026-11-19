@@ -1,5 +1,5 @@
 {
-  "generated_by": "scripts/generate_route_burndown.py",
+  "generated_by": "scripts/generate_route_burndown.mjs",
   "source_fragments": [
     "alpha",
     "unicode"

@@ -376,10 +376,7 @@ export interface SessionSnapshot {
   event_id?: number | null;
 }
 
-export interface SessionSnapshotsResponse {
-  session_id?: number;
-  snapshots: SessionSnapshot[];
-}
+export type SessionSnapshotsResponse = components['schemas']['SessionSnapshotsResponse'];
 
 export interface SessionDetails {
   session_id: number;

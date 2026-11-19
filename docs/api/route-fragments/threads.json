@@ -236,7 +236,8 @@
       "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -246,7 +247,8 @@
       "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -256,7 +258,8 @@
       "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4832
+      "owning_issue": 4832,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
