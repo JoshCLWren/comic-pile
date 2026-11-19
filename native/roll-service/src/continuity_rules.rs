@@ -514,10 +514,7 @@ pub async fn get(
     user: AuthenticatedUser,
     Path(rule_id): Path<String>,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
-    let rule_id: i32 = rule_id
-        .trim()
-        .parse()
-        .map_err(|_| validation_failed())?;
+    let rule_id: i32 = rule_id.trim().parse().map_err(|_| validation_failed())?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -618,10 +615,7 @@ pub async fn update(
     Path(rule_id): Path<String>,
     body: Bytes,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
-    let rule_id: i32 = rule_id
-        .trim()
-        .parse()
-        .map_err(|_| validation_failed())?;
+    let rule_id: i32 = rule_id.trim().parse().map_err(|_| validation_failed())?;
     let mut request: ContinuityRuleRequest =
         serde_json::from_slice(&body).map_err(|_| validation_failed())?;
     normalize_request(&mut request);
@@ -713,10 +707,7 @@ pub async fn delete(
     user: AuthenticatedUser,
     Path(rule_id): Path<String>,
 ) -> Result<Response, ApiError> {
-    let rule_id: i32 = rule_id
-        .trim()
-        .parse()
-        .map_err(|_| validation_failed())?;
+    let rule_id: i32 = rule_id.trim().parse().map_err(|_| validation_failed())?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
