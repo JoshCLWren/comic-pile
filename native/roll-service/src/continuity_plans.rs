@@ -4226,6 +4226,8 @@ pub fn link_dependency_documentation() {}
 pub fn unlink_dependency_documentation() {}
 #[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project", tag = "reading-orders", operation_id = "continuity_plans_project_to_reading_order", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionResult)), security(("HTTPBearer" = [])))]
 pub fn project_reading_order_documentation() {}
+#[utoipa::path(post, path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview", tag = "reading-orders", operation_id = "continuity_plans_project_preview", params(("plan_id" = i32, Path)), request_body = ReadingOrderProjectionRequest, responses((status = 200, body = ReadingOrderProjectionPreview)), security(("HTTPBearer" = [])))]
+pub fn project_preview_documentation() {}
 #[utoipa::path(post, path = "/api/v1/continuity-plans/release-sources/", tag = "continuity-plans", operation_id = "release_sources_create", request_body = ReleaseSourceCreate, responses((status = 201, body = ReleaseSourceResponse)), security(("HTTPBearer" = [])))]
 pub fn release_source_create_documentation() {}
 #[utoipa::path(get, path = "/api/v1/continuity-plans/{plan_id}/release-sources/", tag = "continuity-plans", operation_id = "release_sources_list", params(("plan_id" = i32, Path)), responses((status = 200, body = Vec<ReleaseSourceResponse>)), security(("HTTPBearer" = [])))]
