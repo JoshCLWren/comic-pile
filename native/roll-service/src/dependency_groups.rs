@@ -78,7 +78,8 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      t.notes, t.is_test, t.is_blocked, \
      to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS created_at, \
      t.total_issues, t.reading_progress, t.next_unread_issue_id, \
-     t.next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
+     (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id) AS next_unread_issue_number, \
+     t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
