@@ -21,7 +21,7 @@ describe('comicVineApi series import (#3445)', () => {
     await comicVineApi.importSeries({ comicvine_volume_id: 42, already_read_count: 0 })
 
     expect(post).toHaveBeenCalledWith(
-      '/v1/comicvine/series:import',
+      '/v2/comicvine/series:import',
       { comicvine_volume_id: 42, already_read_count: 0 },
       { timeout: SERIES_IMPORT_TIMEOUT_MS },
     )
@@ -42,7 +42,7 @@ describe('comicVineApi series import (#3445)', () => {
 
     const status = await comicVineApi.getSeriesImportStatus(42)
 
-    expect(get).toHaveBeenCalledWith('/v1/comicvine/series/42/import-status')
+    expect(get).toHaveBeenCalledWith('/v2/comicvine/series/42/import-status')
     expect(status.imported).toBe(true)
     expect(status.thread_id).toBe(501)
     expect(status.issue_count).toBe(12)
