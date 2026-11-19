@@ -456,6 +456,125 @@ pub async fn get_thread_detail(
     }))
 }
 
+/// Delete one owned thread and its dependent data.
+///
+/// Removes the thread together with its issues and reading history, ratings and
+/// events in one transaction, matching the queue delete dialog's promise.
+/// Referencing rows that would otherwise violate foreign keys (events, reading
+/// order items, tag assignments and continuity checkpoints on the thread's
+/// issues) are removed explicitly before the thread row is deleted.
+pub async fn delete_thread(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+) -> Result<StatusCode, ApiError> {
+    let mut connection = db::checkout(&state).await?;
+    let tx = connection
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Per-reader queue advisory lock first, then row locks (see AGENTS/brief).
+    queue::lock_queue(&tx, user.id()).await?;
+
+    let thread = tx
+        .query_opt(
+            "SELECT id FROM threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if thread.is_none() {
+        return Err(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            format!("Thread {thread_id} not found"),
+        ));
+    }
+
+    let issue_rows = tx
+        .query("SELECT id FROM issues WHERE thread_id = $1", &[&thread_id])
+        .await
+        .map_err(db::query_error)?;
+    let issue_ids: Vec<i32> = issue_rows.iter().map(|row| row.get(0)).collect();
+
+    tx.execute(
+        "UPDATE sessions SET pending_thread_id = NULL WHERE pending_thread_id = $1",
+        &[&thread_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Tag assignments are polymorphic (no foreign keys), so purge explicitly.
+    if issue_ids.is_empty() {
+        tx.execute(
+            "DELETE FROM tag_assignments WHERE target_type = 'Thread' AND target_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    } else {
+        tx.execute(
+            "DELETE FROM tag_assignments \
+             WHERE (target_type = 'Thread' AND target_id = $1) \
+                OR (target_type = 'Issue' AND target_id = ANY($2::int[]))",
+            &[&thread_id, &issue_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        // Continuity rule checkpoints reference issues with ON DELETE RESTRICT.
+        tx.execute(
+            "DELETE FROM continuity_rules \
+             WHERE user_id = $1 AND checkpoint_issue_id = ANY($2::int[])",
+            &[&user.id(), &issue_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    tx.execute(
+        "DELETE FROM reading_order_items WHERE thread_id = $1",
+        &[&thread_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    // Remove events that reference this thread directly so deletion succeeds even
+    // when the production constraint lacks ON DELETE CASCADE.
+    tx.execute("DELETE FROM events WHERE thread_id = $1", &[&thread_id])
+        .await
+        .map_err(db::query_error)?;
+
+    tx.execute(
+        "INSERT INTO events (type, user_id, thread_id, timestamp) VALUES ('delete', $1, NULL, NOW())",
+        &[&user.id()],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    tx.execute("DELETE FROM threads WHERE id = $1", &[&thread_id])
+        .await
+        .map_err(db::query_error)?;
+
+    tx.execute(
+        "WITH ranked AS ( \
+             SELECT id, row_number() OVER (ORDER BY queue_position, id) AS pos \
+             FROM threads \
+             WHERE user_id = $1 AND status = 'active' AND queue_position >= 1 \
+         ) \
+         UPDATE threads t SET queue_position = ranked.pos \
+         FROM ranked WHERE t.id = ranked.id",
+        &[&user.id()],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Read one page of the authenticated reader's completed threads.
 pub async fn list_completed_threads(
     State(state): State<Arc<AppState>>,
@@ -1306,6 +1425,21 @@ pub(crate) fn list_threads_documentation() {}
 )]
 #[allow(dead_code)]
 pub(crate) fn get_thread_detail_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/threads/{thread_id}",
+    tag = "threads",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    responses(
+        (status = 204, description = "Thread deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub(crate) fn delete_thread_documentation() {}
 
 #[utoipa::path(
     get,

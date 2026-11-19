@@ -4,7 +4,8 @@ import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import type { IssueCard } from '../services/issueCardsApi'
 import { ReadingPlanRecovery } from '../components/ReadingPlanRecovery'
-import { useState } from 'react'
+import ContainerQueueActions from '../components/ContainerQueueActions'
+import { useMemo, useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -258,6 +259,18 @@ export default function ReadingPlanDetailPage() {
   }
 
   const view = readerQuery.data
+  const memberThreads = useMemo(() => {
+    const byId = new Map<number, { id: number; title: string }>()
+    const issues = [
+      ...view.available_now,
+      ...view.blocked_next,
+      ...view.lanes.flatMap((lane) => lane.issues),
+    ]
+    for (const issue of issues) {
+      if (!byId.has(issue.thread_id)) byId.set(issue.thread_id, { id: issue.thread_id, title: issue.thread_title })
+    }
+    return Array.from(byId.values())
+  }, [view])
   const sourceNames = Object.fromEntries(view.sources.map((source) => [
     source.raw_source_path,
     displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
@@ -340,6 +353,13 @@ export default function ReadingPlanDetailPage() {
           )}
         </div>
       </header>
+
+      <ContainerQueueActions
+        sourceKind="reading_plan"
+        sourceId={view.plan_id}
+        sourceName={view.name}
+        memberThreads={memberThreads}
+      />
 
       <div
         className="surface-panel rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 sm:px-6 sm:py-4"

@@ -14,7 +14,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle, waitForRollPageReady } from './helpers'
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 }
 
@@ -33,7 +33,8 @@ async function pinDieFromHeader(page: Page, die: number): Promise<void> {
 async function openRatingView(page: Page, title: string): Promise<void> {
   await page.locator('#main-die-3d').click()
   await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-  await page.getByText(title).first().click()
+  // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+  await rollPoolThreadByTitle(page, title).click()
   await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 }
 

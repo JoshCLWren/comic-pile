@@ -16,7 +16,7 @@
 import { expect, type Page } from '@playwright/test'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { test } from './fixtures'
-import { createThread, gotoRollPage } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle } from './helpers'
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 }
 const PHONE_VIEWPORT = { width: 390, height: 844 }
@@ -112,7 +112,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Cover Modal Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Cover Modal Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -140,7 +140,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('No Cover Thread').first().click()
+    await rollPoolThreadByTitle(page, 'No Cover Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -165,7 +165,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('ComicVine Link Thread').first().click()
+    await rollPoolThreadByTitle(page, 'ComicVine Link Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -191,7 +191,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('No ComicVine Link Thread').first().click()
+    await rollPoolThreadByTitle(page, 'No ComicVine Link Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -220,7 +220,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Story Title Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Story Title Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -249,7 +249,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Normal Summary Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Normal Summary Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -275,7 +275,7 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Long Summary Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Long Summary Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -318,7 +318,7 @@ test.describe('issue #2768: creators and story arcs', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Creators Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Creators Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -354,7 +354,7 @@ test.describe('issue #2768: creators and story arcs', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Long Creators Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Long Creators Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -404,7 +404,7 @@ test.describe('issue #2768: creators and story arcs', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Story Arcs Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Story Arcs Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -447,7 +447,7 @@ test.describe('issue #2768: creators and story arcs', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Tablet Arc Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Tablet Arc Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -484,7 +484,7 @@ test.describe('issue #2768: responsive and edge cases', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Phone Overflow Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Phone Overflow Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {
@@ -517,7 +517,7 @@ test.describe('issue #2768: responsive and edge cases', () => {
     await gotoRollPage(page)
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-    await page.getByText('Sparse Metadata Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Sparse Metadata Thread').click()
     await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
     await page.evaluate(async () => {
       if (document.fonts) {

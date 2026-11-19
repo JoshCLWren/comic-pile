@@ -12,6 +12,7 @@ import { test } from './fixtures'
 import {
   createThread,
   gotoQueue,
+  rollPoolThreadByTitle,
   waitForQueueReady,
   waitForRollPageReady,
 } from './helpers'
@@ -94,7 +95,8 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Mobile Rate Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Mobile Rate Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     await page.locator('#rating-input').fill('3')

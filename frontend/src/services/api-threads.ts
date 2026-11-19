@@ -1,5 +1,8 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
+  BulkQueueExclusionRequest,
+  BulkQueueExclusionResponse,
+  BulkQueueRestoreResponse,
   CheckPotentialDuplicatesRequest,
   CheckPotentialDuplicatesResponse,
   ReactivateThreadPayload,
@@ -61,6 +64,12 @@ export function createThreadsApi(client: HttpClient) {
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
     exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
     restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
+    bulkExclude: (data: BulkQueueExclusionRequest) =>
+      client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', data),
+    bulkRestore: (threadIds: number[]) =>
+      client.post<BulkQueueRestoreResponse>('/v2/queue-exclusions/restore', { thread_ids: threadIds }),
+    restoreExclusionGroup: (groupId: number) =>
+      client.post<BulkQueueRestoreResponse>(`/v2/queue-exclusion-groups/${groupId}/restore`),
     reactivate: (data: ReactivateThreadPayload) =>
       client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
     listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),

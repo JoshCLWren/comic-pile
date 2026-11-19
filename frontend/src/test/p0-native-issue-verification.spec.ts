@@ -17,7 +17,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle, waitForRollPageReady } from './helpers'
 import type { IssueReadRateResponse } from '../generated/nativeV2Client'
 
 test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => {
@@ -56,7 +56,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
 
     // Click on the thread to open the rating view
-    await page.getByText('Native Patch Verification Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Native Patch Verification Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit a rating
@@ -172,7 +173,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
 
     // Click on the thread - this triggers a roll_offer source rating
-    await page.getByText('Roll Offer Rating Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Roll Offer Rating Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit a 4.5 rating (above threshold, should trigger die stepping)
@@ -210,7 +212,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // Roll and select
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Idempotency Retry Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Idempotency Retry Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     // Submit first rating
@@ -258,7 +261,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Schema Compliance Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Schema Compliance Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const ratingInput = page.locator('#rating-input')

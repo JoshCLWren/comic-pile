@@ -18,7 +18,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle } from './helpers'
 
 const REPORTED_TABLET_VIEWPORT = { width: 800, height: 1094 }
 const ARC_ISSUE_COUNT = 14
@@ -144,7 +144,8 @@ async function enterRatingViewWithLongArc(page: Page): Promise<void> {
   await gotoRollPage(page)
   await page.locator('#main-die-3d').click()
   await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-  await page.getByText('Story Arc Thread').first().click()
+  // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+  await rollPoolThreadByTitle(page, 'Story Arc Thread').click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
   // The Story Arcs disclosure auto-expands once ComicVine intelligence loads.

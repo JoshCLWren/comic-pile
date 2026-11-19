@@ -23,6 +23,8 @@ import {
   gotoRollPage,
   gotoQueue,
   openThreadActions,
+  queueThreadTitle,
+  rollPoolThreadByTitle,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
@@ -54,7 +56,8 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Snooze Me Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Snooze Me Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const offer = page.waitForResponse(
@@ -93,14 +96,16 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Queue Snooze Thread').first().click()
+    // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+    await rollPoolThreadByTitle(page, 'Queue Snooze Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
     await expect.poll(() => cookieSnoozes(page)).toContain(snoozed.id)
 
     await gotoQueue(page)
-    await page.getByText('Queue Snooze Thread').first().waitFor({ state: 'visible', timeout: 10000 })
+    // Use queueThreadTitle for Queue page navigation
+    await queueThreadTitle(page, 'Queue Snooze Thread').waitFor({ state: 'visible', timeout: 10000 })
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Queue Snooze Thread' })
     await expect(threadItem).toBeVisible()
   })

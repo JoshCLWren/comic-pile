@@ -5,7 +5,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, gotoRollPage } from './helpers'
+import { createThread, gotoRollPage, rollPoolThreadByTitle } from './helpers'
 
 const TABLET_VIEWPORT = { width: 800, height: 1094 }
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
@@ -76,7 +76,8 @@ async function enterRatingView(page: Page, title: string): Promise<void> {
   await gotoRollPage(page)
   await page.locator('#main-die-3d').click()
   await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-  await page.getByText(title).first().click()
+  // Use rollPoolThreadByTitle to avoid duplicate-advisory title collisions
+  await rollPoolThreadByTitle(page, title).click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
   await page.evaluate(async () => {

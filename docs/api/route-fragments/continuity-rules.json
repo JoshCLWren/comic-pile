@@ -4,9 +4,9 @@
     "^/api/v1/continuity\\-rules(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
-    "owning_issue": null,
+    "runtime": "native-rust",
+    "status": "live",
+    "owning_issue": 4848,
     "consumers": [
       "frontend/src/services/api-continuity-rules.ts"
     ]

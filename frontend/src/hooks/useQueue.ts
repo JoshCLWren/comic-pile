@@ -25,8 +25,8 @@ export const EXCLUDED_PAGE_SIZE = 50
 /** Queue API surface the movement mutations depend on. */
 export type QueueApi = Pick<typeof queueApi, 'moveToPosition' | 'moveToFront' | 'moveToBack' | 'shuffle'>
 
-/** Thread API surface the restore mutation depends on. */
-export type RestoreThreadApi = Pick<typeof threadsApi, 'restore'>
+/** Thread API surface the restore mutations depend on. */
+export type RestoreThreadApi = Pick<typeof threadsApi, 'restore' | 'restoreExclusionGroup'>
 
 /** Cache reconciliation run after a queue movement mutation succeeds. */
 export type QueueInvalidateFn = (client: QueryClient) => Promise<void>
@@ -315,6 +315,30 @@ export function useRestoreThread(deps: RestoreThreadDeps = {}) {
     },
     onError: (error) => {
       console.error('Failed to restore thread to queue:', getApiErrorDetail(error))
+    },
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
+}
+
+/**
+ * Restores a bulk exclusion group to the queue (issue #5435).
+ *
+ * @param deps - Optional injected threads API and cache-invalidation seam.
+ */
+export function useRestoreExclusionGroup(deps: RestoreThreadDeps = {}) {
+  const { api = threadsApi, invalidate = invalidateAfterQueueMutation } = deps
+  const mutation = useMutation({
+    mutationFn: async (groupId: number) => {
+      await api.restoreExclusionGroup(groupId)
+      await invalidate(queryClient)
+    },
+    onError: (error) => {
+      console.error('Failed to restore exclusion group:', getApiErrorDetail(error))
     },
   })
 

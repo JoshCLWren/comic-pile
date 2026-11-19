@@ -96,6 +96,20 @@ export function queueThreadTitle(page: Page, title: string): Locator {
   return page.getByText(title, { exact: true })
 }
 
+/**
+ * Roll pool thread locator by title.
+ *
+ * Uses the queue-thread-item role button with aria-label matching the title,
+ * avoiding duplicate-advisory title collisions when the same title appears in
+ * multiple contexts (advisory notes, snoozed threads, etc.).
+ */
+export function rollPoolThreadByTitle(page: Page, title: string): Locator {
+  return page.getByRole('button', {
+    name: new RegExp(`^Die face \\d+: ${title}(,|:|$)`, 'i'),
+    exact: false,
+  })
+}
+
 /** Live geometry of the production page scroller (`#root`, not the window). */
 export type AppScrollState = {
   windowScrollY: number
