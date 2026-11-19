@@ -117,7 +117,6 @@ async fn setup() -> (
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = isolated_test_database_url().await;
-    eprintln!("ISSUE_IDENTITY_URL={}", url);
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
