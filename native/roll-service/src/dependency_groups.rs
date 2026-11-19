@@ -33,11 +33,14 @@
 //!   and refresh the denormalized blocked-state flags in the same transaction.
 
 use crate::{
-    auth::AuthenticatedUser, db, issue_read::IssueDetailResponse, issue_service,
+    auth::AuthenticatedUser, db, issue_read::IssueDetailResponse, issue_service, queue,
     threads::ThreadDetailResponse, ApiError, AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{
+        rejection::{JsonRejection, PathRejection},
+        Path, State,
+    },
     http::StatusCode,
     Json,
 };
@@ -151,6 +154,57 @@ pub struct DependencyGroupOrderItem {
     pub sequence_order: i32,
 }
 
+fn validate_group_name_schema(name: &str) -> Result<(), ApiError> {
+    let len = name.chars().count();
+    if len == 0 || len > MAX_GROUP_NAME_CHARS {
+        return Err(validation_failed());
+    }
+    Ok(())
+}
+
+fn validate_member_create_request(
+    request: &DependencyGroupMemberCreateRequest,
+) -> Result<(), ApiError> {
+    if (request.thread_id.is_none()) == (request.issue_id.is_none()) {
+        return Err(validation_failed());
+    }
+    if request.thread_id.is_some_and(|id| id <= 0) {
+        return Err(validation_failed());
+    }
+    if request.issue_id.is_some_and(|id| id <= 0) {
+        return Err(validation_failed());
+    }
+    if request.sequence_order.is_some_and(|order| order < 1) {
+        return Err(validation_failed());
+    }
+    Ok(())
+}
+
+fn validate_issue_range_request(
+    request: &DependencyGroupIssueRangeCreateRequest,
+) -> Result<(), ApiError> {
+    if request.thread_id <= 0 || request.start_position <= 0 || request.end_position <= 0 {
+        return Err(validation_failed());
+    }
+    if request.end_position < request.start_position {
+        // Python schema model_validator rejects this as a validation error.
+        return Err(validation_failed());
+    }
+    Ok(())
+}
+
+fn validate_order_request(request: &DependencyGroupOrderUpdateRequest) -> Result<(), ApiError> {
+    if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
+        return Err(validation_failed());
+    }
+    for item in &request.items {
+        if item.issue_id <= 0 || item.sequence_order <= 0 {
+            return Err(validation_failed());
+        }
+    }
+    Ok(())
+}
+
 /// Wire response mirroring the Python `DependencyGroupIssueRangeResponse`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DependencyGroupIssueRangeResponse {
@@ -253,6 +307,36 @@ fn conflict(detail: impl Into<String>) -> ApiError {
     ApiError::Conflict(detail.into())
 }
 
+/// Production `RequestValidationError` body: `{"detail": "Validation failed"}`.
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
+fn parse_path_i32(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiError> {
+    let Path(value) = raw.map_err(|_| validation_failed())?;
+    value.trim().parse::<i32>().map_err(|_| validation_failed())
+}
+
+fn parse_path_i32_pair(
+    raw: Result<Path<(String, String)>, PathRejection>,
+) -> Result<(i32, i32), ApiError> {
+    let Path((left, right)) = raw.map_err(|_| validation_failed())?;
+    let left = left
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| validation_failed())?;
+    let right = right
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| validation_failed())?;
+    Ok((left, right))
+}
+
+fn parse_json<T>(raw: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
+    raw.map(|Json(value)| value)
+        .map_err(|_| validation_failed())
+}
+
 /// Inclusive range length computed in `i64` so request-supplied `i32` bounds
 /// cannot overflow the size guard (Python uses unbounded integers here).
 fn inclusive_range_size(start: i32, end: i32) -> i64 {
@@ -262,7 +346,7 @@ fn inclusive_range_size(start: i32, end: i32) -> i64 {
 /// Strip and validate a group name (Python `app/services/dependency_group_service.py::_normalize_name`).
 fn normalize_group_name(name: &str) -> Result<String, ApiError> {
     let normalized = name.trim();
-    if normalized.chars().count() == 0 {
+    if normalized.is_empty() {
         return Err(unprocessable("Group name must not be blank"));
     }
     if normalized.chars().count() > MAX_GROUP_NAME_CHARS {
@@ -346,7 +430,7 @@ fn crossover_progress(
         }
         let remaining = unread_counts.get(thread_id).copied().unwrap_or(0);
         total_issues += i64::from(*total);
-        read_issues += i64::from(*total) - remaining;
+        read_issues += (i64::from(*total) - remaining).max(0);
     }
     for member in memberships {
         let Some(issue_id) = member.issue_id else {
@@ -799,8 +883,10 @@ pub async fn list_groups(
 pub async fn create_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(request): Json<DependencyGroupCreateRequest>,
+    request: Result<Json<DependencyGroupCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    let request = parse_json(request)?;
+    validate_group_name_schema(&request.name)?;
     let name = normalize_group_name(&request.name)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
@@ -852,8 +938,9 @@ async fn create_group_tx(
 pub async fn list_thread_groups(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(thread_id): Path<i32>,
+    thread_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
+    let thread_id = parse_path_i32(thread_id)?;
     let connection = db::checkout(&state).await?;
     let owned = connection
         .query_opt(OWNED_THREAD_SQL, &[&thread_id, &user.id()])
@@ -880,8 +967,9 @@ pub async fn list_thread_groups(
 pub async fn get_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
+    group_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<DependencyGroupResponse>, ApiError> {
+    let group_id = parse_path_i32(group_id)?;
     let connection = db::checkout(&state).await?;
     let group = owned_group(&**connection, group_id, user.id())
         .await?
@@ -895,8 +983,9 @@ pub async fn get_group(
 pub async fn get_group_detail(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
+    group_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
+    let group_id = parse_path_i32(group_id)?;
     let connection = db::checkout(&state).await?;
     let group = owned_group(&**connection, group_id, user.id())
         .await?
@@ -974,9 +1063,12 @@ pub async fn get_group_detail(
 pub async fn update_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
-    Json(request): Json<DependencyGroupUpdateRequest>,
+    group_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<DependencyGroupUpdateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    let group_id = parse_path_i32(group_id)?;
+    let request = parse_json(request)?;
+    validate_group_name_schema(&request.name)?;
     let name = normalize_group_name(&request.name)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
@@ -1045,8 +1137,9 @@ async fn update_group_tx(
 pub async fn delete_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
+    group_id: Result<Path<String>, PathRejection>,
 ) -> Result<StatusCode, ApiError> {
+    let group_id = parse_path_i32(group_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1072,6 +1165,7 @@ async fn delete_group_tx(
     group_id: i32,
     user_id: i32,
 ) -> Result<(), ApiError> {
+    queue::lock_queue(tx, user_id).await?;
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
@@ -1090,9 +1184,12 @@ async fn delete_group_tx(
 pub async fn add_issue_range(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
-    Json(request): Json<DependencyGroupIssueRangeCreateRequest>,
+    group_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<DependencyGroupIssueRangeCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<DependencyGroupIssueRangeResponse>), ApiError> {
+    let group_id = parse_path_i32(group_id)?;
+    let request = parse_json(request)?;
+    validate_issue_range_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1103,7 +1200,6 @@ pub async fn add_issue_range(
     let result = add_issue_range_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok(response) => {
-            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             Ok((StatusCode::OK, Json(response)))
         }
@@ -1120,6 +1216,7 @@ async fn add_issue_range_tx(
     user_id: i32,
     request: &DependencyGroupIssueRangeCreateRequest,
 ) -> Result<DependencyGroupIssueRangeResponse, ApiError> {
+    queue::lock_queue(tx, user_id).await?;
     if request.end_position < request.start_position {
         return Err(unprocessable(
             "end_position must be greater than or equal to start_position",
@@ -1194,6 +1291,7 @@ async fn add_issue_range_tx(
         .copied()
         .filter(|id| !added_set.contains(id))
         .collect();
+    issue_service::refresh_blocked_threads(tx, user_id).await?;
     Ok(DependencyGroupIssueRangeResponse {
         thread_id: request.thread_id,
         start_position: request.start_position,
@@ -1207,9 +1305,12 @@ async fn add_issue_range_tx(
 pub async fn add_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
-    Json(request): Json<DependencyGroupMemberCreateRequest>,
+    group_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<DependencyGroupMemberCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<DependencyGroupMemberResponse>), ApiError> {
+    let group_id = parse_path_i32(group_id)?;
+    let request = parse_json(request)?;
+    validate_member_create_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1220,7 +1321,6 @@ pub async fn add_member(
     let result = add_member_tx(&tx, group_id, user.id(), &request).await;
     match result {
         Ok((member, thread_id, issue_id, _sequence_order)) => {
-            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             let thread_ids: BTreeSet<i32> = thread_id.into_iter().collect();
             let issue_ids: BTreeSet<i32> = issue_id.into_iter().collect();
@@ -1249,6 +1349,7 @@ async fn add_member_tx(
     user_id: i32,
     request: &DependencyGroupMemberCreateRequest,
 ) -> Result<(GroupMemberInput, Option<i32>, Option<i32>, Option<i32>), ApiError> {
+    queue::lock_queue(tx, user_id).await?;
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
@@ -1303,6 +1404,7 @@ async fn add_member_tx(
             }
             db::query_error(error)
         })?;
+    issue_service::refresh_blocked_threads(tx, user_id).await?;
     Ok((
         GroupMemberInput {
             id: row.get(0),
@@ -1321,8 +1423,9 @@ async fn add_member_tx(
 pub async fn remove_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path((group_id, member_id)): Path<(i32, i32)>,
+    path: Result<Path<(String, String)>, PathRejection>,
 ) -> Result<StatusCode, ApiError> {
+    let (group_id, member_id) = parse_path_i32_pair(path)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1333,7 +1436,6 @@ pub async fn remove_member(
     let result = remove_member_tx(&tx, group_id, member_id, user.id()).await;
     match result {
         Ok(()) => {
-            issue_service::refresh_blocked_threads(&tx, user.id()).await?;
             tx.commit().await.map_err(db::query_error)?;
             Ok(StatusCode::NO_CONTENT)
         }
@@ -1350,6 +1452,7 @@ async fn remove_member_tx(
     member_id: i32,
     user_id: i32,
 ) -> Result<(), ApiError> {
+    queue::lock_queue(tx, user_id).await?;
     if owned_group(tx, group_id, user_id).await?.is_none() {
         return Err(ApiError::NotFound(format!("Group {group_id} not found")));
     }
@@ -1376,6 +1479,7 @@ async fn remove_member_tx(
     if deleted == 0 {
         return Err(ApiError::NotFound(format!("Member {member_id} not found")));
     }
+    issue_service::refresh_blocked_threads(tx, user_id).await?;
     Ok(())
 }
 
@@ -1383,9 +1487,12 @@ async fn remove_member_tx(
 pub async fn set_group_order(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
-    Json(request): Json<DependencyGroupOrderUpdateRequest>,
+    group_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<DependencyGroupOrderUpdateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    let group_id = parse_path_i32(group_id)?;
+    let request = parse_json(request)?;
+    validate_order_request(&request)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection
         .build_transaction()
@@ -1414,6 +1521,7 @@ async fn set_group_order_tx(
     user_id: i32,
     request: &DependencyGroupOrderUpdateRequest,
 ) -> Result<GroupRecord, ApiError> {
+    queue::lock_queue(tx, user_id).await?;
     if request.items.is_empty() || request.items.len() > MAX_ORDER_ITEMS {
         return Err(unprocessable(format!(
             "The crossover order must contain between 1 and {MAX_ORDER_ITEMS} items"
@@ -1512,8 +1620,9 @@ async fn set_group_order_tx(
 pub async fn list_crossover_plans(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(group_id): Path<i32>,
+    group_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
+    let group_id = parse_path_i32(group_id)?;
     let connection = db::checkout(&state).await?;
     let group = owned_group(&**connection, group_id, user.id())
         .await?
@@ -1521,6 +1630,306 @@ pub async fn list_crossover_plans(
     let _ = group;
     let plans = linked_plans(&connection, group_id, user.id()).await?;
     Ok(Json(plans))
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI documentation
+// ---------------------------------------------------------------------------
+
+/// Documentation-only operation for listing reading-order groups.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list",
+    responses(
+        (status = 200, description = "Owned groups with memberships", body = Vec<DependencyGroupResponse>),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_groups_documentation() {}
+
+/// Documentation-only operation for creating a reading-order group.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_create",
+    request_body = DependencyGroupCreateRequest,
+    responses(
+        (status = 201, description = "Created group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_group_documentation() {}
+
+/// Documentation-only operation for listing groups for a thread.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list_thread_groups",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    responses(
+        (status = 200, description = "Groups containing the thread or its issues", body = Vec<DependencyGroupSummary>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_thread_groups_documentation() {}
+
+/// Documentation-only operation for fetching one group.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_get",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Owned group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_group_documentation() {}
+
+/// Documentation-only operation for renaming one group.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_update",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupUpdateRequest,
+    responses(
+        (status = 200, description = "Renamed group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn update_group_documentation() {}
+
+/// Documentation-only operation for deleting one group.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_delete",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 204, description = "Group deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_group_documentation() {}
+
+/// Documentation-only operation for fetching enriched group detail.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}/detail",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_get_detail",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_group_detail_documentation() {}
+
+/// Documentation-only operation for adding an issue-position range.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_add_issue_range",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupIssueRangeCreateRequest,
+    responses(
+        (status = 200, description = "Range membership result", body = DependencyGroupIssueRangeResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group or thread not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn add_issue_range_documentation() {}
+
+/// Documentation-only operation for adding a group member.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/{group_id}/members",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_add_member",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupMemberCreateRequest,
+    responses(
+        (status = 201, description = "Created membership", body = DependencyGroupMemberResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group, thread, or issue not found"),
+        (status = 409, description = "This member is already in the group"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn add_member_documentation() {}
+
+/// Documentation-only operation for removing a group member.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_remove_member",
+    params(
+        ("group_id" = i32, Path, description = "Owned group identifier"),
+        ("member_id" = i32, Path, description = "Membership identifier")
+    ),
+    responses(
+        (status = 204, description = "Membership removed"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group or member not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn remove_member_documentation() {}
+
+/// Documentation-only operation for setting crossover order.
+#[utoipa::path(
+    put,
+    path = "/api/v1/reading-order-groups/{group_id}/order",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_set_order",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupOrderUpdateRequest,
+    responses(
+        (status = 200, description = "Updated group with reordered memberships", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group, issue, or membership not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn set_group_order_documentation() {}
+
+/// Documentation-only operation for listing linked continuity plans.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}/plans",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_list_plans",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Linked continuity plans", body = Vec<DependencyGroupSummary>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_crossover_plans_documentation() {}
+
+/// OpenAPI document for the native same-path reading-order-group surface.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native same-path reading-order-groups API",
+        version = "1.0.0",
+        description = "Generated contract for the native reading-order-group handlers that retain their original method and path."
+    ),
+    paths(
+        list_groups_documentation,
+        create_group_documentation,
+        list_thread_groups_documentation,
+        get_group_documentation,
+        update_group_documentation,
+        delete_group_documentation,
+        get_group_detail_documentation,
+        add_issue_range_documentation,
+        add_member_documentation,
+        remove_member_documentation,
+        set_group_order_documentation,
+        list_crossover_plans_documentation
+    ),
+    components(schemas(
+        DependencyGroupCreateRequest,
+        DependencyGroupUpdateRequest,
+        DependencyGroupMemberCreateRequest,
+        DependencyGroupIssueRangeCreateRequest,
+        DependencyGroupOrderUpdateRequest,
+        DependencyGroupOrderItem,
+        DependencyGroupIssueRangeResponse,
+        DependencyGroupMemberResponse,
+        DependencyGroupResponse,
+        DependencyGroupSummary,
+        DependencyGroupDetailMemberResponse,
+        DependencyGroupDetailResponse
+    )),
+    modifiers(&DependencyGroupsSecurityAddon)
+)]
+pub struct DependencyGroupsApi;
+
+struct DependencyGroupsSecurityAddon;
+impl utoipa::Modify for DependencyGroupsSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
+/// Emit the same-path native reading-order-groups contract.
+pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    DependencyGroupsApi::openapi()
 }
 
 #[cfg(test)]
@@ -1593,6 +2002,19 @@ mod tests {
             crossover_progress(&[], &empty_threads, &empty_issues, &empty_unread),
             (0, 0, "0%".to_string())
         );
+        // Python floors read progress at zero when another writer has added
+        // unread issues since the thread total was read.
+        let skew_threads: BTreeMap<i32, Option<i32>> = BTreeMap::from([(10, Some(3))]);
+        let skew_unread: BTreeMap<i32, i64> = BTreeMap::from([(10, 4_i64)]);
+        assert_eq!(
+            crossover_progress(
+                &[member(1, Some(10), None)],
+                &skew_threads,
+                &empty_issues,
+                &skew_unread
+            ),
+            (0, 3, "0%".to_string())
+        );
     }
 
     #[test]
@@ -1656,7 +2078,7 @@ mod tests {
         let status = remove_member(
             State(state.clone()),
             AuthenticatedUser::for_test(7),
-            Path((101, 201)),
+            Ok(Path(("101".to_string(), "201".to_string()))),
         )
         .await
         .expect("remove member");
@@ -1682,7 +2104,7 @@ mod tests {
         let error = remove_member(
             State(state.clone()),
             AuthenticatedUser::for_test(8),
-            Path((102, 202)),
+            Ok(Path(("102".to_string(), "202".to_string()))),
         )
         .await
         .expect_err("foreign group must be hidden");
@@ -1768,8 +2190,8 @@ mod tests {
         let response = set_group_order(
             State(state.clone()),
             AuthenticatedUser::for_test(7),
-            Path(101),
-            Json(DependencyGroupOrderUpdateRequest {
+            Ok(Path("101".to_string())),
+            Ok(Json(DependencyGroupOrderUpdateRequest {
                 items: vec![
                     DependencyGroupOrderItem {
                         issue_id: 21,
@@ -1780,7 +2202,7 @@ mod tests {
                         sequence_order: 2,
                     },
                 ],
-            }),
+            })),
         )
         .await
         .expect("set group order");
@@ -1812,16 +2234,37 @@ mod tests {
         let error = set_group_order(
             State(state.clone()),
             AuthenticatedUser::for_test(8),
-            Path(101),
-            Json(DependencyGroupOrderUpdateRequest {
+            Ok(Path("101".to_string())),
+            Ok(Json(DependencyGroupOrderUpdateRequest {
                 items: vec![DependencyGroupOrderItem {
                     issue_id: 21,
                     sequence_order: 1,
                 }],
-            }),
+            })),
         )
         .await
         .expect_err("foreign group must be hidden");
         assert_eq!(ApiError::status(&error), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn contract_documents_every_operation_and_stays_current() {
+        let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
+        for path in [
+            "/api/v1/reading-order-groups/",
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            "/api/v1/reading-order-groups/{group_id}/members",
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            "/api/v1/reading-order-groups/{group_id}/order",
+            "/api/v1/reading-order-groups/{group_id}/plans",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
+        let generated = dependency_groups_openapi().to_pretty_json().unwrap();
+        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
