@@ -1072,118 +1072,6 @@ export interface paths {
         patch: operations["update_legacy_dependency"];
         trace?: never;
     };
-    "/api/v1/identity-inbox": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/search/issues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["search_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["confirm_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/defer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["defer_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["reject_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-inbox/{mapping_id}/skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["skip_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issue-identity/cbl-sources": {
         parameters: {
             query?: never;
@@ -1352,26 +1240,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/issues/{issue_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation-only operation for the mounted single-issue read.
-         * @description Return one owner-scoped issue. Wire parity with Python GET /api/v1/issues/{issue_id}: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.
-         */
-        get: operations["get_issue_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issues/{issue_id}/comicvine": {
         parameters: {
             query?: never;
@@ -1382,128 +1250,6 @@ export interface paths {
         get: operations["issue_intelligence_docs___api_v1_issues__issue_id__comicvine"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}/dependencies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation-only operation for the mounted issue-dependencies read.
-         * @description Return owner-scoped incoming and outgoing dependency edges for one issue. Wire parity with Python GET /api/v1/issues/{issue_id}/dependencies: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
-         */
-        get: operations["get_issue_dependencies_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}/reader-context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for reader context. */
-        get: operations["issue_read_state_reader_context"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:markRead": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:markRead`. */
-        post: operations["issue_read_state_mark_read"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:markUnread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:markUnread`. */
-        post: operations["issue_read_state_mark_unread"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues/{issue_id}:move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:move`. */
-        post: operations["issue_read_state_move"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues:bulkMarkRead": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:bulkMarkRead`. */
-        post: operations["issue_read_state_bulk_mark_read"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issues:bulkMarkUnread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for `:bulkMarkUnread`. */
-        post: operations["issue_read_state_bulk_mark_unread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3110,6 +2856,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/identity-inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/issue-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirm_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/deferrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["defer_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/rejections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/identity-inbox/{mapping_id}/skips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["skip_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-marker-removals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for removing read markers in bulk. */
+        post: operations["issue_read_state_bulk_mark_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-markers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for creating read markers in bulk. */
+        post: operations["issue_read_state_bulk_mark_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -3134,7 +3026,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only operation for the mounted single-issue read.
+         * @description Return one owner-scoped issue: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.
+         */
+        get: operations["get_issue_documentation"];
         put?: never;
         post?: never;
         /**
@@ -3156,6 +3052,78 @@ export interface paths {
             cookie?: never;
         };
         get: operations["issue_intelligence_docs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted issue-dependencies read.
+         * @description Return owner-scoped incoming and outgoing dependency edges for one issue: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
+         */
+        get: operations["get_issue_dependencies_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Documentation-only operation for setting an issue position. */
+        put: operations["issue_read_state_move"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/read-markers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for creating an issue read marker. */
+        post: operations["issue_read_state_mark_read"];
+        /** Documentation-only operation for deleting an issue read marker. */
+        delete: operations["issue_read_state_mark_unread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issues/{issue_id}/reader-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reader context. */
+        get: operations["issue_read_state_reader_context"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6283,7 +6251,7 @@ export interface components {
             /** Format: int32 */
             total_count: number;
         };
-        /** @description Request body for `POST /api/v1/issues/{issue_id}:move`. */
+        /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
         IssueMoveRequest: {
             /**
              * Format: int32
@@ -11875,169 +11843,6 @@ export interface operations {
             };
         };
     };
-    list_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-        };
-    };
-    search_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
-                };
-            };
-        };
-    };
-    get_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-        };
-    };
-    confirm_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    defer_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    reject_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionRequest"];
-            };
-        };
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
-    skip_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mapping id */
-                mapping_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description ok */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-        };
-    };
     discover_cbl_source_lists_documentation: {
         parameters: {
             query?: {
@@ -12482,50 +12287,6 @@ export interface operations {
             };
         };
     };
-    get_issue_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueDetailResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     issue_intelligence_docs___api_v1_issues__issue_id__comicvine: {
         parameters: {
             query?: never;
@@ -12556,380 +12317,6 @@ export interface operations {
             };
             /** @description Issue is not owned by the reader */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_issue_dependencies_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue dependencies */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IssueDependenciesResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_reader_context: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bounded reader context */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReaderContextResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_mark_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue marked read and the thread counters refreshed */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue is already marked as read */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_mark_unread: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Issue marked unread; a completed thread is reactivated */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue is already marked as unread */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_move: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Issue identifier */
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueMoveRequest"];
-            };
-        };
-        responses: {
-            /** @description Issue moved within its thread */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue or anchor issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_bulk_mark_read: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueBulkRequest"];
-            };
-        };
-        responses: {
-            /** @description Every issue marked read atomically */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An issue is already marked as read */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    issue_read_state_bulk_mark_unread: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IssueBulkRequest"];
-            };
-        };
-        responses: {
-            /** @description Every issue marked unread atomically */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An issue is already marked as unread */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17104,6 +16491,283 @@ export interface operations {
             };
         };
     };
+    list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    search_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
+                };
+            };
+        };
+    };
+    get_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    confirm_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    defer_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    reject_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    skip_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    issue_read_state_bulk_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked unread atomically */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_bulk_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked read atomically */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_cards_documentation: {
         parameters: {
             query?: never;
@@ -17128,6 +16792,50 @@ export interface operations {
             };
             /** @description Invalid or unbounded issue id list */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17262,6 +16970,266 @@ export interface operations {
             };
             /** @description Issue is not owned by the reader */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue moved within its thread */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked read and the thread counters refreshed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked unread; a completed thread is reactivated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_reader_context: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded reader context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderContextResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
