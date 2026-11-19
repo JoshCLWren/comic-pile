@@ -2,7 +2,9 @@
 //! Database tests for the migration runner. Each test creates and drops its own
 //! scratch database on the server named by `MIGRATE_TEST_DATABASE_URL`.
 
-use comicpile_migrate::{checksum, connect, run, BASELINE_ALEMBIC_HEAD, MIGRATIONS};
+use comicpile_migrate::{
+    checksum, connect, run, status, Status, BASELINE_ALEMBIC_HEAD, MIGRATIONS,
+};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
@@ -213,6 +215,55 @@ async fn edited_applied_migration_is_refused() {
         .unwrap();
     let error = run(&mut client).await.unwrap_err();
     assert!(error.0.contains("modified after it was applied"), "{error}");
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn status_is_read_only_and_tracks_each_state() {
+    let db = Scratch::create().await;
+    let client = db.client().await;
+    assert_eq!(status(&client).await.unwrap(), Status::Empty);
+    // status must not create bookkeeping on an unmanaged database.
+    let created: bool = client
+        .query_one(
+            "SELECT to_regclass('public.schema_migrations') IS NOT NULL",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!created);
+    drop(client);
+    db.drop_database().await;
+
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    alembic_managed(&client).await;
+    let state = status(&client).await.unwrap();
+    assert_eq!(state, Status::AlembicAtBaseline);
+    assert!(!state.is_up_to_date());
+    run(&mut client).await.unwrap();
+    let state = status(&client).await.unwrap();
+    assert_eq!(state, Status::Managed { pending: vec![] });
+    assert!(state.is_up_to_date());
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn status_refuses_unexpected_alembic_revision() {
+    let db = Scratch::create().await;
+    let client = db.client().await;
+    alembic_managed(&client).await;
+    client
+        .execute(
+            "UPDATE public.alembic_version SET version_num = 'someotherrev'",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert!(status(&client).await.is_err());
     drop(client);
     db.drop_database().await;
 }

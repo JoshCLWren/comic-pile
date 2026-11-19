@@ -3,8 +3,15 @@
 Rust database migration runner (successor to Alembic, which is frozen).
 
 ```sh
-MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- up      # apply / adopt
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- status  # read-only guard
+MIGRATE_DATABASE_URL=postgresql://... cargo run --locked -- verify  # fails if anything pending
 ```
+
+Production runs `scripts/deploy-migrate.sh` (status, up, verify) from
+`deploy-production.yml` before the Vercel deploy; `migrate-rehearsal.yml`
+rehearses the same script against throwaway Postgres on every PR touching
+migrations.
 
 - `migrations/0001_baseline.sql` is a cleaned `pg_dump --schema-only` of the
   Alembic head `i5378deferred01` (`make roll-test-schema` regenerates it). That

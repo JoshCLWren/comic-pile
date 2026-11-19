@@ -21,7 +21,7 @@ def test_production_workflow_migrates_before_deploying() -> None:
         REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
     ).read_text(encoding="utf-8")
 
-    migration = ".venv/bin/alembic upgrade head"
+    migration = "scripts/deploy-migrate.sh"
     deployment = "vercel deploy"
 
     assert migration in workflow

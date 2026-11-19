@@ -73,6 +73,98 @@ pub struct Report {
     pub adopted: Vec<i64>,
 }
 
+/// Read-only description of where a database stands relative to this binary.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Status {
+    /// No tables: `up` applies the baseline.
+    Empty,
+    /// Alembic database at [`BASELINE_ALEMBIC_HEAD`]: `up` adopts the baseline.
+    AlembicAtBaseline,
+    /// Managed by this runner; `pending` versions would be applied by `up`
+    /// (empty means up to date).
+    Managed { pending: Vec<i64> },
+}
+
+impl Status {
+    /// True when `up` would change nothing.
+    pub fn is_up_to_date(&self) -> bool {
+        matches!(self, Status::Managed { pending } if pending.is_empty())
+    }
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Status::Empty => f.write_str("empty (up will apply the baseline)"),
+            Status::AlembicAtBaseline => write!(
+                f,
+                "alembic at {BASELINE_ALEMBIC_HEAD} (up will adopt the baseline without executing it)"
+            ),
+            Status::Managed { pending } if pending.is_empty() => {
+                f.write_str("managed, up to date")
+            }
+            Status::Managed { pending } => write!(f, "managed, pending migrations {pending:?}"),
+        }
+    }
+}
+
+/// Inspect the database without changing it. Fails (like [`run`]) when the
+/// database is not at an expected baseline, or a recorded migration is unknown
+/// or was modified.
+pub async fn status(client: &Client) -> Result<Status, MigrateError> {
+    let has_table: bool = client
+        .query_one(
+            "SELECT to_regclass('public.schema_migrations') IS NOT NULL",
+            &[],
+        )
+        .await?
+        .get(0);
+    let recorded: Vec<(i64, String)> = if has_table {
+        client
+            .query(
+                "SELECT version, checksum FROM public.schema_migrations",
+                &[],
+            )
+            .await?
+            .iter()
+            .map(|r| (r.get(0), r.get(1)))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    verify_recorded(&recorded)?;
+    if recorded.is_empty() {
+        return Ok(if adopt_alembic_baseline(client).await? {
+            Status::AlembicAtBaseline
+        } else {
+            Status::Empty
+        });
+    }
+    let pending = MIGRATIONS
+        .iter()
+        .filter(|m| !recorded.iter().any(|(v, _)| *v == m.version))
+        .map(|m| m.version)
+        .collect();
+    Ok(Status::Managed { pending })
+}
+
+fn verify_recorded(recorded: &[(i64, String)]) -> Result<(), MigrateError> {
+    for (version, stored) in recorded {
+        let Some(migration) = MIGRATIONS.iter().find(|m| m.version == *version) else {
+            return Err(MigrateError(format!(
+                "database has migration {version} that this binary does not know; refusing to run an older binary"
+            )));
+        };
+        if *stored != checksum(migration.sql) {
+            return Err(MigrateError(format!(
+                "migration {version} ({}) was modified after it was applied",
+                migration.name
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Hex SHA-256 of a migration body.
 pub fn checksum(sql: &str) -> String {
     let digest = Sha256::digest(sql.as_bytes());
@@ -126,19 +218,7 @@ async fn run_in_transaction(client: &mut Client) -> Result<Report, MigrateError>
         )
         .await?;
     let recorded: Vec<(i64, String)> = rows.iter().map(|r| (r.get(0), r.get(1))).collect();
-    for (version, stored) in &recorded {
-        let Some(migration) = MIGRATIONS.iter().find(|m| m.version == *version) else {
-            return Err(MigrateError(format!(
-                "database has migration {version} that this binary does not know; refusing to run an older binary"
-            )));
-        };
-        if *stored != checksum(migration.sql) {
-            return Err(MigrateError(format!(
-                "migration {version} ({}) was modified after it was applied",
-                migration.name
-            )));
-        }
-    }
+    verify_recorded(&recorded)?;
 
     let mut report = Report {
         applied: Vec::new(),

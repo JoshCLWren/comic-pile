@@ -1,0 +1,62 @@
+name: Migration Deploy Rehearsal
+
+# Rehearses the exact production migration step (scripts/deploy-migrate.sh with
+# comicpile-migrate) against throwaway Postgres services. Never touches production.
+on:
+  pull_request:
+    paths:
+      - 'native/migrate/**'
+      - 'alembic/**'
+      - 'scripts/deploy-migrate.sh'
+      - 'scripts/rehearse-deploy-migrate.sh'
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/migrate-rehearsal.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'native/migrate/**'
+      - 'alembic/**'
+      - 'scripts/deploy-migrate.sh'
+      - 'scripts/rehearse-deploy-migrate.sh'
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/migrate-rehearsal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: rehearsal-local
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ADMIN_URL: postgresql://postgres:rehearsal-local@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - name: Install Python deps (frozen Alembic, used only to build the pre-adoption database)
+        run: uv sync --frozen --all-extras
+      - name: Build comicpile-migrate
+        run: cargo build --locked --release -p comicpile-migrate
+      - name: Rehearse deploy migration step
+        run: scripts/rehearse-deploy-migrate.sh target/release/comicpile-migrate
