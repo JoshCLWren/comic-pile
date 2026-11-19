@@ -6,9 +6,9 @@
  * `console.error` after the sheet had already closed. Either way the reader
  * saw the click "succeed" and nothing was recorded.
  */
+import type { RollResponse } from '../types'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { rollApi } from '../services/api-roll'
 import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
@@ -62,6 +62,8 @@ function renderActionSheet(options: HarnessOptions = {}) {
   }))
   const onSnoozeRefreshFailed = vi.fn()
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
+  // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
+  const unsnoozeMutate = vi.fn((_threadId: number) => Promise.resolve({} as RollResponse))
 
   const { result } = renderHook(() => {
     const state = useRollPageState()
@@ -79,6 +81,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
         moveToFrontMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         moveToBackMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         shuffleQueueMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
+        unsnoozeMutation: { mutate: unsnoozeMutate, isPending: false },
       },
       refetchBootstrap,
       enterRatingView: vi.fn(() => Promise.resolve()),
@@ -91,7 +94,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   })
 
   // `result` stays live so every assertion reads the latest render's closure.
-  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed }
+  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed, unsnoozeMutate }
 }
 
 /** Select the pooled series whose action sheet the reader opened. */
@@ -167,9 +170,7 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
   })
 
   it('unsnoozes the selected series regardless of the pending thread', async () => {
-    // SAFETY: the hook discards the unsnooze response body; an empty stub suffices
-    const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({} as never)
-    const { result, snoozeMutate, refetchBootstrap } = renderActionSheet({
+    const { result, snoozeMutate, refetchBootstrap, unsnoozeMutate } = renderActionSheet({
       bootstrap: bootstrapWith({ snoozed_threads: [pooledThread(8)], pending_thread_id: null }),
     })
     selectThread(result, 8)
@@ -180,8 +181,7 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
 
     // Roll unsnooze calls the native v2 endpoint (restores the pending roll and
     // reverts the die, #4589) and refreshes, with no legacy v1 unsnooze call.
-    expect(unsnoozeSpy).toHaveBeenCalledWith(8)
-    unsnoozeSpy.mockRestore()
+    expect(unsnoozeMutate).toHaveBeenCalledWith(8)
     expect(refetchBootstrap).toHaveBeenCalled()
     expect(snoozeMutate).not.toHaveBeenCalled()
   })

@@ -19,7 +19,7 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn() },
@@ -42,7 +42,7 @@ const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
-import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
 import { useSessions, useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
@@ -108,6 +108,8 @@ describe('mutation hook success and failure paths', () => {
     const dismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() }); await act(async () => await dismiss.result.current.mutate())
     const setDie = renderHook(() => useSetDie(), { wrapper: createWrapper() }); await act(async () => await setDie.result.current.mutate(6))
     const reroll = renderHook(() => useReroll(), { wrapper: createWrapper() }); await act(async () => await reroll.result.current.mutate())
+    const unsnooze = renderHook(() => useUnsnooze(), { wrapper: createWrapper() }); await act(async () => await unsnooze.result.current.mutate(8))
+    expect(api.rollApi.unsnooze).toHaveBeenCalledWith(8)
     expect(roll.result.current.isError).toBe(false)
     api.rollApi.reroll.mockRejectedValueOnce(new Error('fail'))
     const failed = renderHook(() => useReroll(), { wrapper: createWrapper() })

@@ -26,6 +26,7 @@ interface RollMutations {
   moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<RollResponse>; isPending: boolean }
 }
 
 interface UseRollActionsParams {
@@ -104,6 +105,7 @@ export function useRollActions({
     moveToFrontMutation,
     moveToBackMutation,
     shuffleQueueMutation,
+    unsnoozeMutation,
   } = mutations
 
   function handleThreadClick(thread: RollBootstrapThread) {
@@ -179,11 +181,10 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            // Call the server endpoint to restore the previously snoozed roll
-            // and revert the die. The endpoint also clears the browser snooze
-            // cookie.
-            const { rollApi } = await import('../../services/api-roll')
-            await rollApi.unsnooze(selectedThread!.id)
+            // The server endpoint removes the snooze (restoring the pending
+            // roll and die when it is still the latest action) and the client
+            // clears the browser cookie. The mutation refreshes die state.
+            await unsnoozeMutation.mutate(selectedThread!.id)
             await refetchBootstrap()
             break
           }

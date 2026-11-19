@@ -21,6 +21,7 @@ vi.mock('../hooks/useRollResources', () => ({
   useRollIssueCards: () => ({ data: undefined }),
 }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),

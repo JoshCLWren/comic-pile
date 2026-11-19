@@ -14,6 +14,7 @@ import {
   useDismissPending,
   useOverrideRoll,
   useRoll,
+  useUnsnooze,
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze } from '../../hooks/useSnooze'
@@ -128,6 +129,7 @@ export default function RollPage() {
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
+  const unsnoozeMutation = useUnsnooze()
   const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
@@ -220,6 +222,7 @@ export default function RollPage() {
     state,
     snoozeMutation,
     rerollMutation: rollMutation,
+    unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
     refetchBootstrap,
     onRefreshFailed: reportSnoozeRefreshFailed,
@@ -236,6 +239,7 @@ export default function RollPage() {
       snoozeMutation,
       moveToFrontMutation,
       moveToBackMutation,
+      unsnoozeMutation,
       shuffleQueueMutation,
     },
     refetchBootstrap,
