@@ -45,9 +45,10 @@ def _assert_no_shadow_python_handlers(operations: set[tuple[str, str]]) -> None:
 def test_native_operations_have_no_shadow_python_handlers() -> None:
     """Retire every migrated alias while retaining unrelated Python operations."""
     operations = set(_operations(list(create_app(serve_frontend=False).routes)))
-    # 80 historical aliases plus the nine fully retired v1 creator URLs (the
-    # two v1 creator URLs with native same-path contracts were already counted)
-    # plus ten issue-identity/CBL adoption operations.
+    # 80 historical aliases plus the eleven fully retired v1 creator URLs (no
+    # v1 creator path keeps a native same-path contract; all are served by the
+    # canonical /api/v2/creators resources, #4836) plus ten issue-identity/CBL
+    # adoption operations.
     assert len(_retired_operations()) == 99
     _assert_no_shadow_python_handlers(operations)
     assert ("POST", "/api/v1/threads/") in operations
