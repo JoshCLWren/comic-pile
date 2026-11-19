@@ -1,8 +1,23 @@
 //! Same-path native CRUD for the browser's generalized continuity rules.
 //!
-//! The Python implementation remains in place until production execution is
-//! proven. This module deliberately mirrors its owner checks, graph lock,
-//! cycle validation, canonical dependency compilation, and response shape.
+//! Serves the five frozen `continuity-rules` operations at their original
+//! `/api/v1` methods and paths after the Python handler retired (#4848,
+//! #5162). The frozen Python handler `app/api/continuity_rule.py` is the wire
+//! oracle: this module preserves its owner checks, graph lock, cycle and
+//! compilation validation, canonical dependency edges, status codes, FastAPI
+//! `detail` error envelopes, and ISO-8601 timestamp shape.
+//!
+//! Parity notes:
+//!
+//! * Pydantic field/model validation failures are the house
+//!   `{"detail":"Validation failed"}` 422 rather than FastAPI's list body.
+//! * Domain failures keep their structured `detail` objects because the
+//!   generated client may branch on `detail.code`
+//!   (`continuity_cycle`, `continuity_rule_not_compilable`,
+//!   `continuity_rule_exists`, `continuity_cbl_collision`).
+//! * Timestamps are re-rendered as UTC RFC-3339 (`...Z`) like
+//!   `datetime.isoformat()` in Python; PostgreSQL `::text` would emit a space
+//!   separator and a non-RFC offset.
 
 use crate::{
     auth::AuthenticatedUser, db, issue_service::refresh_blocked_threads, ApiError, AppState,
@@ -13,6 +28,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -21,6 +37,10 @@ use utoipa::ToSchema;
 
 const CONTINUITY_LOCK_NAMESPACE: i32 = 1_129_274_964;
 const RULE_NOTE_PREFIX: &str = "canonical:rule:";
+/// Pydantic `Field(max_length=250)` on both request lists.
+const MAX_REQUEST_ITEMS: usize = 250;
+/// Pydantic `Field(max_length=500)` on the optional note.
+const MAX_NOTE_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -63,96 +83,130 @@ pub struct ContinuityRuleResponse {
     pub updated_at: String,
 }
 
-fn bad_request(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::BAD_REQUEST, detail.into())
+/// House Rust 422 for FastAPI `RequestValidationError` (production body).
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
 }
 
-fn conflict(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::CONFLICT, detail.into())
+/// Python `_cycle_conflict`: 409 with the offending edge named.
+fn cycle_conflict(request: &ContinuityRuleRequest) -> ApiError {
+    ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({
+            "code": "continuity_cycle",
+            "source": {"type": request.source_type, "id": request.source_id},
+            "target": {"type": request.target_type, "id": request.target_id},
+        }),
+    )
+}
+
+/// Python `{"code": "continuity_rule_exists"}` on the unique edge constraint.
+fn rule_exists_conflict() -> ApiError {
+    ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({"code": "continuity_rule_exists"}),
+    )
+}
+
+/// Python `_require_compilable_payload` 400 body.
+fn not_compilable(message: String) -> ApiError {
+    ApiError::structured(
+        StatusCode::BAD_REQUEST,
+        json!({"code": "continuity_rule_not_compilable", "message": message}),
+    )
+}
+
+/// Python `compile_rule_edges` historical CBL-materialization collision.
+fn cbl_collision_conflict(rule_id: i32, pairs: i32) -> ApiError {
+    ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({
+            "code": "continuity_cbl_collision",
+            "message": format!(
+                "Rule {rule_id} collides with historical cbl-order rows on \
+                 {pairs} pair(s); resolve the overlap before saving"
+            ),
+        }),
+    )
 }
 
 fn not_found(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::NOT_FOUND, detail.into())
+    ApiError::NotFound(detail.into())
 }
 
 fn internal_error(detail: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::INTERNAL_SERVER_ERROR, detail.into())
+    ApiError::Internal(detail.into())
+}
+
+/// Render a UTC instant like Python's `datetime.isoformat()`.
+fn iso_utc(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::AutoSi, true)
 }
 
 fn validate_request(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
+    // Field-level constraints first, exactly like pydantic: enum members,
+    // `gt=0`, `max_length` and the nested convergence-target schema.
     if !matches!(request.source_type.as_str(), "issue" | "crossover")
         || !matches!(request.target_type.as_str(), "issue" | "crossover")
     {
-        return Err(bad_request(
-            "source_type and target_type must be 'issue' or 'crossover'",
-        ));
+        return Err(validation_failed());
     }
     if request.source_id <= 0 || request.target_id <= 0 {
-        return Err(bad_request("IDs must be greater than 0"));
-    }
-    if request.source_type == request.target_type && request.source_id == request.target_id {
-        return Err(bad_request(
-            "A continuity rule cannot target its own source node",
-        ));
+        return Err(validation_failed());
     }
     if !matches!(
         request.satisfaction_type.as_str(),
         "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged"
     ) {
-        return Err(bad_request("Invalid satisfaction_type"));
+        return Err(validation_failed());
     }
-    if request.satisfaction_type == "checkpoint" && request.checkpoint_issue_id.is_none() {
-        return Err(bad_request(
-            "checkpoint_issue_id is required for checkpoint rules",
-        ));
-    }
-    if request.satisfaction_type != "checkpoint" && request.checkpoint_issue_id.is_some() {
-        return Err(bad_request(
-            "checkpoint_issue_id is only valid for checkpoint rules",
-        ));
-    }
-    if request.satisfaction_type == "converged" && request.convergence_targets.is_empty() {
-        return Err(bad_request(
-            "convergence_targets are required for converged rules",
-        ));
-    }
-    if request.satisfaction_type != "converged" && !request.convergence_targets.is_empty() {
-        return Err(bad_request(
-            "convergence_targets are only valid for converged rules",
-        ));
-    }
-    if request.satisfaction_type == "selected_members_read"
-        && request.selected_member_issue_ids.is_empty()
+    if request.convergence_targets.len() > MAX_REQUEST_ITEMS
+        || request.selected_member_issue_ids.len() > MAX_REQUEST_ITEMS
     {
-        return Err(bad_request(
-            "selected-member rules require at least one issue",
-        ));
-    }
-    if request.satisfaction_type != "selected_members_read"
-        && !request.selected_member_issue_ids.is_empty()
-    {
-        return Err(bad_request(
-            "selected_member_issue_ids are only valid for selected-member rules",
-        ));
-    }
-    if request
-        .convergence_targets
-        .iter()
-        .any(|target| !matches!(target.node_type.as_str(), "issue" | "crossover") || target.id <= 0)
-    {
-        return Err(bad_request("Invalid convergence target"));
-    }
-    if request.checkpoint_issue_id.is_some_and(|id| id <= 0)
-        || request.selected_member_issue_ids.iter().any(|id| *id <= 0)
-    {
-        return Err(bad_request("Referenced issue IDs must be greater than 0"));
+        return Err(validation_failed());
     }
     if request
         .note
         .as_ref()
-        .is_some_and(|note| note.chars().count() > 500)
+        .is_some_and(|note| note.chars().count() > MAX_NOTE_CHARS)
     {
-        return Err(bad_request("String should have at most 500 characters"));
+        return Err(validation_failed());
+    }
+    if request.checkpoint_issue_id.is_some_and(|id| id <= 0)
+        || request.selected_member_issue_ids.iter().any(|id| *id <= 0)
+        || request
+            .convergence_targets
+            .iter()
+            .any(|target| !matches!(target.node_type.as_str(), "issue" | "crossover") || target.id <= 0)
+    {
+        return Err(validation_failed());
+    }
+
+    // Pydantic `model_validator(mode="after")` shape rules.
+    if request.source_type == request.target_type && request.source_id == request.target_id {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type == "checkpoint" && request.checkpoint_issue_id.is_none() {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type != "checkpoint" && request.checkpoint_issue_id.is_some() {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type == "converged" && request.convergence_targets.is_empty() {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type != "converged" && !request.convergence_targets.is_empty() {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type == "selected_members_read"
+        && request.selected_member_issue_ids.is_empty()
+    {
+        return Err(validation_failed());
+    }
+    if request.satisfaction_type != "selected_members_read"
+        && !request.selected_member_issue_ids.is_empty()
+    {
+        return Err(validation_failed());
     }
     Ok(())
 }
@@ -198,13 +252,15 @@ fn require_compilable(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
             .iter()
             .filter(|target| target.node_type != "issue")
             .count();
-        return Err(bad_request(format!(
-            "Rule has {count} non-issue prerequisite(s); all convergence targets must be issues to compile to canonical edges"
+        return Err(not_compilable(format!(
+            "Converged rule has {count} non-issue prerequisite(s); all convergence targets \
+             must be issues to compile to canonical edges"
         )));
     }
     if edge_pairs(request).is_empty() {
-        return Err(bad_request(format!(
-            "Rule with satisfaction_type={}, source_type={}, target_type={} does not compile to canonical edges and would never block Roll",
+        return Err(not_compilable(format!(
+            "Rule with satisfaction_type={}, source_type={}, target_type={} \
+             does not compile to canonical edges and would never block Roll",
             request.satisfaction_type, request.source_type, request.target_type
         )));
     }
@@ -291,7 +347,8 @@ async fn owned_references(
                 .query_opt(
                     "SELECT x.id FROM unnest($1::int[]) x(id)
                      WHERE NOT EXISTS (SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id
-                                       WHERE i.id=x.id AND t.user_id=$2) LIMIT 1",
+                                       WHERE i.id=x.id AND t.user_id=$2)
+                     ORDER BY x.id LIMIT 1",
                     &[&issue_ids, &user_id],
                 )
                 .await
