@@ -1191,6 +1191,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(continuity_plans::confirm_plan_projection),
         )
         .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(continuity_plans::preview_plan_projection),
+        )
+        .route(
             "/api/v1/continuity-plans/{plan_id}/release-sources/",
             get(continuity_plans::list_release_sources),
         )
