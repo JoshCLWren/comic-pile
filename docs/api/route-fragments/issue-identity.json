@@ -29,7 +29,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -43,7 +44,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -57,7 +59,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -71,7 +74,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -85,7 +89,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -113,7 +118,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -126,7 +132,8 @@
       "owning_issue": 4843,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -139,7 +146,8 @@
       "owning_issue": 4843,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     }
   ]
 }

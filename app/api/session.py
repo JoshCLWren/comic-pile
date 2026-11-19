@@ -5,18 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, TypedDict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.middleware import limiter
 from app.models import Event, ReadingSession, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
-    CorrectionSheetExamplesResponse,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
@@ -35,7 +33,6 @@ from app.services.session_history_projection import (
 )
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.thread_issue_stats import load_issue_stats
-from app.services.correction_examples import generate_correction_examples
 from comic_pile.reading_session import get_current_die
 
 router = APIRouter(tags=["sessions"])
@@ -419,28 +416,3 @@ async def get_session_details(
         timezone=session_obj.timezone,
         events=formatted_events,
     )
-
-
-@v1_router.get("/correction-examples", response_model=CorrectionSheetExamplesResponse)
-@limiter.limit("60/minute")
-async def get_correction_sheet_examples(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> CorrectionSheetExamplesResponse:
-    """Get personalized examples for the correction sheet steering choices.
-
-    Returns compact examples drawn from the user's own rated/read history for
-    each correction sheet option. Examples are explanatory only and do not
-    constrain the canonical recommendation behavior. Returns null for options
-    where no honest example exists.
-
-    Args:
-        request: FastAPI request object for rate limiting.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        CorrectionSheetExamplesResponse with examples for each choice.
-    """
-    return await generate_correction_examples(db, current_user.id)

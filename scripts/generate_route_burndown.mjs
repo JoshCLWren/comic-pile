@@ -9,6 +9,7 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -117,7 +118,7 @@ function pyFullMatch(pattern, text) {
   return re.test(text);
 }
 
-function _loadRouteFragments(dirPath) {
+export function _loadRouteFragments(dirPath) {
   const fragments = [];
   const seen = new Set();
   const files = readdirSync(dirPath).filter(name => name.endsWith('.json')).sort();
@@ -319,7 +320,12 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
         dest = previous.dest;
       }
       if (src === null) {
-        if (previous !== null && previous.src !== null && previous.src !== undefined) {
+        if (
+          previous !== null &&
+          previous.src !== null &&
+          previous.src !== undefined &&
+          previous.src !== CATCH_ALL_SRC
+        ) {
           src = previous.src;
         } else {
           src = routeRegexForPath(routePath);
@@ -412,7 +418,7 @@ function _loadRoutes(filePath) {
   return _routesFromDocument(loadJson(filePath));
 }
 
-function _generateVercelDocument(previous, fragments) {
+export function _generateVercelDocument(previous, fragments, {slim = true} = {}) {
   const rawRoutes = previous.routes;
   if (!Array.isArray(rawRoutes)) {
     throw new BurndownGenerationError('vercel.json must define a routes array');
@@ -474,13 +480,19 @@ function _generateVercelDocument(previous, fragments) {
     methods: r.methods,
     dest: r.dest,
   }));
-  const newRoutes = [
+  const fullRoutes = [
     ...baselineNatives,
     ...generated,
     ...baselinePythons,
     catchAll,
     ...nonApi,
   ];
+  const newRoutes = slim
+    ? slimNativeRollRoutes(
+      fullRoutes,
+      new Set(generated),
+    )
+    : fullRoutes;
   const nativeIndices = [];
   const pythonIndices = [];
   let catchIndex = -1;
