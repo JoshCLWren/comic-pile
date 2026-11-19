@@ -7,6 +7,11 @@ import { useIssueCards } from '../hooks/useIssueCards'
 import { createAppQueryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { readingBoundariesApi } from '../services/api-reading-boundaries'
+import { dependenciesApi } from '../services/api-dependencies'
+import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
+import { useThreadBlockingInfo } from '../hooks/useDependencies'
+import { invalidateAfterThreadMetadataEdit } from '../query/cacheEffects'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -65,4 +70,32 @@ it('does not refetch stale plan data on focus for default callers', async () => 
   await refocus()
   expect(getReader).toHaveBeenCalledTimes(1)
   expect(fetchCards).toHaveBeenCalledTimes(1)
+})
+
+it('refetches the thread Next-issue projections after a rename invalidation (#5486)', async () => {
+  // SAFETY: the projection payload is opaque to this invalidation test.
+  const batch = vi.spyOn(readingBoundariesApi, 'batch').mockResolvedValue({ threads: {} } as never)
+  // SAFETY: the projection payload is opaque to this invalidation test.
+  const blocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({ threads: {} } as never)
+  const client = createAppQueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  const boundaries = renderHook(() => useReadingBoundaries([5]), { wrapper })
+  const info = renderHook(() => useThreadBlockingInfo(5), { wrapper })
+  await waitFor(() => expect(boundaries.result.current.isSuccess && info.result.current.isSuccess).toBe(true))
+  await act(async () => {
+    await invalidateAfterThreadMetadataEdit(client)
+  })
+  await waitFor(() => expect(batch).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(blocking).toHaveBeenCalledTimes(2))
+})
+
+it('refetches the thread blocking projection when the tab regains focus (#5486)', async () => {
+  // SAFETY: the projection payload is opaque to this focus test.
+  const blocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({ threads: {} } as never)
+  const { result } = renderHook(() => useThreadBlockingInfo(6), { wrapper: setup() })
+  await waitFor(() => expect(result.current.isSuccess).toBe(true))
+  await refocus()
+  await waitFor(() => expect(blocking).toHaveBeenCalledTimes(2))
 })

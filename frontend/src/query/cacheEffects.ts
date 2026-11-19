@@ -447,6 +447,10 @@ export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Pr
     }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
+    // The thread page's "Next issue" line renders the series title from the
+    // reading-boundary and blocking projections (#5486).
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.readingBoundariesAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.blockingBatchAll() }),
   ])
 }
 

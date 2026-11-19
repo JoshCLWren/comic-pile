@@ -51,3 +51,9 @@
 **Test:** On a blocked or out-of-pool QA issue, use Mark Read and rating from the issue card.
 
 **Expected:** The owned issue can be read and rated; Option E decides automatic eligibility only. Source: #4405 and #4708.
+
+## MQA-THREAD-SYNC: Thread "Next issue" line follows a rename without lag
+
+**Test:** Open a thread detail in one tab and rename the series there (then rename it back). Also rename it from a second tab and return to the first.
+
+**Expected:** The Next issue panel shows the current series title immediately after the rename and on tab focus, with no reload and no 15-30 second lag. Source: #5486 (part of #5264); related MQA-QUEUE-010, MQA-PLAN-SYNC.
