@@ -164,6 +164,7 @@ export default function PlannerLanes({ editor, planId, threads }: PlannerLanesPr
                             threadTitle={issueCard?.thread_title ?? series?.title ?? node.label}
                             issueNumber={issueCard?.issue_number ?? ''}
                             variant="compact"
+                            imageClassName="h-full w-full object-cover"
                             altText=""
                           />
                         )}
