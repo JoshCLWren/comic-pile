@@ -640,6 +640,45 @@ fn validate_float_field<T: Serialize>(
     }));
 }
 
+/// Read a Pydantic field configured with `populate_by_name=True`.
+///
+/// The public alias wins when a client sends both forms; Pydantic then ignores
+/// the field-name value as an extra input instead of reporting a duplicate.
+fn populate_by_name_field<'a>(
+    object: &'a serde_json::Value,
+    alias: &str,
+    field_name: &str,
+) -> Option<&'a serde_json::Value> {
+    object.get(alias).or_else(|| object.get(field_name))
+}
+
+/// Remove field-name inputs shadowed by their aliases before serde deserializes.
+///
+/// Serde aliases accept either form but reject both as a duplicate field.
+/// Pydantic accepts both and gives the alias precedence, so discard only the
+/// shadowed field-name value after validation has applied the same rule.
+fn normalize_populate_by_name_fields(value: &mut serde_json::Value) {
+    fn discard_shadowed_field_name(object: &mut serde_json::Value, alias: &str, field_name: &str) {
+        if let Some(map) = object.as_object_mut() {
+            if map.contains_key(alias) {
+                map.remove(field_name);
+            }
+        }
+    }
+
+    let Some(diagnostics) = value.get_mut("diagnostics") else {
+        return;
+    };
+    discard_shadowed_field_name(diagnostics, "userAgent", "user_agent");
+    if let Some(screen) = diagnostics.get_mut("screen") {
+        discard_shadowed_field_name(screen, "pixelRatio", "pixel_ratio");
+    }
+    if let Some(performance) = diagnostics.get_mut("performance") {
+        discard_shadowed_field_name(performance, "domContentLoaded", "dom_content_loaded");
+        discard_shadowed_field_name(performance, "loadComplete", "load_complete");
+    }
+}
+
 fn validate_screen(screen: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
     let input = screen.clone();
     for field in ["width", "height"] {
@@ -651,7 +690,7 @@ fn validate_screen(screen: &serde_json::Value, items: &mut Vec<serde_json::Value
             Some(v) => validate_int_field(&["body", "diagnostics", "screen", field], v, items),
         }
     }
-    match screen.get("pixelRatio") {
+    match populate_by_name_field(screen, "pixelRatio", "pixel_ratio") {
         None => items.push(validation_missing(
             &["body", "diagnostics", "screen", "pixelRatio"],
             &input,
@@ -687,16 +726,16 @@ fn validate_scroll(scroll: &serde_json::Value, items: &mut Vec<serde_json::Value
 }
 
 fn validate_performance(perf: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
-    let input = perf.clone();
-    for (wire, _rust) in [("domContentLoaded", ()), ("loadComplete", ())] {
-        if let Some(v) = perf.get(wire) {
+    for (alias, field_name) in [
+        ("domContentLoaded", "dom_content_loaded"),
+        ("loadComplete", "load_complete"),
+    ] {
+        if let Some(v) = populate_by_name_field(perf, alias, field_name) {
             if !v.is_null() {
-                validate_float_field(&["body", "diagnostics", "performance", wire], v, items);
+                validate_float_field(&["body", "diagnostics", "performance", alias], v, items);
             }
         }
     }
-    // required? performance object itself required; fields optional with defaults
-    let _ = input;
 }
 
 fn validate_diagnostics(diag: &serde_json::Value, items: &mut Vec<serde_json::Value>) {
@@ -712,8 +751,8 @@ fn validate_diagnostics(diag: &serde_json::Value, items: &mut Vec<serde_json::Va
             }
         }
     }
-    // userAgent alias
-    match diag.get("userAgent") {
+    // userAgent alias (or user_agent via populate_by_name=True)
+    match populate_by_name_field(diag, "userAgent", "user_agent") {
         None => items.push(validation_missing(
             &["body", "diagnostics", "userAgent"],
             &input,
@@ -858,7 +897,7 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
             )]));
         }
     };
-    let value = err;
+    let mut value = err;
     let Some(object) = value.as_object() else {
         return Err(BugReportError::Validation(vec![validation_model_type(
             &["body"],
@@ -910,10 +949,12 @@ fn parse_request(body: &[u8]) -> Result<BugReportCreate, BugReportError> {
         return Err(BugReportError::Validation(items));
     }
 
-    // Every field that could make serde reject a validated body is now
-    // deserialized through the same Pydantic-lax coercion the validators above
-    // use, so this fallback is a defensive invariant and is unreachable for
-    // bodies that passed validation (no fabricated `value_error` 422).
+    // Match Pydantic's alias precedence before serde sees the object. Every
+    // remaining field is deserialized through the same validation/coercion
+    // rules above, so this fallback is a defensive invariant and is
+    // unreachable for bodies that passed validation (no fabricated
+    // `value_error` 422).
+    normalize_populate_by_name_fields(&mut value);
     serde_json::from_value(value).map_err(|error| {
         BugReportError::Validation(vec![serde_json::json!({
             "type": "value_error",
@@ -1805,6 +1846,106 @@ mod tests {
         assert_eq!(request.report_type, ReportType::Bug);
         assert_eq!(request.title, "Bug");
         assert!(request.diagnostics.is_some());
+    }
+
+    /// `populate_by_name=True` on the retired Pydantic models accepted their
+    /// Rust-style snake_case field names as well as the browser aliases.
+    #[test]
+    fn parse_request_accepts_populate_by_name_field_names() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u","user_agent":"snake-agent",
+                "screen":{"width":390,"height":844,"pixel_ratio":"2.25"},
+                "viewport":{"width":390,"height":664},
+                "scroll":{"x":0,"y":1},
+                "performance":{"dom_content_loaded":"12.5","load_complete":true},
+                "errors":[]
+            }
+        }"#;
+        let request = parse_request(body).expect("field names must be accepted");
+        let diag = request.diagnostics.expect("diagnostics");
+        assert_eq!(diag.user_agent, "snake-agent");
+        assert_eq!(diag.screen.pixel_ratio, 2.25);
+        assert_eq!(diag.performance.dom_content_loaded, Some(12.5));
+        assert_eq!(diag.performance.load_complete, Some(1.0));
+
+        let issue = build_github_issue_body("reporter", ReportType::Bug, "Details", Some(&diag));
+        assert!(issue.contains("**User Agent:** snake-agent"));
+        assert!(issue.contains("**Screen:** 390×844 @2.25x"));
+        assert!(issue.contains("**Performance:** DOMContentLoaded: 12ms, Load: 1ms"));
+    }
+
+    /// Pydantic gives the public alias precedence and treats the field-name
+    /// copy as an ignored extra when both are present. Serde would otherwise
+    /// reject the pair as a duplicate field after validation had succeeded.
+    #[test]
+    fn parse_request_prefers_aliases_over_populate_by_name_field_names() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u",
+                "userAgent":"alias-agent","user_agent":false,
+                "screen":{
+                    "width":390,"height":844,
+                    "pixelRatio":3,"pixel_ratio":"not-a-number"
+                },
+                "viewport":{"width":390,"height":664},
+                "scroll":{"x":0,"y":1},
+                "performance":{
+                    "domContentLoaded":10,"dom_content_loaded":"not-a-number",
+                    "loadComplete":20,"load_complete":false
+                },
+                "errors":[]
+            }
+        }"#;
+        let request = parse_request(body).expect("aliases must win without duplicate-field errors");
+        let diag = request.diagnostics.expect("diagnostics");
+        assert_eq!(diag.user_agent, "alias-agent");
+        assert_eq!(diag.screen.pixel_ratio, 3.0);
+        assert_eq!(diag.performance.dom_content_loaded, Some(10.0));
+        assert_eq!(diag.performance.load_complete, Some(20.0));
+    }
+
+    /// Validation through a field-name input still reports the public alias in
+    /// `loc`, matching Pydantic's aliased error representation.
+    #[test]
+    fn parse_request_validates_populate_by_name_fields_at_public_aliases() {
+        let body = br#"{
+            "title":"Bug","description":"Details",
+            "diagnostics":{
+                "timestamp":"t","url":"u","user_agent":7,
+                "screen":{"width":390,"height":844,"pixel_ratio":null},
+                "viewport":{"width":390,"height":664},
+                "scroll":{"x":0,"y":1},
+                "performance":{"dom_content_loaded":"bad"},
+                "errors":[]
+            }
+        }"#;
+        let error = parse_request(body).expect_err("invalid field-name inputs must fail");
+        assert_eq!(
+            error.detail_json(),
+            serde_json::json!({"detail": [
+                {
+                    "type": "string_type",
+                    "loc": ["body", "diagnostics", "userAgent"],
+                    "msg": "Input should be a valid string",
+                    "input": 7
+                },
+                {
+                    "type": "float_type",
+                    "loc": ["body", "diagnostics", "screen", "pixelRatio"],
+                    "msg": "Input should be a valid number",
+                    "input": null
+                },
+                {
+                    "type": "float_parsing",
+                    "loc": ["body", "diagnostics", "performance", "domContentLoaded"],
+                    "msg": "Input should be a valid number, unable to parse string as a number",
+                    "input": "bad"
+                }
+            ]})
+        );
     }
 
     /// Pydantic v2 lax mode coerces these numeric forms into `int`/`float`
