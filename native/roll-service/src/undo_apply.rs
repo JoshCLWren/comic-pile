@@ -1220,7 +1220,7 @@ pub async fn undo_to_snapshot(
                         );
                         internal()
                     })?;
-                    crate::session_list::json_id_list(raw)
+                    json_id_list(raw)
                 },
                 timezone: session_row.try_get(7).ok().flatten(),
                 reading_bandwidth: session_row.try_get(8).ok().flatten(),
@@ -1248,7 +1248,7 @@ pub async fn undo_to_snapshot(
                         );
                         internal()
                     })?;
-                    crate::session_list::json_id_list(raw)
+                    json_id_list(raw)
                 },
             };
 
@@ -1884,6 +1884,18 @@ impl utoipa::Modify for UndoApplySecurityAddon {
             );
         }
     }
+}
+
+/// Parse a nullable json thread-id array (`snoozed_thread_ids` /
+/// `skipped_thread_ids` columns) into a bounded vector of valid ids.
+fn json_id_list(value: Option<Value>) -> Vec<i32> {
+    value
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|item| item.as_i64())
+        .filter_map(|id| i32::try_from(id).ok())
+        .collect()
 }
 
 #[cfg(test)]

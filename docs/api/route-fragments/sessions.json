@@ -1,85 +1,36 @@
 {
   "family": "sessions",
   "owned_path_patterns": [
-    "^/api/v1/sessions(?:/.*)?$",
-    "^/api/sessions(?:/.*)?$"
+    "^/api/v2/reading-sessions/[^/]+/(?:details|snapshots)$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
-    "owning_issue": null,
+    "owning_issue": 4839,
+    "runtime": "native-rust",
+    "status": "target",
     "consumers": [
       "frontend/src/services/api-sessions.ts"
     ]
   },
   "operations": [
     {
-      "bucket": "unversioned_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/sessions/",
+      "path": "/api/v2/reading-sessions/{session_id}/details",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-sessions/[^/]+/details$",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ]
     },
     {
-      "bucket": "unversioned_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/sessions/{session_id}",
+      "path": "/api/v2/reading-sessions/{session_id}/snapshots",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[0-9]+$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/sessions/{session_id}/details",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[^/]+/details$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/sessions/{session_id}/snapshots",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[^/]+/snapshots$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/sessions/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/sessions/{session_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[0-9]+$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/sessions/{session_id}/details",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[^/]+/details$",
-      "owning_issue": 4839,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/sessions/{session_id}/snapshots",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[^/]+/snapshots$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/reading-sessions/[^/]+/snapshots$",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ]
     }
   ]
 }

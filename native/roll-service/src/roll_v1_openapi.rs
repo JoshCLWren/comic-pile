@@ -22,17 +22,10 @@ use utoipa::OpenApi;
         description = "Generated contract for the native Roll handlers that retain their original method and path."
     ),
     paths(
-        crate::roll_override::override_roll_documentation,
-        crate::roll_override::override_roll_legacy_documentation,
-        crate::roll_switch_prerequisite::switch_prerequisite_documentation,
         crate::recommendation_explanation::recommendation_explanation_documentation,
         crate::recommendation_explanation::recommendation_explanation_legacy_documentation,
     ),
     components(schemas(
-        crate::roll_override::RollOverrideRequest,
-        crate::roll_override::RollResponse,
-        crate::roll_switch_prerequisite::RollPrerequisiteSwitchRequest,
-        crate::roll_switch_prerequisite::RollPrerequisiteSwitchResponse,
         crate::recommendation_explanation::RecommendationExplanationResponse,
         crate::recommendation_explanation::ExplainableFactor,
     )),

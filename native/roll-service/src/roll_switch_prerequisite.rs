@@ -1,5 +1,5 @@
 //! Native cutover of the blocked-roll prerequisite switch:
-//! `POST /api/v1/roll/switch-prerequisite`.
+//! `POST /api/v2/roll/switch-prerequisite`.
 //!
 //! The Python handler chain (`app/api/roll_recovery_switch.py` ->
 //! `app.roll_recovery_switch.switch_pending_roll_to_prerequisite`) is the
@@ -394,10 +394,10 @@ pub(crate) async fn persist_switch_prerequisite(
     Ok(())
 }
 
-/// Documentation-only operation for the mounted v1 prerequisite switch.
+/// Documentation-only operation for the mounted v2 prerequisite switch.
 #[utoipa::path(
     post,
-    path = "/api/v1/roll/switch-prerequisite",
+    path = "/api/v2/roll/switch-prerequisite",
     tag = "roll",
     request_body = RollPrerequisiteSwitchRequest,
     responses(
@@ -439,7 +439,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/v1/roll/switch-prerequisite")
+                    .uri("/api/v2/roll/switch-prerequisite")
                     .header("content-type", "application/json")
                     .header("cookie", "csrf_token=synthetic-test-csrf")
                     .header("x-csrf-token", "synthetic-test-csrf")

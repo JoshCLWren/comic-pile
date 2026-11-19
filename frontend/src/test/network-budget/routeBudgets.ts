@@ -59,7 +59,7 @@ const PUBLIC_ENTRIES = {
 const AUX_ENTRIES = {
   '/whats-new': budget(
     ...AUTHENTICATED_SHELL,
-    'GET /api/v1/releases/?limit=20&offset=0 x1',
+    'GET /api/v2/releases?limit=20&offset=0 x1',
   ),
   '/glossary': AUTHENTICATED_SHELL,
   '/help': AUTHENTICATED_SHELL,

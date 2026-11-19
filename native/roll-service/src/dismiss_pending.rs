@@ -126,24 +126,13 @@ fn now_seconds() -> f64 {
 
 #[utoipa::path(
     post,
-    path = "/api/v1/roll/dismiss-pending",
+    path = "/api/v2/roll/dismiss-pending",
     tag = "roll",
     responses((status = 204, description = "No Content. Pending thread cleared.")),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
 pub(crate) fn dismiss_pending_documentation() {}
-
-/// Also mount the legacy-handler alias.
-#[utoipa::path(
-    post,
-    path = "/api/roll/dismiss-pending",
-    tag = "roll",
-    responses((status = 204, description = "No Content. Pending thread cleared.")),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub(crate) fn dismiss_pending_legacy_documentation() {}
 
 #[cfg(test)]
 mod tests {

@@ -10,7 +10,8 @@ const schema = JSON.parse(readFileSync(schemaPath, 'utf-8')) as {
 
 // Bare `/api` domain routes are legacy compatibility aliases served only until
 // their versioned replacements are adopted. The generated client surface must reference none
-// of them except the same-path native startup metrics contract (#4854).
+// of them except the same-path native startup metrics contract (#4854). The retired
+// `/api/v1/metrics` alias (#4348) is no longer published.
 const EXEMPT_BARE_PATHS = new Set(['/api/metrics'])
 
 function isBareDomainPath(path: string): boolean {
@@ -25,12 +26,22 @@ describe('generated OpenAPI client surface', () => {
     expect(violations).toEqual([])
   })
 
-  it('retains canonical v1 coverage and removes retired ping', () => {
+  it('retains canonical v1 coverage and publishes migrated v2 operations', () => {
     const paths = Object.keys(schema.paths)
 
     expect(paths.some((path) => path.startsWith('/api/v1/'))).toBe(true)
     expect(paths).not.toContain('/api/ping')
     expect(paths).toContain('/api/metrics')
-    expect(paths).toContain('/api/v1/metrics')
+    expect(paths).not.toContain('/api/v1/metrics')
+    for (const path of [
+      '/api/v2/releases',
+      '/api/v2/roll/override',
+      '/api/v2/roll/dismiss-pending',
+      '/api/v2/roll/switch-prerequisite',
+      '/api/v2/reading-sessions/{session_id}/details',
+      '/api/v2/reading-sessions/{session_id}/snapshots',
+    ]) {
+      expect(paths).toContain(path)
+    }
   })
 })
