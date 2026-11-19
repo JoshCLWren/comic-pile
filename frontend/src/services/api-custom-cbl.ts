@@ -1,5 +1,5 @@
 import type { components } from '../generated/openapi'
-export type ReadingListReader = components['schemas']['ReadingListReaderResponse']
+export type ReadingListReader = components['schemas']['ReadingListReader']
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 

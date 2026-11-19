@@ -227,10 +227,9 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert not any(item.get("path") == "/api/v1/roll/dismiss-pending" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/auth/login" for item in v1_ops)
     assert not any(item.get("path") == "/api/v1/taste/discoveries/{signal_id}/dismiss" for item in v1_ops)
-    discoveries = _operation(v1_ops, "GET", "/api/v1/taste/discoveries")
-    assert discoveries["burndown_status"] == "native Rust"
-    assert discoveries["runtime"] == "native-rust"
-    assert discoveries["ingress_destination"] == "/api/native_roll.rs"
+    # The Python discoveries handler is retired; native ingress is pinned by
+    # the taste-discoveries fragment and the Vercel routing tests.
+    assert not any(item.get("path") == "/api/v1/taste/discoveries" for item in v1_ops)
     assert not any(
         item.get("method") == "GET" and item.get("path") == "/api/v1/threads/{thread_id}"
         for item in v1_ops
@@ -569,15 +568,10 @@ def test_sessions_undo_fragments_route_cutover_ops_to_native_rust() -> None:
     for key in native_ops:
         operation = declared[key]
         assert operation["dest"] == "/api/native_roll.rs", key
-        # The v1 Python handlers stay mounted until their cleanup slice, so
-        # those cutover operations remain on the Python inventory surface as
-        # shadowed-by-Rust entries. Unversioned paths have no FastAPI registry
-        # operation or TypeScript caller and stay in the fragment for the
-        # Vercel rewrite only.
-        if key[1].startswith("/api/v1/"):
-            assert operation.get("exclude_from_inventory") is not True, key
-        else:
-            assert operation.get("exclude_from_inventory") is True, key
+        # The shadowed Python handlers are retired, so every cutover operation
+        # (versioned or not) stays in the fragment for the Vercel rewrite only
+        # and has no FastAPI registry operation or TypeScript caller.
+        assert operation.get("exclude_from_inventory") is True, key
         assert operation["owning_issue"] == 4839, key
     for key in python_ops:
         operation = declared[key]
@@ -685,10 +679,10 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
     """One family's fragment merge never alters another family's routes."""
     inventory = load_json(INVENTORY_PATH)
     fragments = _load_route_fragments(FRAGMENT_DIR)
-    undo = next(f for f in fragments if f.name == "undo")
+    sessions = next(f for f in fragments if f.name == "sessions")
     creators = next(f for f in fragments if f.name == "creators")
 
-    merged_undo_only = _merge_route_fragments(inventory, [undo])
+    merged_sessions_only = _merge_route_fragments(inventory, [sessions])
     merged_full = _merge_route_fragments(inventory, fragments)
 
     def _method_path_set(
@@ -712,13 +706,13 @@ def test_new_family_fragment_merges_without_touching_other_family() -> None:
         return found
 
     creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations if not op.get("exclude_from_inventory")}
-    # Merging undo alone must not remove or alter any creators route.
-    assert _method_path_set(merged_undo_only, creators_keys) == creators_keys
+    # Merging sessions alone must not remove or alter any creators route.
+    assert _method_path_set(merged_sessions_only, creators_keys) == creators_keys
     assert _method_path_set(merged_full, creators_keys) == creators_keys
-    undo_keys = {(str(op["method"]), str(op["path"])) for op in undo.operations if not op.get("exclude_from_inventory")}
-    assert undo_keys
-    assert undo_keys.isdisjoint(creators_keys)
-    assert _method_path_set(merged_undo_only, undo_keys) == undo_keys
+    sessions_keys = {(str(op["method"]), str(op["path"])) for op in sessions.operations if not op.get("exclude_from_inventory")}
+    assert sessions_keys
+    assert sessions_keys.isdisjoint(creators_keys)
+    assert _method_path_set(merged_sessions_only, sessions_keys) == sessions_keys
 
 
 def test_generators_are_idempotent() -> None:

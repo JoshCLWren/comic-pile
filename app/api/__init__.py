@@ -14,11 +14,9 @@ relying on package-attribute access, which this package no longer provides.
 #: this package, so ``from app.api import *`` does not resolve them.
 ROUTER_SUBMODULES = (
     "cbl_sources",
-    "custom_cbl",
     "dependency",
     "dependency_group",
     "dependency_group_batch",
     "health",
     "reading_order_projection",
-    "reading_plan_sync",
 )
