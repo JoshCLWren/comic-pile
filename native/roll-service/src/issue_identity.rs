@@ -3053,7 +3053,8 @@ async fn reconcile_entries_impl<E: DbExec>(
             series_external_id.as_deref(),
             &canonical_issues,
             fallback_index.as_ref(),
-        );
+        )
+        .await?;
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
@@ -3338,27 +3339,12 @@ async fn load_owned_issue_fallback_index<E: DbExec>(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn title_number_fallback<E: DbExec>(
-    tx: &E,
-    _user_id: i32,
-    _cvid: &str,
+async fn title_number_fallback(
     series_name: &str,
     issue_number: &str,
-    series_provider: Option<&str>,
     series_external_id: Option<&str>,
     fallback_index: &OwnedIssueFallbackIndex,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
+) -> Result<EntryResolution, ApiError> {
     let want_series = normalize_title_number(series_name);
     let want_issue = normalize_title_number(issue_number);
     if want_series.is_empty() || want_issue.is_empty() {
@@ -3394,27 +3380,7 @@ async fn title_number_fallback<E: DbExec>(
         ));
     }
 
-    let candidate_issue_ids: Vec<i32> = matches.iter().map(|m| m.0).collect();
-    let confirmed_rows = tx
-        .run_query(
-            r#"
-        SELECT m.issue_id
-        FROM issue_external_identity_mappings m
-        JOIN external_identities ei ON ei.id = m.external_identity_id
-        WHERE m.issue_id = ANY($1::int[])
-          AND m.status = 'confirmed'
-          AND ei.provider = 'comicvine'
-          AND ei.entity_type = 'issue'
-        "#,
-            &[&candidate_issue_ids],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
-    let mut has_confirmed: std::collections::HashSet<i32> = std::collections::HashSet::new();
-    for row in confirmed_rows {
-        has_confirmed.insert(row.get(0));
-    }
-    matches.retain(|m| !has_confirmed.contains(&m.0));
+    matches.retain(|m| !fallback_index.confirmed_issue_ids.contains(&m.0));
     if matches.is_empty() {
         return Ok((
             None,
@@ -3514,25 +3480,14 @@ async fn title_number_fallback<E: DbExec>(
     ))
 }
 
-async fn resolve_canonical_for_entry<E: DbExec>(
-    tx: &E,
-    user_id: i32,
+async fn resolve_canonical_for_entry(
     comicvine_issue_id: Option<&str>,
     series_name: &str,
     issue_number: &str,
     series_external_id: Option<&str>,
-    fallback_index: &OwnedIssueFallbackIndex,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
+    canonical_issues: &CanonicalIssueIndex,
+    fallback_index: Option<&OwnedIssueFallbackIndex>,
+) -> Result<EntryResolution, ApiError> {
     if let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) {
         let eid = tx.run_query_opt(
             "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
