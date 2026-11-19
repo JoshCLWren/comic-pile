@@ -453,6 +453,21 @@ def _fragment_named(name: str) -> RouteFragment:
     raise AssertionError(f"missing fragment {name}")
 
 
+def test_taste_discoveries_fragment_routes_only_to_native_rust() -> None:
+    """Taste discoveries must not declare Python ingress and must keep Rust handlers."""
+    fragment = _fragment_named("taste-discoveries")
+    operations = [op for op in fragment.operations if isinstance(op, dict)]
+    by_method_path = {(op.get("method"), op.get("path")): op for op in operations}
+
+    assert ("GET", "/api/v1/taste/discoveries") in by_method_path
+    assert ("POST", "/api/v1/taste/discoveries/{signal_id}/dismiss") in by_method_path
+    assert ("OPTIONS", "/api/v1/taste/discoveries") not in by_method_path
+
+    for operation in operations:
+        assert operation.get("dest") == "/api/native_roll.rs", operation
+        assert operation.get("dest") != "/api/index.py", operation
+
+
 def test_creator_fragment_covers_native_v2_and_creator_adjacent_metadata() -> None:
     """The creators pilot owns its native v2 routes plus creator-adjacent v1 metadata."""
     fragment = _fragment_named("creators")
