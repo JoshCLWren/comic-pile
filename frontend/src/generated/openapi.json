@@ -6117,6 +6117,18 @@
         "title": "DependencyGroupCreate",
         "type": "object"
       },
+      "DependencyGroupCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "DependencyGroupDetailMemberResponse": {
         "description": "Enriched member with thread and issue objects for crossover detail view.",
         "properties": {
@@ -6226,6 +6238,29 @@
         "title": "DependencyGroupIssueRangeCreate",
         "type": "object"
       },
+      "DependencyGroupIssueRangeCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
+        "properties": {
+          "end_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position"
+        ],
+        "type": "object"
+      },
       "DependencyGroupIssueRangeResponse": {
         "description": "Summary of an idempotent issue-range membership operation.",
         "properties": {
@@ -6308,6 +6343,33 @@
           }
         },
         "title": "DependencyGroupMemberCreate",
+        "type": "object"
+      },
+      "DependencyGroupMemberCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupMemberCreate` payload.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "DependencyGroupMemberResponse": {
@@ -6421,6 +6483,21 @@
         "title": "DependencyGroupOrderUpdate",
         "type": "object"
       },
+      "DependencyGroupOrderUpdateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupOrderUpdate` payload.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupOrderItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "DependencyGroupResponse": {
         "description": "A named dependency group with its members.",
         "properties": {
@@ -6502,6 +6579,18 @@
           "name"
         ],
         "title": "DependencyGroupUpdate",
+        "type": "object"
+      },
+      "DependencyGroupUpdateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
         "type": "object"
       },
       "DependencyNoteUpdate": {
@@ -8582,6 +8671,242 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupDetailMemberResponse": {
+        "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IssueDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "membership": {
+            "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
+          },
+          "other_crossovers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ThreadDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "membership",
+          "other_crossovers"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupDetailResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupDetailResponse`.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "linked_plans": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupSummary"
+            },
+            "type": "array"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupDetailMemberResponse"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "linked_plans"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupIssueRangeResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupIssueRangeResponse`.",
+        "properties": {
+          "added_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "already_present_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "end_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position",
+          "added_issue_ids",
+          "already_present_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupMemberResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupMemberResponse`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupOrderItem": {
+        "description": "Wire request item mirroring the Python `DependencyGroupOrderItem` payload.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "sequence_order"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "read_issues": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "read_issues",
+          "total_issues",
+          "reading_progress"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupSummary": {
+        "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -22181,22 +22506,26 @@
     },
     "/api/v1/reading-order-groups/": {
       "get": {
-        "description": "List the current user's groups and memberships.",
-        "operationId": "list_groups_api_v1_reading_order_groups__get",
+        "operationId": "dependency_groups_list",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupResponse"
+                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                   },
-                  "title": "Response List Groups Api V1 Reading Order Groups  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned groups with memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22204,21 +22533,18 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Groups",
+        "summary": "Documentation-only operation for listing reading-order groups.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "post": {
-        "description": "Create a user-owned named group.",
-        "operationId": "create_group_api_v1_reading_order_groups__post",
+        "operationId": "dependency_groups_create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreate"
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
               }
             }
           },
@@ -22229,21 +22555,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22251,25 +22579,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Group",
+        "summary": "Documentation-only operation for creating a reading-order group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
       "get": {
-        "description": "List groups containing an owned thread or any of its owned issues.",
-        "operationId": "list_thread_groups_api_v1_reading_order_groups_threads__thread_id__groups_get",
+        "operationId": "dependency_groups_list_thread_groups",
         "parameters": [
           {
+            "description": "Owned thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22280,24 +22606,25 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
-                  "title": "Response List Thread Groups Api V1 Reading Order Groups Threads  Thread Id  Groups Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Groups containing the thread or its issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22305,42 +22632,42 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Groups",
+        "summary": "Documentation-only operation for listing groups for a thread.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
-        "description": "Delete one owned group and its memberships.",
-        "operationId": "delete_group_api_v1_reading_order_groups__group_id__delete",
+        "operationId": "dependency_groups_delete",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22348,23 +22675,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Group",
+        "summary": "Documentation-only operation for deleting one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "get": {
-        "description": "Return one owned group.",
-        "operationId": "get_group_api_v1_reading_order_groups__group_id__get",
+        "operationId": "dependency_groups_get",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22374,21 +22699,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22396,23 +22723,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group",
+        "summary": "Documentation-only operation for fetching one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "patch": {
-        "description": "Rename one owned group.",
-        "operationId": "update_group_api_v1_reading_order_groups__group_id__patch",
+        "operationId": "dependency_groups_update",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22421,7 +22746,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdate"
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
               }
             }
           },
@@ -22432,21 +22757,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Renamed group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22454,25 +22784,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Group",
+        "summary": "Documentation-only operation for renaming one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/detail": {
       "get": {
-        "description": "Return one owned group with enriched member, plan, and project data.",
-        "operationId": "get_group_detail_api_v1_reading_order_groups__group_id__detail_get",
+        "operationId": "dependency_groups_get_detail",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22482,21 +22810,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22504,25 +22834,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group Detail",
+        "summary": "Documentation-only operation for fetching enriched group detail.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
       "post": {
-        "description": "Add one inclusive issue-position range from an owned thread to a group.",
-        "operationId": "add_issue_range_api_v1_reading_order_groups__group_id__issue_ranges_post",
+        "operationId": "dependency_groups_add_issue_range",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22531,7 +22859,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreate"
+                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreateRequest"
               }
             }
           },
@@ -22542,21 +22870,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupIssueRangeResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupIssueRangeResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Range membership result"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22564,25 +22894,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Add Issue Range",
+        "summary": "Documentation-only operation for adding an issue-position range.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/members": {
       "post": {
-        "description": "Add one owned thread or issue to an owned group.",
-        "operationId": "add_member_api_v1_reading_order_groups__group_id__members_post",
+        "operationId": "dependency_groups_add_member",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22591,7 +22919,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupMemberCreate"
+                "$ref": "#/components/schemas/DependencyGroupMemberCreateRequest"
               }
             }
           },
@@ -22602,21 +22930,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created membership"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, thread, or issue not found"
+          },
+          "409": {
+            "description": "This member is already in the group"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22624,51 +22957,52 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Add Member",
+        "summary": "Documentation-only operation for adding a group member.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/members/{member_id}": {
       "delete": {
-        "description": "Remove one membership from an owned group.",
-        "operationId": "remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete",
+        "operationId": "dependency_groups_remove_member",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Membership identifier",
             "in": "path",
             "name": "member_id",
             "required": true,
             "schema": {
-              "title": "Member Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Membership removed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or member not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22676,25 +23010,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Remove Member",
+        "summary": "Documentation-only operation for removing a group member.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
-        "description": "Set the authoritative ordered reading sequence of a crossover's issue-level members.",
-        "operationId": "set_group_order_api_v1_reading_order_groups__group_id__order_put",
+        "operationId": "dependency_groups_set_order",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22703,7 +23035,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupOrderUpdate"
+                "$ref": "#/components/schemas/DependencyGroupOrderUpdateRequest"
               }
             }
           },
@@ -22714,21 +23046,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Updated group with reordered memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, issue, or membership not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22736,25 +23070,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Set Group Order",
+        "summary": "Documentation-only operation for setting crossover order.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/plans": {
       "get": {
-        "description": "List continuity plans that reference this crossover as a node.",
-        "operationId": "list_crossover_plans_api_v1_reading_order_groups__group_id__plans_get",
+        "operationId": "dependency_groups_list_plans",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -22765,24 +23097,25 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
-                  "title": "Response List Crossover Plans Api V1 Reading Order Groups  Group Id  Plans Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Linked continuity plans"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -22790,10 +23123,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Crossover Plans",
+        "summary": "Documentation-only operation for listing linked continuity plans.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }

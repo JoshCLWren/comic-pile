@@ -100,7 +100,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         // client types after the shadowed Python handlers retire (#5440).
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
-        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi());
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
+        .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.

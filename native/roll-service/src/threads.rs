@@ -115,7 +115,7 @@ pub struct ThreadListResponse {
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
     pub id: i32,
     pub title: String,
