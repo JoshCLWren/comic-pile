@@ -98,6 +98,41 @@ beforeEach(() => {
 })
 
 describe('IdentityInboxPage', () => {
+  it.each([
+    { source: 'direct image URL', image: { image_url: 'https://example.test/direct.jpg' }, url: 'https://example.test/direct.jpg' },
+    { source: 'primary image', image: { primary_image: 'https://example.test/primary.jpg' }, url: 'https://example.test/primary.jpg' },
+    { source: 'medium image', image: { image: { medium_url: 'https://example.test/medium.jpg' } }, url: 'https://example.test/medium.jpg' },
+    { source: 'small image', image: { image: { small_url: 'https://example.test/small.jpg' } }, url: 'https://example.test/small.jpg' },
+    { source: 'original image', image: { image: { original_url: 'https://example.test/original.jpg' } }, url: 'https://example.test/original.jpg' },
+    { source: 'thumbnail', image: { image: { thumb_url: 'https://example.test/thumb.jpg' } }, url: 'https://example.test/thumb.jpg' },
+  ])('uses the candidate own $source without resolving any other identity', async ({ image, url }) => {
+    const item = inboxItem()
+    item.candidates[0].metadata_json = { volume: { name: 'Mister Miracle' }, ...image }
+    mockQueryResult([item], 1)
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    expect(screen.getByRole('img', { name: 'Cover for Mister Miracle' })).toHaveAttribute('src', url)
+  })
+
+  it('renders the shared placeholder for a provider candidate with no supplied art', async () => {
+    mockQueryResult([inboxItem()], 1)
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    expect(screen.getByLabelText('No cover for Mister Miracle')).toBeInTheDocument()
+  })
+
   it('shows each unconfirmed provider candidate own cover without changing confirmation actions', async () => {
     const item = inboxItem()
     item.candidates[0].metadata_json = {
