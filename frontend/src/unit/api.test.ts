@@ -179,7 +179,7 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses canonical paths for session and undo resources', async () => {
+it('uses migrated v2 session detail/snapshot paths and v2 undo paths', async () => {
   await sessionApi.list()
   await sessionApi.get(7)
   await sessionApi.getDetails(7)
@@ -189,8 +189,8 @@ it('uses canonical paths for session and undo resources', async () => {
 
   expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
   expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
   expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
 })

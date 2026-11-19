@@ -251,6 +251,8 @@ export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
 export type DiscoveriesResponse = components['schemas']['CreatorDiscoveryResponse']
 
+export type DismissPendingResponse = void
+
 export interface EligibleIssueIdsRequest {
   query?: {
     snoozed?: string
@@ -299,6 +301,14 @@ export interface GetReadingListRequest {
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
 
+export interface GetSessionDetailsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type GetSessionDetailsResponse = components['schemas']['SessionDetailsResponse']
+
 export interface GetThreadDependenciesRequest {
   path: {
     thread_id: number
@@ -314,8 +324,6 @@ export interface GetThreadIssueDependenciesRequest {
 }
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
-
-export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -369,6 +377,14 @@ export type ListActivityResponse = components['schemas']['ActivityResponse']
 export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
+
+export interface ListSessionSnapshotsRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type ListSessionSnapshotsResponse = components['schemas']['SessionSnapshotsResponse']
 
 export interface ListThreadIssuesRequest {
   path: {
@@ -439,6 +455,12 @@ export interface OfferRequest {
 }
 
 export type OfferResponse = components['schemas']['RollOfferResponse']
+
+export interface OverrideRollRequest {
+  body: components['schemas']['RollOverrideRequest']
+}
+
+export type OverrideRollResponse = components['schemas']['NativeRollResponse']
 
 export interface PreviewRequest {
   path: {
@@ -708,6 +730,12 @@ export interface SummariesRequest {
 
 export type SummariesResponse = components['schemas']['CreatorSummariesResponse']
 
+export interface SwitchPrerequisiteRequest {
+  body: components['schemas']['RollPrerequisiteSwitchRequest']
+}
+
+export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisiteSwitchResponse']
+
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
 export interface UndoToSnapshotRequest {
@@ -785,6 +813,7 @@ export interface NativeV2Client {
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
   discoveries(): Promise<DiscoveriesResponse>
+  dismissPending(): Promise<DismissPendingResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
@@ -792,9 +821,9 @@ export interface NativeV2Client {
   getMetrics(): Promise<GetMetricsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
-  getV1Metrics(): Promise<GetV1MetricsResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -804,6 +833,7 @@ export interface NativeV2Client {
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
+  listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
@@ -813,6 +843,7 @@ export interface NativeV2Client {
   me(): Promise<MeResponse>
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
+  overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
@@ -848,6 +879,7 @@ export interface NativeV2Client {
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
+  switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -1023,6 +1055,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     discoveries() {
       return client.get<DiscoveriesResponse>("/v2/creators/discoveries")
     },
+    dismissPending() {
+      return client.post<DismissPendingResponse>("/v2/roll/dismiss-pending")
+    },
     eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
       return client.get<EligibleIssueIdsResponse>(
         "/v2/roll/eligible-issue-ids",
@@ -1058,6 +1093,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
       )
     },
+    getSessionDetails(args: GetSessionDetailsRequest) {
+      return client.get<GetSessionDetailsResponse>(
+        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/details`,
+      )
+    },
     getThreadDependencies(args: GetThreadDependenciesRequest) {
       return client.get<GetThreadDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
@@ -1067,9 +1107,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<GetThreadIssueDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
-    },
-    getV1Metrics() {
-      return client.get<GetV1MetricsResponse>("/v1/metrics")
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
@@ -1115,6 +1152,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
     },
+    listSessionSnapshots(args: ListSessionSnapshotsRequest) {
+      return client.get<ListSessionSnapshotsResponse>(
+        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
+      )
+    },
     listThreadIssues(args: ListThreadIssuesRequest) {
       return client.get<ListThreadIssuesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
@@ -1159,6 +1201,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(
         "/v2/roll/offer",
+        args.body,
+      )
+    },
+    overrideRoll(args: OverrideRollRequest) {
+      return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
+        "/v2/roll/override",
         args.body,
       )
     },
@@ -1265,7 +1313,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     releasesList(args: ReleasesListRequest = {}) {
       return client.get<ReleasesListResponse>(
-        "/v1/releases/",
+        "/v2/releases",
         { params: compactQuery(args.query) },
       )
     },
@@ -1346,6 +1394,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<SummariesResponse>(
         "/v2/creators/summaries",
         { params: compactQuery(args.query) },
+      )
+    },
+    switchPrerequisite(args: SwitchPrerequisiteRequest) {
+      return client.post<SwitchPrerequisiteResponse, SwitchPrerequisiteRequest['body']>(
+        "/v2/roll/switch-prerequisite",
+        args.body,
       )
     },
     teamChemistry() {

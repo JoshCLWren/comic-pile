@@ -156,7 +156,7 @@ async fn override_requires_auth() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/roll/override")
+            .uri("/api/v2/roll/override")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(json!({"thread_id": 1}).to_string()))
             .unwrap(),
@@ -172,7 +172,7 @@ async fn switch_prerequisite_requires_auth() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/roll/switch-prerequisite")
+            .uri("/api/v2/roll/switch-prerequisite")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({"node_type":"issue","node_id":1}).to_string(),
@@ -279,7 +279,7 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": 999999})),
@@ -303,7 +303,7 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": thread_id})),
@@ -337,7 +337,7 @@ async fn override_returns_422_for_non_selectable_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": thread_id})),
@@ -354,7 +354,7 @@ async fn switch_prerequisite_returns_404_for_missing_or_other_users_issue() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             &token,
             &csrf,
             Some(json!({"node_type":"issue","node_id":999999})),
@@ -371,7 +371,7 @@ async fn switch_prerequisite_rejects_unsupported_node_type() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             &token,
             &csrf,
             Some(json!({"node_type":"crossover","node_id":1})),

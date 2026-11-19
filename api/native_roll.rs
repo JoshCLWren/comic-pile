@@ -223,7 +223,6 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
-        .route("/api/v1/metrics", get(native_metrics))
         .route("/api/v1/identity-inbox", get(native_dispatch))
         .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
         .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
@@ -250,18 +249,12 @@ fn app() -> Router {
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
-        .route("/api/sessions/", get(native_dispatch))
-        .route("/api/sessions/{session_id}", get(native_dispatch))
-        .route("/api/v1/sessions/{session_id}", get(native_dispatch))
-        .route("/api/sessions/{session_id}/snapshots", get(native_dispatch))
         .route(
-            "/api/v1/sessions/{session_id}/snapshots",
+            "/api/v2/reading-sessions/{session_id}/snapshots",
             get(native_dispatch),
         )
-        .route("/api/v1/sessions/", get(native_dispatch))
-        .route("/api/sessions/{session_id}/details", get(native_dispatch))
         .route(
-            "/api/v1/sessions/{session_id}/details",
+            "/api/v2/reading-sessions/{session_id}/details",
             get(native_dispatch),
         )
         .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
@@ -272,6 +265,22 @@ fn app() -> Router {
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route(
             "/api/v1/catalog/series-mappings/commit",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
             post(native_dispatch),
         )
         .route("/api/v2/roll/offer", post(native_dispatch))
@@ -386,10 +395,6 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
-        .route(
-            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
-            get(native_dispatch),
-        )
         .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -496,7 +501,7 @@ fn app() -> Router {
             "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
             get(native_dispatch),
         )
-        .route("/api/v1/releases/", get(native_dispatch))
+        .route("/api/v2/releases", get(native_dispatch))
         .route("/api/v1/releases/", put(native_dispatch))
         .route("/api/v1/releases/source", get(native_dispatch))
         .route("/api/v1/releases/{release_id}", get(native_dispatch))
@@ -537,10 +542,8 @@ fn app() -> Router {
         )
         .route("/api/v1/tags/{tag_id}/unassign/", delete(native_dispatch))
         .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
-        .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/roll/dismiss-pending", post(native_dispatch))
-        .route("/api/v1/roll/override", post(native_dispatch))
-        .route("/api/roll/override", post(native_dispatch))
+        .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v2/roll/override", post(native_dispatch))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(native_dispatch),
@@ -549,7 +552,7 @@ fn app() -> Router {
             "/api/roll/events/{event_id}/recommendation-explanation",
             get(native_dispatch),
         )
-        .route("/api/v1/roll/switch-prerequisite", post(native_dispatch))
+        .route("/api/v2/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
         .route("/api/v1/users/me/preferences", patch(native_dispatch))
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))
@@ -647,6 +650,48 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
+        .route("/api/v1/reading-order-groups/", get(native_dispatch))
+        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        .route(
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/order",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/plans",
+            get(native_dispatch),
+        )
         .fallback(native_not_found)
 }
 
@@ -680,7 +725,7 @@ mod tests {
         comicpile_roll_service::metrics::record_startup_start();
         comicpile_roll_service::metrics::mark_startup_complete();
         let mut first = None;
-        for path in ["/api/metrics", "/api/v1/metrics"] {
+        for path in ["/api/metrics"] {
             let response = app()
                 .call(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
@@ -1052,8 +1097,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_detail_ingress_preserves_same_paths_and_requires_auth() {
-        for uri in ["/api/sessions/7", "/api/v1/sessions/7"] {
+    async fn v2_reading_session_ingress_reaches_rust_and_requires_auth() {
+        for uri in [
+            "/api/v2/reading-sessions/7/details",
+            "/api/v2/reading-sessions/7/snapshots",
+        ] {
             let mut router = app();
             let response = router
                 .call(
@@ -1082,6 +1130,41 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric session ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn migrated_v2_roll_and_release_ingress_never_hits_json_404() {
+        // The Vercel ingress owns a route table separate from the library
+        // router. Every browser-facing path moved in this cutover must be
+        // registered here too, otherwise it falls through to native_not_found.
+        for (method, uri) in [
+            ("POST", "/api/v2/roll/override"),
+            ("POST", "/api/v2/roll/dismiss-pending"),
+            ("POST", "/api/v2/roll/switch-prerequisite"),
+            ("GET", "/api/v2/releases"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback"
             );
         }
     }
