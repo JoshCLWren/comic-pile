@@ -93,6 +93,7 @@ function CandidateCard({
           threadTitle={volumeName ?? issueName ?? 'ComicVine candidate'}
           issueNumber={toText(meta.issue_number) ?? ''}
           variant="compact"
+          imageClassName="h-full w-full object-cover"
         />
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-[var(--theme-text-primary)] truncate">
