@@ -98,14 +98,19 @@ beforeEach(() => {
 })
 
 describe('IdentityInboxPage', () => {
-  it.each([
+  const candidateArtCases: Array<{
+    source: string
+    image: Record<string, string | Record<string, string> | null>
+    url: string
+  }> = [
     { source: 'direct image URL', image: { image_url: 'https://example.test/direct.jpg' }, url: 'https://example.test/direct.jpg' },
     { source: 'primary image', image: { primary_image: 'https://example.test/primary.jpg' }, url: 'https://example.test/primary.jpg' },
     { source: 'medium image', image: { image: { medium_url: 'https://example.test/medium.jpg' } }, url: 'https://example.test/medium.jpg' },
     { source: 'small image', image: { image: { small_url: 'https://example.test/small.jpg' } }, url: 'https://example.test/small.jpg' },
     { source: 'original image', image: { image: { original_url: 'https://example.test/original.jpg' } }, url: 'https://example.test/original.jpg' },
     { source: 'thumbnail', image: { image: { thumb_url: 'https://example.test/thumb.jpg' } }, url: 'https://example.test/thumb.jpg' },
-  ])('uses the candidate own $source without resolving any other identity', async ({ image, url }) => {
+  ]
+  it.each(candidateArtCases)('uses the candidate own $source without resolving any other identity', async ({ image, url }) => {
     const item = inboxItem()
     item.candidates[0].metadata_json = { volume: { name: 'Mister Miracle' }, ...image }
     mockQueryResult([item], 1)
