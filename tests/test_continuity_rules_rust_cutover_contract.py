@@ -47,11 +47,11 @@ def test_vercel_rewrites_send_every_operation_to_the_native_binary_first() -> No
         if route.get("src") == "/api(?:/.*)?"
     )
     expected = {
-        ("^/api/v1/continuity\\-rules/$", {"GET", "POST"}),
-        ("^/api/v1/continuity\\-rules/[^/]+$", {"GET", "PUT", "DELETE"}),
+        ("^/api/v1/continuity\\-rules/$", frozenset({"GET", "POST"})),
+        ("^/api/v1/continuity\\-rules/[^/]+$", frozenset({"GET", "PUT", "DELETE"})),
     }
     found = {
-        (route["src"], set(route["methods"]))
+        (route["src"], frozenset(route["methods"]))
         for route in routes[:catch_all]
         if "continuity\\-rules" in route.get("src", "")
     }
@@ -71,7 +71,7 @@ def test_route_fragment_declares_native_rust_target_owned_by_4848() -> None:
     assert operations == {(method, path) for path, method in EXPECTED_OPERATIONS}
     for op in fragment["operations"]:
         assert op["dest"] == NATIVE_INGRESS
-        assert op["runtime"] == "native-rust"
+        assert op.get("runtime", fragment["defaults"]["runtime"]) == "native-rust"
         assert op["exclude_from_inventory"] is True
 
 
