@@ -5,7 +5,7 @@
   ],
   "defaults": {
     "runtime": "native-rust",
-    "status": "transitional",
+    "status": "native Rust",
     "owning_issue": 4853,
     "consumers": [
       "frontend/src/services/api-taste.ts"
@@ -17,16 +17,14 @@
       "method": "GET",
       "path": "/api/v1/taste/discoveries",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/taste/discoveries$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$"
     }
   ]
 }
