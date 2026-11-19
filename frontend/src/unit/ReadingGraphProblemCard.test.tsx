@@ -145,4 +145,50 @@ describe('ReadingGraphProblemCard', () => {
     await waitFor(() => expect(readingGraphProblemApi.getGraph).toHaveBeenCalledTimes(1))
     expect(screen.queryByText('Reading order needs repair')).not.toBeInTheDocument()
   })
+
+  it('explains an invalid reference without cycle edges or repair buttons', async () => {
+    vi.mocked(readingGraphProblemApi.getGraph).mockResolvedValue({
+      ...healthyGraph,
+      status: 'invalid' as const,
+      unresolved_reference_count: 2,
+    })
+    renderCard()
+
+    expect(await screen.findByText('Missing reference')).toBeInTheDocument()
+    expect(screen.getByText(/2 stored row references a missing issue or series/)).toBeInTheDocument()
+    expect(screen.getByText(/No automatic repair was found/)).toBeInTheDocument()
+    expect(issueCardsApi.fetchCards).not.toHaveBeenCalled()
+  })
+
+  it('names an edge-less cycle generically and lets the owner cancel a preview that leaves a problem', async () => {
+    vi.mocked(readingGraphProblemApi.getGraph).mockResolvedValue({
+      ...graphWithCycle,
+      cycles: [{ message: 'empty cycle', edges: [] }],
+    })
+    vi.mocked(readingGraphProblemApi.repair).mockResolvedValue({
+      applied: false,
+      status_before: 'cycle',
+      status_after: 'cycle',
+      removed: 'One constraint removed',
+      graph: graphWithCycle,
+    })
+    renderCard()
+
+    expect(await screen.findByText('A stored ordering cycle was found.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Delete Reading List/ }))
+    expect(await screen.findByText(/another ordering problem remains/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('One constraint removed')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Delete Reading List/ })).toBeInTheDocument()
+  })
+
+  it('shows a retryable error when the repair preview fails', async () => {
+    vi.mocked(readingGraphProblemApi.getGraph).mockResolvedValue(graphWithCycle)
+    vi.mocked(readingGraphProblemApi.repair).mockRejectedValue(new Error('boom'))
+    renderCard()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Delete Reading List/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not repair the reading order')
+  })
 })
