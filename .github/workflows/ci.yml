@@ -502,7 +502,13 @@ jobs:
 
   ui-audit:
     name: Rendered UI Audit (Chromium)
-    # Playwright system dependencies require Ubuntu 24.04 package names.
+    # ubuntu-24.04 GitHub-hosted runners already ship Chromium and the shared
+    # libraries Playwright needs. Do not install browser system dependencies
+    # with apt here: `playwright install --with-deps` runs `apt-get install`
+    # for fonts-*/xfonts-* from security.ubuntu.com, which has been returning
+    # 503 and failing this job on every PR. Installing only the pinned browser
+    # binaries uses the Playwright CDN and removes all runtime apt dependency
+    # without weakening the audit or its strictness.
     runs-on: ubuntu-24.04
     needs: [build, build-fork, rust-ingress]
     if: always() && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
@@ -525,8 +531,11 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Chromium
-        run: pnpm --filter frontend exec playwright install --with-deps chromium
+      - name: Install Chromium browser binaries
+        # No --with-deps: that path runs apt-get against security.ubuntu.com,
+        # whose 503s for fonts-*/xfonts-* broke every PR. Only the browser
+        # binaries are downloaded (from the Playwright CDN) here.
+        run: pnpm --filter frontend exec playwright install chromium
 
       - name: Run self-contained rendered UI audit
         run: pnpm run audit:ui
