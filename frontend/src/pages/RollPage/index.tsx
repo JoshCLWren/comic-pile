@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
-import type { ThreadListItem, ThreadListResponse } from '../../types'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
@@ -46,6 +45,7 @@ import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
+import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
@@ -348,48 +348,10 @@ export default function RollPage() {
   // arbitrary number of pages just to paint a shelf thumbnail.
   const snoozedCoverQuery = useQuery({
     queryKey: queryKeys.roll.snoozedSeriesCovers(snoozedThreads.map((thread) => thread.id)),
-    queryFn: async (): Promise<Record<number, string | null>> => {
-      const wantedIds = new Set(snoozedThreads.map((thread) => thread.id))
-      const latestById = new Map<number, { url: string | null; updatedAt: number }>()
-      const now = Date.now()
-      const applyThreads = (threads: ThreadListItem[], updatedAt: number) => {
-        // Invalidated, expired and older projections must never overrule a
-        // corrected issue mapping. One timestamp applies to the whole batch.
-        if (!updatedAt || now - updatedAt > 60_000) return
-        for (const thread of threads) {
-          if (!wantedIds.has(thread.id)) continue
-          const previous = latestById.get(thread.id)
-          if (previous && previous.updatedAt > updatedAt) continue
-          latestById.set(thread.id, {
-            url: thread.series_cover_image_url ?? null,
-            updatedAt,
-          })
-        }
-      }
-
-      const plannerState = queryClient.getQueryState<ThreadListItem[]>(queryKeys.thread.list())
-      if (plannerState?.data && !plannerState.isInvalidated) {
-        applyThreads(plannerState.data, plannerState.dataUpdatedAt)
-      }
-      const loadedQueuePages = queryClient.getQueriesData<InfiniteData<ThreadListResponse>>({
-        queryKey: queryKeys.queue.pages(),
-      })
-      for (const [key, pageData] of loadedQueuePages) {
-        const state = queryClient.getQueryState<InfiniteData<ThreadListResponse>>(key)
-        if (!state || state.isInvalidated) continue
-        for (const page of pageData?.pages ?? []) {
-          applyThreads(page.threads, state.dataUpdatedAt)
-        }
-      }
-      if ([...wantedIds].some((id) => !latestById.has(id))) {
-        // A hard upper limit: never walk all queue pages just for art.
-        const page = await threadsApi.list({ page_size: 200 })
-        applyThreads(page.threads, Date.now())
-      }
-      return Object.fromEntries([...latestById].map(([id, value]) => [id, value.url]))
-    },
+    queryFn: () => resolveSnoozedSeriesCovers(snoozedThreads, queryClient),
     enabled: state.snoozedExpanded && snoozedThreads.length > 0 && !state.isRatingView,
-    staleTime: 60_000,
+    // Reopening after mapping corrections must never retain a stale cover.
+    staleTime: 0,
   })
   // Derived die drives the pool cutoff and 3D model; scoped-only with a d6
   // default (see `resolveRollSelectedDie` above).
