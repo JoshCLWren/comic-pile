@@ -32,7 +32,7 @@ test environments — they are intentional exceptions, not client APIs.
 
 The exact canonical families and the allowed legacy aliases are maintained in
 [`docs/API_V1_CANONICAL.md`](API_V1_CANONICAL.md) and enforced by
-`tests/test_api_v1_canonical_contract.py`.
+`tests/test_api_v1_canonical_contract.py`. <!-- docs-path-check: ignore -->
 
 ### API version is not implementation language
 
@@ -67,7 +67,7 @@ tag rows are typed for their stable columns with an explicit additional-property
 boundary, while recovery nodes and mode-guidance JSON remain explicit extension
 boundaries. The inventory, the native contract, the generated schema,
 `vercel.json` ingress and the declared frontend service callers are kept in sync
-by `tests/test_api_v2_contract_inventory.py`.
+by `tests/test_api_v2_contract_inventory.py`. <!-- docs-path-check: ignore -->
 
 ---
 

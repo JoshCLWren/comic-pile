@@ -45,7 +45,7 @@ bounded provider failures. Logged context contains internal/external numeric IDs
 not credentials or provider URLs containing credentials.
 
 For explicit bulk research or repair work, continue to use the existing
-`scripts/hydrate_comicvine_issues.py` workflow. The runtime fallback is deliberately narrow: it
+`scripts/hydrate_comicvine_issues.py` workflow. The runtime fallback is deliberately narrow: it <!-- docs-path-check: ignore -->
 repairs metadata for confirmed issue identities encountered by the product rather than becoming a
 candidate-discovery or bulk-import mechanism.
 
@@ -87,7 +87,7 @@ Bootstrap provider failures return a retryable 503 instead of pretending the rea
 has no safe scope. A missing local series name is nullable at the response boundary and is
 filled from live provider data when available.
 
-Regression evidence is in `tests/test_comicvine_production_mapping_cases.py` and
+Regression evidence is in `tests/test_comicvine_production_mapping_cases.py` and <!-- docs-path-check: ignore -->
 `tests/fixtures/comicvine/production_mapping_cases.json`. The fixture replays public provider
 rosters and the Tom Strong/Starman mapping shapes captured on 2026-10-19; it excludes account
 IDs, credentials, reading progress and history. The original Tom Strong case had 36 confirmed

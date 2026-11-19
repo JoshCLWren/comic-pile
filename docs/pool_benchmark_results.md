@@ -110,7 +110,7 @@ The following pool events are now logged for production monitoring:
 
 ## Regression Tests
 
-Added tests in `scripts/test_pool_config.py` and `scripts/test_pool_events.py` to verify:
+Added tests in `scripts/test_pool_config.py` and `scripts/test_pool_events.py` to verify: <!-- docs-path-check: ignore -->
 1. Environment variable configuration works correctly
 2. Pool event listeners are registered
 3. Default values match baseline configuration

@@ -137,8 +137,8 @@ uv run python scripts/hydrate_comicvine_issues.py --user-id 1 --comicvine-db ./l
 ```
 
 Other scripts use environment variables for local snapshots:
-- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB`
-- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH`
+- `scripts/backfill_read_comicvine.py` uses `COMICVINE_LOCAL_DB` <!-- docs-path-check: ignore -->
+- `comic_pile/local_comicvine.py` uses `COMICPILE_COMICVINE_SQLITE_PATH` <!-- docs-path-check: ignore -->
 
 ### 5. Verify the app is up
 

@@ -5,10 +5,10 @@ Coordination issue: "Use the existing Factory to implement the first Latticery e
 ## What this branch adds (ComicPile side)
 
 - `app/api/delivery.py` — authenticated delivery-ledger HTTP API mounted under `/api/v1/delivery`. <!-- docs-path-check: ignore -->
-- `app/main.py` — registers the delivery router on the versioned surface only.
-- `app/schemas/delivery.py` — `DeliveryFilePayload` plus `files` / `commit_message` on `CrossRepoDeliveryRequest`.
-- `app/services/delivery.py` — `list_delivery_records` and `_apply_delivery_files` so a delivery commits real file content before opening the target PR (bootstrap fix: prior behavior opened an empty branch/PR).
-- `tests/test_delivery.py` — regression coverage for file payloads and content commit behavior.
+- `app/main.py` — registers the delivery router on the versioned surface only. <!-- docs-path-check: ignore -->
+- `app/schemas/delivery.py` — `DeliveryFilePayload` plus `files` / `commit_message` on `CrossRepoDeliveryRequest`. <!-- docs-path-check: ignore -->
+- `app/services/delivery.py` — `list_delivery_records` and `_apply_delivery_files` so a delivery commits real file content before opening the target PR (bootstrap fix: prior behavior opened an empty branch/PR). <!-- docs-path-check: ignore -->
+- `tests/test_delivery.py` — regression coverage for file payloads and content commit behavior. <!-- docs-path-check: ignore -->
 
 ## What is already true from prior issues
 

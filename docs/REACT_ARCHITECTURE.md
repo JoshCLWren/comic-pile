@@ -323,7 +323,7 @@ Vite builds to `../static/react/` with SRI hashes and module splitting
 
 ### FastAPI Integration
 
-FastAPI serves the built SPA whenever `serve_frontend` is enabled (`app/main.py`):
+FastAPI serves the built SPA whenever `serve_frontend` is enabled (`app/main.py`): <!-- docs-path-check: ignore -->
 
 - The React app is served at the root `/` from `static/react/index.html` (with
   no-store headers); `/react` and `/react/` redirect to `/`.

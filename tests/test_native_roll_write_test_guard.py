@@ -8,7 +8,7 @@ predate the rule or delegate their write to an already-tested module.
 
 POST routes that are pure read projections (a batch body with no INSERT/UPDATE/
 DELETE) cannot have a write path. They must instead prove the mounted HTTP route
-against the canonical app schema in ``native/roll-service/parity``.
+against the canonical schema in a DB-backed Rust HTTP integration test.
 """
 
 from __future__ import annotations
@@ -82,8 +82,8 @@ INTEGRATION_WRITE_TESTS = {
 
 
 READ_ONLY_POST_HANDLERS = {
-    ("reading_boundary", "reading_boundary_batch_v2"): "test_http_reading_boundaries.py",
-    ("issue_handler", "issue_cards"): "test_http_issue_cards.py",
+    ("reading_boundary", "reading_boundary_batch_v2"): "reading_boundary_concurrency.rs",
+    ("issue_handler", "issue_cards"): "issue_read_state_v1_http.rs",
 }
 WRITE_SQL_RE = re.compile(
     r"\b(?:INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z0-9_]*\s+SET|DELETE\s+FROM)\b",
@@ -298,11 +298,11 @@ def test_every_mounted_post_handler_has_a_write_test() -> None:
 
 
 def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
-    """A read-only POST exemption needs no write SQL and a DB-backed parity test."""
+    """A read-only POST exemption needs no write SQL and a DB-backed Rust HTTP test."""
     mounted = _mounted_post_routes()
-    parity_root = REPOSITORY_ROOT / "native" / "roll-service" / "parity"
+    tests_root = REPOSITORY_ROOT / "native" / "roll-service" / "tests"
 
-    for (module, handler), parity_name in sorted(READ_ONLY_POST_HANDLERS.items()):
+    for (module, handler), test_file in sorted(READ_ONLY_POST_HANDLERS.items()):
         assert (module, handler) in mounted, (
             f"{module}::{handler} is no longer mounted; remove its read-only "
             "exemption"
@@ -318,29 +318,16 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             "on query/query_one"
         )
 
-        parity = parity_root / parity_name
-        assert parity.is_file(), (
+        integration_test = tests_root / test_file
+        assert integration_test.is_file(), (
             f"{module} is exempt from the write-path guard, so it needs "
-            f"{parity.relative_to(REPOSITORY_ROOT)} proving the mounted route "
-            "against the canonical schema"
+            f"{integration_test.relative_to(REPOSITORY_ROOT)} proving the mounted "
+            "route against the canonical schema"
         )
-        parity_source = parity.read_text(encoding="utf-8")
-        conftest = parity_root / "conftest.py"
-        conftest_source = conftest.read_text(encoding="utf-8") if conftest.is_file() else ""
-        assert any(marker in parity_source for marker in DB_TEST_MARKERS), (
-            f"{parity.name} must run against the canonical PostgreSQL database "
-            "(RUST_ROLL_PARITY_DATABASE_URL, RUST_ROLL_TEST_DATABASE_URL, or a "
-            "test_support accessor)"
-        )
-        # The canonical Alembic schema is proven by the shared autouse fixture,
-        # which serializes tests and resets rows and sequences via TRUNCATE + setval.
-        schema_proven = (
-            "reset_canonical_schema" in conftest_source
-            and "autouse=True" in conftest_source
-        )
-        assert schema_proven, (
-            f"{parity.name} must use the canonical app schema via the parity conftest "
-            "reset_canonical_schema autouse fixture"
+        test_source = integration_test.read_text(encoding="utf-8")
+        assert any(marker in test_source for marker in DB_TEST_MARKERS), (
+            f"{integration_test.name} must run against the canonical PostgreSQL "
+            "database (RUST_ROLL_TEST_DATABASE_URL or a test_support accessor)"
         )
 
 

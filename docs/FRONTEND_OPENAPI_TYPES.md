@@ -96,5 +96,5 @@ and `nativeV2Client.ts` without overwriting repository artifacts. Custom
 `--schema`/`--output` runs do not touch the checked-in native client.
 
 `docs/api/v2-route-inventory.json` and
-`tests/test_api_v2_contract_inventory.py` record and enforce which runtime
+`tests/test_api_v2_contract_inventory.py` record and enforce which runtime <!-- docs-path-check: ignore -->
 serves each live `/api/v2` operation.

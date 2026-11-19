@@ -7,8 +7,8 @@ still carry such literals, so this module enforces the contract as a ratchet in
 the same style as ``tests/test_router_layering_conformance.py``:
 
 - ``tests/hardcoded_ids_baseline.json`` records every current occurrence;
-- any NEW ``User(id=<int>)`` / ``user_id=<int>`` literal in ``tests/`` or NEW
-  ``user_id=1`` literal in ``app/`` fails these tests;
+- any NEW ``User(id=<int>)`` / ``user_id=<int>`` literal in ``tests/`` fails
+  these tests (the ``app/`` scope is retired with the Python API);
 - fixing a coupling must remove its entry from the baseline, which can only
   shrink.
 
@@ -26,7 +26,10 @@ BASELINE_PATH = Path(__file__).resolve().parent / "hardcoded_ids_baseline.json"
 #: File name of this guard, excluded from its own scan.
 _GUARD_FILE_NAME = Path(__file__).name
 
-_SCOPE_DIRECTORIES = {"app": REPOSITORY_ROOT / "app", "tests": REPOSITORY_ROOT / "tests"}
+_SCOPE_DIRECTORIES = {"tests": REPOSITORY_ROOT / "tests"}
+# ``app`` remains a scanner mode for the retired Python-application rule, but
+# there is no longer an app/ directory to walk in the repository baseline.
+_SCAN_SCOPES = {"tests", "app"}
 
 
 def _named_int_arguments(node: ast.Call) -> dict[str, int]:
@@ -63,7 +66,7 @@ def scan_source(source: str, *, scope: str) -> set[str]:
     Raises:
         ValueError: If ``scope`` is not ``"tests"`` or ``"app"``.
     """
-    if scope not in _SCOPE_DIRECTORIES:
+    if scope not in _SCAN_SCOPES:
         raise ValueError(f"Unknown scan scope: {scope!r}")
 
     tree = ast.parse(source)

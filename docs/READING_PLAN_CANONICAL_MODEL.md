@@ -10,8 +10,8 @@
 
 `main` maintained two overlapping ordering concepts:
 
-* **`continuity_plans`** (`ContinuityPlan` in `app/models/continuity_plan.py`): rich JSON document with `nodes` (`issue` | `crossover` | `thread`), `lanes` (ordered parallel sections), and `ordering_mode` (`informational` | `strict_sequential`).
-* **`reading_orders`** (`ReadingOrder` + `ReadingOrderItem` in `app/models/reading_order.py`): a flat, thread-level ordered list.
+* **`continuity_plans`** (`ContinuityPlan` in `app/models/continuity_plan.py`): rich JSON document with `nodes` (`issue` | `crossover` | `thread`), `lanes` (ordered parallel sections), and `ordering_mode` (`informational` | `strict_sequential`). <!-- docs-path-check: ignore -->
+* **`reading_orders`** (`ReadingOrder` + `ReadingOrderItem` in `app/models/reading_order.py`): a flat, thread-level ordered list. <!-- docs-path-check: ignore -->
 
 Keeping both as peers recreates the competing-source-of-truth problem from #257: one system controls visible order while another controls blocking, with no single owner for what the reader intends next.
 

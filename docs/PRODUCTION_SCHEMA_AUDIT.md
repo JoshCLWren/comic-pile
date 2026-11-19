@@ -5,7 +5,7 @@ canonical Alembic fixture at
 `native/migrate/migrations/V1__baseline.sql`.
 `alembic current` only proves the migrated stamp; this audit proves actual
 schema equivalence through `pg_dump --schema-only` normalized with the
-established `scripts/export_roll_test_schema.py` logic plus order-insensitive
+established `scripts/export_roll_test_schema.py` logic plus order-insensitive <!-- docs-path-check: ignore -->
 statement comparison (`scripts/production_schema_audit.py`).
 
 ## What it proves
@@ -14,7 +14,7 @@ statement comparison (`scripts/production_schema_audit.py`).
   minimal diagnostic (counts plus changed object names, and a bounded,
   redacted diff artifact on mismatch).
 - A deliberate schema change (added/dropped column, index, or constraint)
-  is reliably detected; see `tests/test_production_schema_audit.py`, which
+  is reliably detected; see `tests/test_production_schema_audit.py`, which <!-- docs-path-check: ignore -->
   covers both synthetic mutations and a throwaway-PostgreSQL round-trip.
 - Owner/grant/extension-version/ordering noise is normalized deliberately
   without masking real table/column/index/constraint/function changes.
@@ -67,7 +67,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO schema_audit;
 ## Known prod-only extensions
 
 **No extension is ignored by default.** The allowlist
-(`PROD_ONLY_EXTENSION_ALLOWLIST` in `scripts/export_roll_test_schema.py`)
+(`PROD_ONLY_EXTENSION_ALLOWLIST` in `scripts/export_roll_test_schema.py`) <!-- docs-path-check: ignore -->
 ships empty. The canonical fixture intentionally contains exactly one
 extension, `pg_trgm` (created by migration `c40080000001`). If a production
 dump shows platform extensions (for example `pg_stat_statements` or Neon

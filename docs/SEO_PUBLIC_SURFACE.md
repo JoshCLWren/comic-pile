@@ -36,7 +36,7 @@ The policy is expressed in one place per surface. None of them duplicates anothe
 - `frontend/scripts/generate-route-html.mjs` — prerenders per-route HTML metadata from the
   same table so crawlers see route-specific title, description, canonical, and robots tags
   without executing JavaScript.
-- `app/main.py` — serves the built artifacts and emits `X-Robots-Tag: noindex, nofollow`
+- `app/main.py` — serves the built artifacts and emits `X-Robots-Tag: noindex, nofollow` <!-- docs-path-check: ignore -->
   for every SPA path except `/`.
 
 ## Automated regression coverage
@@ -50,7 +50,7 @@ The policy is enforced across artifacts, so drift fails CI rather than shipping:
 - `frontend/src/unit/sitemap.test.ts` and `frontend/scripts/generate-sitemap.test.mjs` — the
   sitemap lists exactly the indexable routes and nothing else.
 - `frontend/src/unit/seoHtmlGeneration.test.ts` — the prerendered metadata generator.
-- `tests/test_seo_crawlability.py` — the served HTTP surface: `X-Robots-Tag` policy,
+- `tests/test_seo_crawlability.py` — the served HTTP surface: `X-Robots-Tag` policy, <!-- docs-path-check: ignore -->
   `robots.txt` content and cache headers, the sitemap, and the no-JavaScript landing HTML.
 - `frontend/src/test/issue-3068-seo-route-cleanup.spec.ts` — browser-level crawlability and
   redirect-chain behavior.

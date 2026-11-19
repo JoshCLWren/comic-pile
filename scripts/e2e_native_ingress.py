@@ -1,11 +1,8 @@
-"""Same-origin ingress for local/e2e runs that need native v2 plus Python.
+"""Same-origin ingress for local/e2e runs against the native Rust service.
 
-Vercel routes ``/api/v2/*`` to the native Rust functions before the Python
-catch-all. Local Playwright/e2e runs serve a single origin from one ASGI
-process, so this bounded proxy reproduces that method/path split:
-
-* ``/api/v2/*`` -> ``NATIVE_ROLL_URL`` (default ``http://127.0.0.1:8010``)
-* everything else -> ``PYTHON_API_URL`` (default ``http://127.0.0.1:9001``)
+Vercel routes every ``/api/*`` request to native Rust. Local Playwright/e2e
+runs serve a single origin from one process, so this bounded proxy forwards
+all requests to ``NATIVE_ROLL_URL`` (default ``http://127.0.0.1:8010``).
 
 It is test/dev infrastructure only. It is not an application route, does not
 implement any endpoint, and must never be deployed as a compatibility fallback.
@@ -18,9 +15,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-NATIVE_PREFIX = "/api/v2"
 NATIVE = urlsplit(os.environ.get("NATIVE_ROLL_URL", "http://127.0.0.1:8010"))
-PYTHON = urlsplit(os.environ.get("PYTHON_API_URL", "http://127.0.0.1:9001"))
 LISTEN_PORT = int(os.environ.get("INGRESS_PORT", "9000"))
 HOP_BY_HOP = {
     "connection",
@@ -41,7 +36,7 @@ class Ingress(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def _forward(self) -> None:
-        upstream = NATIVE if self.path.startswith(NATIVE_PREFIX) else PYTHON
+        upstream = NATIVE
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else None
         headers = {
@@ -82,12 +77,7 @@ for _method in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"):
 def main() -> None:
     """Serve until the process is stopped."""
     server = ThreadingHTTPServer(("127.0.0.1", LISTEN_PORT), Ingress)
-    print(
-        f"e2e ingress on :{LISTEN_PORT} "
-        f"(native {NATIVE.geturl()} for {NATIVE_PREFIX}, "
-        f"python {PYTHON.geturl()})",
-        flush=True,
-    )
+    print(f"e2e ingress on :{LISTEN_PORT} -> native {NATIVE.geturl()}", flush=True)
     server.serve_forever()
 
 

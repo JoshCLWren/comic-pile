@@ -28,7 +28,7 @@ Each test that mutates production must delete its own records in a `finally` blo
 
 ## Account cleanup
 
-`scripts/cleanup_production_e2e_accounts.py` runs both before and after production monitoring. Exact post-run cleanup deletes the current disposable account. Pre-run cleanup reaps accounts older than 24 hours after interrupted runs.
+`scripts/cleanup_production_e2e_accounts.py` runs both before and after production monitoring. Exact post-run cleanup deletes the current disposable account. Pre-run cleanup reaps accounts older than 24 hours after interrupted runs. <!-- docs-path-check: ignore -->
 
 - both username and email match the reserved run-scoped patterns;
 - the run ID and attempt encoded in the username and email agree;

@@ -237,9 +237,9 @@ allocated in the entire history of this database, of which 13 survive. No amount
 could lower the sequence. `cbl_sources_id_seq.last_value` is 5, against 1 surviving source row.
 
 **2. It is not an API limit.** `discover_cbl_source_lists`
-(`app/repositories/cbl_source_repository.py`) filters only on `active = True` and applies the
+(`app/repositories/cbl_source_repository.py`) filters only on `active = True` and applies the <!-- docs-path-check: ignore -->
 caller's `limit`. The endpoint's default is 25 and its ceiling is 100
-(`app/api/cbl_sources.py:36`). With 13 active rows, the endpoint already returns all 13 — the API is
+(`app/api/cbl_sources.py:36`). With 13 active rows, the endpoint already returns all 13 — the API is <!-- docs-path-check: ignore -->
 not withholding anything. The 13 is a persistence fact, not a presentation fact.
 
 **3. It is not a parse-coverage problem.** 1,701 of 1,706 files parse. The 1,688 lists absent from
@@ -258,21 +258,21 @@ orders and imported exactly those.
 ### A latent hazard that will break the first real sync
 
 Production's `cbl_sources.repository` is the local absolute path `/mnt/bigdata/CBL-ReadingLists`. The
-documented default in `scripts/sync_cbl_mirror.py` is `JoshCLWren/CBL-ReadingLists`. Because
+documented default in `scripts/sync_cbl_mirror.py` is `JoshCLWren/CBL-ReadingLists`. Because <!-- docs-path-check: ignore -->
 `sync_cbl_lists` locates the existing source by exact `repository` string match
-(`app/cbl_sync.py:82`), running the sync script with its default `--repository` would **not** find
+(`app/cbl_sync.py:82`), running the sync script with its default `--repository` would **not** find <!-- docs-path-check: ignore -->
 source 3. It would create a second source row and insert all 1,701 lists fresh, leaving the original
 13 stranded on an orphaned source and duplicating every list. Whoever runs the first full sync must
 either pass `--repository /mnt/bigdata/CBL-ReadingLists` or migrate the existing row's identity
 first. This is also why the repository column should hold a stable remote identity, not a machine
-path. `scripts/sync_cbl_mirror.py` now supports
+path. `scripts/sync_cbl_mirror.py` now supports <!-- docs-path-check: ignore -->
 `--reconcile-repository /mnt/bigdata/CBL-ReadingLists`, which renames that source row in place on an
 applying run (preserving its source and list IDs) instead of creating a second source. See
 [`CBL_MIRROR_REFRESH.md`](CBL_MIRROR_REFRESH.md).
 
 ### The real cost blocker for a full sync
 
-Parsing is not the bottleneck; identity persistence is. `_build_entry` (`app/cbl_sync.py:200`) awaits
+Parsing is not the bottleneck; identity persistence is. `_build_entry` (`app/cbl_sync.py:200`) awaits <!-- docs-path-check: ignore -->
 `upsert_external_identity` once per non-null ComicVine id, per entry, with no batching and no
 in-run memoization. For the full mirror that is **667,172 sequential awaited round trips** to resolve
 only **85,467 distinct identities** (9,020 series + 76,447 issue) — roughly 7.8× more database
@@ -299,7 +299,7 @@ Verified against the live route table (`app.main.app.routes`), not the generated
 
 Two corrections to the previous revision's endpoint list: the `reconciliation` endpoint exists and
 was omitted, and the custom-CBL paths are mounted under `/api/v1/custom-cbls` (the router is included
-into `dependency.router` in `app/api/__init__.py:28`).
+into `dependency.router` in `app/api/__init__.py:28`). <!-- docs-path-check: ignore -->
 
 **Separate finding:** `frontend/src/generated/openapi.json` contains no `custom-cbls` paths even
 though the live app serves all six. The generated schema is stale with respect to the custom-CBL

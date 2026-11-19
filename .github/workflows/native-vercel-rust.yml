@@ -39,10 +39,6 @@ jobs:
             echo "::error::RUST_ROLL_ALLOW_DB_SKIP is forbidden in CI and factory tests."
             exit 1
           fi
-      - name: Verify Python bundle excludes cached Rust artifacts
-        run: |
-          npm install --prefix "$RUNNER_TEMP/python-bundle-test" --ignore-scripts --no-audit --no-fund --package-lock=false @vercel/build-utils@15.2.0
-          VERCEL_BUILD_UTILS_DIR="$RUNNER_TEMP/python-bundle-test" node .github/scripts/test-python-bundle.mjs
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt

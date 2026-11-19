@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-/** Temporary cutover tool. Python declares its own legacy API routes;
- * Rust owns all unknown /api requests. Delete this once api/index.py is gone.
- * No new Python modules or database calls are introduced.
+/** Route-ingress generator. Every /api operation is now owned by a route
+ * fragment and routed to native Rust; the Python API and its ingress are
+ * gone. The `pythonOperations` helper remains as a pure parser for the
+ * generator's regression tests, but no Python runtime is consulted here.
  */
-import {execFileSync} from 'node:child_process';
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
@@ -17,24 +17,6 @@ const PARAM = /\{([^{}]+)\}/g;
 const INVENTORY_EXCLUDED_OPERATIONS = new Set([
   'GET /api/v1/cron/release-sync',
 ]);
-
-// Introspect the existing FastAPI application offline. This does not create
-// another Python service, script, or long-lived process.
-const METADATA_QUERY = [
-  'import json',
-  'from app.main import create_app',
-  'from fastapi.routing import APIRoute',
-  'app = create_app(serve_frontend=False, defer_router_imports=False)',
-  'routes = []',
-  'for r in app.routes:',
-  '    if isinstance(r, APIRoute):',
-  '        routes.append((r.path, r.methods, r.include_in_schema))',
-  '    elif hasattr(r, "effective_route_contexts"):',
-  '        routes.extend((context.path, context.methods, context.include_in_schema) for context in r.effective_route_contexts() if context.path == "/api/v1/cron/release-sync")',
-  'print(json.dumps({"paths": app.openapi()["paths"], "registered": [',
-  '{"path": p, "methods": sorted(methods), "visible": visible}',
-  'for p, methods, visible in routes if p.startswith("/api/")]}))',
-].join('\n');
 
 export function pythonOperations(data) {
   const documented = new Set();
@@ -231,6 +213,9 @@ export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
 }
 
 export function updateInventory(inventory, operations) {
+  // No Python operations means there is nothing to sync into the inventory;
+  // leave the fragment-owned surface (and its burndown enrichment) untouched.
+  if (operations.length === 0) return inventory;
   const full = inventory.full_surface;
   if (!full) throw new Error('Missing existing full_surface inventory');
   const prev = new Map([...full.v1_operations, ...full.unversioned_operations]
@@ -263,19 +248,13 @@ export function sameOperationIds(operations, expected) {
 function inventoryOperations(operations) {
   return operations.filter(([method, path]) => !INVENTORY_EXCLUDED_OPERATIONS.has(`${method} ${path}`));
 }
-function inspect() {
-  const env = {...process.env, ENVIRONMENT: 'production',
-    SECRET_KEY: process.env.SECRET_KEY || 'synthetic-route-inspection-only',
-    CORS_ORIGINS: process.env.CORS_ORIGINS || 'https://comic-pile.vercel.app'};
-  const text = execFileSync(process.env.ROUTE_PYTHON || 'python',
-    ['-c', METADATA_QUERY], {env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
-  return JSON.parse(text.trim().split('\n').at(-1));
-}
 function run() {
   const check = process.argv.includes('--check');
   const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
   const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
-  const operations = pythonOperations(inspect());
+  // The Python API is deleted: no Python operation declares an ingress any
+  // longer. Route fragments are the sole source of explicit /api rewrites.
+  const operations = [];
   const fragments = loadFragmentFiles();
   const nextVercel = JSON.stringify(generateVercel(original, operations, fragments), null, 2) + '\n';
   const nextInventory = updateInventory(inventory, inventoryOperations(operations));
@@ -302,11 +281,11 @@ function run() {
         + '; stale inventory IDs=' + JSON.stringify(excess)
         + '; missing inventory IDs=' + JSON.stringify(missing));
     }
-    console.log('Verified Rust-default ingress and ' + operations.length + ' Python route operations');
+    console.log('Verified Rust-default ingress (no Python operations)');
     return;
   }
   writeFileSync('vercel.json', nextVercel);
   writeFileSync('docs/api/v2-route-inventory.json', JSON.stringify(nextInventory, null, 2) + '\n');
-  console.log('Generated Rust-default ingress from ' + operations.length + ' Python operations');
+  console.log('Generated Rust-default ingress from route fragments (no Python operations)');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) run();

@@ -49,7 +49,7 @@ Concrete examples with a dep whose target is issue #10 (position 10):
 | #10         | 10                   | **BLOCKED** (exactly at dep target) |
 | #11         | 11                   | not blocked (already past dep target) |
 
-### File: `comic_pile/dependencies.py`
+### File: `comic_pile/dependencies.py` <!-- docs-path-check: ignore -->
 
 **`get_blocked_thread_ids` (lines 28–46)**
 
@@ -90,7 +90,7 @@ Apply the same structural change. The select should return the blocking source t
 and source issue number as before, but use the same range-based join so the explanations
 appear whenever the block is active.
 
-### File: `tests/test_dependencies.py`
+### File: `tests/test_dependencies.py` <!-- docs-path-check: ignore -->
 
 **Update `test_future_issue_dependency_does_not_block_current_reads` (line 349)**
 

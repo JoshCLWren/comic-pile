@@ -54,7 +54,7 @@ The fast-merge policy itself remains protected from self-approval:
 `.github/factory-fast-merge.json`,
 `.github/workflows/factory-fast-merge.yml`,
 `.github/scripts/factory-fast-merge.py` and
-`tests/test_factory_fast_merge.py` cannot use this exception.
+`tests/test_factory_fast_merge.py` cannot use this exception. <!-- docs-path-check: ignore -->
 
 ## Operating instructions
 

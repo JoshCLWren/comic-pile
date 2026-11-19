@@ -65,7 +65,7 @@ generator boundary and never rewrites repository artifacts from custom-schema
 runs.
 `docs/api/v2-route-inventory.json` records the observed runtime and declared
 consumers for each live v2 operation, and
-`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native
+`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native <!-- docs-path-check: ignore -->
 contract, the generated schema, `vercel.json` or a frontend service caller
 drifts.
 

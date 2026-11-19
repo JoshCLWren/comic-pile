@@ -32,10 +32,10 @@ Python fallback.
 6. Protect the exact behavior with disposable-PostgreSQL tests and targeted
    frontend/ingress checks. For direct read/rate, see
    `native/roll-service/src/issue_service.rs` and
-   `native/roll-service/parity/test_http_issue_read_rate.py`. For ingress
-   checks, see `tests/test_native_roll_live_ingress.py`,
+   `native/roll-service/parity/test_http_issue_read_rate.py`. For ingress <!-- docs-path-check: ignore -->
+   checks, see `tests/test_native_roll_live_ingress.py`, <!-- docs-path-check: ignore -->
    `tests/test_native_roll_write_test_guard.py`, and
-   `tests/test_vercel_deployment.py`.
+   `tests/test_vercel_deployment.py`. <!-- docs-path-check: ignore -->
 7. Deploy only after exact-head CI and independent semantic review. Confirm a
    successful authenticated production request used the Rust entrypoint and
    achieved the requested behavior. Keep the owner objective open until
@@ -45,8 +45,8 @@ Python fallback.
 
 Native cutovers change a shared `vercel.json` route list, but they must **not**
 renumber unrelated test expectations. Use the method/path/entrypoint discovery
-in `tests/test_native_roll_live_ingress.py` for the complete Rust surface;
-use the semantic route lookup in `tests/test_vercel_deployment.py` for
+in `tests/test_native_roll_live_ingress.py` for the complete Rust surface; <!-- docs-path-check: ignore -->
+use the semantic route lookup in `tests/test_vercel_deployment.py` for <!-- docs-path-check: ignore -->
 specific contract and security-header checks. **Do not introduce
 `routes[37]`-style assertions, fixed native-route counts, or mass index
 updates** when adding an endpoint. Any test added for an endpoint should

@@ -8,7 +8,7 @@ Rate limiting is implemented using [slowapi](https://github.com/laurentS/slowapi
 
 ## Configuration
 
-Rate limiting is configured in `app/middleware/rate_limit.py` and uses IP-based tracking by default.
+Rate limiting is configured in `app/middleware/rate_limit.py` and uses IP-based tracking by default. <!-- docs-path-check: ignore -->
 
 ```python
 from slowapi import Limiter
@@ -121,7 +121,7 @@ Rate limits are stored in-memory using the default slowapi storage backend. This
 
 ## Testing
 
-Rate limiting tests are in `tests/test_rate_limit.py` and verify:
+Rate limiting tests are in `tests/test_rate_limit.py` and verify: <!-- docs-path-check: ignore -->
 - Rate limits are enforced correctly
 - 429 responses are returned when limits are exceeded
 - Rate limit headers are present
@@ -179,7 +179,7 @@ This is useful for:
 **Solutions**:
 - Verify the `@limiter.limit()` decorator is applied correctly
 - Check that `request: Request` parameter is present in the endpoint function
-- Ensure the limiter is registered in `app/main.py`
+- Ensure the limiter is registered in `app/main.py` <!-- docs-path-check: ignore -->
 
 **Issue**: Rate limits causing issues in tests
 

@@ -1,10 +1,9 @@
-"""Regression coverage for the production Vercel dependency diet (issue #2841).
+"""Regression coverage for the retained Python dependency surface (#5431).
 
-The Vercel Python function installs ``[project].dependencies`` from
-``pyproject.toml`` without installing dependency groups. This suite locks the
-audit contract: test/server/migration tooling stays out of the deployed set,
-the request-path packages stay in, and every other runtime discovers the
-moved tooling through the shared default groups.
+The Python request-serving API is deleted; the remaining Python toolchain only
+supports operator/CI scripts. This suite locks that slim contract: API-only
+packages stay out, script tooling stays in its group, and the migration tree
+is gone.
 """
 
 from __future__ import annotations
@@ -48,7 +47,7 @@ def _lock_project_package() -> dict:
 
 
 def _project_dependency_names() -> list[str]:
-    """Return normalized names of the production runtime dependency set.
+    """Return normalized names of the retained runtime dependency set.
 
     Returns:
         Lowercased, extras-stripped names declared in ``[project].dependencies``.
@@ -64,7 +63,7 @@ def _group_dependency_names(group: str) -> list[str]:
     """Return normalized names of a named dependency group.
 
     Args:
-        group: Dependency group name (dev, migrate, or server).
+        group: Dependency group name (dev or migrate).
 
     Returns:
         Lowercased names, recursively resolving PEP 735 include-group entries.
@@ -82,28 +81,40 @@ def _group_dependency_names(group: str) -> list[str]:
     return names
 
 
-def test_pytest_xdist_is_not_a_production_dependency() -> None:
-    """pytest-xdist must ship in the dev group only (acceptance criterion)."""
+def test_pytest_xdist_is_dev_only() -> None:
+    """pytest-xdist must ship in the dev group only."""
     assert "pytest-xdist" not in _project_dependency_names()
     assert "pytest-xdist" in _group_dependency_names("dev")
 
 
-def test_server_tooling_is_out_of_the_vercel_runtime() -> None:
-    """Uvicorn must live in the server group plus dev, not project deps."""
-    project_names = _project_dependency_names()
-    assert "pillow" not in project_names, "The retired image optimizer must not pull in Pillow"
-    assert "uvicorn" not in project_names
-    assert "uvicorn" in _group_dependency_names("server")
-    assert "uvicorn" in _group_dependency_names("dev")
+def test_python_api_dependencies_are_removed() -> None:
+    """Packages that only the deleted FastAPI request path needed are gone."""
+    project_names = set(_project_dependency_names())
+    for removed in {
+        "fastapi",
+        "pydantic",
+        "pydantic-settings",
+        "python-multipart",
+        "python-dotenv",
+        "python-jose",
+        "bcrypt",
+        "email-validator",
+        "filelock",
+        "pygithub",
+        "slowapi",
+        "uvicorn",
+    }:
+        assert removed not in project_names
 
 
-def test_migration_tooling_is_out_of_the_vercel_runtime() -> None:
-    """Alembic and psycopg must live in the migrate group, not project deps."""
-    project_names = _project_dependency_names()
+def test_migration_tooling_is_out_of_the_runtime() -> None:
+    """Alembic is deleted; psycopg stays in the operator migrate group only."""
+    project_names = set(_project_dependency_names())
     assert "alembic" not in project_names
     assert "psycopg" not in project_names
-    assert "alembic" in _group_dependency_names("migrate")
     assert "psycopg" in _group_dependency_names("migrate")
+    assert not (REPOSITORY_ROOT / "alembic.ini").exists()
+    assert not (REPOSITORY_ROOT / "alembic").exists()
 
 
 def test_unused_jinja2_is_removed_entirely() -> None:
@@ -118,32 +129,15 @@ def test_script_only_yaml_lives_in_dev_not_prod() -> None:
     assert "pyyaml" in _group_dependency_names("dev")
 
 
-def test_request_path_dependencies_are_retained() -> None:
-    """Packages imported by api/index.py request-path code stay in the runtime set."""
-    project_names = _project_dependency_names()
-    for required in {
-        "fastapi",
-        "sqlalchemy",
-        "asyncpg",
-        "pydantic",
-        "pydantic-settings",
-        "python-multipart",
-        "python-dotenv",
-        "python-jose",
-        "bcrypt",
-        "email-validator",
-        "filelock",
-        "httpx",
-        "pygithub",
-        "slowapi",
-    }:
-        assert required in project_names
+def test_operator_runtime_dependencies_are_retained() -> None:
+    """Libraries imported by retained scripts stay in the runtime set."""
+    assert {"sqlalchemy", "asyncpg", "httpx"} <= set(_project_dependency_names())
 
 
 def test_default_groups_cover_all_non_vercel_runtimes() -> None:
-    """Local dev, CI, Docker, and the deploy migration step see every group."""
+    """Local dev and CI see every retained dependency group."""
     default_groups = _pyproject()["tool"]["uv"]["default-groups"]
-    assert default_groups == ["dev", "migrate", "server"]
+    assert default_groups == ["dev", "migrate"]
 
 
 def test_async_database_runtime_installs_greenlet_without_dev_tools() -> None:
@@ -171,24 +165,13 @@ def test_lockfile_project_metadata_matches_the_slim_set() -> None:
     """uv.lock must agree with the trimmed production dependency set."""
     package = _lock_project_package()
     locked_requires = {item["name"] for item in package["metadata"]["requires-dist"]}
-    for removed in {"alembic", "jinja2", "psycopg", "pytest-xdist", "pyyaml", "uvicorn"}:
+    for removed in {
+        "alembic",
+        "fastapi",
+        "jinja2",
+        "psycopg",
+        "pytest-xdist",
+        "pyyaml",
+        "uvicorn",
+    }:
         assert removed not in locked_requires
-
-    dev_dependencies = package["dev-dependencies"]
-    assert "migrate" in dev_dependencies
-    assert "server" in dev_dependencies
-    migrate_names = {item["name"] for item in dev_dependencies["migrate"]}
-    server_names = {item["name"] for item in dev_dependencies["server"]}
-    assert {"alembic", "psycopg"} <= migrate_names
-    assert "uvicorn" in server_names
-
-
-def test_factory_parsers_are_development_tooling_only() -> None:
-    """Native review parsers are installed for dev/control-plane, never app runtime."""
-    parsers = {
-        'shfmt-py', 'tree-sitter', 'tree-sitter-css',
-        'tree-sitter-javascript', 'tree-sitter-typescript',
-    }
-    assert parsers <= set(_group_dependency_names('factory-syntax'))
-    assert parsers <= set(_group_dependency_names('dev'))
-    assert parsers.isdisjoint(_project_dependency_names())

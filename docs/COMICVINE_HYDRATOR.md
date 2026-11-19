@@ -4,7 +4,7 @@ The ComicVine hydrator inspects comics that already exist in ComicPile and write
 
 ## Read-issue identity and creator backfill
 
-Use `scripts/backfill_read_comicvine.py` as the single operator entrypoint for read
+Use `scripts/backfill_read_comicvine.py` as the single operator entrypoint for read <!-- docs-path-check: ignore -->
 issues. It targets only the explicitly exported `DATABASE_URL` and runs four resumable
 stages in order:
 

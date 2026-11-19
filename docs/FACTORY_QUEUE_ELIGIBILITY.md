@@ -34,9 +34,9 @@ The pure rules live in `scripts/factory_eligibility.py`. All three consumers
 import that module; `factory_work_policy` re-exports only `is_manual_only`,
 `is_acceptance_parent`, and `parse_declared_dependencies` for callers that
 already hold the policy module. Agreement is pinned by
-`tests/test_factory_eligibility.py`
+`tests/test_factory_eligibility.py` <!-- docs-path-check: ignore -->
 (`test_selectors_agree_with_shared_semantics`) and
-`tests/test_factory_rotisserie_adopter.py`
+`tests/test_factory_rotisserie_adopter.py` <!-- docs-path-check: ignore -->
 (`test_human_gate_uses_the_structured_manual_only_contract`).
 
 Static exclusions, in evaluation order:

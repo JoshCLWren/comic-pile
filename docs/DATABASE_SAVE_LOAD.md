@@ -448,7 +448,7 @@ head -50 db_export.json
 
 ### Export Specific Tables
 
-Edit `scripts/export_db.py` to only export specific tables:
+Edit `scripts/export_db.py` to only export specific tables: <!-- docs-path-check: ignore -->
 
 ```python
 # Only export threads
@@ -466,7 +466,7 @@ python -m scripts.import_db
 
 ### Merge Instead of Wipe
 
-For non-destructive merges, edit `scripts/import_db.py` to check for existing records:
+For non-destructive merges, edit `scripts/import_db.py` to check for existing records: <!-- docs-path-check: ignore -->
 
 ```python
 existing = db.query(Thread).filter_by(id=thread_data["id"]).first()

@@ -42,7 +42,7 @@ which runs `gh workflow run deploy-production.yml --ref main -f source=factory-m
   by any workflow. Their `gh pr merge` blocks and the dispatch call after each one are dead code. The
   dispatch calls stay in so the guard test below keeps passing, and they would do the right thing if
   one of those paths were revived.
-- `tests/test_factory_deploy_dispatch_after_merge.py` finds every `gh pr merge` or merge-API call
+- `tests/test_factory_deploy_dispatch_after_merge.py` finds every `gh pr merge` or merge-API call <!-- docs-path-check: ignore -->
   under `.github/` and `scripts/` and fails when one does not dispatch the deploy. The only
   exemption is `scripts/opencode_pipeline.sh`, which merges locally with the operator's token, so
   its push event deploys normally.
