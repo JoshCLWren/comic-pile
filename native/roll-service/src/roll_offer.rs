@@ -637,9 +637,14 @@ pub async fn unsnooze(
         if let (true, Some(event)) = (was_latest_snooze, latest_die_event) {
             let event_type: String = event.try_get(0).map_err(db::query_error)?;
             let event_thread: Option<i32> = event.try_get(1).map_err(db::query_error)?;
-            let die_before: i32 = event.try_get(2).map_err(db::query_error)?;
-            if event_type == "snooze" && event_thread == Some(request.thread_id) {
-                let updated = tx
+            // Non-dice events (e.g. queue `reorder`) carry a NULL die; read it
+            // as optional and only use it for a matching snooze event.
+            let event_die: Option<i32> = event.try_get(2).map_err(db::query_error)?;
+            if let ("snooze", Some(thread), Some(die_before)) =
+                (event_type.as_str(), event_thread, event_die)
+            {
+                if thread == request.thread_id {
+                    let updated = tx
                     .execute(
                         "UPDATE sessions
                          SET pending_thread_id=$1, pending_issue_id=NULL, pending_thread_updated_at=NOW()
@@ -648,32 +653,33 @@ pub async fn unsnooze(
                     )
                     .await
                     .map_err(db::query_error)?;
-                if updated != 1 {
-                    return Err(ApiError::Conflict(
-                        "Reading session changed; try again".to_string(),
-                    ));
-                }
-                let unsnooze_key = format!("{}-unsnooze", Uuid::new_v4());
-                let context = json!({
-                    "dice_command_key": unsnooze_key,
-                    "dice_command": { "kind": "unsnooze", "thread_id": request.thread_id },
-                });
-                tx.execute(
-                    "INSERT INTO events
+                    if updated != 1 {
+                        return Err(ApiError::Conflict(
+                            "Reading session changed; try again".to_string(),
+                        ));
+                    }
+                    let unsnooze_key = format!("{}-unsnooze", Uuid::new_v4());
+                    let context = json!({
+                        "dice_command_key": unsnooze_key,
+                        "dice_command": { "kind": "unsnooze", "thread_id": request.thread_id },
+                    });
+                    tx.execute(
+                        "INSERT INTO events
                        (user_id, type, timestamp, die, die_after, thread_id, context)
                      VALUES ($1, 'unsnooze', clock_timestamp(), $2, $3, $4, $5::text::json)",
-                    &[
-                        &user.id(),
-                        &die_before,
-                        &die_before,
-                        &request.thread_id,
-                        &context.to_string(),
-                    ],
-                )
-                .await
-                .map_err(db::query_error)?;
-                die_size = die_before;
-                restored = true;
+                        &[
+                            &user.id(),
+                            &die_before,
+                            &die_before,
+                            &request.thread_id,
+                            &context.to_string(),
+                        ],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+                    die_size = die_before;
+                    restored = true;
+                }
             }
         }
     }
