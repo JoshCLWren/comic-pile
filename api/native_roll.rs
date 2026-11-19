@@ -2124,10 +2124,7 @@ mod tests {
         let cases = [
             ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
             ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
-            (
-                "DELETE",
-                "/api/v1/custom-cbls/26/overlap-decisions/7",
-            ),
+            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
         ];
         for (method, uri) in cases {
             let mut router = app();
