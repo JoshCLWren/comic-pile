@@ -183,7 +183,7 @@ test('guard fails closed on an unjustified allowlist entry', t => {
 
 test('every allowlist entry carries a reason; gaps reference the follow-up PR', () => {
   for (const [module, entry] of ALLOWLIST) {
-    assert(module && typeof module === 'string', 'allowlist key must be a module name');
+    assert(module && Object.prototype.toString.call(module) === '[object String]', 'allowlist key must be a module name');
     assert(['genuine', 'gap'].includes(entry.kind), `${module}: unknown allowlist kind`);
     assert(entry.reason.length > 20, `${module}: allowlist entry needs a concrete reason`);
     if (entry.kind === 'gap') {
