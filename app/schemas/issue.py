@@ -21,6 +21,21 @@ class IssueResponse(BaseModel):
     created_at: datetime
 
 
+class IssueCreate(BaseModel):
+    """Schema for creating a new issue."""
+
+    issue_number: str = Field(..., min_length=1, max_length=50)
+    status: str = Field(default="unread", pattern="^(unread|read)$")
+    read_at: datetime | None = None
+
+
+class IssueUpdate(BaseModel):
+    """Schema for updating an issue."""
+
+    status: str | None = Field(None, pattern="^(unread|read)$")
+    read_at: datetime | None = None
+
+
 class IssueListResponse(BaseModel):
     """Schema for paginated issue list response."""
 
@@ -49,54 +64,3 @@ class ThreadIssueCreatorsResponse(BaseModel):
     issues: list[IssueCreatorsEntry] = Field(default_factory=list)
 
 
-class IssueCreate(BaseModel):
-    """Schema for creating a new issue."""
-
-    issue_number: str = Field(..., min_length=1, max_length=50)
-    status: str = Field(default="unread", pattern="^(unread|read)$")
-    read_at: datetime | None = None
-
-
-class IssueUpdate(BaseModel):
-    """Schema for updating an issue."""
-
-    status: str | None = Field(None, pattern="^(unread|read)$")
-    read_at: datetime | None = None
-
-
-class IssueMoveRequest(BaseModel):
-    """Schema for moving an issue to a new position."""
-
-    after_issue_id: int | None = Field(
-        ...,
-        ge=1,
-        description="Move after this issue. null = move to position 1 (top).",
-    )
-
-
-class IssueBulkMarkReadRequest(BaseModel):
-    """Schema for bulk marking issues as read."""
-
-    issue_ids: list[int] = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Broadcast list of issue IDs to mark read.",
-    )
-
-
-class IssueBulkMarkUnreadRequest(BaseModel):
-    """Schema for bulk marking issues as unread."""
-
-    issue_ids: list[int] = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Broadcast list of issue IDs to mark unread.",
-    )
-
-
-class IssueOrderValidationResponse(BaseModel):
-    """Schema for reporting in-thread dependency ordering conflicts."""
-
-    warnings: list[str]

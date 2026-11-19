@@ -88,8 +88,8 @@ function methodsOverlap(a, b) {
 
 export function routesMayOverlap(a, b) {
   if (!methodsOverlap(a, b)) return false;
-  const left = typeof a.src === 'string' ? parseSegments(a.src) : null;
-  const right = typeof b.src === 'string' ? parseSegments(b.src) : null;
+  const left = Object.prototype.toString.call(a.src) === '[object String]' ? parseSegments(a.src) : null;
+  const right = Object.prototype.toString.call(b.src) === '[object String]' ? parseSegments(b.src) : null;
   if (left === null || right === null) return true;
   return segmentsOverlap(left, right);
 }

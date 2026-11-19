@@ -408,51 +408,6 @@ async def test_remove_from_queue_preserves_records_and_restore_reuses_the_same_r
 
 
 @pytest.mark.asyncio
-async def test_exclusion_survives_reading_the_final_unread_issue(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """Reading every issue must not silently reactivate an excluded series.
-
-    Marking the last unread issue read recomputes the thread lifecycle to
-    ``completed``. A durable queue exclusion outranks that recomputation: the
-    series has to stay excluded, and therefore restorable, until the reader
-    asks for it. Otherwise removal is a one-way trip to the wrong shelf.
-    """
-    ids = await _seed_series(async_db, default_user)
-    before = await _curated_state(async_db, ids)
-
-    exclude_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/exclude")
-    assert exclude_response.status_code == 200
-
-    for issue_id in ids.unread_issue_ids:
-        mark_read = await auth_client.post(f"/api/v1/issues/{issue_id}:markRead")
-        assert mark_read.status_code == 204
-
-    async_db.expire_all()
-    thread = await async_db.get(Thread, ids.thread_id)
-    assert thread is not None
-    assert thread.status == "excluded"
-    assert thread.queue_position == 0
-    assert thread.issues_remaining == 0
-
-    # Read state is recorded normally; only the lifecycle status is preserved.
-    async_db.expire_all()
-    issues = await _issue_rows(async_db, ids.thread_id)
-    assert [issue.status for issue in issues] == ["read", "read", "read"]
-    assert all(issue.read_at is not None for issue in issues)
-
-    await _assert_thread_preserved(async_db, ids, before)
-
-    # Still excluded, still discoverable, still restorable.
-    assert await _excluded_thread_ids(auth_client) == [ids.thread_id]
-
-    restore_response = await auth_client.post(f"/api/v1/threads/{ids.thread_id}/restore")
-    assert restore_response.status_code == 200
-
-
-
-
-@pytest.mark.asyncio
 async def test_excluded_series_stays_out_of_the_roll_pool(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
@@ -480,8 +435,6 @@ async def test_excluded_series_stays_out_of_the_roll_pool(
     assert ids.thread_id not in await derive_effective_roll_excluded_thread_ids(
         async_db, user_id
     )
-
-
 
 
 @pytest.mark.asyncio

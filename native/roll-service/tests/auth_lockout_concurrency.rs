@@ -474,6 +474,12 @@ async fn count_queries_stay_indexed_as_history_grows() {
         )
         .await
         .unwrap();
+    // Plan choice depends on table statistics; autovacuum timing must not decide
+    // this assertion, so refresh them deterministically before EXPLAIN.
+    connection
+        .batch_execute("ANALYZE failed_login_attempts")
+        .await
+        .unwrap();
     for (label, sql, value) in [
         (
             "username counts",
