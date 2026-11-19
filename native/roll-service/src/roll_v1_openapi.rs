@@ -6,12 +6,8 @@
 //! Python handlers stay mounted until authenticated production proof, so the
 //! merged frontend client schema remains the Python contract for now.
 //!
-//! Regenerate `native/contracts/roll-v1.openapi.json` with:
-//!
-//! ```sh
-//! cargo run --manifest-path native/roll-service/Cargo.toml --example roll_v1_openapi \
-//!   > native/contracts/roll-v1.openapi.json
-//! ```
+//! `native/contracts/roll-v1.openapi.json` is a gitignored build output written by
+//! `node scripts/generate_api_artifacts.mjs` (see `crate::contract_artifacts`).
 use utoipa::OpenApi;
 
 #[derive(utoipa::OpenApi)]
@@ -53,18 +49,4 @@ impl utoipa::Modify for RollV1SecurityAddon {
 /// Emit the same-path native Roll v1 contract.
 pub fn roll_v1_openapi() -> utoipa::openapi::OpenApi {
     RollV1Api::openapi()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn checked_in_contract_is_current() {
-        let expected = include_str!("../../contracts/roll-v1.openapi.json");
-        let generated = roll_v1_openapi()
-            .to_pretty_json()
-            .expect("serializable contract");
-        assert_eq!(expected.trim_end(), generated.trim_end());
-    }
 }

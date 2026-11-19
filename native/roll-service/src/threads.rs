@@ -1746,19 +1746,4 @@ mod tests {
         assert_eq!(effective_sort, "created");
         assert_eq!(cursor_clause(effective_sort, None).0, "");
     }
-
-    #[test]
-    fn checked_in_openapi_contract_is_current() {
-        use utoipa::OpenApi;
-        let checked_in = include_str!("../../../native/contracts/threads-v2.openapi.json");
-        let generated = ThreadsApi::openapi()
-            .to_pretty_json()
-            .expect("serializable OpenAPI document");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/threads-v2.openapi.json with \
-             cargo run --example threads_openapi"
-        );
-    }
 }

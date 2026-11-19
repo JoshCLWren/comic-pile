@@ -15,6 +15,7 @@ pub mod config;
 pub mod continuity_plans;
 pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
+pub mod contract_artifacts;
 pub mod creators;
 pub mod creators_v2;
 pub mod cron_auth;

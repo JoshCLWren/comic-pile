@@ -70,6 +70,6 @@ resubmitting. Added entries remain unsaved until Save; changing the query hides 
 These editor controls do not activate Option E execution. Production conversion and activation
 still require the separately reviewed, owner-approved operation under #3676.
 
-CI runs `pnpm --filter frontend run check:api-types` with explicit `ENVIRONMENT=test` to enforce
-schema/client freshness, including the environment-gated `/api/v1/debug/log` route. This setting
-does not depend on `.env.test` being present or on the runner's inherited environment.
+CI generates the schema and client from the Rust declarations in its `api-artifacts` job
+(`node scripts/generate_api_artifacts.mjs`); the generated files are gitignored build outputs and
+the frontend typecheck runs against them.

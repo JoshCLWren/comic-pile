@@ -3,18 +3,20 @@
  * Generate deterministic TypeScript API types from ComicPile's OpenAPI contracts.
  *
  * Node port of scripts/generate_openapi_types.py (#5431). Pipeline: merge the
- * checked-in contracts into frontend/src/generated/openapi.json, render
- * openapi.ts with the pinned openapi-typescript, then render the native v2
- * request client. `--check` verifies everything is current without writing.
+ * contracts into frontend/src/generated/openapi.json, render openapi.ts with
+ * the pinned openapi-typescript, then render the native v2 request client.
+ *
+ * Every output is a gitignored build artifact (owner directive 2026-11-19:
+ * feature PRs never edit or commit generated files). The Rust contracts this
+ * reads are produced first by `node scripts/generate_api_artifacts.mjs`, which
+ * is the normal entry point and then calls this script.
  */
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {main as exportSchema} from './export_openapi_schema.mjs';
-import {CLIENT_OUTPUT, NATIVE_CONTRACT, generateNativeClient, renderNativeClient} from './generate_native_client.mjs';
-import {parseJsonPreservingFloats} from './export_openapi_schema.mjs';
+import {CLIENT_OUTPUT, GENERATED_NOTICE, NATIVE_CONTRACT, generateNativeClient} from './generate_native_client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCHEMA_OUTPUT = 'frontend/src/generated/openapi.json';
@@ -28,17 +30,15 @@ function generateTypes(schema, output) {
   const [cmd, ...args] = generatorCommand(schema, output);
   const result = spawnSync(cmd, args, {cwd: ROOT, stdio: 'inherit'});
   if (result.status !== 0) throw new Error(`${GENERATOR_PACKAGE} failed (exit ${result.status})`);
+  // Keep the do-not-edit banner in the generator output itself.
+  fs.writeFileSync(output, `${GENERATED_NOTICE}\n${fs.readFileSync(output, 'utf8')}`, 'utf8');
 }
-
-const sameBytes = (a, b) => fs.existsSync(a) && fs.readFileSync(a).equals(fs.readFileSync(b));
 
 export function main(argv = process.argv.slice(2)) {
   let schema = SCHEMA_OUTPUT;
   let output = TYPES_OUTPUT;
-  let check = false;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--check') check = true;
-    else if (argv[i] === '--schema') schema = argv[++i];
+    if (argv[i] === '--schema') schema = argv[++i];
     else if (argv[i] === '--output') output = argv[++i];
     else {
       console.error(`unknown argument: ${argv[i]}`);
@@ -49,47 +49,16 @@ export function main(argv = process.argv.slice(2)) {
   const defaultOutputs = defaultSchema && output === TYPES_OUTPUT;
 
   if (defaultSchema) {
-    const code = exportSchema(check ? ['--check'] : []);
+    const code = exportSchema([]);
     if (code !== 0) return code;
   }
-  const schemaAbs = path.resolve(ROOT, schema);
-  const outputAbs = path.resolve(ROOT, output);
-
-  if (!check) {
-    generateTypes(schemaAbs, outputAbs);
-    console.log(`Generated TypeScript API types with ${GENERATOR_PACKAGE}: ${output}`);
-    if (defaultOutputs) {
-      generateNativeClient(SCHEMA_OUTPUT, NATIVE_CONTRACT, CLIENT_OUTPUT);
-      console.log(`Generated native v2 request client: ${CLIENT_OUTPUT}`);
-    }
-    return 0;
+  generateTypes(path.resolve(ROOT, schema), path.resolve(ROOT, output));
+  console.log(`Generated TypeScript API types with ${GENERATOR_PACKAGE}: ${output}`);
+  if (defaultOutputs) {
+    generateNativeClient(SCHEMA_OUTPUT, NATIVE_CONTRACT, CLIENT_OUTPUT);
+    console.log(`Generated native v2 request client: ${CLIENT_OUTPUT}`);
   }
-
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'comic-pile-openapi-'));
-  try {
-    const generated = path.join(tmp, path.basename(output));
-    generateTypes(schemaAbs, generated);
-    const typesCurrent = sameBytes(outputAbs, generated);
-    let clientCurrent = true;
-    if (defaultOutputs) {
-      const load = (f) => parseJsonPreservingFloats(fs.readFileSync(path.resolve(ROOT, f), 'utf8'));
-      const rendered = renderNativeClient(load(SCHEMA_OUTPUT), load(NATIVE_CONTRACT));
-      const clientAbs = path.resolve(ROOT, CLIENT_OUTPUT);
-      clientCurrent = fs.existsSync(clientAbs) && fs.readFileSync(clientAbs, 'utf8') === rendered;
-    }
-    if (typesCurrent && clientCurrent) {
-      console.log(`Verified generated TypeScript API types: ${output}`);
-      if (defaultOutputs) console.log(`Verified generated native v2 client: ${CLIENT_OUTPUT}`);
-      return 0;
-    }
-  } finally {
-    fs.rmSync(tmp, {recursive: true, force: true});
-  }
-  console.log(
-    `Generated TypeScript API artifacts are stale:\n  ${output}\n  ${defaultOutputs ? CLIENT_OUTPUT : 'native v2 client skipped'}\n` +
-      'Run `node scripts/generate_openapi_types.mjs` and commit both generated artifacts.',
-  );
-  return 1;
+  return 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

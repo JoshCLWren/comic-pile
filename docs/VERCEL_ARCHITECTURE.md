@@ -21,9 +21,10 @@ segment does not by itself prove the executing language.
 The public bare `/health`, `/docs`, `/redoc`, and `/openapi.json` URLs
 return **404 at Vercel ingress**. They neither start Python nor return
 `index.html` from the SPA fallback. Use `/api/v2/health` for production
-liveness, and read the checked-in generated OpenAPI schema at
+liveness, and read the generated OpenAPI schema at
 `native/contracts/v2-runtime.openapi.json` or the merged contract at
-`frontend/src/generated/openapi.json`. Local FastAPI still exposes Swagger
+`frontend/src/generated/openapi.json` (gitignored build outputs of
+`node scripts/generate_api_artifacts.mjs`). Local FastAPI still exposes Swagger
 and ReDoc for development.
 
 Backend routes precede filesystem and SPA fallback rules, so unknown API

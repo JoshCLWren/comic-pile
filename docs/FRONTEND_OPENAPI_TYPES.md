@@ -71,29 +71,41 @@ ComicPile should not adopt a generated HTTP client as part of the type-generatio
 
 ## Regeneration
 
-Use the repository's existing OpenAPI generation and stale-artifact checks. Never edit `frontend/src/generated/openapi.ts` directly. Backend schema changes should regenerate the artifact, and generated aliases should make incompatible transport drift visible through frontend type checking.
+All generated API files are **gitignored build outputs** (owner directive
+2026-11-19): `frontend/src/generated/openapi.json`, `frontend/src/generated/openapi.ts`,
+`frontend/src/generated/nativeV2Client.ts` and the Rust-generated
+`native/contracts/*.openapi.json`. Never edit or commit them; a feature PR changes
+only the Rust declarations and TypeScript sources, and the Route Fragment Guard in
+CI Summary fails any PR that adds them back. Each `.ts` output starts with a
+`GENERATED FILE. DO NOT EDIT` banner emitted by its generator.
 
-The generated schema now covers the deployed native Rust `/api/v2` operations as
+The generated schema covers the deployed native Rust `/api/v2` operations as
 well as the remaining Python/FastAPI routes. `scripts/export_openapi_schema.mjs` (Node, no
 Python needed) merges the Rust-generated `native/contracts/v2-runtime.openapi.json` into the
-frozen Python snapshot `native/contracts/python-legacy.openapi.json` (the former
+frozen tracked Python snapshot `native/contracts/python-legacy.openapi.json` (the former
 `app.openapi()` output; delete its entries as Python handlers are retired);
 a differing native component name is published as `Native<Name>` so a native
 operation never silently references a same-named Python schema. The same run
 also emits `frontend/src/generated/nativeV2Client.ts`, a thin typed request
 client generated from the native operation set and the merged operation types.
 It delegates every call to the existing `HttpClient`; it is not a new transport
-and does not change authentication, CSRF, retry or error semantics. Regenerate
-all three sources together:
+and does not change authentication, CSRF, retry or error semantics. Generate
+everything (after cloning, creating a worktree, or changing a Rust route) with:
 
 ```sh
-cd native/roll-service && cargo run --example v2_openapi > ../contracts/v2-runtime.openapi.json
-cd ../.. && node scripts/generate_openapi_types.mjs
+node scripts/generate_api_artifacts.mjs   # or: pnpm --filter frontend run generate:api
 ```
 
-`scripts/generate_openapi_types.mjs --check` verifies the schema, `openapi.ts`,
-and `nativeV2Client.ts` without overwriting repository artifacts. Custom
-`--schema`/`--output` runs do not touch the checked-in native client.
+It runs `cargo run --example api_contracts` (every contract in
+`comicpile_roll_service::contract_artifacts::CONTRACT_ARTIFACTS`), then
+`scripts/generate_openapi_types.mjs`. Strictness comes from validation instead of a
+checked-in comparison: every Rust contract and the merged schema must be OpenAPI 3.1
+with unique operationIds, declared responses and resolvable `$ref`s, the native
+client generator fails on a native operation missing from the merged schema or a
+duplicate method name, and `cargo test contract_artifacts` checks validity and
+byte-determinism of every contract. CI generates once (`api-artifacts` job) and
+every consumer job downloads the result; the production deploy workflow generates
+before `vercel deploy`.
 
 `docs/api/v2-route-inventory.json` and
 `tests/test_api_v2_contract_inventory.py` record and enforce which runtime

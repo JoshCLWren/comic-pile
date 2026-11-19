@@ -21,6 +21,7 @@ from scripts.check_route_fragment_guard import (
     find_generated_violations,
     is_generated_path,
     is_source_fragment,
+    is_untracked_generated_path,
 )
 
 
@@ -28,16 +29,62 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_generated_paths_are_bot_owned() -> None:
-    """All three generated artifacts are classified as bot-owned."""
+    """Both tracked generated route artifacts are classified as bot-owned."""
     assert is_generated_path("vercel.json")
     assert is_generated_path("docs/api/v2-route-inventory.json")
-    assert is_generated_path("docs/api/route-fragments/vercel-rewrites.json")
 
 
 def test_vercel_rewrites_is_generated_despite_fragment_directory() -> None:
-    """The rewrite artifact is generated, not a source fragment."""
+    """The rewrite artifact is an untracked build output, not a source fragment."""
     assert not is_source_fragment("docs/api/route-fragments/vercel-rewrites.json")
-    assert is_generated_path("docs/api/route-fragments/vercel-rewrites.json")
+    assert is_untracked_generated_path("docs/api/route-fragments/vercel-rewrites.json")
+
+
+@pytest.mark.parametrize(
+    ("path", "generated"),
+    [
+        ("frontend/src/generated/openapi.ts", True),
+        ("frontend/src/generated/openapi.json", True),
+        ("frontend/src/generated/nativeV2Client.ts", True),
+        ("native/contracts/v2-runtime.openapi.json", True),
+        ("native/contracts/same-path-runtime.openapi.json", True),
+        ("native/contracts/python-legacy.openapi.json", False),
+        ("native/contracts/roll-bootstrap-v1.openapi.json", False),
+        ("native/contracts/README.md", False),
+        ("frontend/src/services/api-queue.ts", False),
+        ("docs/api/route-fragments/threads.json", False),
+    ],
+)
+def test_untracked_generated_artifact_classification(path: str, generated: bool) -> None:
+    """Gitignored build outputs are classified; frozen inputs and sources are not."""
+    assert is_untracked_generated_path(path) is generated
+
+
+def test_adding_untracked_generated_artifact_is_a_violation() -> None:
+    """A PR that re-adds or edits a generated artifact fails the guard."""
+    violations = find_generated_violations(
+        ["frontend/src/generated/nativeV2Client.ts", "native/contracts/v2-runtime.openapi.json"],
+        agents_changed=False,
+    )
+    assert violations == [
+        "frontend/src/generated/nativeV2Client.ts",
+        "native/contracts/v2-runtime.openapi.json",
+    ]
+
+
+def test_deleting_untracked_generated_artifact_is_allowed() -> None:
+    """Removing a generated artifact from git (merge main, delete copies) passes."""
+    deleted = frozenset(
+        {"frontend/src/generated/openapi.ts", "native/contracts/v2-runtime.openapi.json"}
+    )
+    assert find_generated_violations(sorted(deleted), agents_changed=False, deleted_files=deleted) == []
+
+
+def test_deleting_bot_owned_tracked_artifact_is_still_a_violation() -> None:
+    """vercel.json stays tracked and bot-owned; a PR may not delete it."""
+    assert find_generated_violations(
+        ["vercel.json"], agents_changed=False, deleted_files=frozenset({"vercel.json"})
+    ) == ["vercel.json"]
 
 
 def test_source_fragments_are_contributor_editable() -> None:
@@ -189,7 +236,6 @@ def test_standalone_guard_workflow_is_gone() -> None:
     [
         "vercel.json",
         "docs/api/v2-route-inventory.json",
-        "docs/api/route-fragments/vercel-rewrites.json",
     ],
 )
 def test_generated_paths_list_matches_guard_contract(path: str) -> None:

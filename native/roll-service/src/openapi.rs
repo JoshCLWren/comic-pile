@@ -8,8 +8,8 @@
 //! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset
 //! and reading-boundary declarations.
 //!
-//! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
-//! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.mjs`
+//! The build artifact is the gitignored `native/contracts/v2-runtime.openapi.json`,
+//! written by `node scripts/generate_api_artifacts.mjs`; see `native/contracts/README.md`. `scripts/export_openapi_schema.mjs`
 //! merges this runtime contract into the single generated frontend client.
 
 use utoipa::OpenApi;
@@ -436,20 +436,6 @@ mod tests {
                 "provider_volume_id",
                 "enabled",
             ],
-        );
-    }
-
-    #[test]
-    fn checked_in_runtime_contract_is_current() {
-        let checked_in = include_str!("../../../native/contracts/v2-runtime.openapi.json");
-        let generated = canonical_openapi()
-            .to_pretty_json()
-            .expect("serializable OpenAPI document");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/v2-runtime.openapi.json with \
-             cargo run --example v2_openapi"
         );
     }
 

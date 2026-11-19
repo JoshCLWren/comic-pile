@@ -1,4 +1,27 @@
-# Python endpoint references for native ports
+# Native OpenAPI contracts
+
+## Generated files: never edit or commit (owner directive 2026-11-19)
+
+GENERATED FILES. DO NOT EDIT OR COMMIT CHANGES IN A FEATURE PR. Every
+`*.openapi.json` here except the two frozen inputs below is produced by
+`node scripts/generate_api_artifacts.mjs` (which runs
+`cargo run -p comicpile-roll-service --example api_contracts -- native/contracts`
+for every entry of `comicpile_roll_service::contract_artifacts::CONTRACT_ARTIFACTS`);
+owned by CI and the production deploy workflow. They are gitignored, so a fresh
+checkout has none until you run that command. If git ever shows a conflict on
+one, take main's version (`git rm --cached` it). The Route Fragment Guard in CI
+Summary fails any PR that adds one back.
+
+Strictness that used to come from byte-comparing checked-in copies now comes
+from validation: `contract_artifacts::validate_contract` (OpenAPI 3.1, unique
+non-empty operationIds, declared responses, resolvable `$ref`s, every path under
+`/api/`) runs on every contract in `cargo test` and again before the example
+writes anything, and each contract must render byte-identically twice.
+
+Tracked here: `python-legacy.openapi.json` and `roll-bootstrap-v1.openapi.json`
+are frozen, hand-maintained inputs (never regenerated), plus this README.
+
+## Python endpoint references for native ports
 
 `roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
 `frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
@@ -9,15 +32,9 @@ port, not a live oracle.
 
 `issue-v2.openapi.json` is the generated native contract for the new product
 behaviour in #4443: `PATCH /api/v2/issues/{issue_id}` and the bounded
-`POST /api/v2/issues/cards` projection. Regenerate it with:
+`POST /api/v2/issues/cards` projection. It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
-```sh
-cd native/roll-service
-cargo run --example issue_openapi > ../contracts/issue-v2.openapi.json
-```
-
-The Rust test `checked_in_openapi_contract_is_current` fails when the checked-in
-file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
+This is the canonical Rust contract, not
 a FastAPI-generated operation; the coordinated frontend client and caller
 cutover remain #4444/#4337 work.
 
@@ -36,15 +53,8 @@ reading-session initialization, the dice/offer/reset commands, the scoped
 already published by `QueueApi`, `ThreadsApi` and `IssueApi`. It is generated
 only from Rust declarations (`comicpile_roll_service::openapi::canonical_openapi`),
 which merges the per-domain `utoipa::OpenApi` documents instead of duplicating a
-spec. Regenerate it with:
+spec. It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
-```sh
-cd native/roll-service
-cargo run --example v2_openapi > ../contracts/v2-runtime.openapi.json
-```
-
-Its checked-in drift test is
-`openapi::tests::checked_in_runtime_contract_is_current`, and
 `openapi::tests::covers_every_deployed_native_v2_operation` pins the exact
 method/path surface. The aggregate intentionally includes public auth entry
 points, so the artifact guard checks explicit security declarations rather than
@@ -60,24 +70,15 @@ inside the native subtree rewritten; an identical schema is reused.
 `nativeV2Client.ts` is generated from the native operation set and the merged
 operation types, and every method delegates to the caller-provided
 `HttpClient`; it is not a second transport and does not reimplement auth, CSRF,
-retries or error handling. Its `--check` drift runs in the same canonical
-generator boundary and never rewrites repository artifacts from custom-schema
-runs.
-`docs/api/v2-route-inventory.json` records the observed runtime and declared
+retries or error handling. `docs/api/v2-route-inventory.json` records the observed runtime and declared
 consumers for each live v2 operation, and
 `tests/test_api_v2_contract_inventory.py` fails when the inventory, the native
 contract, the generated schema, `vercel.json` or a frontend service caller
 drifts.
 
 `threads-v2.openapi.json` is the generated native contract for
-`GET /api/v2/threads` (#4342). Regenerate it with:
+`GET /api/v2/threads` (#4342). It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
-```sh
-cd native/roll-service
-cargo run --example threads_openapi > ../contracts/threads-v2.openapi.json
-```
-
-Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_current`.
 The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
 remaining thread mutations stay on their existing v1 paths).
 
@@ -89,12 +90,7 @@ and now fall through to the Python catch-all. V2 is a separate contract.
 
 `bug-reports-v1.openapi.json` is the generated native contract for the
 same-path bug-report slice `POST /api/bug-reports/` and
-`POST /api/v1/bug-reports/` (#4852, Part of #4335). Regenerate it with:
-
-```sh
-cd native/roll-service
-cargo run --example bug_reports_openapi > ../contracts/bug-reports-v1.openapi.json
-```
+`POST /api/v1/bug-reports/` (#4852, Part of #4335). It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
 It is generated only from `comicpile_roll_service::bug_reports::BugReportsApi`
 and preserves the retired Python wire contract (201 `issue_url`,
@@ -116,15 +112,9 @@ Browser-called user preferences moved to Rust v2
 (`GET`/`PATCH /api/v2/users/me/preferences`) and are documented in the
 v2 runtime/OpenAPI surface, not in this same-path contract. It is generated
 only from Rust declarations
-(`comicpile_roll_service::preferences::PreferencesApi`). Regenerate it with:
+(`comicpile_roll_service::preferences::PreferencesApi`). It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
-```sh
-cd native/roll-service
-cargo run -p comicpile-roll-service --example preferences_openapi > ../contracts/preferences-v1.openapi.json
-```
-
-Its checked-in drift test is
-`preferences::tests::checked_in_openapi_contract_is_current`. The Python
+The Python
 handlers stay mounted until authenticated production proof permits their
 removal; the schemas here match the Python `TasteSignal*` and
 `TasteVerdictRequest` contracts field for field.
@@ -170,8 +160,5 @@ actual request/response DTOs for the native v1 and unversioned handlers. The
 Python schema exporter merges it before the canonical v2 document, so retiring
 shadowed Python handlers does not remove TypeScript client contracts.
 
-```bash
-cargo run --manifest-path native/roll-service/Cargo.toml --example same_path_openapi > native/contracts/same-path-runtime.openapi.json
-```
+It is a gitignored build output of `node scripts/generate_api_artifacts.mjs`.
 
-The Rust drift test checks this artifact independently of the v2 contract.

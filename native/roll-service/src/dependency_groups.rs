@@ -2263,8 +2263,5 @@ mod tests {
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
-        let generated = dependency_groups_openapi().to_pretty_json().unwrap();
-        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }

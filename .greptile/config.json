@@ -48,7 +48,7 @@
     {
       "id": "bot-owned-route-outputs",
       "severity": "high",
-      "rule": "PRs must not change vercel.json, docs/api/v2-route-inventory.json, docs/api/route-fragments/vercel-rewrites.json or the AGENTS.md route-burndown marker block."
+      "rule": "PRs must not change vercel.json, docs/api/v2-route-inventory.json or the AGENTS.md route-burndown marker block, and must not add or modify gitignored generated artifacts: frontend/src/generated/** (openapi.json, openapi.ts, nativeV2Client.ts), native/contracts/*.openapi.json other than the frozen python-legacy.openapi.json and roll-bootstrap-v1.openapi.json, or docs/api/route-fragments/vercel-rewrites.json. These are build outputs of `node scripts/generate_api_artifacts.mjs` in CI and deploy (owner directive 2026-11-19); a PR deleting them is correct. Flag any PR that edits a generated file or adds a checked-in-copy equality test for one."
     },
     {
       "id": "no-sql-in-loops",

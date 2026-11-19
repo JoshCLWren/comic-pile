@@ -187,6 +187,28 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
 
+      # Generated API artifacts (frontend/src/generated/**, Rust-generated
+      # native/contracts/*.openapi.json) are gitignored build outputs (owner
+      # directive 2026-11-19). `vercel deploy` uploads this working tree
+      # (.vercelignore does not exclude them) and the remote static build
+      # imports nativeV2Client.ts at runtime, so generate them here, before any
+      # production migration, exactly as CI does.
+      - name: Install pinned Rust toolchain for API artifact generation
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: api-artifacts
+          save-if: false
+
+      - name: Generate API artifacts for the deployed frontend
+        run: |
+          set -euo pipefail
+          corepack enable
+          node scripts/generate_api_artifacts.mjs
+          test -s frontend/src/generated/nativeV2Client.ts
+          test -s frontend/src/generated/openapi.ts
+
       - name: Get production database connection string
         id: neon
         env:

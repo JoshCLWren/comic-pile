@@ -22,6 +22,7 @@
  * - Files under HISTORICAL_PREFIXES are skipped (per-issue plans and changelogs).
  */
 import {execFileSync} from 'node:child_process';
+import {GENERATED_ARTIFACT_PATHS} from './generate_api_artifacts.mjs';
 import {existsSync, readFileSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -39,6 +40,10 @@ export const GENERATED_PREFIXES = [
   'node_modules/',
   'target/',
 ];
+// Gitignored generated API artifacts (owner directive 2026-11-19) are valid
+// references even though a fresh checkout has not generated them yet.
+const GENERATED_ARTIFACTS = new Set(GENERATED_ARTIFACT_PATHS);
+const GENERATED_BASENAMES = new Set(GENERATED_ARTIFACT_PATHS.map((p) => p.slice(p.lastIndexOf('/') + 1)));
 const IGNORED_DIRECTORIES = new Set(['.git', '.venv', '.vercel', 'node_modules', 'archive']);
 const CODE_EXTENSIONS = '(?:py|rs|tsx?|jsx?|mjs|cjs|sh|sql|css|html|ya?ml|toml|json|md)';
 const BARE_CODE_EXTENSIONS = new Set([
@@ -181,7 +186,7 @@ export function extractPaths(text) {
 
 /** Return whether `candidate` names an existing file or an intentionally skipped path. */
 export function pathResolves(root, doc, candidate, basenames, tracked) {
-  if (GENERATED_PREFIXES.some((prefix) => candidate.startsWith(prefix))) {
+  if (GENERATED_PREFIXES.some((prefix) => candidate.startsWith(prefix)) || GENERATED_ARTIFACTS.has(candidate)) {
     return true;
   }
   if (candidate.includes('/')) {
@@ -192,7 +197,7 @@ export function pathResolves(root, doc, candidate, basenames, tracked) {
   if (!BARE_CODE_EXTENSIONS.has(extension)) {
     return true;
   }
-  return basenames.has(candidate);
+  return basenames.has(candidate) || GENERATED_BASENAMES.has(candidate);
 }
 
 /** Return whether `marker` appears as a real comment, not in a code span, fence, or generated block. */

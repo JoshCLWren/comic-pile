@@ -13,7 +13,9 @@ These are tools that remain safe and useful to rerun:
 - Database export/import: `export_db.py`, `import_db.py`, `clone_prod_to_local.py`
 - CBL mirror inventory and refresh: `sync_cbl_mirror.py` (see
   [`docs/CBL_MIRROR_REFRESH.md`](../docs/CBL_MIRROR_REFRESH.md))
-- OpenAPI tooling (Node, no Python): `export_openapi_schema.mjs`, `generate_openapi_types.mjs`, `generate_native_client.mjs`
+- OpenAPI tooling (Node, no Python): `generate_api_artifacts.mjs` (entry point: Rust contracts, then
+  `export_openapi_schema.mjs`, `generate_openapi_types.mjs`, `generate_native_client.mjs`). All outputs
+  are gitignored build artifacts; never commit them (owner directive 2026-11-19).
 - Route burndown (Node): `generate_route_burndown.mjs`
 - Seed and dev utilities: `seed_data.py`, `seed_dev_db.py`, `dev-all.sh`
 - Factory/CI automation, lint/test helpers, and monitoring tooling

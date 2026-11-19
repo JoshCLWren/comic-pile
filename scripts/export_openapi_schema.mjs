@@ -3,13 +3,16 @@
  * Export ComicPile's client-facing OpenAPI schema deterministically.
  *
  * Node port of scripts/export_openapi_schema.py (#5431). The document is built
- * from three checked-in contracts, so no Python runtime is needed:
+ * from three contracts, so no Python runtime is needed. The output is a
+ * gitignored build artifact (owner directive 2026-11-19): run
+ * `node scripts/generate_api_artifacts.mjs`, never commit it.
  *
  * - native/contracts/python-legacy.openapi.json: frozen snapshot of the
  *   remaining Python-served operations. It only ever shrinks: delete entries
  *   when the matching Python handlers are retired.
  * - native/contracts/same-path-runtime.openapi.json and
- *   native/contracts/v2-runtime.openapi.json: the Rust runtime contracts.
+ *   native/contracts/v2-runtime.openapi.json: the Rust runtime contracts,
+ *   gitignored outputs of `cargo run --example api_contracts`.
  *
  * Output is byte-identical to the former `json.dumps(indent=2, sort_keys=True,
  * ensure_ascii=False)` rendering (float literals such as `0.0` are preserved).
@@ -174,46 +177,78 @@ export function renderOpenapiSchema(schema) {
   return `${restored}\n`;
 }
 
-function simpleDiff(existing, rendered, limit = 90) {
-  const a = existing.split('\n');
-  const b = rendered.split('\n');
-  const out = [];
-  for (let i = 0; i < Math.max(a.length, b.length) && out.length < limit; i += 1) {
-    if (a[i] === b[i]) continue;
-    if (a[i] !== undefined) out.push(`-${i + 1}: ${a[i]}`);
-    if (b[i] !== undefined) out.push(`+${i + 1}: ${b[i]}`);
+const HTTP_METHODS = new Set(['get', 'put', 'post', 'patch', 'delete', 'head', 'options', 'trace']);
+
+/**
+ * Validate a generated OpenAPI document. Replaces the old byte-comparison
+ * against a checked-in copy (owner directive 2026-11-19: generated files are
+ * build outputs, never PR-authored) with structural strictness:
+ * OpenAPI 3.1, at least one operation, a non-empty operationId per operation
+ * that is unique in the document, at least one response per operation, and
+ * every `#/components/schemas/<name>` reference resolving.
+ *
+ * @param {string} name - Artifact label used in error messages.
+ * @param {object} document - Parsed OpenAPI document.
+ * @returns {string[]} Problems found; empty when the document is valid.
+ */
+export function openapiDocumentProblems(name, document) {
+  const problems = [];
+  if (!isObject(document)) return [`${name}: document must be an object`];
+  if (!String(document.openapi ?? '').startsWith('3.1')) problems.push(`${name}: openapi version must be 3.1.x`);
+  const seen = new Map();
+  let operations = 0;
+  for (const [p, item] of Object.entries(isObject(document.paths) ? document.paths : {})) {
+    for (const [method, operation] of Object.entries(isObject(item) ? item : {})) {
+      if (!HTTP_METHODS.has(method)) continue;
+      operations += 1;
+      const label = `${method.toUpperCase()} ${p}`;
+      const id = operation?.operationId;
+      if (!isString(id) || id === '') problems.push(`${name}: ${label} has no operationId`);
+      else if (seen.has(id)) problems.push(`${name}: operationId ${id} is declared by both ${seen.get(id)} and ${label}`);
+      else seen.set(id, label);
+      if (!isObject(operation?.responses) || Object.keys(operation.responses).length === 0) {
+        problems.push(`${name}: ${label} declares no responses`);
+      }
+    }
   }
-  return out.join('\n');
+  if (operations === 0) problems.push(`${name}: document declares no operations`);
+  const schemas = isObject(document.components?.schemas) ? document.components.schemas : {};
+  const unresolved = new Set();
+  const walk = (value) => {
+    if (Array.isArray(value)) value.forEach(walk);
+    else if (isObject(value)) {
+      for (const [key, child] of Object.entries(value)) {
+        if (key === '$ref' && isString(child)) {
+          if (!child.startsWith(SCHEMA_REF_PREFIX) || !Object.hasOwn(schemas, child.slice(SCHEMA_REF_PREFIX.length))) {
+            unresolved.add(child);
+          }
+        } else walk(child);
+      }
+    }
+  };
+  walk(document);
+  if (unresolved.size) problems.push(`${name}: unresolved schema references: ${[...unresolved].sort().join(', ')}`);
+  return problems;
 }
 
 export function main(argv = process.argv.slice(2)) {
   let output = DEFAULT_OUTPUT;
-  let check = false;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--check') check = true;
-    else if (argv[i] === '--output') output = argv[++i];
+    if (argv[i] === '--output') output = argv[++i];
     else {
       console.error(`unknown argument: ${argv[i]}`);
       return 2;
     }
   }
   const target = path.resolve(ROOT, output);
-  const rendered = renderOpenapiSchema(clientOpenapiSchema());
-  if (check) {
-    const existing = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
-    if (existing === rendered) {
-      console.log(`Verified deterministic OpenAPI schema: ${output}`);
-      return 0;
-    }
-    if (existing !== null) console.log(simpleDiff(existing, rendered));
-    console.log(
-      `Generated OpenAPI schema is stale: ${output}\n` +
-        'Run `node scripts/export_openapi_schema.mjs` and commit the result.',
-    );
+  const schema = clientOpenapiSchema();
+  const problems = openapiDocumentProblems(output, schema);
+  if (problems.length) {
+    console.error(`Generated OpenAPI schema is invalid:\n  ${problems.join('\n  ')}`);
     return 1;
   }
   fs.mkdirSync(path.dirname(target), {recursive: true});
-  fs.writeFileSync(target, rendered, 'utf8');
+  fs.writeFileSync(target, renderOpenapiSchema(schema), 'utf8');
   console.log(`Wrote deterministic OpenAPI schema: ${output}`);
   return 0;
 }

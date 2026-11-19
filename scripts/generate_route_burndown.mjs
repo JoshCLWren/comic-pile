@@ -1009,12 +1009,12 @@ export function main(argv = process.argv) {
       const inventoryCurrent = readFileSync(args.inventory, 'utf8');
       const vercelCurrent = readFileSync(args.vercel, 'utf8');
       const agentsCurrent = readFileSync(args.agents, 'utf8');
-      const rewriteCurrent = readFileSync(args['rewrite-fragment'], 'utf8');
+      // The rewrite fragment is a gitignored build output (owner directive
+      // 2026-11-19), so --check verifies only the tracked bot-owned files.
       if (
         inventoryCurrent !== inventoryText ||
         vercelCurrent !== vercelText ||
-        agentsCurrent !== agentsText ||
-        rewriteCurrent !== rewriteText
+        agentsCurrent !== agentsText
       ) {
         console.log(
           'Route burndown is stale; run `node scripts/generate_route_burndown.mjs` and commit the result.',
@@ -1022,7 +1022,7 @@ export function main(argv = process.argv) {
         return 1;
       }
       console.log(
-        `Verified route burndown: ${args.inventory}, ${args.vercel}, ${args.agents}, and ${args['rewrite-fragment']}`,
+        `Verified route burndown: ${args.inventory}, ${args.vercel}, and ${args.agents}`,
       );
       return 0;
     }

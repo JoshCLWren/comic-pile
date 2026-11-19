@@ -59,13 +59,58 @@ jobs:
       - run: npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --strict --skipLibCheck auth/me.ts
       - run: npm test
 
+  api-artifacts:
+    name: Generate API artifacts (Rust contracts + TS client)
+    # Generated API files are gitignored build outputs (owner directive
+    # 2026-11-19: feature PRs never edit or commit generated files). This job
+    # produces them once from the PR head's Rust declarations and every
+    # consumer job downloads them. The generators validate each document
+    # (OpenAPI 3.1, unique operationIds, responses, resolvable $refs) and the
+    # native client generator fails on any undeclared or duplicate operation.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: api-artifacts
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Enable repository pnpm version
+        run: corepack enable
+      - name: Generate contracts, merged schema, types and native client
+        run: node scripts/generate_api_artifacts.mjs
+      - name: Publish generated API artifacts for consumer jobs
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-artifacts-${{ github.sha }}
+          path: |
+            frontend/src/generated/
+            native/contracts/*.openapi.json
+          if-no-files-found: error
+          retention-days: 1
+
   rust-ingress:
     name: Rust-default API ingress (real FastAPI registry)
     runs-on: ubuntu-latest
+    needs: [api-artifacts]
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
+          path: .
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -162,6 +207,7 @@ jobs:
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Build Docker Image
+    needs: [api-artifacts]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -175,6 +221,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
+          path: .
 
       - name: Set lowercase image name
         id: lowercase
@@ -210,6 +262,7 @@ jobs:
   build-fork:
     name: Build Fork Docker Image
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    needs: [api-artifacts]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -217,6 +270,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
+          path: .
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v7
         with:
@@ -230,8 +288,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [api-artifacts, build, build-fork]
+    if: always() && needs.api-artifacts.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 15
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -240,6 +298,12 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
+          path: .
 
       - name: Install fork CI toolchain
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
@@ -263,9 +327,6 @@ jobs:
 
       - name: Check for unused frontend modules
         run: pnpm --filter frontend run check:unused
-
-      - name: Verify generated API contract freshness
-        run: pnpm --filter frontend run check:api-types
 
       - name: Run frontend typecheck
         run: pnpm --filter frontend run typecheck
@@ -381,8 +442,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork, rust-ingress]
-    if: always() && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [api-artifacts, build, build-fork, rust-ingress]
+    if: always() && needs.api-artifacts.result == 'success' && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 10
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -396,6 +457,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: resolved-ingress-${{ github.sha }}
+          path: .
+
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
           path: .
 
       - name: Install fork CI toolchain
@@ -422,8 +489,8 @@ jobs:
     # binaries uses the Playwright CDN and removes all runtime apt dependency
     # without weakening the audit or its strictness.
     runs-on: ubuntu-24.04
-    needs: [build, build-fork, rust-ingress]
-    if: always() && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [api-artifacts, build, build-fork, rust-ingress]
+    if: always() && needs.api-artifacts.result == 'success' && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -435,6 +502,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: resolved-ingress-${{ github.sha }}
+          path: .
+
+      - name: Download generated API artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: api-artifacts-${{ github.sha }}
           path: .
 
       - name: Enable repository pnpm version
@@ -593,11 +666,12 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, route-fragment-guard, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [api-artifacts, build, build-fork, node-auth, rust-ingress, route-fragment-guard, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
         run: |
+          echo "Generated API artifacts: ${{ needs.api-artifacts.result }}"
           echo "Build: ${{ needs.build.result }}"
           echo "Fork build: ${{ needs.build-fork.result }}"
           echo "TypeScript auth: ${{ needs.node-auth.result }}"
@@ -616,6 +690,7 @@ jobs:
           echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
           echo "Migration Health: ${{ needs.migration-health.result }}"
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
+             [ "${{ needs.api-artifacts.result }}" != "success" ] || \
              [ "${{ needs.node-auth.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \

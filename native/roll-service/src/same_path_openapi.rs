@@ -147,13 +147,34 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
 mod tests {
     use super::*;
 
+    /// Retired identity-inbox Python handlers keep all seven native same-path
+    /// contracts (moved from scripts/generate_route_burndown.test.mjs when the
+    /// generated JSON artifact stopped being tracked, owner directive 2026-11-19).
     #[test]
-    fn checked_in_contract_is_current() {
-        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
-        let generated = same_path_openapi()
-            .to_pretty_json()
-            .expect("serializable contract");
-        assert_eq!(expected.trim_end(), generated.trim_end());
+    fn retired_identity_inbox_handlers_retain_all_seven_native_contracts() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        for (method, route) in [
+            ("get", "/api/v1/identity-inbox"),
+            ("get", "/api/v1/identity-inbox/search/issues"),
+            ("get", "/api/v1/identity-inbox/{mapping_id}"),
+            ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
+            ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
+            ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
+            ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
+        ] {
+            let operation = &document["paths"][route][method];
+            assert!(
+                operation["operationId"]
+                    .as_str()
+                    .is_some_and(|id| !id.is_empty()),
+                "missing native operationId for {method} {route}"
+            );
+            let responses = operation["responses"].as_object().expect("responses");
+            assert!(
+                responses.keys().any(|code| code.starts_with('2')),
+                "{route}"
+            );
+        }
     }
 
     /// The thread dependency operations moved to native Rust but their browser

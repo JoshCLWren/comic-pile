@@ -7,34 +7,31 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {
+  GENERATED_ARTIFACT_PATHS,
+  GENERATED_CONTRACTS,
+  contractCommand,
+  main as artifactsMain,
+  writtenContracts,
+} from './generate_api_artifacts.mjs';
+
+import {
   clientOpenapiSchema,
   isClientSchemaPath,
   mergeNativeRuntimeContract,
   nativeSchemaRenames,
   parseJsonPreservingFloats,
-  main as exportMain,
+  openapiDocumentProblems,
   renderOpenapiSchema,
 } from './export_openapi_schema.mjs';
 import {
+  GENERATED_NOTICE,
   NativeClientGenerationError,
-  main as clientMain,
   methodName,
   renderNativeClient,
   tsType,
 } from './generate_native_client.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
-
-test('checked-in openapi.json is exactly what the contracts render', () => {
-  assert.equal(renderOpenapiSchema(clientOpenapiSchema()), read('frontend/src/generated/openapi.json'));
-});
-
-test('checked-in native v2 client is exactly what the contracts render', () => {
-  const load = (rel) => parseJsonPreservingFloats(read(rel));
-  const rendered = renderNativeClient(load('frontend/src/generated/openapi.json'), load('native/contracts/v2-runtime.openapi.json'));
-  assert.equal(rendered, read('frontend/src/generated/nativeV2Client.ts'));
-});
 
 test('float literals keep their fractional form through render', () => {
   const doc = parseJsonPreservingFloats('{"a": {"minimum": 0.0, "max": 1.5, "n": 3}}');
@@ -127,118 +124,152 @@ test('decimals inside JSON strings are not treated as float literals', () => {
   assert.equal(renderOpenapiSchema(doc), '{\n  "d": "Examples: 1.5, 2.5, and 3.5",\n  "x": 2.0\n}\n');
 });
 
-test('export --check fails on a stale schema without rewriting it, and passes when current', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 's5431scr-export-'));
-  const out = path.join(tmp, 'openapi.json');
-  try {
-    fs.writeFileSync(out, '{"stale": true}\n');
-    const quiet = (fn) => {
-      const log = console.log;
-      console.log = () => {};
-      try {
-        return fn();
-      } finally {
-        console.log = log;
-      }
-    };
-    assert.equal(quiet(() => exportMain(['--check', '--output', out])), 1);
-    assert.equal(fs.readFileSync(out, 'utf8'), '{"stale": true}\n');
-    assert.equal(quiet(() => exportMain(['--output', out])), 0);
-    assert.equal(fs.readFileSync(out, 'utf8'), read('frontend/src/generated/openapi.json'));
-    assert.equal(quiet(() => exportMain(['--check', '--output', out])), 0);
-  } finally {
-    fs.rmSync(tmp, {recursive: true, force: true});
-  }
-});
+// Generated artifacts are gitignored build outputs (owner directive
+// 2026-11-19), so these tests never compare against a checked-in copy. They
+// run the real generator entry point in a staged temporary repository built
+// from small fixture contracts and a fake pnpm, so they are deterministic,
+// offline, and need no Rust toolchain.
+const FIXTURES = path.join(root, 'scripts/__fixtures__/api-artifacts');
+const OUTPUTS = [
+  'frontend/src/generated/openapi.json',
+  'frontend/src/generated/openapi.ts',
+  'frontend/src/generated/nativeV2Client.ts',
+];
 
-test('native client --check fails on a stale client without rewriting it, and passes when current', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 's5431scr-client-'));
-  const out = path.join(tmp, 'nativeV2Client.ts');
-  const quiet = (fn) => {
-    const log = console.log;
-    console.log = () => {};
-    try {
-      return fn();
-    } finally {
-      console.log = log;
-    }
-  };
-  try {
-    fs.writeFileSync(out, '// stale\n');
-    assert.equal(quiet(() => clientMain(['--check', '--output', out])), 1);
-    assert.equal(fs.readFileSync(out, 'utf8'), '// stale\n');
-    assert.equal(quiet(() => clientMain(['--output', out])), 0);
-    assert.equal(fs.readFileSync(out, 'utf8'), read('frontend/src/generated/nativeV2Client.ts'));
-    assert.equal(quiet(() => clientMain(['--check', '--output', out])), 0);
-  } finally {
-    fs.rmSync(tmp, {recursive: true, force: true});
-  }
-});
-
-test('combined type-generator --check rejects stale types and native client without rewriting either', (t) => {
-  // Exercise the actual CI entrypoint, not just the two exporters in isolation.
-  // Use a temporary repository and fake pnpm so failures are deterministic and
-  // do not mutate committed generated artifacts or download npm packages.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'comic-pile-types-check-'));
+function stageRepo(t, contracts = {}) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'comic-pile-api-artifacts-'));
   t.after(() => fs.rmSync(tmp, {recursive: true, force: true}));
   const staged = (rel) => path.join(tmp, rel);
-  const copy = (rel) => {
-    fs.mkdirSync(path.dirname(staged(rel)), {recursive: true});
-    fs.copyFileSync(path.join(root, rel), staged(rel));
-  };
-  for (const rel of [
-    'scripts/export_openapi_schema.mjs',
-    'scripts/generate_native_client.mjs',
-    'scripts/generate_openapi_types.mjs',
-    'native/contracts/python-legacy.openapi.json',
-    'native/contracts/same-path-runtime.openapi.json',
-    'native/contracts/v2-runtime.openapi.json',
-    'frontend/src/generated/openapi.json',
-    'frontend/src/generated/openapi.ts',
-    'frontend/src/generated/nativeV2Client.ts',
-  ]) copy(rel);
-
-  const reference = staged('types-reference.ts');
-  fs.copyFileSync(staged('frontend/src/generated/openapi.ts'), reference);
+  fs.mkdirSync(staged('scripts'), {recursive: true});
+  for (const name of [
+    'export_openapi_schema.mjs',
+    'generate_native_client.mjs',
+    'generate_openapi_types.mjs',
+    'generate_api_artifacts.mjs',
+  ]) fs.copyFileSync(path.join(root, 'scripts', name), staged(`scripts/${name}`));
+  fs.mkdirSync(staged('native/contracts'), {recursive: true});
+  for (const name of ['python-legacy', 'same-path-runtime', 'v2-runtime']) {
+    const file = `${name}.openapi.json`;
+    const body = contracts[name] ?? fs.readFileSync(path.join(FIXTURES, file), 'utf8');
+    fs.writeFileSync(staged(`native/contracts/${file}`), body);
+  }
+  // Fake pnpm: `pnpm dlx openapi-typescript <schema> --output <out>` writes a
+  // deterministic stub derived from the schema bytes.
   const bin = staged('fake-bin');
   fs.mkdirSync(bin);
-  const pnpm = path.join(bin, 'pnpm');
-  fs.writeFileSync(pnpm, [
+  fs.writeFileSync(path.join(bin, 'pnpm'), [
     '#!/bin/sh',
     'set -eu',
     '[ "$1" = "dlx" ]',
     '[ "$4" = "--output" ]',
-    'cp "$COMICPILE_TYPES_REFERENCE" "$5"',
+    'printf "export type components = { schemas: Record<string, unknown> }\\n// bytes: %s\\n" "$(wc -c < "$3" | tr -d " ")" > "$5"',
     '',
   ].join('\n'));
-  fs.chmodSync(pnpm, 0o755);
-  const runCheck = () => {
+  fs.chmodSync(path.join(bin, 'pnpm'), 0o755);
+  const run = (script, args = []) => {
     try {
-      execFileSync(process.execPath, [staged('scripts/generate_openapi_types.mjs'), '--check'], {
+      execFileSync(process.execPath, [staged(`scripts/${script}`), ...args], {
         cwd: tmp,
-        env: {
-          ...process.env,
-          PATH: bin + path.delimiter + (process.env.PATH ?? ''),
-          COMICPILE_TYPES_REFERENCE: reference,
-        },
+        env: {...process.env, PATH: bin + path.delimiter + (process.env.PATH ?? '')},
         encoding: 'utf8',
+        stdio: 'pipe',
       });
       return 0;
     } catch (error) {
       return error.status;
     }
   };
+  const output = (rel) => (fs.existsSync(staged(rel)) ? fs.readFileSync(staged(rel), 'utf8') : null);
+  return {run, output, staged};
+}
 
-  assert.equal(runCheck(), 0, 'current generated artifacts must pass');
-  for (const rel of [
-    'frontend/src/generated/openapi.ts',
-    'frontend/src/generated/nativeV2Client.ts',
-  ]) {
-    const before = fs.readFileSync(staged(rel), 'utf8');
-    fs.writeFileSync(staged(rel), '// deliberately stale\n');
-    assert.equal(runCheck(), 1, rel + ' must fail the combined --check');
-    assert.equal(fs.readFileSync(staged(rel), 'utf8'), '// deliberately stale\n', rel + ' must not be overwritten');
-    fs.writeFileSync(staged(rel), before);
-    assert.equal(runCheck(), 0, rel + ' restored to current must pass');
+test('generator pipeline writes valid, bannered artifacts byte-identically on every run', (t) => {
+  const repo = stageRepo(t);
+  assert.equal(repo.run('generate_api_artifacts.mjs', ['--skip-rust']), 0);
+  const first = Object.fromEntries(OUTPUTS.map((rel) => [rel, repo.output(rel)]));
+  assert.equal(repo.run('generate_openapi_types.mjs'), 0);
+  for (const rel of OUTPUTS) {
+    assert.notEqual(first[rel], null, `${rel} must be generated`);
+    assert.equal(repo.output(rel), first[rel], `${rel} must be deterministic`);
+  }
+  const schema = parseJsonPreservingFloats(first['frontend/src/generated/openapi.json']);
+  assert.deepEqual(openapiDocumentProblems('openapi.json', schema), []);
+  assert.deepEqual(Object.keys(schema.paths).sort(), ['/api/v1/legacy', '/api/v1/same', '/api/v2/things', '/health']);
+  assert.match(first['frontend/src/generated/openapi.json'], /"minimum": 0\.0/);
+  for (const rel of ['frontend/src/generated/openapi.ts', 'frontend/src/generated/nativeV2Client.ts']) {
+    assert.ok(first[rel].startsWith(`${GENERATED_NOTICE}\n`), `${rel} must start with the do-not-edit banner`);
+  }
+  assert.match(first['frontend/src/generated/nativeV2Client.ts'], /listThings\(/);
+});
+
+test('generator pipeline refuses an invalid merged schema and writes nothing', (t) => {
+  const v2 = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'v2-runtime.openapi.json'), 'utf8'));
+  v2.paths['/api/v2/things'].get.operationId = 'get_same';
+  const repo = stageRepo(t, {'v2-runtime': JSON.stringify(v2)});
+  assert.equal(repo.run('generate_openapi_types.mjs'), 1);
+  for (const rel of OUTPUTS) assert.equal(repo.output(rel), null, `${rel} must not be written`);
+});
+
+test('generator pipeline fails when a Rust contract has not been generated', (t) => {
+  const repo = stageRepo(t);
+  fs.rmSync(repo.staged('native/contracts/v2-runtime.openapi.json'));
+  assert.notEqual(repo.run('generate_api_artifacts.mjs', ['--skip-rust']), 0);
+  for (const rel of OUTPUTS) assert.equal(repo.output(rel), null, `${rel} must not be written`);
+  assert.equal(repo.run('generate_openapi_types.mjs', ['--bogus']), 2);
+});
+
+test('artifact entry point builds Rust contracts with the locked api_contracts example', () => {
+  assert.deepEqual(contractCommand(), [
+    'cargo', 'run', '--locked', '--quiet', '-p', 'comicpile-roll-service',
+    '--example', 'api_contracts', '--', 'native/contracts',
+  ]);
+  const error = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(artifactsMain(['--bogus']), 2);
+  } finally {
+    console.error = error;
+  }
+});
+
+test('openapiDocumentProblems reports each broken invariant', () => {
+  const valid = () => ({
+    openapi: '3.1.0',
+    paths: {'/api/v2/a': {get: {operationId: 'a', responses: {'200': {content: {'application/json': {schema: {$ref: '#/components/schemas/A'}}}}}}}},
+    components: {schemas: {A: {type: 'object'}}},
+  });
+  assert.deepEqual(openapiDocumentProblems('doc', valid()), []);
+  const cases = [
+    ['openapi version', (d) => { d.openapi = '3.0.3'; }],
+    ['has no operationId', (d) => { delete d.paths['/api/v2/a'].get.operationId; }],
+    ['declared by both', (d) => { d.paths['/api/v2/a'].post = structuredClone(d.paths['/api/v2/a'].get); }],
+    ['declares no responses', (d) => { d.paths['/api/v2/a'].get.responses = {}; }],
+    ['declares no operations', (d) => { d.paths = {}; }],
+    ['unresolved schema references', (d) => { d.components.schemas = {}; }],
+  ];
+  for (const [expected, mutate] of cases) {
+    const doc = valid();
+    mutate(doc);
+    const problems = openapiDocumentProblems('doc', doc);
+    assert.ok(problems.some((p) => p.includes(expected)), `${expected}: ${problems.join('; ')}`);
+  }
+});
+
+test('writtenContracts reads the api_contracts example report', () => {
+  assert.deepEqual(
+    writtenContracts('wrote native/contracts/v2-runtime.openapi.json\nnoise\nwrote native/contracts/roll-v1.openapi.json\n'),
+    ['roll-v1.openapi.json', 'v2-runtime.openapi.json'],
+  );
+});
+
+test('every generated artifact is gitignored and untracked; frozen contract inputs stay tracked', () => {
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], {encoding: 'utf8'});
+  assert.equal(new Set(GENERATED_CONTRACTS).size, GENERATED_CONTRACTS.length);
+  for (const rel of GENERATED_ARTIFACT_PATHS) {
+    assert.doesNotThrow(() => git('check-ignore', '--no-index', '-q', rel), `${rel} must be gitignored`);
+    assert.equal(git('ls-files', '--', rel), '', `${rel} must not be tracked`);
+  }
+  for (const rel of ['native/contracts/python-legacy.openapi.json', 'native/contracts/roll-bootstrap-v1.openapi.json']) {
+    assert.equal(git('ls-files', '--', rel).trim(), rel, `${rel} is a frozen tracked input`);
   }
 });

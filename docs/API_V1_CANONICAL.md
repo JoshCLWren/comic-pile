@@ -80,5 +80,5 @@ pytest tests/test_api_v1_canonical_contract.py
 
 It asserts: no duplicate `operationId`s, no supported Collections surface, every canonical
 family above has an `/api/v1` route, and every bare `/api` alias is on the allowlist.
-Regenerate the schema with `node scripts/generate_openapi_types.mjs` after any routing
-change.
+Regenerate the (gitignored) schema with `node scripts/generate_api_artifacts.mjs` after any
+routing change; never commit it.

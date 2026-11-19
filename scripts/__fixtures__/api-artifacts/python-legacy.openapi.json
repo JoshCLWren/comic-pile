@@ -1,0 +1,56 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "legacy",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/legacy": {
+      "get": {
+        "operationId": "get_legacy",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Legacy"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Legacy"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Legacy": {
+        "type": "object",
+        "properties": {
+          "ratio": {
+            "type": "number",
+            "minimum": 0.0
+          }
+        }
+      }
+    }
+  }
+}

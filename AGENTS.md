@@ -86,7 +86,17 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
 ### Route generation ownership (bot-owned)
 
-Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `node scripts/generate_route_burndown.mjs` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
+Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`, a gitignored build output). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json` or the `<!-- route-burndown -->` section above. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `node scripts/generate_route_burndown.mjs` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
+
+### Generated files: never edit or commit (owner directive 2026-11-19)
+
+Feature PRs must not edit or commit generated files; that is what made every parallel route PR conflict. These are **gitignored build outputs**, absent from a fresh checkout or worktree until you run `node scripts/generate_api_artifacts.mjs` (cargo `api_contracts` example, then the Node OpenAPI/type/client generators):
+
+- `frontend/src/generated/openapi.json`, `frontend/src/generated/openapi.ts`, `frontend/src/generated/nativeV2Client.ts`
+- `native/contracts/*.openapi.json` except the frozen tracked inputs `native/contracts/python-legacy.openapi.json` and `native/contracts/roll-bootstrap-v1.openapi.json`
+- `docs/api/route-fragments/vercel-rewrites.json`
+
+A route PR changes only Rust declarations (add the operation to its utoipa `OpenApi` doc; new contracts go in `native/roll-service/src/contract_artifacts.rs`), route fragments and TypeScript sources. CI's `api-artifacts` job generates and validates them (OpenAPI 3.1, unique operationIds, responses, resolvable `$ref`s, every native operation present in the client) and consumer jobs download them; the production deploy workflow generates them before `vercel deploy`. The Route Fragment Guard in required CI Summary fails any PR that adds or modifies one (deleting is allowed). On a merge conflict in one of these paths, take main's version / `git rm --cached` it. The tracked bot-owned route outputs above (`vercel.json`, the inventory, the AGENTS block) stay tracked only because the generators read their previous version and Vercel reads `vercel.json` at deploy.
 
 ## MANDATORY: Frontend Visual Policy
 
@@ -568,7 +578,7 @@ The following rules in `.greptile/config.json` are enforced by Greptile during P
 
 5. **no-test-weakening**: Flag removed/loosened assertions, added timeouts/retries/sleeps, or new skip guards; flaky tests are deleted and redesigned deterministically (owner rule).
 
-6. **bot-owned-route-outputs**: PRs must not change vercel.json, docs/api/v2-route-inventory.json, docs/api/route-fragments/vercel-rewrites.json or the AGENTS.md route-burndown marker block.
+6. **bot-owned-route-outputs**: PRs must not change vercel.json, docs/api/v2-route-inventory.json or the AGENTS.md route-burndown marker block, and must not add or modify gitignored generated artifacts (frontend/src/generated/**, Rust-generated native/contracts/*.openapi.json, docs/api/route-fragments/vercel-rewrites.json); they are produced by `node scripts/generate_api_artifacts.mjs` in CI/deploy (owner directive 2026-11-19).
 
 ### Medium Severity Rules
 

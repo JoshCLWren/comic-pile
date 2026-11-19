@@ -303,23 +303,3 @@ test('real releases and dependency fragments retain declared browser routes', ()
     assert.equal(op.runtime, 'native-rust', route);
   }
 });
-
-test('retired identity-inbox handlers retain all seven native same-path contracts', () => {
-  const native = JSON.parse(readFileSync(
-    path.join(repoRoot, 'native/contracts/same-path-runtime.openapi.json'), 'utf8',
-  ));
-  const expected = [
-    ['GET', '/api/v1/identity-inbox'],
-    ['GET', '/api/v1/identity-inbox/search/issues'],
-    ['GET', '/api/v1/identity-inbox/{mapping_id}'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/confirm'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/defer'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/reject'],
-    ['POST', '/api/v1/identity-inbox/{mapping_id}/skip'],
-  ];
-  for (const [method, route] of expected) {
-    const op = native.paths[route]?.[method.toLowerCase()];
-    assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
-    assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
-  }
-});

@@ -1114,8 +1114,5 @@ mod tests {
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let expected = include_str!("../../contracts/issue-read-state-v1.openapi.json");
-        let generated = issue_read_state_openapi().to_pretty_json().unwrap();
-        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }

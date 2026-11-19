@@ -564,20 +564,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn checked_in_openapi_contract_is_current() {
-        let checked_in = include_str!("../../../native/contracts/preferences-v1.openapi.json");
-        let generated = PreferencesApi::openapi()
-            .to_pretty_json()
-            .expect("serializable OpenAPI document");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/preferences-v1.openapi.json with \
-             cargo run --example preferences_openapi"
-        );
-    }
-
     async fn db_fixture() -> (
         std::sync::Arc<AppState>,
         tokio_postgres::Client,

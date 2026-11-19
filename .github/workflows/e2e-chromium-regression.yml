@@ -108,6 +108,13 @@ jobs:
       - name: Install locked Python dependencies
         run: uv sync --locked
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Gitignored build outputs (owner directive 2026-11-19): the frontend
+      # imports the generated native client, so generate before building.
+      - name: Generate API artifacts
+        run: CARGO_TARGET_DIR=native/roll-service/target node scripts/generate_api_artifacts.mjs
+
       - name: Build frontend
         run: pnpm --filter frontend run build
 
@@ -117,8 +124,6 @@ jobs:
         # already provides the browser system libraries; only the pinned
         # browser binaries are downloaded (from the Playwright CDN) here.
         run: pnpm --filter frontend exec playwright install chromium
-
-      - uses: dtolnay/rust-toolchain@stable
 
       - name: Build native v2 service
         run: CARGO_TARGET_DIR=native/roll-service/target cargo build --release --locked -p comicpile-roll-service

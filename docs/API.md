@@ -43,14 +43,15 @@ Rust" from a path.
 
 ### Generated authoritative contract
 
-The checked-in client contract
-(`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
-generated sources:
+The client contract (`frontend/src/generated/openapi.json` and `openapi.ts`, both
+gitignored build outputs of `node scripts/generate_api_artifacts.mjs`; never commit
+them) is assembled from two sources:
 
 - `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
   Python/FastAPI routes, and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
-  operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
+  operations, generated (not tracked) from the Rust DTOs by
+  `cargo run --example api_contracts`.
 
 `scripts/export_openapi_schema.mjs` merges them: a native operation replaces the
 same `(path, method)` because ingress routes that request to Rust, and a native

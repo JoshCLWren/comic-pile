@@ -2243,20 +2243,6 @@ mod tests {
     }
 
     #[test]
-    fn checked_in_openapi_contract_is_current() {
-        let generated = IssueApi::openapi()
-            .to_pretty_json()
-            .expect("serializable OpenAPI document");
-        let checked_in = include_str!("../../../native/contracts/issue-v2.openapi.json");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/issue-v2.openapi.json with \
-             cargo run --example issue_openapi"
-        );
-    }
-
-    #[test]
     fn generated_openapi_declares_both_owner_scoped_issue_operations() {
         let document =
             serde_json::to_value(IssueApi::openapi()).expect("serializable OpenAPI document");

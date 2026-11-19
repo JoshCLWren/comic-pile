@@ -3,10 +3,12 @@ name: Regenerate Routes (Post-Merge)
 # Post-merge regeneration of bot-owned routing artifacts.
 #
 # Route PRs touch only docs/api/route-fragments/*.json source fragments
-# (excluding the generated vercel-rewrites.json artifact). vercel.json,
-# docs/api/v2-route-inventory.json, docs/api/route-fragments/
-# vercel-rewrites.json, and the AGENTS.md route-burndown section are
-# bot-owned and are regenerated here after source fragments land.
+# (excluding the generated vercel-rewrites.json artifact, which is a
+# gitignored build output since the 2026-11-19 owner directive). vercel.json,
+# docs/api/v2-route-inventory.json and the AGENTS.md route-burndown section
+# are bot-owned and are regenerated here after source fragments land. They
+# stay tracked because the generators read the previous vercel.json and
+# inventory as input and Vercel reads vercel.json at deploy time.
 # Regeneration is published as a PR because main's required CI Summary rule
 # rejects unchecked direct pushes. The PR runs ordinary CI and auto-merges
 # only when the exact generated head passes its required check.
@@ -93,8 +95,7 @@ jobs:
           DEPLOY_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git add vercel.json docs/api/v2-route-inventory.json \
-            docs/api/route-fragments/vercel-rewrites.json AGENTS.md
+          git add vercel.json docs/api/v2-route-inventory.json AGENTS.md
           branch='automation/route-regeneration/current'
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
@@ -121,8 +122,7 @@ jobs:
           if [[ -n "$existing" && -n "$remote_sha" ]]; then
             git fetch --no-tags origin "$branch"
             if git diff --quiet FETCH_HEAD HEAD -- \
-              vercel.json docs/api/v2-route-inventory.json \
-              docs/api/route-fragments/vercel-rewrites.json AGENTS.md; then
+              vercel.json docs/api/v2-route-inventory.json AGENTS.md; then
               echo "Regenerated files match existing PR #$existing; preserving its exact CI head."
               exit 0
             fi

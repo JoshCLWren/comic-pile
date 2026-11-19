@@ -233,3 +233,14 @@ docs/typing/mypy-inventory.json
 
 # Rotisserie factory runtime checkout (see .rotisserie/config.toml)
 /.rotisserie/runtime/
+
+# Generated API artifacts: build outputs, never tracked (owner directive
+# 2026-11-19, AGENTS.md "Generated files"). Produce them with
+# `node scripts/generate_api_artifacts.mjs`. CI, the production deploy workflow
+# and local development generate them; the Route Fragment Guard fails any PR
+# that adds them back.
+/frontend/src/generated/
+/native/contracts/*.openapi.json
+!/native/contracts/python-legacy.openapi.json
+!/native/contracts/roll-bootstrap-v1.openapi.json
+/docs/api/route-fragments/vercel-rewrites.json

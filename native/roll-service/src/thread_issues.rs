@@ -2056,8 +2056,5 @@ mod tests {
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let expected = include_str!("../../contracts/thread-issues-v1.openapi.json");
-        let generated = thread_issues_openapi().to_pretty_json().unwrap();
-        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
