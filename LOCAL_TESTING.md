@@ -59,15 +59,6 @@ async def test_my_feature(auth_api_client_async: AsyncClient, async_db: AsyncSes
 
 ## Key Fixtures
 
-### E2E Fixtures (`tests_e2e/conftest.py`)
-
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `async_db` | function | Async DB session with transaction rollback |
-| `auth_api_client_async` | function | Authenticated API client (ASGI transport) |
-| `test_server_url` | session | Live HTTP server on free port with seeded data |
-| `browser_page` | function | Playwright page with localStorage cleared |
-
 ### Unit Test Fixtures (`tests/conftest.py`)
 
 | Fixture | Scope | Description |
