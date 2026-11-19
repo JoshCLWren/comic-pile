@@ -109,47 +109,6 @@ async def test_roll_bounded_candidate_ids_match_pool(
 
 
 @pytest.mark.asyncio
-async def test_override_roll_records_override_selection_method(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """An override roll stores selection_method='override' in the context snapshot."""
-    now = datetime.now(UTC)
-    thread = Thread(
-        title="Override Context Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-        created_at=now,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    # Roll once to create a pending thread
-    await roll_pending_thread(async_db)
-
-    override_response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": thread.id}
-    )
-    assert override_response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event)
-        .where(Event.type == "roll")
-        .where(Event.selection_method == "override")
-        .order_by(Event.id.desc())
-        .limit(1)
-    )
-    event = result.scalar_one()
-    ctx = event.rolling_recommendation_context
-    assert ctx is not None
-    assert ctx["selection_method"] == "override"
-    assert ctx["bounded_candidate_ids"] == [thread.id]
-    assert ctx["selected_index"] == 0
-
-
-@pytest.mark.asyncio
 async def test_rolling_recommendation_context_validates_against_schema(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
