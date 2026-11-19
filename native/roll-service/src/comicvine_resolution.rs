@@ -12,6 +12,7 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, Utc};
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -91,7 +92,7 @@ pub struct IssueIdentityMapping {
     pub status: String,
     pub confidence: Option<f64>,
     pub evidence_source: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -132,7 +133,7 @@ pub struct CanonicalCorrection {
     pub canonical_value: String,
     pub provenance: String,
     pub created_by: i32,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -287,7 +288,7 @@ pub async fn search_comicvine_series(
     let mut total_available = 0i32;
     if let Some(p) = payload {
         if let Some(arr) = p.get("results").and_then(|v| v.as_array()) {
-            for row in arr {
+            for row in &arr {
                 let volume_id = row.get("id").and_then(|v| v.as_i64()).map(|v| v as i32);
                 let name = row.get("name").and_then(|v| v.as_str());
                 if volume_id.is_none() || name.is_none() {
@@ -383,7 +384,7 @@ pub async fn get_comicvine_series_issues(
                     if arr.is_empty() {
                         break;
                     }
-                    for row in arr {
+                    for row in &arr {
                         let id = row.get("id").and_then(|v| v.as_i64()).map(|x| x as i32);
                         if id.is_none() {
                             continue;
@@ -570,7 +571,7 @@ pub async fn resolve_comicvine_input(
                         Some(p) => {
                             let arr = p.get("results").and_then(|v| v.as_array()).cloned().unwrap_or_default();
                             if arr.is_empty() { break; }
-                            for row in arr {
+                            for row in &arr {
                                 let iid = row.get("id").and_then(|v| v.as_i64()).map(|x| x as i32);
                                 if iid.is_none() { continue; }
                                 let image_url = row.get("image").and_then(|v| v.as_object().and_then(|o| o.get("small_url").or_else(||o.get("thumb_url")).and_then(|x|x.as_str()).map(str::to_string)));
@@ -649,7 +650,7 @@ pub async fn get_issue_identity(
 
     let rows = conn
         .query(
-            "SELECT m.id, m.external_identity_id, e.provider, e.external_id, m.status, m.confidence, m.evidence_source, m.created_at, e.id \
+            "SELECT m.id, m.external_identity_id, e.provider, e.external_id, m.status, m.confidence, m.evidence_source, m.created_at::text, e.id \
              FROM issue_external_identity_mappings m JOIN external_identities e ON e.id = m.external_identity_id \
              WHERE m.issue_id = $1 ORDER BY m.confidence DESC NULLS LAST",
             &[&issue_id],
@@ -929,7 +930,7 @@ pub async fn list_corrections(
 
     let rows = conn
         .query(
-            "SELECT id, field_name, provider_value, canonical_value, provenance, created_by, created_at \
+            "SELECT id, field_name, provider_value, canonical_value, provenance, created_by, created_at::text \
              FROM issue_metadata_corrections WHERE issue_id=$1 AND reverted_at IS NULL ORDER BY created_at DESC",
             &[&issue_id],
         )
@@ -1060,6 +1061,10 @@ pub async fn series_import_status(
 #[utoipa::path(get, path = "/api/v1/comicvine/search/series", tag = "comicvine-resolution", responses((status = 200, description = "ok", body = ComicVineSeriesSearchResponse)), security(("HTTPBearer" = [])))]
 #[allow(dead_code)]
 pub fn search_comicvine_series_documentation() {}
+
+#[utoipa::path(get, path = "/api/v1/comicvine/series/{comicvine_volume_id}/import-status", tag = "comicvine-resolution", responses((status = 200, description = "ok", body = SeriesImportStatusResponse)), security(("HTTPBearer" = [])))]
+#[allow(dead_code)]
+pub fn series_import_status_documentation() {}
 
 // ---------------------------------------------------------------------------
 // Tests
