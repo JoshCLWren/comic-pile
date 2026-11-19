@@ -1595,3 +1595,60 @@ async fn roll_unsnooze_after_a_queue_reorder_event_removes_only_the_snooze() {
     assert!(snoozed_ids.is_empty());
     assert_eq!(die, die_before);
 }
+
+#[tokio::test]
+async fn roll_unsnooze_of_a_removed_series_removes_only_the_snooze() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-unsnooze-removed").await;
+    let ids = rollable_threads(&state.pool.get().await.unwrap(), user_id, 3).await;
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, pending_thread_id) VALUES ($1, NOW(), 6, $2)",
+            &[&user_id, &ids[0]],
+        )
+        .await
+        .unwrap();
+    let offer = offer_value(
+        &state,
+        &token,
+        &csrf,
+        "unsnooze-removed-key-001",
+        Some(ids[0]),
+    )
+    .await;
+    let snoozed = offer["snoozed_thread_id"].as_i64().unwrap() as i32;
+    let replacement = offer["thread_id"].as_i64().unwrap() as i32;
+    // Remove the snoozed series from the Queue (status change, no event).
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET status = 'excluded' WHERE id = $1",
+            &[&snoozed],
+        )
+        .await
+        .unwrap();
+    let (_, _, die_before) = session_state(&state, user_id).await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/roll/unsnooze",
+            &token,
+            &csrf,
+            Some(json!({ "thread_id": snoozed })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["restored"], json!(false), "{body:?}");
+    let (pending, snoozed_ids, die) = session_state(&state, user_id).await;
+    assert_eq!(pending, Some(replacement));
+    assert!(snoozed_ids.is_empty());
+    assert_eq!(die, die_before);
+}

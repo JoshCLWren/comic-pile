@@ -643,7 +643,18 @@ pub async fn unsnooze(
             if let ("snooze", Some(thread), Some(die_before)) =
                 (event_type.as_str(), event_thread, event_die)
             {
-                if thread == request.thread_id {
+                // The series must still belong in the pool: removing it from the
+                // Queue changes status without recording an event.
+                let still_active: bool = tx
+                    .query_opt(
+                        "SELECT status = 'active' FROM threads WHERE id = $1 AND user_id = $2",
+                        &[&request.thread_id, &user.id()],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .map(|row| row.get(0))
+                    .unwrap_or(false);
+                if thread == request.thread_id && still_active {
                     let updated = tx
                     .execute(
                         "UPDATE sessions
