@@ -254,12 +254,8 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-<<<<<<< HEAD
 pub(crate) async fn provider_response(
-=======
-async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
->>>>>>> origin/main
     resource: &str,
     extra_query: &str,
     api_key: &str,
@@ -352,15 +348,11 @@ async fn provider_response(
         })?
 }
 
-<<<<<<< HEAD
-pub(crate) async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
-=======
-async fn provider_issue(
+pub(crate) async fn provider_issue(
     outbound: &Arc<dyn OutboundHttp>,
     id: u32,
     api_key: &str,
 ) -> Result<Value, ProviderFailure> {
->>>>>>> origin/main
     provider_response(
         outbound,
         &format!("issue/4000-{id}"),
