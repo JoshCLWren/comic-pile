@@ -268,6 +268,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
+        .route("/api/v2/series-mapping-commits", post(native_dispatch))
         .route(
             "/api/v1/catalog/series-mappings/commit",
             post(native_dispatch),
@@ -362,6 +363,10 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
         )
+        .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(native_dispatch),
+        )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -411,6 +416,38 @@ fn app() -> Router {
             "/api/v2/reading-lists/{list_id}/reader",
             get(native_dispatch),
         )
+        .route(
+            "/api/v2/reading-lists/issue-candidates",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/export",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/adoption-commits",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
+            post(native_dispatch),
+        )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
@@ -456,14 +493,6 @@ fn app() -> Router {
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/cbl/{list_id}/adoption-commit",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
             post(native_dispatch),
         )
         .route(
@@ -652,29 +681,6 @@ fn app() -> Router {
         .route(
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(native_dispatch),
-        )
-        .route("/api/v1/custom-cbls", get(native_dispatch))
-        .route("/api/v1/custom-cbls", post(native_dispatch))
-        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
-        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
-        .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-            put(native_dispatch),
-        )
-        .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-            delete(native_dispatch),
         )
         .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
@@ -983,8 +989,11 @@ mod tests {
                 "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
             ),
             ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
-            ("POST", "/api/v1/cbl/26/adoption-commit"),
-            ("POST", "/api/v1/cbl/26/reading-plans/7/adoption-commit"),
+            ("POST", "/api/v2/reading-lists/26/adoption-commits"),
+            (
+                "POST",
+                "/api/v2/reading-lists/26/reading-plans/7/adoption-commits",
+            ),
         ];
         for (method, uri) in cases {
             let mut router = app();
@@ -1053,6 +1062,45 @@ mod tests {
         assert!(
             text != r#"{"detail":"Not Found"}"#,
             "cbl-sources discover must not hit the native 404 fallback: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
+        // The threads route fragment points this method/path at this Vercel
+        // entry. Without a matching outer route the regenerated ingress falls
+        // through to native_not_found before the inner router ever sees the
+        // handler (same failure class as #5484). No DB state is needed here:
+        // an anonymous mutation must reach the dispatched handler's 401 (or
+        // the 503 cold-start response), never the Rust JSON 404.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/threads/21/test-backdate?days_ago=5")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "test-backdate must reach Rust dispatch, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert_ne!(
+            text, r#"{"detail":"Not Found"}"#,
+            "test-backdate must not hit native_not_found: {text}"
         );
     }
 
@@ -2259,9 +2307,9 @@ mod tests {
         // native_roll ingress (not just the inner service) so production
         // requests do not fall through to the Rust JSON 404 fallback.
         let cases = [
-            ("GET", "/api/v1/custom-cbls/26/overlap-decisions"),
-            ("PUT", "/api/v1/custom-cbls/26/overlap-decisions"),
-            ("DELETE", "/api/v1/custom-cbls/26/overlap-decisions/7"),
+            ("GET", "/api/v2/reading-lists/26/overlap-decisions"),
+            ("PUT", "/api/v2/reading-lists/26/overlap-decisions"),
+            ("DELETE", "/api/v2/reading-lists/26/overlap-decisions/7"),
         ];
         for (method, uri) in cases {
             let mut router = app();

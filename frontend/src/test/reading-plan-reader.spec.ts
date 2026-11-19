@@ -139,11 +139,11 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   const later = await createThread(page, { title: 'Julix King of Fear', format: 'Comics', issues_remaining: 1, total_issues: 1 })
   const firstIssue = await firstIssueId(page, headers, first.id)
   const laterIssue = await firstIssueId(page, headers, later.id)
-  const createdList = await page.request.post('/api/v1/custom-cbls', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
+  const createdList = await page.request.post('/api/v2/reading-lists', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })
   expect(createdList.ok(), await createdList.text()).toBeTruthy()
   // SAFETY: successful list creation returns a numeric id; this test reads only that id.
   const list = await createdList.json() as { id: number }
-  const reader = await page.request.get(`/api/v1/custom-cbls/${list.id}/reader`, { headers })
+  const reader = await page.request.get(`/api/v2/reading-lists/${list.id}/reader`, { headers })
   expect(reader.ok(), await reader.text()).toBeTruthy()
   // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
   const projection = await reader.json() as { execution_mode: string }

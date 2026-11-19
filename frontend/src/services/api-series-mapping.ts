@@ -163,7 +163,7 @@ export function createSeriesMappingApi(client: HttpClient) {
     preview: (request: SeriesMappingPreviewRequest) =>
       client.post<SeriesMappingPreviewResponse>('/v1/catalog/series-mappings/preview', request),
     commit: (request: SeriesMappingCommitRequest) =>
-      client.post<SeriesMappingCommitResponse>('/v1/catalog/series-mappings/commit', request),
+      client.post<SeriesMappingCommitResponse>('/v2/series-mapping-commits', request),
   }
 }
 

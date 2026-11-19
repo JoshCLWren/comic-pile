@@ -58,9 +58,9 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 64 (64 native-rust + 0 python-fastapi).
+- Live v2 operations: 73 (73 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 40 operations (v1 40 + unversioned 0); v1 active 15 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 40 operations (v1 40 + unversioned 0); v1 active 13 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -77,6 +77,7 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4822 (1): `GET /api/v2/activity -> native-rust`
 - #4836 (11): `GET /api/v2/creators -> native-rust`; `GET /api/v2/creators/compare -> native-rust`; `GET /api/v2/creators/discoveries -> native-rust`; `GET /api/v2/creators/summaries -> native-rust`; `GET /api/v2/creators/team-chemistry -> native-rust`; `GET /api/v2/creators/{creator_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/role-stats/{role} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/series-stats/{series_key} -> native-rust`; `GET /api/v2/creators/{creator_key}/metrics/{metric_type} -> native-rust`; `GET /api/v2/creators/{creator_key}/series/{series_key}/issues -> native-rust`
 - #4839 (2): `GET /api/v2/reading-sessions/{session_id}/details -> native-rust`; `GET /api/v2/reading-sessions/{session_id}/snapshots -> native-rust`
+- #4844 (9): `GET /api/v2/reading-lists/issue-candidates -> native-rust`; `POST /api/v2/reading-lists/{list_id}/adoption-commits -> native-rust`; `GET /api/v2/reading-lists/{list_id}/export -> native-rust`; `GET /api/v2/reading-lists/{list_id}/overlap-decisions -> native-rust`; `PUT /api/v2/reading-lists/{list_id}/overlap-decisions -> native-rust`; `DELETE /api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id} -> native-rust`; `POST /api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits -> native-rust`; `POST /api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications -> native-rust`; `POST /api/v2/series-mapping-commits -> native-rust`
 - #4849 (1): `GET /api/v2/releases -> native-rust`
 - #4850 (4): `POST /api/v2/roll/dismiss-pending -> native-rust`; `POST /api/v2/roll/override -> native-rust`; `POST /api/v2/roll/switch-prerequisite -> native-rust`; `POST /api/v2/roll/unsnooze -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`

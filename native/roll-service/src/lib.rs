@@ -590,9 +590,8 @@ async fn runtime_identity(request: Request, next: Next) -> Response {
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
     use custom_cbl::{
-        apply_custom_cbl, create_custom_cbl, delete_overlap_decision, export_custom_cbl,
-        get_custom_cbl, get_overlap_decisions, list_custom_cbls, read_custom_cbl,
-        save_overlap_decision, search_custom_cbl_issues, update_custom_cbl,
+        apply_custom_cbl, delete_overlap_decision, export_custom_cbl, get_overlap_decisions,
+        save_overlap_decision, search_custom_cbl_issues,
     };
     Router::new()
         .route(
@@ -632,7 +631,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(auth::handlers::reset_password),
         )
         .route(
-            "/api/v1/catalog/series-mappings/commit",
+            "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
         .route(
@@ -827,6 +826,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_issues::create_thread_issues),
         )
         .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
             post(thread_issues::reorder_thread_issues),
         )
@@ -884,6 +887,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_lifecycle::set_pending_thread),
         )
         .route(
+            "/api/v1/threads/{thread_id}/test-backdate",
+            put(thread_lifecycle::backdate_thread_for_testing),
+        )
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )
@@ -911,37 +918,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
         )
-        // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
-        .route("/api/v1/custom-cbls", get(list_custom_cbls))
-        .route("/api/v1/custom-cbls", post(create_custom_cbl))
         .route(
-            "/api/v1/custom-cbls/issue-search",
+            "/api/v2/reading-lists/issue-candidates",
             get(search_custom_cbl_issues),
         )
-        .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
-        .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
         .route(
-            "/api/v1/custom-cbls/{list_id}/export",
+            "/api/v2/reading-lists/{list_id}/export",
             get(export_custom_cbl),
         )
-        .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
-        // Axum (matchit) forbids a parameter sharing a segment with a literal,
-        // so the colon-action wire suffix is captured whole and parsed inside
-        // the handler; the public path stays exactly `{plan_id}:apply`.
         .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_action}",
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
             post(apply_custom_cbl),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
             get(get_overlap_decisions),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions",
             put(save_overlap_decision),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
             delete(delete_overlap_decision),
         )
         .route(
@@ -1035,11 +1033,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_identity::cbl_adoption_plan),
         )
         .route(
-            "/api/v1/cbl/{list_id}/adoption-commit",
+            "/api/v2/reading-lists/{list_id}/adoption-commits",
             post(issue_identity::cbl_adoption_commit),
         )
         .route(
-            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
             post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(

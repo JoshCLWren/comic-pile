@@ -65,6 +65,8 @@ pub struct ReadingList {
     pub created_at: String,
     pub updated_at: String,
     pub entries: Vec<ReadingListEntry>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -332,6 +334,7 @@ fn list_from_row(
     row: (i32, String, Option<String>, String, String, String, i32),
     user_id: i32,
     entries: Vec<ReadingListEntry>,
+    warnings: Vec<String>,
 ) -> ReadingList {
     ReadingList {
         id: row.0,
@@ -343,6 +346,7 @@ fn list_from_row(
         updated_at: row.5,
         issue_count: row.6,
         entries,
+        warnings,
     }
 }
 
@@ -388,7 +392,7 @@ pub async fn get_reading_list(
         return Err(ApiError::NotFound("Reading List not found".to_string()));
     };
     let entries = load_entries_conn(&conn, list_id).await?;
-    Ok(Json(list_from_row(row, user.id(), entries)))
+    Ok(Json(list_from_row(row, user.id(), entries, Vec::new())))
 }
 
 /// `POST /api/v2/reading-lists`
@@ -487,8 +491,9 @@ pub async fn create_reading_list(
         .map_err(db::query_error)?;
     }
 
-    graph_preflight(&tx, user).await?;
+    let inputs = graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
+    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
     let list = list_from_row(
         (
             list_id,
@@ -501,12 +506,16 @@ pub async fn create_reading_list(
         ),
         user.id(),
         entries,
+        warnings,
     );
     tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(list)))
 }
 
-async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Result<(), ApiError> {
+async fn graph_preflight(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<option_inputs::OptionInputs, ApiError> {
     let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = inputs
         .lists
@@ -515,7 +524,106 @@ async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Resul
         .collect();
     ValidatedReadingInputs::new(inputs.clone(), &names)
         .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
-    Ok(())
+    Ok(inputs)
+}
+
+fn strict_coverage_warnings(
+    inputs: &option_inputs::OptionInputs,
+    entries: &[ReadingListEntry],
+    mode: &str,
+) -> Vec<String> {
+    if mode != "strict" {
+        return Vec::new();
+    }
+
+    let placed: BTreeSet<i32> = entries.iter().map(|entry| entry.issue_id).collect();
+    let covered: BTreeSet<i32> = entries
+        .iter()
+        .filter(|entry| !entry.skipped)
+        .map(|entry| entry.issue_id)
+        .collect();
+    let represented: BTreeSet<i32> = inputs
+        .core
+        .issues
+        .iter()
+        .filter(|issue| placed.contains(&issue.id))
+        .map(|issue| issue.thread_id)
+        .collect();
+    let titles: BTreeMap<i32, &str> = inputs
+        .core
+        .threads
+        .iter()
+        .map(|thread| (thread.id, thread.title.as_str()))
+        .collect();
+    let names: BTreeMap<i32, String> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| {
+            (
+                issue.id,
+                format!(
+                    "{} #{}",
+                    titles.get(&issue.thread_id).copied().unwrap_or("Series"),
+                    issue.issue_number
+                ),
+            )
+        })
+        .collect();
+
+    let mut omitted_counts: BTreeMap<i32, usize> = BTreeMap::new();
+    let mut samples: BTreeMap<i32, Vec<String>> = BTreeMap::new();
+    for issue in &inputs.core.issues {
+        if represented.contains(&issue.thread_id)
+            && !covered.contains(&issue.id)
+            && issue.status != "read"
+            && !inputs.excluded_issue_ids.contains(&issue.id)
+        {
+            *omitted_counts.entry(issue.thread_id).or_default() += 1;
+            let sample = samples.entry(issue.thread_id).or_default();
+            if sample.len() < 5 {
+                sample.push(
+                    names
+                        .get(&issue.id)
+                        .cloned()
+                        .unwrap_or_default()
+                        .chars()
+                        .take(80)
+                        .collect(),
+                );
+            }
+        }
+    }
+
+    let affected: Vec<&crate::reading_inputs::ReadingThread> = inputs
+        .core
+        .threads
+        .iter()
+        .filter(|thread| omitted_counts.contains_key(&thread.id))
+        .collect();
+    let mut warnings = Vec::new();
+    for thread in affected.iter().take(10) {
+        let count = omitted_counts[&thread.id];
+        let sample = samples.get(&thread.id).cloned().unwrap_or_default();
+        let suffix = if count > sample.len() {
+            format!(", … (+{} more)", count - sample.len())
+        } else {
+            String::new()
+        };
+        let thread_name: String = thread.title.chars().take(80).collect();
+        warnings.push(format!(
+            "Strict list omits {count} unread Issues from {thread_name}: {}{}",
+            sample.join(", "),
+            suffix
+        ));
+    }
+    if affected.len() > 10 {
+        warnings.push(format!(
+            "Partial coverage also affects {} more Threads.",
+            affected.len() - 10
+        ));
+    }
+    warnings
 }
 
 /// An authoritative Reading List must not be removed while an owned Plan
@@ -788,8 +896,9 @@ pub async fn update_reading_list(
         ).await.map_err(db::query_error)?;
     }
 
-    graph_preflight(&tx, user).await?;
+    let inputs = graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
+    let warnings = strict_coverage_warnings(&inputs, &entries, &mode);
     let new_requirements = stored_requirements(&mode, &entries);
     let labels: BTreeMap<i32, String> = old_entries
         .iter()
@@ -839,6 +948,7 @@ pub async fn update_reading_list(
         ),
         user.id(),
         entries,
+        warnings.clone(),
     );
     let mut json = serde_json::to_value(&list).map_err(|e| {
         tracing::debug!(
@@ -848,7 +958,7 @@ pub async fn update_reading_list(
         ApiError::Internal("Reading List serialization failed".into())
     })?;
     json["predecessor_changes"] = serde_json::to_value(&changes).unwrap_or_default();
-    json["warnings"] = serde_json::json!([]);
+    json["warnings"] = serde_json::to_value(&warnings).unwrap_or_default();
     tx.commit().await.map_err(db::query_error)?;
     // The metadata timestamp is selected after commit so clients get the
     // actual persisted optimistic token rather than a manufactured clock.
