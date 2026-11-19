@@ -1,0 +1,4 @@
+{
+  "base_revision": "m5d300000001",
+  "description": "Prod-shaped synthetic/anonymized seed at Alembic revision m5d300000001 for migration rehearsal (#3554). Includes multiple users, threads with dependencies, reading plans with nodes_json, CBL source-linked/adopted-shape plans, snoozed and blocked threads, NULL-heavy legacy rows, and the reviewed dangling ContinuityRule allowlist case that previously aborted c25530000001 pre-#3495."
+}
