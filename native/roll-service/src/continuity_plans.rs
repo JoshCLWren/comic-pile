@@ -3541,9 +3541,8 @@ pub async fn preview_plan_projection(
 
     let mut entries: Vec<ReadingOrderProjectionEntry> = Vec::new();
     let mut dropped_node_ids: Vec<String> = Vec::new();
-    let mut total_positions: i32 = 0;
 
-    if conflicts.is_empty() {
+    let total_positions = if conflicts.is_empty() {
         let mut position = 1i32;
         for node in &ordered {
             if node.node_type != "thread" || !thread_titles.contains_key(&node.ref_id) {
@@ -3563,10 +3562,10 @@ pub async fn preview_plan_projection(
             });
             position += 1;
         }
-        total_positions = entries.len() as i32;
+        entries.len() as i32
     } else {
-        total_positions = existing_rows.len() as i32;
-    }
+        existing_rows.len() as i32
+    };
 
     // Collect dropped node IDs (nodes whose lane is not in the plan).
     let lane_ids: std::collections::HashSet<&str> = lanes_json
