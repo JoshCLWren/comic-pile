@@ -55,7 +55,6 @@ export const ALLOWLIST = new Map([
     'comicvine_issue',
     'comicvine_repair',
     'comicvine_resolution',
-    'continuity_rules',
     'creators',
     'demo',
     'dice_api',
