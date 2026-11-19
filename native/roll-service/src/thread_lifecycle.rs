@@ -2647,6 +2647,27 @@ pub fn reactivate_thread_documentation() {}
 pub fn set_pending_thread_documentation() {}
 
 #[utoipa::path(
+    put,
+    path = "/api/v1/threads/{thread_id}/test-backdate",
+    tag = "threads",
+    description = "Backdate an owned thread's last activity in a test environment.",
+    params(
+        ("thread_id" = i32, Path, description = "The thread ID to backdate"),
+        ("days_ago" = i32, Query, description = "Number of days to backdate the thread", minimum = 1, maximum = 3650)
+    ),
+    responses(
+        (status = 200, description = "Backdated thread", body = ThreadResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Only available in a test environment"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn backdate_thread_for_testing_documentation() {}
+
+#[utoipa::path(
     get,
     path = "/api/v1/threads/stale",
     tag = "threads",

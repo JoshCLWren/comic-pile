@@ -29,6 +29,7 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::restore_thread_documentation,
         crate::thread_lifecycle::reactivate_thread_documentation,
         crate::thread_lifecycle::set_pending_thread_documentation,
+        crate::thread_lifecycle::backdate_thread_for_testing_documentation,
         crate::thread_lifecycle::list_stale_threads_documentation,
         crate::thread_lifecycle::list_excluded_threads_documentation,
         crate::thread_lifecycle::check_potential_duplicates_documentation,

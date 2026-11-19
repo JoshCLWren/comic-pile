@@ -9,8 +9,6 @@
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
-    routing::get as route_get,
-    Router,
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::{json, Value};
