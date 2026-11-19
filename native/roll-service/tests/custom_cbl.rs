@@ -962,6 +962,24 @@ async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_disti
     assert_eq!(
         pairs,
         vec![(910301, 910311), (910302, 910321)],
-        "each canonical issue once; same-titled series stay distinct and grouped: {body}"
+        "each canonical issue once; same-titled series stay distinct: {body}"
     );
+
+    // A bounded result must still reach every same-titled series even when the
+    // first series has more matching issues than the limit.
+    let (status, body) = get(
+        &fixture.state,
+        &fixture.token,
+        "/api/v1/custom-cbls/issue-search?q=Mutant%20X&limit=2",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let mut threads: Vec<i64> = body
+        .as_array()
+        .expect("array body")
+        .iter()
+        .map(|i| i["thread_id"].as_i64().unwrap())
+        .collect();
+    threads.sort();
+    assert_eq!(threads, vec![910301, 910302], "{body}");
 }

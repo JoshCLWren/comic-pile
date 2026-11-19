@@ -557,9 +557,9 @@ export default function CustomCBLBuilder({
     focusListStart()
   }
 
-  const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : []).filter(
-    (candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id),
-  )
+  const searchResults = (issueQuery.trim() === submittedIssueQuery ? issueSearchQuery.data ?? [] : [])
+    .filter((candidate) => !entries.some((entry) => entry.issue_id === candidate.issue_id))
+    .sort((a, b) => a.series_name.localeCompare(b.series_name) || a.thread_id - b.thread_id)
 
   // Show the series ID only when results hold several same-named series.
   const ambiguousSeriesNames = useMemo(() => {

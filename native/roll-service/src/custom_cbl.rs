@@ -1184,7 +1184,7 @@ pub async fn search_custom_cbl_issues(
             pattern = format!("%{}%", normalized);
             params_vec.push(&pattern);
         }
-        query.push_str(" ORDER BY t.title ASC, t.id ASC, i.position ASC, i.id ASC");
+        query.push_str(" ORDER BY t.title ASC, i.position ASC, i.id ASC");
         query.push_str(" LIMIT $");
         query.push_str(&(params_vec.len() + 1).to_string());
         params_vec.push(&limit);
