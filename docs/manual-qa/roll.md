@@ -72,7 +72,7 @@
 
 **Test:** Open Pick manually, type a partial title and identifying year/volume when available; exercise keyboard navigation, no matches, clear, and selection of either same-named Thread.
 
-**Expected:** Results filter responsively with accessible focus and controls; each choice identifies the correct existing Thread, not just its displayed title. Typing or clearing never rolls, rates, marks read, or changes the die. A confirmed manual choice records the exact canonical issue identity and is labeled Picked manually, never a fabricated result such as Rolled 0 of d6.
+**Expected:** Results filter responsively with accessible focus and controls; each choice identifies the correct existing Thread, not just its displayed title. Series choices use the shared cover component with the exact thread's representative confirmed cover (or its no-cover fallback), including the Snoozed group. Typing or clearing never rolls, rates, marks read, or changes the die. A confirmed manual choice records the exact canonical issue identity and is labeled Picked manually, never a fabricated result such as Rolled 0 of d6.
 
 ## MQA-ROLL-010: Covers, high zoom, and action accessibility
 
