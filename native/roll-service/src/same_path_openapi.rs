@@ -184,7 +184,7 @@ mod tests {
         let generated = same_path_openapi()
             .to_pretty_json()
             .expect("serializable contract");
-        std::fs::write("../../contracts/same-path-runtime.openapi.json", generated).expect("write");
+        std::fs::write("/home/runner/work/comic-pile/comic-pile/native/contracts/same-path-runtime.openapi.json", generated).expect("write");
     }
 
     /// The thread dependency operations moved to native Rust but their browser
