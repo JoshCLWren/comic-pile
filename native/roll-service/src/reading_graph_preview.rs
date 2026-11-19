@@ -229,8 +229,8 @@ pub async fn preview_reading_graph_handler(
     // Validate inputs (contains cycle detection via contained path).
     let validated = ValidatedReadingInputs::contained(inputs, &list_names).map_err(|e| {
         let msg = match &e {
-            reading_constraints::ValidationError::InvalidSnapshot { message } => message.clone(),
-            reading_constraints::ValidationError::Cycle { message, .. } => message.clone(),
+            ValidationError::InvalidSnapshot { message } => message.clone(),
+            ValidationError::Cycle { message, .. } => message.clone(),
         };
         ApiError::Internal(msg)
     })?;
@@ -447,12 +447,13 @@ fn build_series_nodes(
                 thread_id: *thread_id,
                 volume_id: volume_id.map(|s| s.to_string()),
                 unread: unread_count,
-                rollable,
-                waiting,
-                waits_for,
+                rollable: rollable.clone(),
+                waiting: waiting.clone(),
+                waits_for: waits_for.clone(),
             });
         aggregate.rollable.extend(rollable);
         aggregate.waiting.extend(waiting);
+        aggregate.waits_for.extend(waits_for);
         aggregate.waits_for.extend(waits_for);
     }
 
