@@ -47,7 +47,7 @@ pub struct SeriesMappingPreviewResponse {
 ///
 /// Builds the same read-only series-mapping plan Python builds, then mints an
 /// HMAC-signed preview token when the scope is available. No rows are mutated.
-#[instrument(skip(state))]
+#[instrument(skip(state, user))]
 pub async fn preview_series_mapping_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
