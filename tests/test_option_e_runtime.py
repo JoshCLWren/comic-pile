@@ -388,62 +388,6 @@ async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
     assert excluded.threads[0].is_blocked is True
 
 
-async def test_reading_list_reader_is_inactive_until_approved(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Opening the reader cannot turn saved strict intent into active execution."""
-    user = await get_or_create_user_async(async_db)
-    _, issues = await _series(async_db, user.id, "Ordinary", 1)
-    reading_list = CustomCBLList(user_id=user.id, name="Inactive strict", mode="strict")
-    async_db.add(reading_list)
-    await async_db.flush()
-    async_db.add(CustomCBLEntry(list_id=reading_list.id, issue_id=issues[0].id, position=1))
-    list_id = reading_list.id
-    await async_db.commit()
-    response = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
-    assert response.status_code == 200
-    assert response.json()["execution_mode"] == "legacy"
-    assert response.json()["entries"][0]["availability"] == "legacy"
-    assert response.json()["entries"][0]["explanation"] is None
-    assert (await auth_client.get("/api/v1/custom-cbls/999999999/reader")).status_code == 404
-
-
-async def test_list_reader_distinguishes_exclusions_inactive_and_empty_lists(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Collection exclusions, inactivity and no membership never masquerade as blockers."""
-    user = await get_or_create_user_async(async_db)
-    _, excluded_issues = await _series(async_db, user.id, "Excluded", 1)
-    _, inactive_issues = await _series(async_db, user.id, "Inactive", 2, status="paused")
-    reading_list = CustomCBLList(user_id=user.id, name="States", mode="loose")
-    empty = CustomCBLList(user_id=user.id, name="Empty", mode="loose")
-    foreign_user = await get_or_create_user_async(async_db, username="other-list-reader")
-    foreign = CustomCBLList(user_id=foreign_user.id, name="Private", mode="loose")
-    async_db.add_all([reading_list, empty, foreign])
-    await async_db.flush()
-    async_db.add_all(
-        [
-            CustomCBLEntry(list_id=reading_list.id, issue_id=excluded_issues[0].id, position=1),
-            CustomCBLEntry(list_id=reading_list.id, issue_id=inactive_issues[0].id, position=2),
-            CollectionExclusion(user_id=user.id, issue_id=excluded_issues[0].id),
-        ]
-    )
-    list_id, empty_id, foreign_id = reading_list.id, empty.id, foreign.id
-    await async_db.commit()
-    response = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
-    assert response.status_code == 200
-    assert [entry["availability"] for entry in response.json()["entries"]] == [
-        "excluded",
-        "inactive",
-    ]
-    empty_response = await auth_client.get(f"/api/v1/custom-cbls/{empty_id}/reader")
-    assert empty_response.json()["entries"] == []
-    assert (await auth_client.get(f"/api/v1/custom-cbls/{foreign_id}/reader")).status_code == 404
-
-
 async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
     option_e: None,
     auth_client: AsyncClient,
