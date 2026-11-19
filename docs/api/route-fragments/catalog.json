@@ -30,8 +30,11 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/catalog/series-mappings/preview",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/catalog/series\\-mappings/preview$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/catalog/series\\-mappings/preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842
     }
   ]
 }
