@@ -601,46 +601,6 @@
     "name": "list_thread_issue_dependencies"
   },
   {
-    "path": "/api/v1/continuity-rules/",
-    "methods": [
-      "GET"
-    ],
-    "module": "app.api.continuity_rule",
-    "name": "list_continuity_rules"
-  },
-  {
-    "path": "/api/v1/continuity-rules/{rule_id}",
-    "methods": [
-      "GET"
-    ],
-    "module": "app.api.continuity_rule",
-    "name": "get_continuity_rule"
-  },
-  {
-    "path": "/api/v1/continuity-rules/",
-    "methods": [
-      "POST"
-    ],
-    "module": "app.api.continuity_rule",
-    "name": "create_continuity_rule"
-  },
-  {
-    "path": "/api/v1/continuity-rules/{rule_id}",
-    "methods": [
-      "PUT"
-    ],
-    "module": "app.api.continuity_rule",
-    "name": "update_continuity_rule"
-  },
-  {
-    "path": "/api/v1/continuity-rules/{rule_id}",
-    "methods": [
-      "DELETE"
-    ],
-    "module": "app.api.continuity_rule",
-    "name": "delete_continuity_rule"
-  },
-  {
     "path": "/api/v1/catalog/series-mappings/commit",
     "methods": [
       "POST"

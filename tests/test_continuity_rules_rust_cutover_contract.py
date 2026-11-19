@@ -43,13 +43,13 @@ def test_continuity_rules_registered_in_native_rust() -> None:
     )
 
 
-def test_continuity_rules_v2_inventory_status() -> None:
-    """Continuity-rules operations are marked as native-rust in v2-route-inventory.json."""
+def test_continuity_rules_v1_inventory_status() -> None:
+    """Continuity-rules v1 operations are in full_surface.v1_operations with native-rust status."""
     root = Path(__file__).resolve().parents[1]
     inventory = json.loads((root / "docs/api/v2-route-inventory.json").read_text())
 
     count = 0
-    for op in inventory["operations"]:
+    for op in inventory["full_surface"]["v1_operations"]:
         if op.get("path", "").startswith("/api/v1/continuity-rules"):
             count += 1
             assert op.get("runtime") == "native-rust", (
@@ -62,7 +62,7 @@ def test_continuity_rules_v2_inventory_status() -> None:
                 f"{op['method']} {op['path']} should be owned by issue #4848"
             )
 
-    assert count == 5, f"Expected 5 continuity-rules operations in inventory, found {count}"
+    assert count == 5, f"Expected 5 continuity-rules v1 operations in inventory, found {count}"
 
 
 def test_continuity_rules_not_in_retired_python_handlers() -> None:
