@@ -3053,7 +3053,7 @@ async fn reconcile_entries_impl<E: DbExec>(
             series_external_id.as_deref(),
             &canonical_issues,
             fallback_index.as_ref(),
-        );
+        )?;
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
@@ -3338,7 +3338,7 @@ async fn load_owned_issue_fallback_index<E: DbExec>(
     })
 }
 
-async fn title_number_fallback(
+fn title_number_fallback(
     series_name: &str,
     issue_number: &str,
     series_external_id: Option<&str>,
