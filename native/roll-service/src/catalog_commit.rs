@@ -6,8 +6,6 @@
 use crate::{auth::AuthenticatedUser, comicvine_repair, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
     Json,
 };
 use hmac::{digest::KeyInit, Hmac, Mac};
