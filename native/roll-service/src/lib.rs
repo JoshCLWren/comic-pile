@@ -630,6 +630,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_preview::preview_series_mapping),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
