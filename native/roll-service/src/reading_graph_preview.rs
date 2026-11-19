@@ -419,7 +419,7 @@ fn build_series_nodes(
 
         let state = eligibility.get(thread_id);
         let mut rollable: HashSet<i32> = HashSet::new();
-        let mut waiting: HashSet<i32> = HashSet::new();
+        let waiting: HashSet<i32> = HashSet::new();
         let mut waits_for: HashSet<i32> = HashSet::new();
 
         if let Some(s) = state {
