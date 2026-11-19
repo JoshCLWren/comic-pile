@@ -15,8 +15,8 @@
 //!   generated client may branch on `detail.code`
 //!   (`continuity_cycle`, `continuity_rule_not_compilable`,
 //!   `continuity_rule_exists`, `continuity_cbl_collision`).
-//! * Timestamps are re-rendered as UTC RFC-3339 (`...Z`) like
-//!   `datetime.isoformat()` in Python; PostgreSQL `::text` would emit a space
+//! * Timestamps are re-rendered as UTC RFC-3339 (`...Z`) like Pydantic v2's
+//!   `datetime` serialization; PostgreSQL `::text` would emit a space
 //!   separator and a non-RFC offset.
 
 use crate::{
