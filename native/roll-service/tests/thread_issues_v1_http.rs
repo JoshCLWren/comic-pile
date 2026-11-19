@@ -9,6 +9,8 @@
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
+    routing::get as route_get,
+    Router,
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::{json, Value};
@@ -206,6 +208,25 @@ fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
     authed("GET", path, token, csrf, None)
 }
 
+async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn creators_test_router(state: &Arc<AppState>) -> Router {
+    Router::new()
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
+        )
+        .with_state(state.clone())
+}
+
 async fn plain_thread(
     conn: &Conn,
     user_id: i32,
@@ -240,7 +261,6 @@ async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
         ("POST", "/api/v1/threads/1/issues"),
-        ("GET", "/api/v1/threads/1/issues/creators"),
         ("POST", "/api/v1/threads/1/issues:reorder"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
@@ -261,6 +281,22 @@ async fn every_operation_requires_authentication() {
             "{method} {path} -> {status}"
         );
     }
+
+    // Creators endpoint is not mounted on the public Rust router (vercel routes to
+    // Python), but the retained handler must still require authentication.
+    let (status, _) = send_router(
+        creators_test_router(&state),
+        Request::builder()
+            .method("GET")
+            .uri("/api/v1/threads/1/issues/creators")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
+        "GET /api/v1/threads/1/issues/creators -> {status}"
+    );
 }
 
 #[tokio::test]
@@ -618,7 +654,8 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     .await
     .unwrap();
     let path = format!("/api/v1/threads/{thread}/issues/creators");
-    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
+    let router = creators_test_router(&state);
+    let (status, body) = send_router(router.clone(), get(&path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["thread_id"], thread);
     assert_eq!(body["issues"].as_array().unwrap().len(), 1);
@@ -630,17 +667,17 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
             {"creator_id": null, "name": "Anon", "roles": ["colorist"]}
         ])
     );
-    let (status, body) = send(&state, get(&path, &other_token, &other_csrf)).await;
+    let (status, body) = send_router(router.clone(), get(&path, &other_token, &other_csrf)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
-    let (status, _) = send(
-        &state,
+    let (status, _) = send_router(
+        router.clone(),
         get("/api/v1/threads/987654/issues/creators", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    let (status, body) = send(
-        &state,
+    let (status, body) = send_router(
+        router,
         get("/api/v1/threads/abc/issues/creators", &token, &csrf),
     )
     .await;

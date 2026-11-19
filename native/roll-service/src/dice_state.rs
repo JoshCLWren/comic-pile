@@ -15,7 +15,7 @@ const LATEST_DIE_SQL: &str = "
 SELECT die_after
 FROM events
 WHERE user_id = $1
-  AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+  AND type IN ('rate', 'snooze', 'undo', 'unsnooze', 'manual_die', 'reset_dice')
   AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
 ORDER BY timestamp DESC, id DESC
 LIMIT 1";
@@ -30,7 +30,7 @@ pub(crate) const LATEST_DIE_CTE: &str = r#"die_state AS (
     SELECT die_after
     FROM events
     WHERE user_id = (SELECT user_id FROM me)
-      AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+      AND type IN ('rate', 'snooze', 'undo', 'unsnooze', 'manual_die', 'reset_dice')
       AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
     ORDER BY timestamp DESC, id DESC
     LIMIT 1
@@ -95,7 +95,7 @@ pub async fn bootstrap_die_after_native_command(
             "SELECT
                 (SELECT die_after FROM events
                  WHERE user_id = $1
-                   AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+                   AND type IN ('rate', 'snooze', 'undo', 'unsnooze', 'manual_die', 'reset_dice')
                    AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
                  ORDER BY timestamp DESC, id DESC LIMIT 1),
                 EXISTS (SELECT 1 FROM events

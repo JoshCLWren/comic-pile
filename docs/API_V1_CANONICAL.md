@@ -64,8 +64,10 @@ Any other bare `/api` route is a regression and fails the contract test.
 ## Collections
 
 Collections were removed. The OpenAPI document contains no supported Collections route,
-schema, or operation. The distinct `/api/v1/collection-exclusions` API protects durable
-reader exclusions under Option E; it does not restore the retired Collections domain. References to a *retired* `collection_id` query parameter in legacy
+schema, or operation. Durable reader exclusions under Option E remain in storage, but the
+distinct `/api/v1/collection-exclusions` HTTP API was retired with the Python API (Part of
+#5431); it neither exists as a supported operation nor restores the retired Collections
+domain. References to a *retired* `collection_id` query parameter in legacy
 operation descriptions are documentation of removed behavior, not supported surface.
 
 ## Verification
@@ -78,5 +80,5 @@ pytest tests/test_api_v1_canonical_contract.py
 
 It asserts: no duplicate `operationId`s, no supported Collections surface, every canonical
 family above has an `/api/v1` route, and every bare `/api` alias is on the allowlist.
-Regenerate the schema with `python scripts/generate_openapi_types.py` after any routing
+Regenerate the schema with `node scripts/generate_openapi_types.mjs` after any routing
 change.

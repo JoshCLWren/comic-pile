@@ -138,6 +138,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({
 }))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: [], refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }),

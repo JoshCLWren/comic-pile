@@ -3834,6 +3834,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/roll/unsnooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted v2 Roll unsnooze command. */
+        post: operations["unsnooze_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/threads": {
         parameters: {
             query?: never;
@@ -9535,6 +9552,53 @@ export interface components {
             /** Format: int32 */
             session_id: number;
             snapshots: components["schemas"]["UndoSnapshotItem"][];
+        };
+        /** @description Request body for unsnoozing a thread. */
+        UnsnoozeRequest: {
+            /**
+             * Format: int32
+             * @description The thread ID to unsnooze. Idempotent: an already-removed snooze succeeds.
+             */
+            thread_id: number;
+        };
+        /** @description Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate. */
+        UnsnoozeResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /**
+             * @description True when the pending roll and die were restored; false when only the
+             *     snooze was removed (older snooze, later die choice, or an already-removed
+             *     snooze replayed after a lost response).
+             */
+            restored: boolean;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+            /** Format: int32 */
+            unsnoozed_thread_id?: number | null;
         };
         UpdateTagRequest: {
             color?: string | null;
@@ -18752,6 +18816,65 @@ export interface operations {
             };
             /** @description Invalid idempotency key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unsnooze_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsnoozeRequest"];
+            };
+        };
+        responses: {
+            /** @description Restored the previously snoozed roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnsnoozeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsnooze projection unavailable */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

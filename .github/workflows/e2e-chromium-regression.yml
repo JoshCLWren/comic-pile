@@ -111,8 +111,12 @@ jobs:
       - name: Build frontend
         run: pnpm --filter frontend run build
 
-      - name: Install Chromium
-        run: pnpm --filter frontend exec playwright install --with-deps chromium
+      - name: Install Chromium browser binaries
+        # No --with-deps: that path runs apt-get against security.ubuntu.com,
+        # whose 503s for fonts-*/xfonts-* broke this job. The hosted runner
+        # already provides the browser system libraries; only the pinned
+        # browser binaries are downloaded (from the Playwright CDN) here.
+        run: pnpm --filter frontend exec playwright install chromium
 
       - uses: dtolnay/rust-toolchain@stable
 
