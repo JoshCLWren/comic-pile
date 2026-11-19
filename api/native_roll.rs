@@ -264,10 +264,7 @@ fn app() -> Router {
             "/api/v1/sessions/{session_id}/details",
             get(native_dispatch),
         )
-        .route(
-            "/api/v2/undo/{session_id}/snapshots",
-            get(native_dispatch),
-        )
+        .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
         .route(
             "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
             post(native_dispatch),

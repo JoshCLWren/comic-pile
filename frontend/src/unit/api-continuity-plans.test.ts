@@ -43,7 +43,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(client.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -56,7 +56,7 @@ describe('continuityPlansApi', () => {
 
     await expect(continuityPlansApi.get(12)).resolves.toEqual(basePlan)
 
-    expect(client.get).toHaveBeenCalledWith('/v1/continuity-plans/12')
+    expect(client.get).toHaveBeenCalledWith('/v2/continuity-plans/12')
   })
 
   it('loads the reader view by id', async () => {
@@ -86,7 +86,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(client.put).toHaveBeenCalledWith('/v1/continuity-plans/12', {
+    expect(client.put).toHaveBeenCalledWith('/v2/continuity-plans/12', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -116,7 +116,7 @@ describe('continuityPlansApi', () => {
       nodes: parallelPlan.nodes,
     })).resolves.toEqual(parallelPlan)
 
-    expect(client.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/', {
       name: 'Parallel plan',
       ordering_mode: 'informational',
       lanes: parallelPlan.lanes,
