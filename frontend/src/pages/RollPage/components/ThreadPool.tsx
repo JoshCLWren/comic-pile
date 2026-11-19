@@ -17,6 +17,7 @@ interface ThreadPoolProps {
    */
   emptyPoolReason?: RollPoolReason
   snoozedThreads: Array<{ id: number; title: string; format: string }>
+  snoozedCovers?: Record<number, string | null>
   snoozedCount?: number
   snoozedExpanded: boolean
   onThreadClick: (thread: RollBootstrapThread) => void
@@ -36,6 +37,7 @@ export function ThreadPool({
   selectedThreadId,
   emptyPoolReason,
   snoozedThreads,
+  snoozedCovers,
   snoozedCount,
   snoozedExpanded,
   onThreadClick,
@@ -276,6 +278,12 @@ export function ThreadPool({
                   key={thread.id}
                   className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
+                  <ComicIssueCover
+                    coverImageUrl={snoozedCovers?.[thread.id] ?? null}
+                    threadTitle={thread.title}
+                    issueNumber=""
+                    variant="compact"
+                  />
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
                     type="button"
