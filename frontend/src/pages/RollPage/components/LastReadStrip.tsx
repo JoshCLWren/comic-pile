@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RollLastReadView } from '../../../hooks/useRollLastRead'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import {
   rollSecondaryActionClass,
   rollUtilityActionClass,
@@ -45,18 +46,15 @@ export function LastReadStrip({
   canUndo = false,
 }: LastReadStripProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [coverFailed, setCoverFailed] = useState(false)
 
   const recordKey = `${view.lastRead.issue_id ?? 'none'}:${view.lastRead.read_at ?? ''}`
   useEffect(() => {
     setCopyStatus('idle')
-    setCoverFailed(false)
   }, [recordKey])
 
   const label = issueLabel(view)
   const title = view.lastRead.thread_title?.trim() || 'Last read issue'
   const issueNumber = view.lastRead.issue_number?.trim()
-  const coverUrl = coverFailed ? null : view.coverUrl
 
   const seriesStats = view.seriesStats
   const seriesAverage = seriesStats?.averageRating ?? null
@@ -85,22 +83,17 @@ export function LastReadStrip({
       className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 shadow-lg"
     >
       <div className="flex items-start gap-3">
-        {coverUrl ? (
-          <img
-            src={coverUrl}
-            alt={`${label} cover`}
-            loading="lazy"
-            onError={() => setCoverFailed(true)}
-            className="h-20 w-14 shrink-0 rounded-lg border border-[var(--theme-border)] object-cover"
-          />
-        ) : (
-          <div
-            aria-label="Cover unavailable"
-            className="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-lg font-black text-[var(--theme-text-dim)]"
-          >
-            {title.slice(0, 1).toUpperCase()}
-          </div>
-        )}
+        <ComicIssueCover
+          key={recordKey}
+          coverImageUrl={view.coverUrl}
+          threadTitle={title}
+          issueNumber={issueNumber ?? ''}
+          variant="compact"
+          frameClassName="h-20 w-14"
+          altText={`${label} cover`}
+          testId="last-read-cover"
+          placeholderTestId="last-read-cover-placeholder"
+        />
 
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]">
