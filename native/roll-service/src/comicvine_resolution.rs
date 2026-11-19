@@ -168,7 +168,7 @@ pub struct SeriesImportStatusResponse {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
-struct SearchQuery {
+pub struct SearchQuery {
     q: String,
     #[serde(default = "default_limit")]
     limit: i32,
@@ -181,13 +181,13 @@ fn default_limit() -> i32 {
 }
 
 #[derive(Debug, Deserialize)]
-struct ResolveQuery {
+pub struct ResolveQuery {
     #[serde(rename = "input")]
     input: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct SeriesIssuesQuery {
+pub struct SeriesIssuesQuery {
     #[serde(default)]
     series_name: String,
 }
@@ -288,7 +288,7 @@ pub async fn search_comicvine_series(
     let mut total_available = 0i32;
     if let Some(p) = payload {
         if let Some(arr) = p.get("results").and_then(|v| v.as_array()) {
-            for row in &arr {
+            for row in arr {
                 let volume_id = row.get("id").and_then(|v| v.as_i64()).map(|v| v as i32);
                 let name = row.get("name").and_then(|v| v.as_str());
                 if volume_id.is_none() || name.is_none() {
