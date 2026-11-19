@@ -30,13 +30,15 @@ const CLIENT_EXEMPT_BARE_PATHS = new Set(['/api/metrics']);
 // form through JS numbers. They are carried as marker strings and restored on
 // render so the output stays byte-identical to the Python renderer.
 const FLOAT_MARK = '\u0000float:';
-const FLOAT_RE = /(:\s*)(-?\d+\.\d+(?:[eE][-+]?\d+)?)(?=\s*[,}\]\n])/g;
+// Alternation: a whole string literal is consumed first (and left untouched),
+// so decimals inside string contents are never rewritten.
+const FLOAT_RE = /"(?:[^"\\]|\\.)*"|-?\d+\.\d+(?:[eE][-+]?\d+)?/g;
 
 export const isMarkedFloat = (value) => typeof value === 'string' && value.startsWith(FLOAT_MARK);
 export const markedFloatText = (value) => value.slice(FLOAT_MARK.length);
 
 export function parseJsonPreservingFloats(text) {
-  const marked = text.replace(FLOAT_RE, (_m, sep, num) => `${sep}"\\u0000float:${num}"`);
+  const marked = text.replace(FLOAT_RE, (m) => (m.startsWith('"') ? m : `"\\u0000float:${m}"`));
   return JSON.parse(marked);
 }
 

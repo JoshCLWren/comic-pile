@@ -56,8 +56,13 @@ parse_database_url() {
 
     # Safety guard (#5431): a restore wipes the target database, so refuse any
     # host that is not provably local. There is intentionally no override.
-    case "${PGHOST,,}" in
-        localhost|localhost.localdomain|127.*|::1|\[::1\]) ;;
+    local host_lc
+    host_lc="$(printf '%s' "$PGHOST" | tr '[:upper:]' '[:lower:]')"
+    if printf '%s' "$host_lc" | grep -Eq '^127(\.[0-9]{1,3}){3}$'; then
+        host_lc="127.0.0.1"
+    fi
+    case "$host_lc" in
+        localhost|localhost.localdomain|127.0.0.1|::1|\[::1\]) ;;
         *)
             echo -e "${RED}ERROR: refusing to restore into non-local host '$PGHOST'${NC}"
             echo -e "${YELLOW}Restore only targets a loopback/local PostgreSQL database.${NC}"
