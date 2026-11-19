@@ -71,7 +71,7 @@ export default function QueuePage() {
   // The active Queue endpoint cannot return finished rows (#5171).
   const completed = useCompletedThreads()
   const { threads: excludedThreads } = useExcludedThreads(true)
-  const { handleRestore, restoreError, isRestoring } = useQueueRestore()
+  const { handleRestore, handleRestoreGroup, restoreError, isRestoring } = useQueueRestore()
 
   const { activeThreads, filteredThreads } = useQueueFilters(
     threads,
@@ -236,6 +236,7 @@ export default function QueuePage() {
           isRestoring={isRestoring}
           error={restoreError}
           onRestore={handleRestore}
+          onRestoreGroup={handleRestoreGroup}
         />
 
         {isError && threads !== null && (

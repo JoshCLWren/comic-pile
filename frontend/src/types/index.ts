@@ -1,5 +1,13 @@
 import type { components } from '../generated/openapi'
 
+/** Bulk exclusion provenance attached to an excluded queue thread (issue #5435). */
+export interface ThreadQueueExclusionGroup {
+  id: number
+  source_kind: 'reading_list' | 'reading_plan' | 'crossover'
+  source_id: number
+  source_name: string
+}
+
 /**
  * Represents a thread in list view (QueuePage).
  *
@@ -8,7 +16,33 @@ import type { components } from '../generated/openapi'
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export type ThreadListItem = components['schemas']['QueueThreadListItem']
+export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
+  queue_exclusion_group?: ThreadQueueExclusionGroup | null
+}
+
+export interface BulkQueueExclusionRequest {
+  thread_ids: number[]
+  source: {
+    kind: 'reading_list' | 'reading_plan' | 'crossover'
+    id: number
+    name: string
+  }
+}
+
+export interface BulkQueueExclusionResponse {
+  group: {
+    id: number
+    source_kind: 'reading_list' | 'reading_plan' | 'crossover'
+    source_id: number
+    source_name: string
+    created_at: string
+  } | null
+  excluded_thread_ids: number[]
+}
+
+export interface BulkQueueRestoreResponse {
+  restored_thread_ids: number[]
+}
 
 /**
  * Represents a comic thread/series

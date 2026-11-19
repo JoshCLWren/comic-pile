@@ -30,6 +30,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
+        onRestoreGroup={vi.fn()}
       />,
     )
     expect(screen.queryByTestId('excluded-threads-section')).not.toBeInTheDocument()
@@ -44,6 +45,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
+        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -73,6 +75,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={vi.fn()}
+        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -91,6 +94,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error={null}
         onRestore={onRestore}
+        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -109,6 +113,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={true}
         error={null}
         onRestore={vi.fn()}
+        onRestoreGroup={vi.fn()}
       />,
     )
 
@@ -126,6 +131,7 @@ describe('ExcludedThreadsSection', () => {
         isRestoring={false}
         error="Could not restore that series to the queue."
         onRestore={vi.fn()}
+        onRestoreGroup={vi.fn()}
       />,
     )
 

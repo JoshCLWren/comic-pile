@@ -1,7 +1,9 @@
 
+import { useMemo } from 'react'
 import { useCrossoverDetail } from '../hooks/useCrossoverDetail'
 import { useParams, Link } from 'react-router-dom'
 import Breadcrumbs from '../components/Breadcrumbs'
+import ContainerQueueActions from '../components/ContainerQueueActions'
 
 
 export default function CrossoverDetailPage() {
@@ -9,6 +11,18 @@ export default function CrossoverDetailPage() {
   const groupId = parseInt(group ?? '', 10)
 
   const { crossover, members, linkedPlans, isLoading, error, refetch } = useCrossoverDetail(groupId)
+  const memberThreads = useMemo(() => {
+    const byId = new Map<number, { id: number; title: string }>()
+    for (const member of members) {
+      const threadId = member.membership.thread_id
+      if (threadId == null || threadId <= 0 || byId.has(threadId)) continue
+      byId.set(threadId, {
+        id: threadId,
+        title: member.thread?.title ?? `Series ${threadId}`,
+      })
+    }
+    return Array.from(byId.values())
+  }, [members])
 
   if (isLoading) {
     return (
@@ -117,6 +131,13 @@ export default function CrossoverDetailPage() {
           </Link>
         ) : null}
       </div>
+
+      <ContainerQueueActions
+        sourceKind="crossover"
+        sourceId={crossover.id}
+        sourceName={crossover.name}
+        memberThreads={memberThreads}
+      />
 
       <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 sm:px-6 sm:py-4">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 sm:gap-y-0 sm:divide-x sm:divide-[var(--theme-border)]">

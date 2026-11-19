@@ -39,6 +39,7 @@ pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
+pub mod queue_exclusions;
 pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -747,6 +748,18 @@ pub fn router(state: Arc<AppState>) -> Router {
             patch(queue::update_queue_entry),
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
+        .route(
+            "/api/v2/queue-exclusions",
+            post(queue_exclusions::bulk_exclude),
+        )
+        .route(
+            "/api/v2/queue-exclusions/restore",
+            post(queue_exclusions::bulk_restore),
+        )
+        .route(
+            "/api/v2/queue-exclusion-groups/{group_id}/restore",
+            post(queue_exclusions::restore_group),
+        )
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
             "/api/v1/threads/{thread_id}",

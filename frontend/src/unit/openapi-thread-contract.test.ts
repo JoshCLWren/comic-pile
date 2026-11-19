@@ -13,7 +13,11 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
   })
 
   it('exports the queue thread list item from OpenAPI', () => {
-    expectTypeOf<ThreadListItem>().toEqualTypeOf<QueueThreadListItem>()
+    // #5435 adds additive exclusion-group provenance on excluded rows; the
+    // checked-in generated OpenAPI schema is bot-owned and may lag this runtime
+    // field until regenerated, so the frontend list item is allowed to extend it.
+    expectTypeOf<Omit<ThreadListItem, 'queue_exclusion_group'>>().toEqualTypeOf<QueueThreadListItem>()
+    expectTypeOf<ThreadListItem>().toHaveProperty('queue_exclusion_group')
   })
 
   it('exports the paginated queue thread list response from OpenAPI', () => {
