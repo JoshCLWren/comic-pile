@@ -876,40 +876,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/creators": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Document the same-path native creators list using its actual response type. */
-        get: operations["list_creators_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/creators/summaries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Document native creator summaries with the mounted query and response types. */
-        get: operations["get_summaries_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/custom-cbls": {
         parameters: {
             query?: never;
