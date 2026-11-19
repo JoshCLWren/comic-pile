@@ -1425,12 +1425,23 @@ pub async fn create(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> Result<Response, BugReportError> {
-    let issuer =
-        |settings: GithubSettings,
-         title: String,
-         body: String,
-         labels: Vec<String>|
-         -> GithubFuture { Box::pin(create_github_issue(settings, title, body, labels)) };
+    // The issuer resolves through the app-state outbound seam, so a
+    // test-configured app holds the recording fake instead of a real GitHub
+    // client (#5339, #5464).
+    let outbound = state.outbound.clone();
+    let issuer = move |settings: GithubSettings,
+                       title: String,
+                       body: String,
+                       labels: Vec<String>|
+           -> GithubFuture {
+        Box::pin(create_github_issue(
+            outbound.clone(),
+            settings,
+            title,
+            body,
+            labels,
+        ))
+    };
     create_with_issuer(state, user.id(), body, &issuer).await
 }
 
