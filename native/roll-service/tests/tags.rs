@@ -5,7 +5,7 @@ use axum::{
     body::Body,
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::Value;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -24,18 +24,15 @@ async fn setup() -> (
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => Some("synthetic-tags-secret".into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-tags-secret".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let _guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("tag-user-{}-{}", std::process::id(), unique_suffix());
     let registered = send(
