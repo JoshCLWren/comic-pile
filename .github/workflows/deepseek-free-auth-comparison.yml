@@ -18,6 +18,15 @@ jobs:
         mode: [anonymous, authenticated]
     steps:
       - uses: actions/checkout@v7
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 01ada6f12e50dbbea1ddb33be8d107a370f0a776
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - name: Install latest OpenCode 2
         run: bash .github/scripts/install-opencode-v2.sh
       - name: Call exact OpenCode Free DeepSeek model and shell tool

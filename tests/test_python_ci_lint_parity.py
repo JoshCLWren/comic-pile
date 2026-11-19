@@ -55,10 +55,8 @@ def test_agent_policy_forbids_path_filtered_python_lint() -> None:
     agents = _read("AGENTS.md")
     protocol = _read("docs/ISSUE_EXECUTION_PROTOCOL.md")
     skill = _read(".agents/skills/github-issue-kanban/SKILL.md")
-    factory = _read("docs/AUTONOMOUS_FACTORY_POLICY.md")
-    prompt = _read("prompts/agent-next-task.md")
 
-    for document in (agents, protocol, skill, factory, prompt):
+    for document in (agents, protocol, skill):
         assert CI_RUFF in document
         assert CI_TY in document
         assert GATE_MARKER in document

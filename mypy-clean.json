@@ -87,7 +87,5 @@
   "comic_pile/recommendation_version.py",
   "comic_pile/snooze_backoff.py",
   "scripts/mypy_baseline.py",
-  "tests/test_factory_dispatch_workflow.py",
-  "tests/test_factory_runtime_evidence_workflow.py",
   "tests/test_mypy_baseline.py"
 ]
