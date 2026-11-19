@@ -128,15 +128,6 @@ struct IssueMeta {
     status: String,
 }
 
-struct GraphContext {
-    issue_meta: HashMap<i32, IssueMeta>,
-    thread_names: HashMap<i32, String>,
-    volume_by_thread: HashMap<i32, Option<String>>,
-    series_refs: HashMap<String, ReadingGraphSeriesReference>,
-    volume_years: HashMap<String, i32>,
-    list_names: BTreeMap<i32, String>,
-}
-
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -389,7 +380,7 @@ pub async fn preview_reading_graph(
         .collect();
 
     // 6. Series nodes (placeholder: single pass without blocker expansion).
-    let active_thread_ids: HashSet<i32> = inputs
+    let _active_thread_ids: HashSet<i32> = inputs
         .core
         .threads
         .iter()
@@ -401,7 +392,7 @@ pub async fn preview_reading_graph(
         &issue_meta,
         &thread_names,
         &graph_thread_ids,
-        &active_thread_ids,
+        &_active_thread_ids,
         &volume_by_thread,
         &baseline,
         excluded,
@@ -475,9 +466,9 @@ fn build_series_nodes(
     issue_meta: &HashMap<i32, IssueMeta>,
     thread_names: &HashMap<i32, String>,
     graph_thread_ids: &HashSet<i32>,
-    active_thread_ids: &HashSet<i32>,
+    _active_thread_ids: &HashSet<i32>,
     volume_by_thread: &HashMap<i32, Option<String>>,
-    baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
+    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
     excluded: &std::collections::BTreeSet<i32>,
 ) -> Vec<ReadingGraphSeriesNode> {
     let mut nodes: Vec<ReadingGraphSeriesNode> = vec![];
@@ -486,12 +477,12 @@ fn build_series_nodes(
         let key = volume_id
             .clone()
             .unwrap_or_else(|| format!("unidentified-thread:{thread_id}"));
-        let meta = issue_meta.get(&thread_id);
+        let series_name = thread_names.get(&thread_id).cloned().unwrap_or_default();
         let unread = issue_meta.values().filter(|m| m.thread_id == thread_id && !excluded.contains(&m.issue_id) && m.status != "read").count() as i32;
         let state = if unread > 0 { "continues" } else { "waits" }.to_string();
         nodes.push(ReadingGraphSeriesNode {
             comicvine_volume_id: key,
-            series_name: thread_names.get(&thread_id).cloned().unwrap_or_default(),
+            series_name,
             year: None,
             state,
             unread_count: unread,
@@ -506,7 +497,7 @@ fn build_series_nodes(
 
 fn build_issue_references(
     _graph_issue_ids: &HashSet<i32>,
-    _baseline: &HashMap<i32, reading_eligibility::ThreadEligibility>,
+    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
     _issue_meta: &HashMap<i32, IssueMeta>,
 ) -> Vec<ReadingGraphIssueReference> {
     vec![]
@@ -520,7 +511,7 @@ fn build_cycle_errors(
 
 fn expand_graph_threads(
     _snapshot: &reading_constraints::Snapshot,
-    _baseline: &HashMap<i32, reading_eligibility::ThreadEligibility>,
+    _baseline: &HashMap<i32, reading_constraints::ThreadEligibility>,
     _seed_threads: &HashSet<i32>,
     _issue_meta: &HashMap<i32, IssueMeta>,
 ) -> HashSet<i32> {
