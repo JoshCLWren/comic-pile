@@ -156,13 +156,6 @@ def _register_dependencies(app: FastAPI) -> None:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
 
-def _register_catalog(app: FastAPI) -> None:
-    """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
-    from app.api import catalog
-
-    app.include_router(catalog.router, tags=["catalog"])
-
-
 def _register_issue_identity(app: FastAPI) -> None:
     """Register issue-identity routers (absolute ``/api/v1`` paths)."""
     from app.api import issue_identity
@@ -202,7 +195,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         ),
         _register_dependencies,
     ),
-    RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
 )
 
