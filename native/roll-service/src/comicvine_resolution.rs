@@ -185,6 +185,15 @@ pub struct ResolveQuery {
     input: String,
 }
 
+/// Validate the resolve input against the retired FastAPI parameter contract
+/// (`Query(..., min_length=1, max_length=1000)`).
+fn validated_resolve_input(q: &ResolveQuery) -> Result<String, ApiError> {
+    if q.input.trim().is_empty() || q.input.chars().count() > RESOLVE_INPUT_MAX_CHARS {
+        return Err(validation_failed());
+    }
+    Ok(q.input.clone())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SeriesIssuesQuery {
     #[serde(default)]
@@ -295,19 +304,20 @@ async fn fetch_json(
 pub async fn search_comicvine_series(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    Query(q): Query<SearchQuery>,
+    query: Result<Query<SearchQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineSeriesSearchResponse>, ApiError> {
-    let clamped_limit = q.limit.clamp(1, 100);
-    let clamped_offset = q.offset.max(0);
-    let page = clamped_offset / clamped_limit + 1;
+    let Query(q) = query_or_validation_failed(query)?;
+    let (query_text, limit, offset) = validated_search_query(&q)?;
+    // ComicVine /search pages with a 1-based page number (page size == limit).
+    let page = offset / limit + 1;
 
-    if env_api_key().is_none() || q.q.trim().is_empty() {
+    if env_api_key().is_none() {
         return Ok(Json(ComicVineSeriesSearchResponse {
-            query: q.q,
+            query: query_text,
             results: vec![],
             total_available: Some(0),
-            offset: clamped_offset,
-            limit: clamped_limit,
+            offset,
+            limit,
             has_more: false,
             next_offset: None,
         }));
@@ -317,8 +327,8 @@ pub async fn search_comicvine_series(
     let url = format!(
         "https://comicvine.gamespot.com/api/search/?api_key={}&format=json&query={}&resources=volume&limit={}&page={}&field_list={}",
         percent_encode(&api_key),
-        percent_encode(&q.q),
-        clamped_limit,
+        percent_encode(&query_text),
+        limit,
         page,
         percent_encode(field_list),
     );
@@ -365,14 +375,14 @@ pub async fn search_comicvine_series(
         }
         total_available = p.get("number_of_total_results").and_then(|v| v.as_i64()).map(|x| x as i32).unwrap_or(results.len() as i32);
     }
-    let loaded = clamped_offset + results.len() as i32;
+    let loaded = offset + results.len() as i32;
     let has_more = loaded < total_available;
     Ok(Json(ComicVineSeriesSearchResponse {
-        query: q.q,
+        query: query_text,
         results,
         total_available: Some(total_available),
-        offset: clamped_offset,
-        limit: clamped_limit,
+        offset,
+        limit,
         has_more,
         next_offset: if has_more { Some(loaded) } else { None },
     }))
@@ -514,9 +524,10 @@ fn parse_comicvine_url(raw: &str) -> Option<(String, i32)> {
 pub async fn resolve_comicvine_input(
     State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
-    Query(q): Query<ResolveQuery>,
+    query: Result<Query<ResolveQuery>, QueryRejection>,
 ) -> Result<Json<ComicVineResolveResponse>, ApiError> {
-    let input = q.input.clone();
+    let Query(q) = query_or_validation_failed(query)?;
+    let input = validated_resolve_input(&q)?;
     // if URL
     if let Some((kind, id)) = parse_comicvine_url(&input) {
         if kind == "issue" {
