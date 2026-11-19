@@ -186,10 +186,10 @@ pub async fn read(
     let mut sources = Vec::new();
     for row in source_rows {
         let raw_source_path: String = row.get(1);
-        if raw_source_path.starts_with("custom-cbl:") {
+        let link: Option<i32> = row.get(8);
+        if raw_source_path.starts_with("custom-cbl:") || link.is_some() {
             had_authoritative_list_source = true;
         }
-        let link: Option<i32> = row.get(8);
         let resolved: Option<String> = row.get(9);
         if let (Some(id), Some(_)) = (link, resolved.as_ref()) {
             source_list_ids.insert(id);

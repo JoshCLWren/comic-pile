@@ -784,3 +784,197 @@ async fn authoring_save_preserves_removed_list_authority() {
     drop(conn);
     assert_eq!(preserved, 1, "authoring save erased list provenance");
 }
+
+/// Concurrency guard for the changed membership writer: two overlapping saves
+/// of the same plan must both settle (one wins, one version-conflicts) without
+/// deadlocking or losing preserved Reading List provenance.
+#[tokio::test]
+async fn concurrent_authoring_saves_keep_source_history() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-save-race").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA race plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-save-race").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA race authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    drop(conn);
+
+    let payload = |name: &str| {
+        json!({
+            "name": name,
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [],
+            "expected_updated_at": created["updated_at"]
+        })
+    };
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
+    let (first, second) = tokio::join!(
+        authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race A"))),
+        authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race B"))),
+    );
+    let statuses = [first.0, second.0];
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::OK)
+            .count(),
+        1,
+        "expected exactly one winning save: {first:?} {second:?}"
+    );
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::CONFLICT)
+            .count(),
+        1,
+        "expected one optimistic-lock conflict: {first:?} {second:?}"
+    );
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let preserved: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources
+              WHERE plan_id=$1 AND raw_source_path=$2",
+            &[&plan_id_i32, &raw_source_path],
+        )
+        .await
+        .expect("verify preserved provenance")
+        .get(0);
+    drop(conn);
+    assert_eq!(preserved, 1, "concurrent saves lost list provenance");
+}
+
+/// Repeated authoring saves of a preserved `custom-cbl:` placement must rebuild
+/// its placement row rather than duplicating or stranding it.
+#[tokio::test]
+async fn repeated_authoring_saves_do_not_duplicate_preserved_placements() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-repeat-save").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA repeat plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-repeat-save").await;
+    seed_thread_issue(&state, user_id, 546301, 546311, "Repeat Series", "1").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA repeat authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    drop(conn);
+
+    let build_payload = |version: &serde_json::Value| {
+        json!({
+            "name": "QA repeat plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [{
+                "id": "issue-546311",
+                "node_type": "issue",
+                "ref_id": 546311,
+                "lane_id": "main",
+                "position": 0,
+                "source_paths": [raw_source_path]
+            }],
+            "expected_updated_at": version
+        })
+    };
+
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
+    let (status, first) = authed_json(
+        &state,
+        "PUT",
+        &uri,
+        &token,
+        &csrf,
+        Some(build_payload(&created["updated_at"])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+
+    let (status, plan) = authed_json(&state, "GET", &uri, &token, &csrf, None).await;
+    assert_eq!(status, StatusCode::OK, "{plan}");
+    let (status, second) = authed_json(
+        &state,
+        "PUT",
+        &uri,
+        &token,
+        &csrf,
+        Some(build_payload(&plan["updated_at"])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let placements: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_source_placements
+              WHERE plan_id=$1",
+            &[&plan_id_i32],
+        )
+        .await
+        .expect("verify placements")
+        .get(0);
+    drop(conn);
+    assert_eq!(placements, 1, "repeated save duplicated a placement row");
+}
