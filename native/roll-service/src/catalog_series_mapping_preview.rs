@@ -249,7 +249,8 @@ fn pydantic_int(value: Option<&Value>) -> Option<i32> {
         Some(Value::String(text)) => text.trim().parse::<i64>().ok()?,
         Some(Value::Number(number)) => number.as_i64().or_else(|| {
             number.as_f64().and_then(|value| {
-                if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX) {
+                if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX)
+                {
                     Some(value as i64)
                 } else {
                     None
