@@ -374,7 +374,19 @@ async fn owned_references(
             .map_err(db::query_error)?;
         let count: i32 = row.get(0);
         if count != group_ids.len() as i32 {
-            return Err(not_found(format!("Crossover {} not found", group_ids[0])));
+            let missing = tx
+                .query_opt(
+                    "SELECT x.id FROM unnest($1::int[]) x(id)
+                     WHERE NOT EXISTS (SELECT 1 FROM dependency_groups g
+                                       WHERE g.id=x.id AND g.user_id=$2)
+                     ORDER BY x.id LIMIT 1",
+                    &[&group_ids, &user_id],
+                )
+                .await
+                .map_err(db::query_error)?
+                .map(|row| row.get::<_, i32>(0))
+                .unwrap_or(0);
+            return Err(not_found(format!("Crossover {missing} not found")));
         }
     }
     Ok(())
@@ -439,8 +451,8 @@ fn response_from_row(row: &Row, selected_member_issue_ids: Vec<i32>) -> Continui
         convergence_targets,
         selected_member_issue_ids,
         note: row.get(9),
-        created_at: row.get(10),
-        updated_at: row.get(11),
+        created_at: iso_utc(row.get(10)),
+        updated_at: iso_utc(row.get(11)),
     }
 }
 
@@ -452,7 +464,7 @@ async fn load_rule(
     let row = tx
         .query_opt(
             "SELECT id,user_id,source_type,source_id,target_type,target_id,satisfaction_type,
-                checkpoint_issue_id,convergence_targets::text,note,created_at::text,updated_at::text
+                checkpoint_issue_id,convergence_targets::text,note,created_at,updated_at
          FROM continuity_rules WHERE id=$1 AND user_id=$2",
             &[&rule_id, &user_id],
         )
@@ -484,25 +496,79 @@ pub(crate) async fn compile_edges(
     Ok(())
 }
 
+/// Reject a rule whose canonical edges would be silently shadowed by a
+/// historical inert `cbl-order:` dependency row.
+///
+/// Python `compile_rule_edges` raises before inserting (`promote_cbl_occupants`
+/// is false for author-saved rules). Without this check the ON CONFLICT upsert
+/// would leave the inert row in place and the new hard constraint would never
+/// block Roll.
+async fn ensure_no_cbl_collision(
+    tx: &Transaction<'_>,
+    pairs: &[(i32, i32)],
+    rule_id: i32,
+) -> Result<(), ApiError> {
+    if pairs.is_empty() {
+        return Ok(());
+    }
+    let sources: Vec<i32> = pairs.iter().map(|pair| pair.0).collect();
+    let targets: Vec<i32> = pairs.iter().map(|pair| pair.1).collect();
+    let row = tx
+        .query_one(
+            "SELECT count(*)::int
+             FROM dependencies d
+             JOIN unnest($1::int[], $2::int[]) AS p(source_id, target_id)
+               ON d.source_issue_id = p.source_id AND d.target_issue_id = p.target_id
+             WHERE d.note LIKE 'cbl-order:%'",
+            &[&sources, &targets],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let collisions: i32 = row.get(0);
+    if collisions > 0 {
+        return Err(cbl_collision_conflict(rule_id, collisions));
+    }
+    Ok(())
+}
+
 pub(crate) async fn retire_edges(
     tx: &Transaction<'_>,
     user_id: i32,
     pairs: &[(i32, i32)],
     exclude_rule_id: i32,
 ) -> Result<(), ApiError> {
-    for (source, target) in pairs {
-        let still_used = tx.query_opt(
-            "SELECT 1 FROM continuity_rules r
-             WHERE r.user_id=$1 AND r.id<>$2 AND (
-               (r.satisfaction_type IN ('item_read','checkpoint') AND r.source_type='issue' AND r.target_type='issue' AND COALESCE(r.checkpoint_issue_id,r.source_id)=$3 AND r.target_id=$4)
-               OR (r.satisfaction_type='converged' AND r.target_type='issue' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(r.convergence_targets::jsonb,'[]'::jsonb)) t WHERE t->>'type'='issue' AND (t->>'id')::int=$3) AND r.target_id=$4)
-             ) LIMIT 1",
-            &[&user_id, &exclude_rule_id, &source, &target],
-        ).await.map_err(db::query_error)?.is_some();
-        if !still_used {
-            tx.execute("DELETE FROM dependencies WHERE source_issue_id=$1 AND target_issue_id=$2 AND (note LIKE 'canonical:rule:%' OR note LIKE 'canonical:rule-backfill:%')", &[&source, &target]).await.map_err(db::query_error)?;
-        }
+    if pairs.is_empty() {
+        return Ok(());
     }
+    let sources: Vec<i32> = pairs.iter().map(|pair| pair.0).collect();
+    let targets: Vec<i32> = pairs.iter().map(|pair| pair.1).collect();
+    // Set-based: one statement for every retired pair, never SQL in a loop.
+    tx.execute(
+        "DELETE FROM dependencies d
+         USING unnest($3::int[], $4::int[]) AS p(source_id, target_id)
+         WHERE d.source_issue_id = p.source_id
+           AND d.target_issue_id = p.target_id
+           AND (d.note LIKE 'canonical:rule:%' OR d.note LIKE 'canonical:rule-backfill:%')
+           AND NOT EXISTS (
+             SELECT 1 FROM continuity_rules r
+             WHERE r.user_id = $1 AND r.id <> $2 AND (
+               (r.satisfaction_type IN ('item_read','checkpoint')
+                 AND r.source_type='issue' AND r.target_type='issue'
+                 AND COALESCE(r.checkpoint_issue_id,r.source_id)=p.source_id
+                 AND r.target_id=p.target_id)
+               OR (r.satisfaction_type='converged' AND r.target_type='issue'
+                 AND r.target_id=p.target_id
+                 AND EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements(COALESCE(r.convergence_targets::jsonb,'[]'::jsonb)) t
+                   WHERE t->>'type'='issue' AND (t->>'id')::int=p.source_id
+                 ))
+             )
+           )",
+        &[&user_id, &exclude_rule_id, &sources, &targets],
+    )
+    .await
+    .map_err(db::query_error)?;
     Ok(())
 }
 
@@ -523,7 +589,7 @@ pub async fn list(
     user: AuthenticatedUser,
 ) -> Result<Json<Vec<ContinuityRuleResponse>>, ApiError> {
     let conn = db::checkout(&state).await?;
-    let rows = conn.query("SELECT id,user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets::text,note,created_at::text,updated_at::text FROM continuity_rules WHERE user_id=$1 ORDER BY id", &[&user.id()]).await.map_err(db::query_error)?;
+    let rows = conn.query("SELECT id,user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets::text,note,created_at,updated_at FROM continuity_rules WHERE user_id=$1 ORDER BY id", &[&user.id()]).await.map_err(db::query_error)?;
     let ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
     let member_rows = if ids.is_empty() {
         Vec::new()
@@ -566,7 +632,6 @@ pub async fn create(
 ) -> Result<(StatusCode, Json<ContinuityRuleResponse>), ApiError> {
     normalize_request(&mut request);
     validate_request(&request)?;
-    require_compilable(&request)?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -606,8 +671,10 @@ pub async fn create(
             cycle
         }
     {
-        return Err(conflict("continuity_cycle"));
+        return Err(cycle_conflict(&request));
     }
+    // Python validates compilability after ownership and cycle checks.
+    require_compilable(&request)?;
     let targets = if request.convergence_targets.is_empty() {
         None
     } else {
@@ -620,10 +687,12 @@ pub async fn create(
             .to_string(),
         )
     };
-    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { conflict("continuity_rule_exists") } else { db::query_error(error) })?;
+    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { rule_exists_conflict() } else { db::query_error(error) })?;
     let rule_id: i32 = row.get(0);
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
-    compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
+    let pairs = edge_pairs(&request);
+    ensure_no_cbl_collision(&tx, &pairs, rule_id).await?;
+    compile_edges(&tx, &pairs, rule_id).await?;
     refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
@@ -640,7 +709,6 @@ pub async fn update(
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
     normalize_request(&mut request);
     validate_request(&request)?;
-    require_compilable(&request)?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -663,7 +731,7 @@ pub async fn update(
     )
     .await?
     {
-        return Err(conflict("continuity_cycle"));
+        return Err(cycle_conflict(&request));
     }
     for target in &request.convergence_targets {
         if would_create_cycle(
@@ -677,9 +745,12 @@ pub async fn update(
         )
         .await?
         {
-            return Err(conflict("continuity_cycle"));
+            return Err(cycle_conflict(&request));
         }
     }
+    // Python validates the replacement shape after ownership and cycle checks
+    // and before mutating the persisted row.
+    require_compilable(&request)?;
     let old_request = ContinuityRuleRequest {
         source_type: old.source_type,
         source_id: old.source_id,
@@ -712,8 +783,15 @@ pub async fn update(
     .await
     .map_err(db::query_error)?;
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
-    retire_edges(&tx, user.id(), &old_pairs, rule_id).await?;
-    compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
+    let new_pairs = edge_pairs(&request);
+    let retired: Vec<(i32, i32)> = old_pairs
+        .iter()
+        .copied()
+        .filter(|pair| !new_pairs.contains(pair))
+        .collect();
+    retire_edges(&tx, user.id(), &retired, rule_id).await?;
+    ensure_no_cbl_collision(&tx, &new_pairs, rule_id).await?;
+    compile_edges(&tx, &new_pairs, rule_id).await?;
     refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
