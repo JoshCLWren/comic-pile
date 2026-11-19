@@ -29,33 +29,46 @@ const AGENTS_END_MARKER = '<!-- route-burndown:end -->';
 
 class BurndownGenerationError extends Error {}
 
+
+function isString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
+
+function isBoolean(value) {
+  return Object.prototype.toString.call(value) === '[object Boolean]';
+}
+
+function isObjectRecord(value) {
+  return value !== null && Object.prototype.toString.call(value) === '[object Object]';
+}
+
 function loadJson(filePath) {
   const value = JSON.parse(readFileSync(filePath, 'utf8'));
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isObjectRecord(value)) {
     throw new BurndownGenerationError(`${filePath} must contain a JSON object`);
   }
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [String(k), v]));
 }
 
 function _object(value, context) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isObjectRecord(value)) {
     throw new BurndownGenerationError(`${context} must be a JSON object`);
   }
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [String(k), v]));
 }
 
 function _string(value, context) {
-  if (typeof value !== 'string') {
+  if (!isString(value)) {
     throw new BurndownGenerationError(`${context} must be a string`);
   }
   return value;
 }
 
 function _consumers(value, context) {
-  if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) {
+  if (!Array.isArray(value) || !value.every(isString)) {
     throw new BurndownGenerationError(`${context} must be an array of strings`);
   }
-  return value.filter(item => typeof item === 'string');
+  return value.filter(isString);
 }
 
 function _owner(value, context) {
@@ -68,7 +81,7 @@ function _owner(value, context) {
 
 function _optionalDest(value, context) {
   if (value === null || value === undefined) return null;
-  if (typeof value !== 'string' || !VERCEL_DESTINATIONS.has(value)) {
+  if (!isString(value) || !VERCEL_DESTINATIONS.has(value)) {
     const sorted = [...VERCEL_DESTINATIONS].sort();
     throw new BurndownGenerationError(
       `${context} must be one of [${sorted.map(v => `'${v}'`).join(', ')}] or null`,
@@ -79,7 +92,7 @@ function _optionalDest(value, context) {
 
 function _optionalSrc(value, context) {
   if (value === null || value === undefined) return null;
-  if (typeof value !== 'string' || value.length === 0) {
+  if (!isString(value) || value.length === 0) {
     throw new BurndownGenerationError(`${context} must be a non-empty string or null`);
   }
   return value;
@@ -87,7 +100,7 @@ function _optionalSrc(value, context) {
 
 function _optionalBool(value, context) {
   if (value === null || value === undefined) return false;
-  if (typeof value !== 'boolean') {
+  if (!isBoolean(value)) {
     throw new BurndownGenerationError(`${context} must be a boolean`);
   }
   return value;
@@ -127,7 +140,7 @@ export function _loadRouteFragments(dirPath) {
     const document = loadJson(fragmentPath);
     const family = _string(document.family, `${fragmentPath}.family`);
     const rawPatterns = document.owned_path_patterns;
-    if (!Array.isArray(rawPatterns) || !rawPatterns.every(pattern => typeof pattern === 'string')) {
+    if (!Array.isArray(rawPatterns) || !rawPatterns.every(isString)) {
       throw new BurndownGenerationError(`${fragmentPath}.owned_path_patterns must be an array of strings`);
     }
     const defaults = _object(document.defaults ?? {}, `${fragmentPath}.defaults`);
@@ -279,7 +292,7 @@ function stableRouteSortKey(route) {
   const rawMethods = route.methods;
   let methodsStr = '';
   if (Array.isArray(rawMethods)) {
-    methodsStr = rawMethods.filter(item => typeof item === 'string').join(',');
+    methodsStr = rawMethods.filter(isString).join(',');
   }
   return [_string(route.src, 'route.src'), _string(route.dest, 'route.dest'), methodsStr];
 }
@@ -390,7 +403,7 @@ function _routesFromDocument(document) {
   }
   const routes = [];
   for (const rawRoute of rawRoutes) {
-    if (rawRoute === null || typeof rawRoute !== 'object' || Array.isArray(rawRoute)) {
+    if (!isObjectRecord(rawRoute)) {
       throw new BurndownGenerationError('vercel.json routes must be objects');
     }
     const full = Object.fromEntries(Object.entries(rawRoute).map(([k, v]) => [String(k), v]));
@@ -399,14 +412,14 @@ function _routesFromDocument(document) {
     const rawMethods = full.methods;
     let methods = [];
     if (rawMethods !== null && rawMethods !== undefined) {
-      if (!Array.isArray(rawMethods) || !rawMethods.every(method => typeof method === 'string')) {
+      if (!Array.isArray(rawMethods) || !rawMethods.every(isString)) {
         throw new BurndownGenerationError('vercel.json route methods must be strings');
       }
-      methods = rawMethods.filter(item => typeof item === 'string');
+      methods = rawMethods.filter(isString);
     }
     routes.push({
-      src: typeof src === 'string' ? src : null,
-      dest: typeof dest === 'string' ? dest : null,
+      src: isString(src) ? src : null,
+      dest: isString(dest) ? dest : null,
       methods,
     });
   }
@@ -425,7 +438,7 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   const previousRoutes = [];
   const previousFull = [];
   for (const rawRoute of rawRoutes) {
-    if (rawRoute === null || typeof rawRoute !== 'object' || Array.isArray(rawRoute)) {
+    if (!isObjectRecord(rawRoute)) {
       throw new BurndownGenerationError('vercel.json routes must be objects');
     }
     const full = Object.fromEntries(Object.entries(rawRoute).map(([k, v]) => [String(k), v]));
@@ -435,14 +448,14 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     const rawMethods = full.methods;
     let methods = [];
     if (rawMethods !== null && rawMethods !== undefined) {
-      if (!Array.isArray(rawMethods) || !rawMethods.every(item => typeof item === 'string')) {
+      if (!Array.isArray(rawMethods) || !rawMethods.every(isString)) {
         throw new BurndownGenerationError('vercel.json route methods must be strings');
       }
-      methods = rawMethods.filter(item => typeof item === 'string');
+      methods = rawMethods.filter(isString);
     }
     previousRoutes.push({
-      src: typeof src === 'string' ? src : null,
-      dest: typeof dest === 'string' ? dest : null,
+      src: isString(src) ? src : null,
+      dest: isString(dest) ? dest : null,
       methods,
     });
   }
@@ -914,8 +927,8 @@ function _renderRewriteFragment(fragments, routes) {
     }
     if (matches) selected.push([index, route]);
   }
-  const native = selected.filter(([, route]) => NATIVE_DESTINATIONS.has(route.dest)).map(([, route]) => route);
-  const python = selected.filter(([, route]) => route.dest === '/api/index.py').map(([, route]) => route);
+  const native = selected.flatMap(([, route]) => (NATIVE_DESTINATIONS.has(route.dest) ? [route] : []));
+  const python = selected.flatMap(([, route]) => (route.dest === '/api/index.py' ? [route] : []));
   const ordered = [...native, ...python];
   const payload = {
     generated_by: 'scripts/generate_route_burndown.mjs',
@@ -982,9 +995,9 @@ export function main(argv = process.argv) {
     const rewriteText = _renderRewriteFragment(fragments, routes);
     const fullSurface = payload.full_surface;
     let fullSummary = null;
-    if (fullSurface !== null && typeof fullSurface === 'object' && !Array.isArray(fullSurface)) {
+    if (isObjectRecord(fullSurface)) {
       const rawSummary = fullSurface.summary;
-      if (rawSummary !== null && typeof rawSummary === 'object' && !Array.isArray(rawSummary)) {
+      if (isObjectRecord(rawSummary)) {
         fullSummary = Object.fromEntries(Object.entries(rawSummary).map(([k, v]) => [String(k), v]));
       }
     }
