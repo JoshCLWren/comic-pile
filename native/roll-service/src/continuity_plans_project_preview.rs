@@ -144,12 +144,14 @@ fn parse_nodes(nodes: &Value, plan_id: i64) -> Result<Vec<Node>, PreviewError> {
         ) else {
             return Err(malformed("node failed ContinuityPlanNode validation"));
         };
+        // Python `ContinuityPlanNode` (and `ContinuityPlanWrite::validate_structure`)
+        // constrain these fields by characters, not UTF-8 bytes.
         if id.is_empty()
-            || id.len() > 80
+            || id.chars().count() > 80
             || node_type.is_empty()
             || ref_id < 1
             || lane_id.is_empty()
-            || lane_id.len() > 80
+            || lane_id.chars().count() > 80
             || position < 0
         {
             return Err(malformed("node failed ContinuityPlanNode validation"));
@@ -485,6 +487,25 @@ mod tests {
             let error = parse_request(body).expect_err("invalid");
             assert_eq!(error.detail(), "Validation failed");
         }
+    }
+
+    /// Pydantic's `max_length=80` counts characters, not UTF-8 bytes; a plan
+    /// with 30 Chinese characters is valid and must not 409 in this preview.
+    #[test]
+    fn multibyte_node_and_lane_ids_are_measured_in_characters() {
+        let wide = "节".repeat(30);
+        assert!(wide.len() > 80 && wide.chars().count() == 30);
+        let nodes = serde_json::json!([
+            {"id": wide, "node_type": "thread", "ref_id": 10, "lane_id": wide, "position": 0}
+        ]);
+        let parsed = parse_nodes(&nodes, 5).expect("30-character ids are valid");
+        assert_eq!(parsed[0].id, wide);
+
+        let too_long = "节".repeat(81);
+        let nodes = serde_json::json!([
+            {"id": too_long, "node_type": "thread", "ref_id": 10, "lane_id": "a", "position": 0}
+        ]);
+        assert!(parse_nodes(&nodes, 5).is_err());
     }
 
     #[test]
