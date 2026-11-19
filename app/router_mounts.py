@@ -149,13 +149,6 @@ def _register_dependencies(app: FastAPI) -> None:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
 
-def _register_catalog(app: FastAPI) -> None:
-    """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
-    from app.api import catalog
-
-    app.include_router(catalog.router, tags=["catalog"])
-
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
@@ -183,7 +176,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         ),
         _register_dependencies,
     ),
-    RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
 )
 
 
