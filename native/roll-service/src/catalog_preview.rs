@@ -344,7 +344,7 @@ async fn build_series_mapping_plan(
     
     // Classify and build response
     let mut counts = empty_preview_counts();
-    let classified_rows = classify_series_mapping_rows(
+    let mut classified_rows = classify_series_mapping_rows(
         &issues_with_mappings,
         &payload.provider,
         &origin_issue.get("issue_number").and_then(|v| v.as_str()).unwrap_or(""),
