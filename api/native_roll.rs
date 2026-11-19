@@ -1690,6 +1690,42 @@ mod tests {
                     "mirror repositories must project to the public name: {text}"
                 );
 
+                // Regression for #5485: "Batman" (and case/substring variants) must
+                // match active CBL source lists by name or source path, while other
+                // terms continue to work. The inactive "Archived Batman" row must
+                // remain excluded so results come from active catalog entries only.
+                for query in ["batman", "Batman", "BATMAN", "Bat"] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        !items.is_empty(),
+                        "search for {query:?} must return Batman results (#5485): {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| {
+                            item["name"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_ascii_lowercase()
+                                .contains("bat")
+                                || item["source_path"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_ascii_lowercase()
+                                    .contains("bat")
+                        }),
+                        "all results for {query:?} must match the Batman term: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != "Archived Batman"),
+                        "inactive lists must stay excluded for {query:?}: {text}"
+                    );
+                }
+
                 let (status, body, _, text) = call_app(request(
                     "/api/v1/issue-identity/cbl-sources?q=batman&limit=1".into(),
                 ))
