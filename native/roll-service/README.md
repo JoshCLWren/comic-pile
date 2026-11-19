@@ -122,7 +122,7 @@ failures return the sanitized Python database-unavailable 503 envelope and
 
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
-canonical Alembic schema in `public`, loaded from
+canonical schema in `public`, loaded from
 `native/migrate/migrations/V1__baseline.sql` (a `pg_dump --schema-only` of a database
 at Alembic head — regenerate with `make roll-test-schema`). They truncate and
 reseed the application tables between cases and never hand-write them:
@@ -156,7 +156,8 @@ never used to choose eligibility. Missing or cross-thread pointers fail closed;
 failed or canceled transactions discard their physical pool connection.
 
 The local parity example is a CLI only, with no public HTTP route. On a disposable
-PostgreSQL database with the canonical Alembic schema already applied:
+PostgreSQL database with the canonical schema already applied
+(`MIGRATE_DATABASE_URL=<url> cargo run --locked -p comicpile-migrate -- up`):
 
 ```bash
 cargo build --locked -p comicpile-roll-service --example reading_snapshot
@@ -164,7 +165,7 @@ PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s 
 ```
 
 Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The parity suite
-uses the restricted `roll_test_dml` role against the canonical Alembic schema in
+uses the restricted `roll_test_dml` role against the canonical schema in
 `public`; it never creates schemas or tables. Run a Rust test first to provision
 the role, then set `RUST_ROLL_PARITY_DATABASE_URL` to its DSN and run pytest.
 Each parity case takes a shared advisory lock, truncates application rows, and

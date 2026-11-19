@@ -3,13 +3,13 @@
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
   "updated_by_issue": 4739,
   "burndown": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 53,
-    "native_rust": 53,
+    "total_live_operations": 59,
+    "native_rust": 59,
     "python_fastapi": 0,
-    "native_rust_status": 53,
+    "native_rust_status": 59,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -949,6 +949,51 @@
       }
     },
     {
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-sessions/{session_id}/details",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-sessions/{session_id}/snapshots",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4849,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-releases.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/releases",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "GET",
       "path": "/api/v2/roll/bootstrap",
       "runtime": "native-rust",
@@ -1023,6 +1068,19 @@
       }
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/dismiss-pending",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "GET",
       "path": "/api/v2/roll/eligible-issue-ids",
       "runtime": "native-rust",
@@ -1071,6 +1129,19 @@
       }
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/override",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/roll/reset",
       "runtime": "native-rust",
@@ -1092,6 +1163,19 @@
         "proof_reference": "native/roll-service/src/roll_reset.rs",
         "measurement_status": "pending-fixture"
       }
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/switch-prerequisite",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
@@ -1179,26 +1263,26 @@
     }
   ],
   "full_surface": {
-    "generated_by": "scripts/generate_route_burndown.py",
+    "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
     "summary": {
-      "generated_by": "scripts/generate_route_burndown.py",
+      "generated_by": "scripts/generate_route_burndown.mjs",
       "issue": 4739,
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 43,
+      "v1_total": 40,
       "v1_shadowed_by_rust": 0,
-      "v1_live_python": 30,
+      "v1_live_python": 15,
       "v1_orphaned": 0,
       "unversioned_total": 0,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 43,
+      "total_python_surface": 40,
       "total_shadowed_by_rust": 0,
-      "total_live_python": 30,
+      "total_live_python": 15,
       "total_orphaned": 0
     },
     "catch_all": {
@@ -1207,16 +1291,16 @@
     },
     "v1_operations": [
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4842,
         "consumers": [
           "frontend/src/services/api-series-mapping.ts"
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/preview",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1389,187 +1473,191 @@
         "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4842,
         "consumers": [
           "frontend/src/services/api-continuity-plans.ts",
-          "frontend/src/services/api-reading-orders.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
+          "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "method": "POST",
+        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4842,
+        "consumers": [
+          "frontend/src/services/api-continuity-plans.ts",
+          "frontend/src/services/api-reading-orders.ts",
+          "frontend/src/services/api-cbl-sources.ts",
+          "frontend/src/services/api-reading-graph.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/reading-order-groups/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "POST",
         "path": "/api/v1/reading-order-groups/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "DELETE",
         "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "PATCH",
         "path": "/api/v1/reading-order-groups/{group_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/reading-order-groups/{group_id}/detail",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "POST",
         "path": "/api/v1/reading-order-groups/{group_id}/issue-ranges",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "POST",
         "path": "/api/v1/reading-order-groups/{group_id}/members",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "DELETE",
         "path": "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
+        "consumers": [
+          "frontend/src/services/api-dependency-groups.ts"
+        ],
         "method": "PUT",
         "path": "/api/v1/reading-order-groups/{group_id}/order",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-dependency-groups.ts"
-        ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/reading-order-groups/{group_id}/plans",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "runtime": "native-rust",
+        "status": "native Rust",
+        "owning_issue": 4841,
         "consumers": [
           "frontend/src/services/api-dependency-groups.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "method": "GET",
+        "path": "/api/v1/reading-order-groups/{group_id}/plans",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1786,60 +1874,6 @@
         "path": "/api/v1/threads/{thread_id}/test-backdate",
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4832,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4832,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4832,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ],
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       }
     ],
