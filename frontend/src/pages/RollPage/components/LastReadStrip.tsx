@@ -90,6 +90,7 @@ export function LastReadStrip({
           issueNumber={issueNumber ?? ''}
           variant="compact"
           frameClassName="h-20 w-14"
+          imageClassName="h-full w-full object-cover"
           altText={`${label} cover`}
           testId="last-read-cover"
           placeholderTestId="last-read-cover-placeholder"
