@@ -199,6 +199,46 @@ fn env_api_key() -> Option<String> {
     std::env::var("COMICVINE_API_KEY").ok().filter(|s| !s.trim().is_empty())
 }
 
+/// Python-parity 422: FastAPI rejects an invalid query with
+/// `{"detail":"Validation failed"}` before the handler body runs.
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
+/// Rejected query extractor (missing or malformed parameter) maps to the same
+/// 422 body the retired FastAPI route emitted.
+fn query_or_validation_failed<T>(query: Result<Query<T>, QueryRejection>) -> Result<Query<T>, ApiError> {
+    query.map_err(|_| validation_failed())
+}
+
+/// Python `Query(..., min_length=1, max_length=200)` for the search query.
+const SEARCH_QUERY_MAX_CHARS: usize = 200;
+
+/// Python `Query(10, ge=1, le=50)` for the search page size.
+const SEARCH_LIMIT_MIN: i32 = 1;
+const SEARCH_LIMIT_MAX: i32 = 50;
+
+/// Python `Query(..., min_length=1, max_length=1000)` for the resolve input.
+const RESOLVE_INPUT_MAX_CHARS: usize = 1000;
+
+/// Validate the search query against the retired FastAPI parameter contract.
+///
+/// Returns the clamped-free (Python already validated) page inputs.
+fn validated_search_query(
+    q: &SearchQuery,
+) -> Result<(String, i32, i32), ApiError> {
+    if q.q.trim().is_empty() || q.q.chars().count() > SEARCH_QUERY_MAX_CHARS {
+        return Err(validation_failed());
+    }
+    if !(SEARCH_LIMIT_MIN..=SEARCH_LIMIT_MAX).contains(&q.limit) {
+        return Err(validation_failed());
+    }
+    if q.offset < 0 {
+        return Err(validation_failed());
+    }
+    Ok((q.q.clone(), q.limit, q.offset))
+}
+
 fn percent_encode(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
