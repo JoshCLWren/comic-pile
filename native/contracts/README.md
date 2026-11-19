@@ -87,14 +87,6 @@ uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
 `/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
 and now fall through to the Python catch-all. V2 is a separate contract.
 
-`GET /api/v2/analytics/metrics` (#4348) is documented by
-`comicpile_roll_service::analytics::AnalyticsApi`. Emit its operation with:
-
-```sh
-cd native/roll-service
-cargo run --example analytics_openapi
-```
-
 `bug-reports-v1.openapi.json` is the generated native contract for the
 same-path bug-report slice `POST /api/bug-reports/` and
 `POST /api/v1/bug-reports/` (#4852, Part of #4335). Regenerate it with:

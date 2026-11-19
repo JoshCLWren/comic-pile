@@ -13,10 +13,7 @@ relying on package-attribute access, which this package no longer provides.
 #: Listed for discoverability only: the names are not bound as attributes of
 #: this package, so ``from app.api import *`` does not resolve them.
 ROUTER_SUBMODULES = (
-    "cbl_catalog",
-    "cbl_comicvine_lookup",
     "cbl_sources",
-    "collection_exclusions",
     "custom_cbl",
     "dependency",
     "dependency_group",
@@ -24,5 +21,4 @@ ROUTER_SUBMODULES = (
     "health",
     "reading_order_projection",
     "reading_plan_sync",
-    "roll_recovery_switch",
 )

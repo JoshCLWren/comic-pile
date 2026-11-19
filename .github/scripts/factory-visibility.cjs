@@ -676,6 +676,35 @@ function durablePrOwner(current) {
   return null;
 }
 
+const LOCAL_OWNER_LABEL = 'factory:local';
+const READY_STAGE_LABEL = 'factory:ready';
+
+// A `factory:local` label present at the write boundary is a live local owner
+// lease: authoritative next-action state written by the local coordinator
+// (docs/AUTONOMOUS_FACTORY_POLICY.md). This label-level reconciler must never
+// replace it with `factory:unowned` or hand it to another owner — only a
+// provably stale lease may fall through, and staleness (the local lease TTL) is
+// proven by the Python lease policy (factory_work_policy.lease_is_stale, applied
+// by factory_issue_pr_state_policy.py to the same live read); this reconciler
+// deliberately does not duplicate that TTL. While the lease is live, a
+// `factory:ready` stage set alongside it is preserved as well, because the
+// local coordinator owns the merge gate: PR #5393 had ready+local reverted to
+// review+unowned within seconds by exactly this projection. A new head
+// (synchronize) still invalidates ready/ci, and an explicit trusted release of
+// the local lease still wins.
+function preserveLiveLocalLease(
+  current,
+  requested,
+  { newHead = false, releaseLocalLease = false, preserveReadyStage = false } = {},
+) {
+  if (releaseLocalLease || !current.has(LOCAL_OWNER_LABEL)) return requested;
+  const currentStage = STAGE_LABELS.find(label => current.has(label));
+  const stage = preserveReadyStage && !newHead && currentStage === READY_STAGE_LABEL
+    ? READY_STAGE_LABEL
+    : requested.stage;
+  return { ...requested, owner: LOCAL_OWNER_LABEL, stage };
+}
+
 function stageFrom(body) {
   if (/comic-pile-factory-needs-human-v\d+:/.test(body)) return 'factory:blocked';
   if (/comic-pile-factory-ready-v\d+:/.test(body)) return 'factory:ready';
@@ -753,8 +782,23 @@ async function currentLabels(github, context, number) {
   return new Set(response.data.map(label => label.name));
 }
 
-async function reconcileLabels(github, context, number, { owner, stage, derivedLabels, approved }) {
+async function reconcileLabels(
+  github,
+  context,
+  number,
+  { owner, stage, derivedLabels, approved, newHead = false, releaseLocalLease = false, preserveReadyStage = false },
+) {
   const current = await currentLabels(github, context, number);
+  // Decide ownership/stage against the same live read that builds the
+  // replacement set, so a local lease landing between the caller's own read and
+  // this write can never be discarded (the PR #5393 revert).
+  const lease = preserveLiveLocalLease(
+    current,
+    { owner, stage },
+    { newHead, releaseLocalLease, preserveReadyStage },
+  );
+  owner = lease.owner;
+  stage = lease.stage;
   const next = [...current].filter(
     label => !isOwnerLabel(label) && !STAGE_LABELS.includes(label)
       && !DERIVED_LABELS.has(label) && label !== APPROVAL_LABEL,
@@ -1059,6 +1103,11 @@ async function reconcileMissingPrLabels({ github, context, openPullRequests = nu
       stage,
       derivedLabels: derived,
       approved,
+      // A push is a new head and invalidates ready/ci; every other event keeps
+      // a factory:ready parked under a live local lease (the local coordinator
+      // owns the merge gate).
+      newHead: pushed,
+      preserveReadyStage: true,
     });
   }
 }
@@ -1108,11 +1157,17 @@ async function reconcile({ github, context }) {
       && requestedStage === 'factory:building'
       && ADVANCED_PR_STAGES.has(currentStage);
 
+    // An explicit trusted claim-released marker naming the local worker releases
+    // the local lease; any other marker must not replace a live local lease.
+    const localLeaseRelease = released && ownerFor(worker) === LOCAL_OWNER_LABEL;
+
     await reconcileLabels(github, context, number, {
       owner: released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
       stage: preserveAdvancedPrStage ? currentStage : requestedStage || currentStage,
       approved: semanticVerdict ? semanticVerdict[5] === 'approve'
         : legacyVerdict ? legacyVerdict[2] === 'pass' : undefined,
+      releaseLocalLease: localLeaseRelease,
+      preserveReadyStage: Boolean(context.payload.issue.pull_request),
     });
     return;
   }
@@ -1147,14 +1202,23 @@ async function reconcile({ github, context }) {
 
     const current = await currentLabels(github, context, pullRequest.number);
     const prLocalOwner = durablePrOwner(current);
+    const action = context.payload.action || '';
+    // A push is a new head: it invalidates factory:ci/factory:ready and returns
+    // the exact new head to factory:review. Every other PR event must not
+    // downgrade an existing stage (PR #5393 lost factory:ready this way).
+    const newHead = action === 'synchronize';
+    const currentStage = STAGE_LABELS.find(label => current.has(label));
+    const stage = newHead || action === 'closed' || !currentStage ? 'factory:review' : currentStage;
 
     await reconcileLabels(github, context, pullRequest.number, {
       // Local and fixed-model workers write durable PR-local ownership before
       // review workflows refresh visibility. Preserve that stronger signal even
       // when the linked issue has since been released for other work.
       owner: prLocalOwner || await ownerFromLinkedIssue(github, context, pullRequest),
-      stage: 'factory:review',
+      stage,
       approved: false,
+      newHead,
+      preserveReadyStage: true,
     });
     return;
   }
@@ -1197,6 +1261,9 @@ module.exports = reconcile;
 module.exports.reconcileMissingPrLabels = reconcileMissingPrLabels;
 module.exports._test = {
   durablePrOwner,
+  preserveLiveLocalLease,
+  LOCAL_OWNER_LABEL,
+  READY_STAGE_LABEL,
   ownerFor,
   isOwnerLabel,
   hasManualOnlyDirective,

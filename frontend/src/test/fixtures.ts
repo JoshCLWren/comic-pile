@@ -264,7 +264,6 @@ function isExpectedAnonymousAuthProbe(message: string): boolean {
   const anonymousProbePaths = [
     'api/v2/auth/me',
     'api/v2/auth/refresh',
-    'api/sessions/current',
     'api/threads/',
     'api/v1/dependencies/blocked',
   ];

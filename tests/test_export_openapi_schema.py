@@ -234,13 +234,20 @@ def test_merge_native_runtime_contract_renames_transitive_references() -> None:
 
 
 def test_native_same_path_contract_covers_retired_python_operations() -> None:
-    """Every removed handler keeps a Rust-owned client contract at its exact URL."""
+    """Every same-path replacement keeps a Rust contract; fully retired URLs stay absent."""
     root = Path(__file__).resolve().parents[1]
     native = json.loads((root / "native/contracts/same-path-runtime.openapi.json").read_text())
     retired = json.loads((root / "tests/fixtures/retired-python-handlers.json").read_text())
+    paths = native["paths"]
     for operation in retired:
+        path = operation["path"]
+        if operation.get("same_path_replacement", True) is False:
+            # The URL was retired outright (e.g. v1 creators now served by
+            # different v2 paths). A same-path Rust route here would be fake.
+            assert path not in paths, path
+            continue
         for method in operation["methods"]:
-            declaration = native["paths"][operation["path"]][method.lower()]
+            declaration = paths[path][method.lower()]
             assert declaration["operationId"]
             assert any(code.startswith("2") for code in declaration["responses"])
 

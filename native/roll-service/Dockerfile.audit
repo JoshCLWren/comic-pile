@@ -9,6 +9,10 @@ COPY Cargo.toml Cargo.lock build.rs ./
 COPY api/native_roll.rs api/native_issue.rs ./api/
 COPY native/roll-service/Cargo.toml ./native/roll-service/
 COPY native/roll-service/src/ ./native/roll-service/src/
+# Cargo loads every workspace member's manifest and target sources before
+# building the service. The migration crate's binary/SQL are not needed here.
+COPY native/migrate/Cargo.toml ./native/migrate/
+COPY native/migrate/src/ ./native/migrate/src/
 # Test fixtures are loaded on demand by Rust tests; no SQL dump belongs in a
 # deployable service image or is required to compile the runtime binary.
 RUN cargo build --locked -p comicpile-roll-service --bin comicpile-roll-service
