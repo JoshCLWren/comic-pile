@@ -22,7 +22,6 @@
   "app/repositories/comicvine_metadata_refresh_repository.py",
   "app/repositories/continuity_repository.py",
   "app/repositories/creator_summary.py",
-  "app/repositories/custom_cbl_source_link_repository.py",
   "app/repositories/dependency_group_repository.py",
   "app/repositories/dependency_repository.py",
   "app/repositories/failed_login_repository.py",
