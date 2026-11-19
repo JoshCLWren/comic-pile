@@ -313,6 +313,53 @@ pub async fn preview_reading_graph(
     }
 
     // 4. Build the prospective snapshot and evaluate.
+    //    All existing owner lists are included; the proposed list (built from
+    //    selected positions) replaces any existing list with the same id, or is
+    //    appended as a new list.
+    let proposed_list_entry: reading_constraints::List = reading_constraints::List {
+        list_id: proposed_list_id,
+        mode: proposed_mode.clone(),
+        name: proposed_name.clone(),
+        entries: proposed_entries
+            .iter()
+            .map(|e| reading_constraints::Entry {
+                issue_id: e.issue_id,
+                gate: e.gate.clone(),
+                skipped: e.skipped,
+            })
+            .collect(),
+        overlap_decisions: vec![],
+    };
+
+    let mut snapshot_lists: Vec<reading_constraints::List> = inputs
+        .lists
+        .iter()
+        .filter(|l| l.list_id != proposed_list_id)
+        .map(|l| reading_constraints::List {
+            list_id: l.list_id,
+            mode: l.mode.clone(),
+            name: l.name.clone(),
+            entries: l
+                .entries
+                .iter()
+                .map(|e| reading_constraints::Entry {
+                    issue_id: e.issue_id,
+                    gate: e.gate.clone(),
+                    skipped: e.skipped,
+                })
+                .collect(),
+            overlap_decisions: l
+                .overlap_decisions
+                .iter()
+                .map(|d| reading_constraints::Overlap {
+                    continuing_volume_id: d.continuing_volume_id.clone(),
+                    waiting_volume_id: d.waiting_volume_id.clone(),
+                })
+                .collect(),
+        })
+        .collect();
+    snapshot_lists.push(proposed_list_entry);
+
     let prerequisites: Vec<reading_constraints::Prerequisite> = inputs
         .prerequisites
         .iter()
@@ -328,34 +375,42 @@ pub async fn preview_reading_graph(
     let snapshot = reading_constraints::Snapshot {
         threads,
         issues,
-        lists: vec![reading_constraints::List {
-            list_id: proposed_list_id,
-            mode: proposed_mode.clone(),
-            name: proposed_name.clone(),
-            entries: proposed_entries
-                .iter()
-                .map(|e| reading_constraints::Entry {
-                    issue_id: e.issue_id,
-                    gate: e.gate.clone(),
-                    skipped: e.skipped,
-                })
-                .collect(),
-            overlap_decisions: vec![],
-        }],
+        lists: snapshot_lists,
         prerequisites,
         excluded_issue_ids: inputs.excluded_issue_ids.clone(),
     };
 
     let names: BTreeMap<i32, String> = list_names.clone();
+    let oi_lists: Vec<option_inputs::ReadingList> = snapshot
+        .lists
+        .iter()
+        .map(|l| option_inputs::ReadingList {
+            list_id: l.list_id,
+            mode: l.mode.clone(),
+            name: l.name.clone(),
+            entries: l
+                .entries
+                .iter()
+                .map(|e| option_inputs::ReadingEntry {
+                    issue_id: e.issue_id,
+                    gate: e.gate.clone(),
+                    skipped: e.skipped,
+                })
+                .collect(),
+            overlap_decisions: l
+                .overlap_decisions
+                .iter()
+                .map(|d| option_inputs::OverlapDecision {
+                    continuing_volume_id: d.continuing_volume_id.clone(),
+                    waiting_volume_id: d.waiting_volume_id.clone(),
+                })
+                .collect(),
+        })
+        .collect();
     let oi = option_inputs::OptionInputs {
         core: inputs.core.clone(),
         thread_volumes: inputs.thread_volumes.clone(),
-        lists: vec![reading_list_from_entries(
-            proposed_list_id,
-            &proposed_mode,
-            &proposed_name,
-            &proposed_entries,
-        )],
+        lists: oi_lists,
         prerequisites: inputs.prerequisites.clone(),
         excluded_issue_ids: inputs.excluded_issue_ids.clone(),
         unresolved: vec![],
@@ -372,37 +427,59 @@ pub async fn preview_reading_graph(
         .iter()
         .filter_map(|id| issue_meta.get(id).map(|m| m.thread_id))
         .collect();
-    let graph_thread_ids = expand_graph_threads(&snapshot, &baseline, &seed_threads, &issue_meta);
+    let graph_thread_ids =
+        expand_graph_threads(&snapshot, &baseline, &seed_threads, &issue_meta);
     let graph_issue_ids: HashSet<i32> = issue_meta
         .iter()
         .filter(|(_, m)| graph_thread_ids.contains(&m.thread_id))
         .map(|(id, _)| *id)
         .collect();
 
-    // 6. Series nodes (placeholder: single pass without blocker expansion).
-    let _active_thread_ids: HashSet<i32> = inputs
-        .core
-        .threads
-        .iter()
-        .filter(|t| t.status == "active")
-        .map(|t| t.id)
-        .collect();
-    let excluded = &inputs.excluded_issue_ids;
+    // 6. Series nodes (grouped by exact volume).
     let series = build_series_nodes(
         &issue_meta,
         &thread_names,
         &graph_thread_ids,
-        &_active_thread_ids,
         &volume_by_thread,
         &baseline,
-        excluded,
+        &inputs.excluded_issue_ids,
+        &inputs.thread_volumes,
     );
 
-    // 7. Overlaps (placeholder: none).
-    let overlaps: Vec<ReadingGraphOverlap> = vec![];
+    // 7. Overlaps: strict_order cross-volume conflicts in the proposed list.
+    let (overlaps, blocked_by_pair) = build_overlaps(
+        &context_for_overlaps(
+            &issue_meta,
+            &thread_names,
+            &volume_by_thread,
+            &inputs.thread_volumes,
+        ),
+        &selected_issue_ids,
+        &baseline,
+        &volume_by_thread,
+        &series_refs_for_volumes(
+            &issue_meta,
+            &thread_names,
+            &volume_by_thread,
+            &inputs.thread_volumes,
+        ),
+        proposed_list_id,
+        &payload.overlap_choices,
+    );
 
     // 8. Issue directory.
-    let issues = build_issue_references(&graph_issue_ids, &baseline, &issue_meta);
+    let issues = build_issue_references(
+        &graph_issue_ids,
+        &baseline,
+        &issue_meta,
+        &volume_by_thread,
+        &series_refs_for_volumes(
+            &issue_meta,
+            &thread_names,
+            &volume_by_thread,
+            &inputs.thread_volumes,
+        ),
+    );
 
     // 9. Rollable / waiting.
     let rollable_issue_ids: Vec<i32> = baseline
@@ -421,7 +498,7 @@ pub async fn preview_reading_graph(
         .collect();
 
     // 10. Cycle errors.
-    let cycle_errors = build_cycle_errors(&snapshot);
+    let cycle_errors = build_cycle_errors(&snapshot, &issue_meta, &thread_names, &list_names);
 
     Ok(Json(ReadingGraphPreview {
         source_list_id: list_meta.id,
