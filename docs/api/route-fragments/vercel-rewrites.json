@@ -1,5 +1,5 @@
 {
-  "generated_by": "scripts/generate_route_burndown.py",
+  "generated_by": "scripts/generate_route_burndown.mjs",
   "source_fragments": [
     "activity",
     "bug-reports",
@@ -18,9 +18,11 @@
     "metrics",
     "preferences",
     "reading-mode",
+    "reading-order-groups",
     "reading-orders",
     "reading-plan-sync",
     "releases",
+    "review-previews",
     "roll",
     "sessions",
     "tags",
@@ -49,14 +51,6 @@
         "POST"
       ],
       "dest": "/api/native_issue.rs"
-    },
-    {
-      "src": "^/api/v1/catalog/series\\-mappings/preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
     },
     {
       "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
@@ -151,21 +145,6 @@
       "src": "^/api/v1/comicvine/series:import$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/taste/discoveries$",
-      "methods": [
         "OPTIONS"
       ],
       "dest": "/api/index.py"
