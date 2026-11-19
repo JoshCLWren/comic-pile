@@ -557,19 +557,24 @@ describe('comparison and CBL discovery request budgets', () => {
     )
 
     expect(await screen.findByRole('button', { name: /Annihilation/ })).toBeInTheDocument()
-    // Cold load: the group list plus exactly one bounded issue-card batch
-    // (CSRF bootstrap precedes the POST); never one request per member row.
-    await waitFor(() => expect(ledger.requests).toHaveLength(3))
+    // Cold load fetches only the group list: collapsed groups render no issue
+    // cards, so their ids must not trigger metadata fetches (#4445).
+    await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests.map((request) => request.url)).toEqual([
       'GET /api/v1/reading-order-groups/',
-      'GET /api/v2/auth/csrf',
-      'POST /api/v2/issues/cards',
     ])
 
     ledger.beginAction('expand crossover')
     fireEvent.click(screen.getByRole('button', { name: /Annihilation/ }))
 
+    // Expansion starts the bounded all-series read and exactly one bounded
+    // issue-card batch for the visible rows (CSRF precedes the POST); never
+    // one request per member row.
     await waitFor(() => expect(ledger.requests).toHaveLength(4))
-    expect(ledger.requests[3]?.url).toBe('GET /api/v2/threads?page_size=100')
+    expect(ledger.requests.slice(1).map((request) => request.url).sort()).toEqual([
+      'GET /api/v2/auth/csrf',
+      'GET /api/v2/threads?page_size=100',
+      'POST /api/v2/issues/cards',
+    ].sort())
   })
 })

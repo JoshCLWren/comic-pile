@@ -136,6 +136,32 @@ describe('CrossoversPage', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
   })
 
+  it('batches card metadata only for the expanded group, not collapsed groups', async () => {
+    const fetchCards = vi.mocked(issueCardsApi.fetchCards)
+    fetchCards.mockClear()
+    fetchCards.mockResolvedValue([])
+    groupsApi.list.mockResolvedValue([
+      annihilation,
+      {
+        ...annihilation,
+        id: 8,
+        name: 'Secret Wars',
+        memberships: [
+          { id: 3, issue_id: 88, thread_id: null, series_title: 'Avengers', issue_number: '1' },
+        ],
+      },
+    ])
+
+    renderPage()
+    await screen.findByText(/Annihilation/)
+    expect(fetchCards).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Annihilation 2 members/ }))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([11]))
+    // The collapsed group's issue is never fetched just to render the list.
+    expect(fetchCards).not.toHaveBeenCalledWith([88])
+  })
+
   it('renames and deletes an existing crossover', async () => {
     groupsApi.list.mockResolvedValue([annihilation])
     groupsApi.rename.mockResolvedValue({ ...annihilation, name: 'Annihilation Conquest' })

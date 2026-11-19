@@ -35,7 +35,17 @@ function StepNames({ steps, cardsByIssue }: { steps: RecoveryStep[]; cardsByIssu
   )
 }
 
-function CandidateChanges({ candidate, cardsByIssue }: { candidate: RecoveryCandidate; cardsByIssue: Map<number, IssueCard> }) {
+function CandidateChanges({
+  candidate,
+  cardsByIssue,
+  showFullOrder,
+  onToggleFullOrder,
+}: {
+  candidate: RecoveryCandidate
+  cardsByIssue: Map<number, IssueCard>
+  showFullOrder: boolean
+  onToggleFullOrder: (open: boolean) => void
+}) {
   return (
     <div className="mt-3 space-y-3 text-sm" data-testid="plan-recovery-diff">
       <p className="font-semibold text-[var(--theme-text-primary)]">
@@ -63,7 +73,10 @@ function CandidateChanges({ candidate, cardsByIssue }: { candidate: RecoveryCand
         !candidate.order_changed && (
           <p>The saved membership and order match this Reading List.</p>
         )}
-      <details>
+      <details
+        open={showFullOrder}
+        onToggle={(event) => onToggleFullOrder(event.currentTarget.open)}
+      >
         <summary className="cursor-pointer font-semibold">View the complete proposed reading order</summary>
         <StepNames steps={candidate.steps} cardsByIssue={cardsByIssue} />
       </details>
@@ -84,23 +97,38 @@ export function ReadingPlanRecovery({
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
+  const [showSavedRefs, setShowSavedRefs] = useState(false)
+  const [showFullOrder, setShowFullOrder] = useState(false)
   const recovery = useReadingPlanRecoveryPreview(planId)
   const apply = useRelinkReadingPlan(planId, onRecovered)
 
-  // One bounded batch for every exact owned issue named by the recovery
-  // preview; hooks run before early returns so hook order is stable.
+  // One bounded batch for the sections the reader can actually see: the saved
+  // references only when that disclosure is open, and the chosen candidate's
+  // diff (plus its full order only when expanded). The server returns every
+  // owned list as a candidate, so batching all of them would fetch metadata
+  // for the whole collection just to open recovery. Hooks run before early
+  // returns so hook order stays stable.
   const previewForCards = recovery.data
   const stepIssueIds = useMemo(
     () => {
       if (!previewForCards) return []
       const ids = new Set<number>()
-      for (const step of previewForCards.retained_steps) ids.add(step.issue_id)
-      for (const candidate of previewForCards.candidates) {
-        for (const step of candidate.steps) ids.add(step.issue_id)
+      if (showSavedRefs) {
+        for (const step of previewForCards.retained_steps) ids.add(step.issue_id)
+      }
+      const selectedCandidate = previewForCards.candidates.find(
+        (candidate) => candidate.list_id === selectedId,
+      )
+      if (selectedCandidate) {
+        for (const step of selectedCandidate.added_steps) ids.add(step.issue_id)
+        for (const step of selectedCandidate.removed_steps) ids.add(step.issue_id)
+        if (showFullOrder) {
+          for (const step of selectedCandidate.steps) ids.add(step.issue_id)
+        }
       }
       return [...ids]
     },
-    [previewForCards],
+    [previewForCards, selectedId, showSavedRefs, showFullOrder],
   )
   const cardsQuery = useIssueCards(stepIssueIds, { enabled: stepIssueIds.length > 0 })
   const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
@@ -130,7 +158,10 @@ export function ReadingPlanRecovery({
         The saved Plan has {preview.retained_steps.length} surviving issue references.
         Creating another list with the same name does not restore its identity.
       </p>
-      <details>
+      <details
+        open={showSavedRefs}
+        onToggle={(event) => setShowSavedRefs(event.currentTarget.open)}
+      >
         <summary className="cursor-pointer font-semibold">Show saved Plan references</summary>
         <StepNames steps={preview.retained_steps} cardsByIssue={cardsByIssue} />
       </details>
@@ -160,7 +191,12 @@ export function ReadingPlanRecovery({
       </label>
       {selected && (
         <>
-          <CandidateChanges candidate={selected} cardsByIssue={cardsByIssue} />
+          <CandidateChanges
+            candidate={selected}
+            cardsByIssue={cardsByIssue}
+            showFullOrder={showFullOrder}
+            onToggleFullOrder={setShowFullOrder}
+          />
           <label className="flex items-start gap-3">
             <input
               type="checkbox"

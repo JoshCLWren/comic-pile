@@ -149,6 +149,50 @@ describe('orphaned Reading Plan recovery', () => {
     expect(relinkApi).not.toHaveBeenCalled()
   })
 
+  it('fetches card metadata only for the selected candidate and opened sections', async () => {
+    const user = userEvent.setup()
+    const fetchCards = vi.mocked(issueCardsApi.fetchCards)
+    fetchCards.mockResolvedValue([])
+    // A stable middle step that is neither retained nor in the diff: it is
+    // needed only when the full proposed order is disclosed.
+    previewApi.mockResolvedValue({
+      ...preview,
+      candidates: [
+        {
+          ...preview.candidates[0],
+          steps: [
+            ...preview.candidates[0].steps,
+            { issue_id: 1121999, label: 'Batman #2 (stable middle)' },
+          ],
+        },
+        preview.candidates[1],
+      ],
+    })
+
+    renderRecovery()
+    await screen.findByRole('heading', { name: 'Recover this Reading Plan' })
+    expect(fetchCards).not.toHaveBeenCalled()
+
+    const savedRefs = screen.getByText('Show saved Plan references').closest('details')
+    expect(savedRefs).not.toBeNull()
+    savedRefs!.open = true
+    savedRefs!.dispatchEvent(new Event('toggle', { bubbles: true }))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([1121029, 1121031, 1121101]))
+
+    await user.selectOptions(screen.getByLabelText('Reading List to relink'), '1000109')
+    await waitFor(() =>
+      expect(fetchCards).toHaveBeenCalledWith([1121029, 1121031, 1121101, 1121328]),
+    )
+
+    const fullOrder = screen.getByText('View the complete proposed reading order').closest('details')
+    expect(fullOrder).not.toBeNull()
+    fullOrder!.open = true
+    fullOrder!.dispatchEvent(new Event('toggle', { bubbles: true }))
+    await waitFor(() =>
+      expect(fetchCards).toHaveBeenCalledWith([1121029, 1121031, 1121101, 1121328, 1121999]),
+    )
+  })
+
   it('shows stale-preview errors and supports reloading before retrying', async () => {
     const user = userEvent.setup()
     relinkApi.mockRejectedValueOnce(new Error('Reading List changed'))
