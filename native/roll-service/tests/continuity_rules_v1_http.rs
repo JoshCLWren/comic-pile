@@ -176,7 +176,7 @@ async fn continuity_rules_requires_authentication() {
 #[tokio::test]
 async fn continuity_rules_crud_is_native_wire_compatible() {
     let (state, _db) = database().await;
-    let username = format!("cr-wire-{}", unique_username());
+    let username = format!("cr{}", NEXT_IP.fetch_add(1, Ordering::Relaxed));
     let (token, csrf) = register_and_login(&state, &username).await;
     let user_id = user_id_for(&state, &username).await;
     let (_thread, source_issue, target_issue) = seed_issues(&state, user_id).await;
@@ -271,22 +271,3 @@ async fn continuity_rules_crud_is_native_wire_compatible() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
-
-fn unique_username() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos()
-}
-```
-
-Wait, I used unique_username() which returns u128, but username format uses {}. Fine. But NEXT_IP is AtomicU16; register_and_login uses it. Good. But unique_username defined at bottom; Rust allows. But the username string format "cr-wire-{}" with u128. Fine.
-
-But I referenced unique_username() before definition? In Rust, function order doesn't matter. Good.
-
-However, the username might be too long? Username max maybe 50. u128 nanos is 39 digits + prefix ~ 48. Should be okay. But DB column username length? Let me check. Probably 50 or 100. Use a shorter unique suffix. The continuity_plans test uses "cp-wire" literal and relies on test_state reset? Multiple tests with same username might conflict if not unique. But tests run in parallel; duplicate usernames cause register failure. Better use unique. Let me use a shorter counter. Actually use the NEXT_IP or a static atomic counter plus timestamp. Simpler: use format!("cr-{}", unique_suffix) where unique_suffix returns a small number? Use nanos but truncate. Let me just use the ip counter approach: format!("cr{}", NEXT_IP.fetch_add). But NEXT_IP is AtomicU16. Fine.
-
-Let me simplify: username = format!("cr{}", NEXT_IP.fetch_add(1, Ordering::Relaxed)). But that may collide across tests? Each test calls fetch_add. Should be okay. But register_and_login also fetches NEXT_IP. So username gets a unique number. Good.
-
-Let me adjust: username = format!("cr{}", NEXT_IP.fetch_add(1, Ordering::Relaxed)); and remove unique_username. But register_and_login also fetches. That's fine; username just needs unique enough. Actually if two tests call register_and_login with same username, collision. Using NEXT_IP fetch in main test for username before register_and_login increments twice. That's okay, still unique. But simpler: pass a base name and append nothing; register_and_login uses NEXT_IP internally for x-forwarded-for only, not username. So username must be unique. Let me make username = format!("cr{}", std::process::id()) plus a counter. Use a separate static AtomicU64. Let me just use nanos but format as hex short? Rust u128 to string is long. Let me use a static AtomicUsize counter.<|end|><|start|><|start|>assistant to=edit<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
-native/roll-service/tests/continuity_rules_v1_http.rs
