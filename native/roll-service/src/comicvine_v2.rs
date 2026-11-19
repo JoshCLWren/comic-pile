@@ -1889,6 +1889,7 @@ pub fn resolve_input_documentation() {}
 #[utoipa::path(
     get,
     path = "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
+    operation_id = "comicvine_series_issues_documentation",
     params(
         ("comicvine_volume_id" = i32, Path, description = "ComicVine volume ID"),
         ("series_name" = String, Query, description = "Pre-fetched series name"),
