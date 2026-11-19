@@ -3009,7 +3009,23 @@ async fn reconcile_entries_impl<E: DbExec>(
             .await
             .map_err(|e| tx_db_error(e, ""))?,
     };
-    let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
+    // Resolve every known ComicVine identity and all owned mappings in one
+    // set-based query. Only entries with a known identity but no owned mapping
+    // need Python's title/number fallback evidence; loading that evidence is
+    // likewise three bounded batch queries, never work inside the row loop.
+    let canonical_issues = load_canonical_issue_index(tx, user_id, &rows).await?;
+    let fallback_needed = rows.iter().any(|row| {
+        row.get::<_, Option<String>>(4)
+            .as_deref()
+            .map(str::trim)
+            .filter(|cvid| !cvid.is_empty())
+            .is_some_and(|cvid| canonical_issues.get(cvid).is_some_and(Vec::is_empty))
+    });
+    let fallback_index = if fallback_needed {
+        Some(load_owned_issue_fallback_index(tx, user_id).await?)
+    } else {
+        None
+    };
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         let cse_id: i32 = row.get(0);
@@ -3023,7 +3039,6 @@ async fn reconcile_entries_impl<E: DbExec>(
         let series_external_id: Option<String> = row.get(8);
         let volume_year: Option<i32> = row.get(9);
         let publication_year: Option<i32> = row.get(10);
-        let series_provider_for_resolution = series_provider.as_deref();
         let (
             resolved_issue_id,
             canonical_issue_id,
@@ -3032,22 +3047,13 @@ async fn reconcile_entries_impl<E: DbExec>(
             read_status,
             read_at,
         ) = resolve_canonical_for_entry(
-            tx,
-            user_id,
             comicvine_issue_id.as_deref(),
             &series_name,
             &issue_number,
-            if series_provider_for_resolution
-                .map(|p| p.eq_ignore_ascii_case("comicvine"))
-                .unwrap_or(false)
-            {
-                series_external_id.as_deref()
-            } else {
-                None
-            },
-            &fallback_index,
-        )
-        .await?;
+            series_external_id.as_deref(),
+            &canonical_issues,
+            fallback_index.as_ref(),
+        );
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
