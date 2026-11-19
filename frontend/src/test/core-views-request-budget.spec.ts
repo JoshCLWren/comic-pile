@@ -65,7 +65,7 @@ test.describe('Issue #4501: core-view request budgets', () => {
 
     const catalogCalls = () =>
       recorder.calls.filter(
-        (call) => call.method === 'GET' && call.path === '/api/v1/tags/',
+        (call) => call.method === 'GET' && call.path === '/api/v2/tags',
       )
 
     expect(catalogCalls()).toHaveLength(0)

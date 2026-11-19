@@ -30,28 +30,28 @@ function renderTagSection() {
 describe('tag editor request scope', () => {
   it('does not read the catalog while closed and reads it exactly once on open', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/tags/effective/thread/42/') return threadTags
-      if (call.url === '/v1/tags/') return { tags: [] }
+      if (call.url === '/v2/tags/effective/threads/42') return threadTags
+      if (call.url === '/v2/tags') return { tags: [] }
       return {}
     })
     setDefaultHttpClient(client)
 
     renderTagSection()
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/tags/effective/thread/42/')).toBe(true))
-    expect(calls.some((call) => call.url === '/v1/tags/')).toBe(false)
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/tags/effective/threads/42')).toBe(true))
+    expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit tags' }))
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/tags/')).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/tags')).toBe(true))
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(requestCounts(calls)['GET /v1/tags/']).toBe(1)
+    expect(requestCounts(calls)['GET /v2/tags']).toBe(1)
   })
 
   it('bulk toolbar reads the catalog only for a non-empty selection, exactly once', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/tags/') return { tags: [] }
+      if (call.url === '/v2/tags') return { tags: [] }
       return {}
     })
     setDefaultHttpClient(client)
@@ -59,15 +59,15 @@ describe('tag editor request scope', () => {
     const view = render(
       <BulkTagToolbar selectedIds={[]} onClearSelection={() => undefined} />,
     )
-    expect(calls.some((call) => call.url === '/v1/tags/')).toBe(false)
+    expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
 
     view.rerender(
       <BulkTagToolbar selectedIds={[7]} onClearSelection={() => undefined} />,
     )
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/tags/')).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/tags')).toBe(true))
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    expect(requestCounts(calls)['GET /v1/tags/']).toBe(1)
+    expect(requestCounts(calls)['GET /v2/tags']).toBe(1)
   })
 })

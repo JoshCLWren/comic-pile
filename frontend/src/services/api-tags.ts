@@ -192,37 +192,39 @@ export function createTagsApi(client: HttpClient) {
     /** List tags visible to the caller, optionally filtered by name. */
     list: async (search?: string): Promise<TagListResponse> => {
       const trimmed = search?.trim()
-      return client.get<TagListResponse>('/v1/tags/', {
+      return client.get<TagListResponse>('/v2/tags', {
         params: trimmed ? { search: trimmed } : undefined,
       })
     },
-    get: (id: number) => client.get<Tag>(`/v1/tags/${id}/`),
+    get: (id: number) => client.get<Tag>(`/v2/tags/${id}`),
     create: (data: CreateTagPayload) =>
-      client.post<CreateTagResponse, CreateTagPayload>('/v1/tags/', data),
+      client.post<CreateTagResponse, CreateTagPayload>('/v2/tags', data),
     update: (id: number, data: UpdateTagPayload) =>
-      client.put<Tag, UpdateTagPayload>(`/v1/tags/${id}/`, data),
-    delete: (id: number) => client.delete<DeleteTagResponse>(`/v1/tags/${id}/`),
-    usage: (id: number) => client.get<TagUsage>(`/v1/tags/${id}/usage/`),
+      client.patch<Tag, UpdateTagPayload>(`/v2/tags/${id}`, data),
+    delete: (id: number) => client.delete<DeleteTagResponse>(`/v2/tags/${id}`),
+    usage: (id: number) => client.get<TagUsage>(`/v2/tags/${id}/usage`),
     assign: (id: number, data: AssignTagPayload) =>
-      client.post<TagAssignment, AssignTagPayload>(`/v1/tags/${id}/assign/`, data),
+      client.post<TagAssignment, AssignTagPayload>(`/v2/tags/${id}/assignments`, data),
     unassign: (id: number, data: AssignTagPayload) =>
-      client.delete<TagAssignment>(`/v1/tags/${id}/unassign/`, { data }),
+      client.delete<TagAssignment>(
+        `/v2/tags/${id}/assignments/${data.target_type}/${data.target_id}`,
+      ),
     /** Attach one tag to many targets; unrelated tags are never touched. */
     bulkAssign: (id: number, data: BulkAssignPayload) =>
       client.post<BulkAssignResponse, BulkAssignPayload>(
-        `/v1/tags/${id}/bulk-assign/`,
+        `/v2/tags/${id}/assignment-batches`,
         data,
       ),
     /** Detach one tag from many targets; unrelated tags are never touched. */
     bulkUnassign: (id: number, data: BulkAssignPayload) =>
       client.post<BulkAssignResponse, BulkAssignPayload>(
-        `/v1/tags/${id}/bulk-unassign/`,
+        `/v2/tags/${id}/unassignment-batches`,
         data,
       ),
     effectiveForIssue: (issueId: number) =>
-      client.get<EffectiveTagsResponse>(`/v1/tags/effective/issue/${issueId}/`),
+      client.get<EffectiveTagsResponse>(`/v2/tags/effective/issues/${issueId}`),
     effectiveForThread: (threadId: number) =>
-      client.get<EffectiveTagsResponse>(`/v1/tags/effective/thread/${threadId}/`),
+      client.get<EffectiveTagsResponse>(`/v2/tags/effective/threads/${threadId}`),
     /**
      * Bulk effective tags for every issue in one thread (issue #3422).
      * Powers the thread detail issue rows so the client never issues one
@@ -230,10 +232,10 @@ export function createTagsApi(client: HttpClient) {
      */
     threadIssuesEffective: (threadId: number) =>
       client.get<ThreadIssuesEffectiveTagsResponse>(
-        `/v1/tags/effective/thread/${threadId}/issues/`,
+        `/v2/tags/effective/threads/${threadId}/issues`,
       ),
     effectiveForPlan: (planId: number) =>
-      client.get<EffectiveTagsResponse>(`/v1/tags/effective/plan/${planId}/`),
+      client.get<EffectiveTagsResponse>(`/v2/tags/effective/plans/${planId}`),
   }
 }
 

@@ -118,7 +118,7 @@ describe('public route network budgets', () => {
     await app.settle()
     expect(app.currentPath()).toBe('/')
     expect(app.rows()).toContain('GET /api/v2/auth/me x1')
-    expect(app.rows()).toContain('GET /api/v1/users/me/preferences x1')
+    expect(app.rows()).toContain('GET /api/v2/users/me/preferences x1')
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
   })
 

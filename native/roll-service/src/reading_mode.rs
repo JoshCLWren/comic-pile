@@ -1,9 +1,9 @@
 //! Same-path Rust cutover for browser-called reading-mode operations (#4840, parent #4335).
 //!
 //! Preserves the Python `app/api/reading_mode.py` wire contract at the same
-//! HTTP methods and exact paths (`GET/POST /api/v1/reading-mode`,
-//! `POST /api/v1/reading-mode/dismiss-suggestion`,
-//! `POST /api/v1/reading-mode/suggest`); only the implementation moves from
+//! HTTP methods and exact paths (`GET/PUT /api/v2/reading-mode`,
+//! `POST /api/v2/reading-mode/suggestion-dismissals`,
+//! `POST /api/v2/reading-mode/suggestions`); only the implementation moves from
 //! Python FastAPI to the native Roll binary. No frontend URL changes.
 //!
 //! Parity notes (Python oracle is `app/services/reading_mode.py` +
@@ -13,7 +13,7 @@
 //!   `bootstrap` path, matching Python `get_or_create`. The first request for
 //!   a user without an authoritative session creates one with
 //!   `reading_mode_suggested=false` and null mode fields, exactly like Python.
-//! - `POST /api/v1/reading-mode` validates `source` then resolves quiz answers
+//! - `PUT /api/v2/reading-mode` validates `source` then resolves quiz answers
 //!   before any session work (no session is created on a 422), mirroring the
 //!   Python service order (`if source not in values`, `resolve_quiz_answers`,
 //!   `is_valid_reading_mode`, then `_get_active_session`).
@@ -240,7 +240,7 @@ pub async fn suggest_reading_mode(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-mode",
+    path = "/api/v2/reading-mode",
     tag = "reading-mode",
     responses(
         (status = 200, description = "Current reading-mode state", body = ReadingModeResponse),
@@ -253,8 +253,8 @@ pub async fn suggest_reading_mode(
 pub(crate) fn get_reading_mode_documentation() {}
 
 #[utoipa::path(
-    post,
-    path = "/api/v1/reading-mode",
+    put,
+    path = "/api/v2/reading-mode",
     tag = "reading-mode",
     request_body = ReadingModeSetRequest,
     responses(
@@ -270,7 +270,7 @@ pub(crate) fn set_reading_mode_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-mode/dismiss-suggestion",
+    path = "/api/v2/reading-mode/suggestion-dismissals",
     tag = "reading-mode",
     responses(
         (status = 200, description = "Unchanged reading-mode state with suggestion cleared", body = ReadingModeResponse),
@@ -284,7 +284,7 @@ pub(crate) fn dismiss_reading_mode_suggestion_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-mode/suggest",
+    path = "/api/v2/reading-mode/suggestions",
     tag = "reading-mode",
     responses(
         (status = 200, description = "Reading-mode state with suggestion enabled", body = ReadingModeResponse),

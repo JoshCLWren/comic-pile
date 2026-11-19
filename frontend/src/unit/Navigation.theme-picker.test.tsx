@@ -48,8 +48,8 @@ vi.mock('../services/api', () => {
 vi.mock('../services/api-preferences', () => ({
   preferencesApi: {
     get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      mocks.get('/v1/users/me/preferences', options),
-    patch: (data: { theme?: string | null }) => mocks.patch('/v1/users/me/preferences', data),
+      mocks.get('/v2/users/me/preferences', options),
+    patch: (data: { theme?: string | null }) => mocks.patch('/v2/users/me/preferences', data),
   },
 }))
 
@@ -86,7 +86,7 @@ function setViewport(width: number) {
 const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
 
 async function waitForPreferencesApplied() {
-  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v2/users/me/preferences', PREFERENCES_CONFIG))
   await waitFor(() => expect(queryClient.getQueryState(['preferences', 'detail'])?.status).toBe('success'))
 }
 
@@ -172,7 +172,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     expect(screen.getByRole('button', { name: 'Ink Gold theme' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute('aria-pressed', 'false')
     await waitFor(() =>
-      expect(mocks.patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' }),
+      expect(mocks.patch).toHaveBeenCalledWith('/v2/users/me/preferences', { theme: 'ink-gold' }),
     )
     expect(readStoredThemePreference()).toBe('ink-gold')
   })
@@ -260,7 +260,7 @@ describe('mobile More tray keeps the theme selector (issue #1792)', () => {
     await user.click(tray.getByRole('button', { name: 'Ink-gold theme' }))
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     await waitFor(() =>
-      expect(mocks.patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' }),
+      expect(mocks.patch).toHaveBeenCalledWith('/v2/users/me/preferences', { theme: 'ink-gold' }),
     )
   })
 })

@@ -178,11 +178,13 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # handler was retired once the native routes were live (#5162).
         ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
         ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
-        # Preferences and Taste Bank signals keep their browser-called
-        # /api/v1 URLs and are now served same-path by native Rust (#4834).
-        # The Python handlers stay mounted until production proof.
+        # User preferences moved to Rust v2 (Part of #4335); retired
+        # /api/v1/users/me/preferences paths now reach the native catch-all.
+        # Taste Bank signals remain same-path v1 native Rust (#4834).
         ("GET", "/api/v1/users/me/preferences"): "/api/native_roll.rs",
         ("PATCH", "/api/v1/users/me/preferences"): "/api/native_roll.rs",
+        ("GET", "/api/v2/users/me/preferences"): "/api/native_roll.rs",
+        ("PATCH", "/api/v2/users/me/preferences"): "/api/native_roll.rs",
         ("GET", "/api/v1/users/me/taste-signals"): "/api/native_roll.rs",
         (
             "PUT",

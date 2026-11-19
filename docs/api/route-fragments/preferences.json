@@ -1,7 +1,8 @@
 {
   "family": "preferences",
   "owned_path_patterns": [
-    "^/api/v1/users/me/(?:preferences|taste\\-signals)(?:/.*)?$"
+    "^/api/v1/users/me/taste\\-signals(?:/.*)?$",
+    "^/api/v2/users/me/preferences$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,24 +14,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/users/me/preferences",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/users/me/preferences$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PATCH",
-      "path": "/api/v1/users/me/preferences",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/users/me/preferences$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
-    },
     {
       "bucket": "v1_operations",
       "method": "GET",
@@ -48,6 +31,32 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "owning_issue": 4834,
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/users/me/preferences",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/users/me/preferences$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-preferences.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/users/me/preferences",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/users/me/preferences$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-preferences.ts"
+      ]
     }
   ]
 }
