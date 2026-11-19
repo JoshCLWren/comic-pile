@@ -8,7 +8,7 @@ deviations when pulling upstream changes.
 
 - **Upstream repository:** https://github.com/dmmulroy/anti-slop
 - **Installed via:** the `install-anti-slop` skill (`skills/install-anti-slop`),
-  `scripts/install.mjs`, which copies `assets/anti-slop/` into this directory.
+  the skill's own `scripts/install.mjs` <!-- docs-path-check: ignore -->, which copies `assets/anti-slop/` into this directory.
 - **Skill lock hash** (`skills-lock.json` → `install-anti-slop.computedHash`):
   `c9e929154f6eb4309dfee64eeab70b90fcc5d62a23c1712d11593577d17d0e8e`
 - **Exact upstream commit:** `95a56e5d24fb3d849673c2d51eb0908b8bd2d33b`
