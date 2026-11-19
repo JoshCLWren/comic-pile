@@ -150,8 +150,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             for parameter in operation.parameters.iter_mut().flatten() {
                 if let utoipa::openapi::RefOr::T(parameter) = parameter {
                     if parameter.name == "limit" {
-                        parameter.description =
-                            Some("Maximum discoveries to return.".to_string());
+                        parameter.description = Some("Maximum discoveries to return.".to_string());
                     }
                 }
             }
