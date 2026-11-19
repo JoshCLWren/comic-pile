@@ -7,7 +7,9 @@
     "runtime": "native-rust",
     "status": "target",
     "owning_issue": 4848,
-    "consumers": []
+    "consumers": [
+      "frontend/src/generated/nativeV2Client.ts"
+    ]
   },
   "operations": [
     {
@@ -16,7 +18,12 @@
       "path": "/api/v1/continuity-rules/",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-rules/$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4848,
+      "consumers": [
+        "frontend/src/generated/nativeV2Client.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -24,7 +31,12 @@
       "path": "/api/v1/continuity-rules/",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-rules/$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4848,
+      "consumers": [
+        "frontend/src/generated/nativeV2Client.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -32,7 +44,12 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4848,
+      "consumers": [
+        "frontend/src/generated/nativeV2Client.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -40,7 +57,12 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4848,
+      "consumers": [
+        "frontend/src/generated/nativeV2Client.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -48,7 +70,12 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4848,
+      "consumers": [
+        "frontend/src/generated/nativeV2Client.ts"
+      ]
     }
   ]
 }
