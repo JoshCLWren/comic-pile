@@ -1002,6 +1002,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn thread_issue_creators_ingress_reaches_the_mounted_rust_handler() {
+        // Both routers are required: the outer Vercel entry dispatches this
+        // method/path, and the inner service router must mount the handler.
+        // An anonymous call proves the complete stack because a missing route
+        // produces 404 instead of the handler's authentication challenge.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/threads/21/issues/creators")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "issue creators must reach Rust dispatch, not a 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
     async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
         // The threads route fragment points this method/path at this Vercel
         // entry. Without a matching outer route the regenerated ingress falls

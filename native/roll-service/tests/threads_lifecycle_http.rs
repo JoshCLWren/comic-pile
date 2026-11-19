@@ -2384,6 +2384,12 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
         .await
         .unwrap()
         .get(0);
+    let response_activity = chrono::DateTime::parse_from_rfc3339(
+        body["last_activity_at"].as_str().unwrap(),
+    )
+    .unwrap()
+    .with_timezone(&chrono::Utc);
+    assert_eq!(response_activity, activity);
     let expected = before - chrono::Duration::days(5);
     let delta = (activity - expected).num_seconds().abs();
     assert!(
@@ -2453,8 +2459,14 @@ async fn test_backdate_thread_for_testing_validates_days_ago() {
     let production = std::env::var("ENVIRONMENT").as_deref() == Ok("production");
     let assert_rejection = |status: StatusCode, body: &Value, error: Value| {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
-        assert_eq!(body["detail"], "Validation failed", "{body:?}");
-        if !production {
+        if production {
+            assert_eq!(
+                *body,
+                json!({"detail": "Validation failed"}),
+                "Python-measured production 422 must not leak field details"
+            );
+        } else {
+            assert_eq!(body["detail"], "Validation failed", "{body:?}");
             assert_eq!(
                 body["errors"],
                 json!([error]),
