@@ -288,20 +288,7 @@ fn not_found(thread_id: i32) -> ApiError {
     ApiError::NotFound(format!("Thread {thread_id} not found"))
 }
 
-pub(crate) fn option_e_enabled() -> bool {
-    let enabled = std::env::var("OPTION_E_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "t" | "yes" | "y" | "on"
-            )
-        })
-        .unwrap_or(false);
-    enabled
-        && std::env::var("OPTION_E_APPROVED_PREVIEW")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
-}
+pub(crate) use crate::option_e_setting::option_e_enabled;
 
 /// Return the eligible-thread authority used by the read path.
 ///
@@ -1776,6 +1763,67 @@ mod tests {
                 expected,
                 "option e GET ordinal after move for thread {thread_id}"
             );
+        }
+    }
+
+    /// Every env combination resolves through the one shared accessor: only an
+    /// enabled switch plus a non-blank approval changes ordering authority, all
+    /// other combinations keep the stored legacy grouping with identical results.
+    #[tokio::test]
+    async fn option_e_setting_combinations_select_one_grouping_authority() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state().await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed_option_e_thread(&state, 7, 1, 1, false, None).await;
+        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
+
+        let saved = (
+            std::env::var_os("OPTION_E_ENABLED"),
+            std::env::var_os("OPTION_E_APPROVED_PREVIEW"),
+        );
+        // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
+        let legacy = [(1, 1), (2, 2), (3, 3)];
+        let evaluated = [(1, 3), (2, 1), (3, 2)];
+        type Case<'a> = (Option<&'a str>, Option<&'a str>, [(i32, i32); 3]);
+        let cases: [Case<'_>; 7] = [
+            (None, None, legacy),
+            (Some("true"), None, legacy),
+            (Some("true"), Some("   "), legacy),
+            (None, Some("ref"), legacy),
+            (Some("false"), Some("ref"), legacy),
+            (Some("TRUE"), Some("ref"), evaluated),
+            (Some("1"), Some("ref"), evaluated),
+        ];
+        for (enabled, approval, expected) in cases {
+            for (name, value) in [
+                ("OPTION_E_ENABLED", enabled),
+                ("OPTION_E_APPROVED_PREVIEW", approval),
+            ] {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+            for (thread_id, position) in expected {
+                let entry = get_queue_entry(State(state.clone()), user, Path(thread_id))
+                    .await
+                    .expect("queue entry");
+                assert_eq!(
+                    entry.0.position, position,
+                    "enabled={enabled:?} approval={approval:?} thread {thread_id}"
+                );
+            }
+        }
+        for (name, value) in [
+            ("OPTION_E_ENABLED", saved.0),
+            ("OPTION_E_APPROVED_PREVIEW", saved.1),
+        ] {
+            match value {
+                Some(value) => std::env::set_var(name, value),
+                None => std::env::remove_var(name),
+            }
         }
     }
 

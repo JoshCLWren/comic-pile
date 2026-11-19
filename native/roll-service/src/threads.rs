@@ -170,20 +170,7 @@ fn normalize_search(search: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-pub(crate) fn option_e_enabled() -> bool {
-    let enabled = std::env::var("OPTION_E_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "t" | "yes" | "y" | "on"
-            )
-        })
-        .unwrap_or(false);
-    enabled
-        && std::env::var("OPTION_E_APPROVED_PREVIEW")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
-}
+pub(crate) use crate::option_e_setting::option_e_enabled;
 
 /// Canonical SQL expression that groups blocked rows last in display order.
 ///

@@ -34,6 +34,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
+pub mod option_e_setting;
 pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
