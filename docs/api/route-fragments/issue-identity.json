@@ -5,6 +5,7 @@
     "^/api/v1/cbl/\\{list_id\\}/reading\\-plans/\\{plan_id\\}/adoption\\-commit$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-preview$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-plan$",
+    "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/reading\\-graph\\-preview$",
     "^/api/v1/issue\\-identity/cbl\\-sources$",
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/\\{comicvine_issue_id\\}$",
