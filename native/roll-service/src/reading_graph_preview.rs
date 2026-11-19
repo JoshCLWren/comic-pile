@@ -5,7 +5,6 @@
 
 use axum::{
     extract::{Path, State, Json as AxumJson},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -17,14 +16,9 @@ use tracing::instrument;
 use crate::{
     auth::AuthenticatedUser,
     db::checkout,
-    option_inputs::{
-        load_option_diagnostics, OptionInputs, Prerequisite, ReadingEntry, ReadingList,
-    },
+    option_inputs::load_option_diagnostics,
     reading_constraints::{ThreadEligibility, ValidatedReadingInputs, ValidationError},
     reading_eligibility::evaluate,
-    reading_inputs::{
-        self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
-    },
     ApiError, AppState,
 };
 
