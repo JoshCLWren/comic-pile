@@ -1030,6 +1030,12 @@ export default function CustomCBLBuilder({
                       </div>
                     )}
 
+                    {cblSourcesQuery.isSuccess && !cblSourcesQuery.isFetching && cblSourcesQuery.data.length === 0 && (
+                      <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+                        No active global CBL sources match &ldquo;{cblSubmittedQuery}&rdquo;.
+                      </p>
+                    )}
+
                     {(cblSourcesQuery.data?.length ?? 0) > 0 && (
                       <div className="grid gap-2" aria-label="Global CBL source candidates">
                         {(cblSourcesQuery.data ?? []).map((source) => (
