@@ -31,15 +31,17 @@ export function useReadingPlans() {
   })
 }
 
-export function useReadingPlanReader(planId: number | null) {
+export function useReadingPlanReader(
+  planId: number | null,
+  options?: { refetchOnWindowFocus?: boolean | 'always' },
+) {
   return useQuery({
     queryKey: planId ? queryKeys.readingPlans.reader(planId) : [],
     queryFn: () => continuityPlansApi.getReader(planId!),
     enabled: planId != null,
-    // A thread rename or edit confirmed in another tab must not leave an open
-    // plan detail showing stale series titles (#5486). The app disables focus
-    // refetch globally, so this view opts back in like useThread (#4181).
-    refetchOnWindowFocus: 'always',
+    // Opt-in per view (#5486): the detail page refreshes on focus, but the
+    // legacy edit route must not unmount its draft on a failed background fetch.
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
   })
 }
 

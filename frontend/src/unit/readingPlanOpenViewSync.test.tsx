@@ -28,10 +28,10 @@ async function refocus() {
   })
 }
 
-it('refetches the plan reader when the tab regains focus (#5486)', async () => {
+it('refetches the opted-in plan reader when the tab regains focus (#5486)', async () => {
   // SAFETY: the reader payload is opaque to this hook-level focus test.
   const getReader = vi.spyOn(continuityPlansApi, 'getReader').mockResolvedValue({} as never)
-  const { result } = renderHook(() => useReadingPlanReader(7), { wrapper: setup() })
+  const { result } = renderHook(() => useReadingPlanReader(7, { refetchOnWindowFocus: 'always' }), { wrapper: setup() })
   await waitFor(() => expect(result.current.isSuccess).toBe(true))
   expect(getReader).toHaveBeenCalledTimes(1)
   await refocus()
@@ -49,10 +49,20 @@ it('refetches plan issue cards on focus when opted in (#5486)', async () => {
   await waitFor(() => expect(fetchCards).toHaveBeenCalledTimes(2))
 })
 
-it('keeps default issue-card focus behavior for other callers', async () => {
+it('does not refetch stale plan data on focus for default callers', async () => {
+  // SAFETY: the reader payload is opaque to this hook-level focus test.
+  const getReader = vi.spyOn(continuityPlansApi, 'getReader').mockResolvedValue({} as never)
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockResolvedValue([])
-  const { result } = renderHook(() => useIssueCards([3]), { wrapper: setup() })
-  await waitFor(() => expect(result.current.isSuccess).toBe(true))
+  const client = createAppQueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  const reader = renderHook(() => useReadingPlanReader(8), { wrapper })
+  const cards = renderHook(() => useIssueCards([3]), { wrapper })
+  await waitFor(() => expect(reader.result.current.isSuccess && cards.result.current.isSuccess).toBe(true))
+  // Age every cached query past staleTime so only the focus option decides.
+  client.getQueryCache().getAll().forEach((q) => q.setState({ ...q.state, dataUpdatedAt: 0 }))
   await refocus()
+  expect(getReader).toHaveBeenCalledTimes(1)
   expect(fetchCards).toHaveBeenCalledTimes(1)
 })
