@@ -24,34 +24,38 @@ import {main as generateTypes} from './generate_openapi_types.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const CONTRACTS_DIR = 'native/contracts';
 
-/**
- * Contracts written by the `api_contracts` example. Must equal
- * `comicpile_roll_service::contract_artifacts::CONTRACT_ARTIFACTS`; the
- * generator fails when the Rust run writes a different set.
- */
-export const GENERATED_CONTRACTS = [
-  'bug-reports-v1.openapi.json',
-  'issue-read-state-v1.openapi.json',
-  'issue-v2.openapi.json',
-  'preferences-v1.openapi.json',
-  'reading-order-groups-v1.openapi.json',
-  'roll-v1.openapi.json',
-  'same-path-runtime.openapi.json',
-  'thread-issues-v1.openapi.json',
-  'thread-ordering-v1.openapi.json',
-  'threads-v1.openapi.json',
-  'threads-v2.openapi.json',
-  'v2-runtime.openapi.json',
+/** Frozen, hand-maintained contract inputs: the only tracked `*.openapi.json`. */
+export const FROZEN_CONTRACTS = [
+  `${CONTRACTS_DIR}/python-legacy.openapi.json`,
+  `${CONTRACTS_DIR}/roll-bootstrap-v1.openapi.json`,
 ];
 
-/** Every gitignored generated artifact path (repository-relative). */
-export const GENERATED_ARTIFACT_PATHS = [
+/** Generated non-contract artifacts (repository-relative). */
+export const GENERATED_FILES = [
   'frontend/src/generated/nativeV2Client.ts',
   'frontend/src/generated/openapi.json',
   'frontend/src/generated/openapi.ts',
-  ...GENERATED_CONTRACTS.map((name) => `${CONTRACTS_DIR}/${name}`),
   'docs/api/route-fragments/vercel-rewrites.json',
 ];
+
+/** Contracts the frontend generators read; the Rust run must write them. */
+const REQUIRED_CONTRACTS = ['same-path-runtime.openapi.json', 'v2-runtime.openapi.json'];
+
+/**
+ * Return whether a repository-relative path is a gitignored generated artifact.
+ * Mirrors `is_untracked_generated_path` in scripts/check_route_fragment_guard.py:
+ * every `native/contracts/*.openapi.json` except the frozen inputs, everything
+ * under `frontend/src/generated/`, and the route rewrite artifact. The Rust
+ * registry (`contract_artifacts.rs`) is the single list of contracts.
+ *
+ * @param {string} rel - Repository-relative path.
+ * @returns {boolean} True for generated artifacts.
+ */
+export function isGeneratedArtifactPath(rel) {
+  if (GENERATED_FILES.includes(rel) || rel.startsWith('frontend/src/generated/')) return true;
+  const name = rel.startsWith(`${CONTRACTS_DIR}/`) ? rel.slice(CONTRACTS_DIR.length + 1) : null;
+  return name !== null && !name.includes('/') && name.endsWith('.openapi.json') && !FROZEN_CONTRACTS.includes(rel);
+}
 
 /**
  * Return the contract file names reported by the `api_contracts` example.
@@ -98,10 +102,12 @@ export function main(argv = process.argv.slice(2)) {
     }
     process.stdout.write(result.stdout);
     const written = writtenContracts(result.stdout);
-    if (JSON.stringify(written) !== JSON.stringify([...GENERATED_CONTRACTS].sort())) {
+    const frozen = written.filter((name) => FROZEN_CONTRACTS.includes(`${CONTRACTS_DIR}/${name}`));
+    const missing = REQUIRED_CONTRACTS.filter((name) => !written.includes(name));
+    if (frozen.length || missing.length) {
       console.error(
-        'Rust CONTRACT_ARTIFACTS and GENERATED_CONTRACTS disagree:\n' +
-          `  rust: ${written.join(', ')}\n  node: ${GENERATED_CONTRACTS.join(', ')}`,
+        `api_contracts must not overwrite frozen inputs (${frozen.join(', ') || 'none'}) ` +
+          `and must write ${REQUIRED_CONTRACTS.join(', ')} (missing: ${missing.join(', ') || 'none'})`,
       );
       return 1;
     }

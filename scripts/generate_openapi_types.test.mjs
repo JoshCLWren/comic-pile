@@ -7,9 +7,10 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {
-  GENERATED_ARTIFACT_PATHS,
-  GENERATED_CONTRACTS,
+  FROZEN_CONTRACTS,
+  GENERATED_FILES,
   contractCommand,
+  isGeneratedArtifactPath,
   main as artifactsMain,
   writtenContracts,
 } from './generate_api_artifacts.mjs';
@@ -262,14 +263,22 @@ test('writtenContracts reads the api_contracts example report', () => {
   );
 });
 
-test('every generated artifact is gitignored and untracked; frozen contract inputs stay tracked', () => {
+test('generated artifacts are gitignored and untracked; frozen contract inputs stay tracked', () => {
   const git = (...args) => execFileSync('git', ['-C', root, ...args], {encoding: 'utf8'});
-  assert.equal(new Set(GENERATED_CONTRACTS).size, GENERATED_CONTRACTS.length);
-  for (const rel of GENERATED_ARTIFACT_PATHS) {
+  const samples = [
+    ...GENERATED_FILES,
+    'native/contracts/v2-runtime.openapi.json',
+    'native/contracts/same-path-runtime.openapi.json',
+    // A contract added later is covered by the pattern, not a second registry.
+    'native/contracts/some-future-domain-v1.openapi.json',
+  ];
+  for (const rel of samples) {
+    assert.ok(isGeneratedArtifactPath(rel), `${rel} is a generated artifact`);
     assert.doesNotThrow(() => git('check-ignore', '--no-index', '-q', rel), `${rel} must be gitignored`);
     assert.equal(git('ls-files', '--', rel), '', `${rel} must not be tracked`);
   }
-  for (const rel of ['native/contracts/python-legacy.openapi.json', 'native/contracts/roll-bootstrap-v1.openapi.json']) {
-    assert.equal(git('ls-files', '--', rel).trim(), rel, `${rel} is a frozen tracked input`);
-  }
+  const trackedContracts = git('ls-files', '--', 'native/contracts/*.openapi.json').split('\n').filter(Boolean).sort();
+  assert.deepEqual(trackedContracts, [...FROZEN_CONTRACTS].sort());
+  for (const rel of FROZEN_CONTRACTS) assert.equal(isGeneratedArtifactPath(rel), false, rel);
+  assert.equal(git('ls-files', '--', 'frontend/src/generated'), '');
 });
