@@ -2384,11 +2384,10 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
         .await
         .unwrap()
         .get(0);
-    let response_activity = chrono::DateTime::parse_from_rfc3339(
-        body["last_activity_at"].as_str().unwrap(),
-    )
-    .unwrap()
-    .with_timezone(&chrono::Utc);
+    let response_activity =
+        chrono::DateTime::parse_from_rfc3339(body["last_activity_at"].as_str().unwrap())
+            .unwrap()
+            .with_timezone(&chrono::Utc);
     assert_eq!(response_activity, activity);
     let expected = before - chrono::Duration::days(5);
     let delta = (activity - expected).num_seconds().abs();
