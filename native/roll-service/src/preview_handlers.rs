@@ -13,17 +13,16 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{auth::AuthenticatedUser, comicvine_repair, db, option_inputs, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Json as AxumJson, Path, State},
+    extract::{Path, State},
     Json,
 };
-use chrono::{DateTime, SecondsFormat, Utc};
 use hmac::{digest::KeyInit, Hmac, Mac};
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_postgres::Transaction;
+use std::time::SystemTime;
 use utoipa::ToSchema;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -324,8 +323,8 @@ pub struct ReadingGraphPreview {
 // ============================================================================
 
 fn now_f64() -> f64 {
-    chrono::SystemTime::now()
-        .duration_since(chrono::SystemTime::UNIX_EPOCH)
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs_f64()
 }
@@ -519,7 +518,7 @@ pub async fn preview_series_mapping(
                   AND tsm.external_identity_id = $3 AND tsm.status = 'confirmed'
                 WHERE e.provider = $2 AND e.entity_type = 'issue'
                 "#,
-                &[&auth.id() as i32, &provider, &sr.get::<_, i32>(0)],
+                &[&auth.id(), &provider, &sr.get::<_, i32>(0)],
             )
             .await
             .map_err(db::query_error)?;
@@ -591,7 +590,7 @@ pub async fn preview_series_mapping(
                             WHERE i.thread_id = $2 AND i.id <> $3
                             ORDER BY i.position, i.id
                             "#,
-                            &[&auth.id() as i32, &tid, &origin_issue_id],
+                            &[&auth.id(), &tid, &origin_issue_id],
                         )
                         .await
                         .map_err(db::query_error)?;
@@ -874,7 +873,7 @@ pub async fn preview_plan_projection(
         .query_opt(
             "SELECT id, user_id, name, ordering_mode, lanes_json, nodes_json \
              FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &auth.id() as i32],
+            &[&plan_id, &auth.id()],
         )
         .await
         .map_err(db::query_error)?
