@@ -6117,6 +6117,18 @@
         "title": "DependencyGroupCreate",
         "type": "object"
       },
+      "DependencyGroupCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "DependencyGroupDetailMemberResponse": {
         "description": "Enriched member with thread and issue objects for crossover detail view.",
         "properties": {
@@ -6226,6 +6238,29 @@
         "title": "DependencyGroupIssueRangeCreate",
         "type": "object"
       },
+      "DependencyGroupIssueRangeCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
+        "properties": {
+          "end_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position"
+        ],
+        "type": "object"
+      },
       "DependencyGroupIssueRangeResponse": {
         "description": "Summary of an idempotent issue-range membership operation.",
         "properties": {
@@ -6308,6 +6343,33 @@
           }
         },
         "title": "DependencyGroupMemberCreate",
+        "type": "object"
+      },
+      "DependencyGroupMemberCreateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupMemberCreate` payload.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "DependencyGroupMemberResponse": {
@@ -6421,6 +6483,21 @@
         "title": "DependencyGroupOrderUpdate",
         "type": "object"
       },
+      "DependencyGroupOrderUpdateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupOrderUpdate` payload.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupOrderItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "DependencyGroupResponse": {
         "description": "A named dependency group with its members.",
         "properties": {
@@ -6502,6 +6579,18 @@
           "name"
         ],
         "title": "DependencyGroupUpdate",
+        "type": "object"
+      },
+      "DependencyGroupUpdateRequest": {
+        "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
         "type": "object"
       },
       "DependencyNoteUpdate": {
@@ -8585,6 +8674,242 @@
         ],
         "type": "object"
       },
+      "NativeDependencyGroupDetailMemberResponse": {
+        "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IssueDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "membership": {
+            "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
+          },
+          "other_crossovers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ThreadDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "membership",
+          "other_crossovers"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupDetailResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupDetailResponse`.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "linked_plans": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupSummary"
+            },
+            "type": "array"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupDetailMemberResponse"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "linked_plans"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupIssueRangeResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupIssueRangeResponse`.",
+        "properties": {
+          "added_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "already_present_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "end_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position",
+          "added_issue_ids",
+          "already_present_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupMemberResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupMemberResponse`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupOrderItem": {
+        "description": "Wire request item mirroring the Python `DependencyGroupOrderItem` payload.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sequence_order": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "sequence_order"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupResponse": {
+        "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "read_issues": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "read_issues",
+          "total_issues",
+          "reading_progress"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyGroupSummary": {
+        "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "NativeIssueCreatorsEntry": {
         "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
         "properties": {
@@ -8699,6 +9024,352 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "NativeReadingGraphBlocker": {
+        "properties": {
+          "explanation": {
+            "type": "string"
+          },
+          "gate_issue_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "waiting_on_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "waiting_on_issue_ids",
+          "explanation"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphChoiceEffect": {
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphSeriesNode"
+            },
+            "type": "array"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "choice",
+          "label",
+          "detail",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "series"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphCycleError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphIssueReference": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphBlocker"
+            },
+            "type": "array"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphOverlap": {
+        "properties": {
+          "blocked_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphChoiceEffect"
+            },
+            "type": "array"
+          },
+          "continuing_series": {
+            "$ref": "#/components/schemas/NativeReadingGraphSeriesReference"
+          },
+          "overlap_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "selected_choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_series": {
+            "$ref": "#/components/schemas/NativeReadingGraphSeriesReference"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "continuing_series",
+          "waiting_series",
+          "question",
+          "blocked_issue_ids",
+          "choices"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphOverlapChoice": {
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "overlap_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "overlap_id",
+          "choice"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphPreview": {
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "cycle_errors": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphCycleError"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphIssueReference"
+            },
+            "type": "array"
+          },
+          "overlaps": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphOverlap"
+            },
+            "type": "array"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphSeriesNode"
+            },
+            "type": "array"
+          },
+          "source_list_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "series",
+          "overlaps",
+          "issues",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "cycle_errors"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphPreviewRequest": {
+        "properties": {
+          "included_positions": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "overlap_choices": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingGraphOverlapChoice"
+            },
+            "type": "array"
+          },
+          "target_list_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NativeReadingGraphSeriesNode": {
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "rollable_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "unread_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waiting_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "waits_for_issue_ids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "year": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "state",
+          "unread_count",
+          "rollable_count",
+          "waiting_count",
+          "waits_for_issue_ids"
+        ],
+        "type": "object"
+      },
+      "NativeReadingGraphSeriesReference": {
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "year": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "series_name"
+        ],
         "type": "object"
       },
       "NativeReadingOrderProjectionConflict": {
@@ -8929,6 +9600,276 @@
           "result",
           "offset",
           "snoozed_count"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewCounts": {
+        "properties": {
+          "already_confirmed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded_special": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "needs_review_ambiguous": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "needs_review_conflict": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "safe_exact_match": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unresolved": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "already_confirmed",
+          "safe_exact_match",
+          "needs_review_ambiguous",
+          "needs_review_conflict",
+          "unresolved",
+          "excluded_special"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewProviderSeries": {
+        "description": "Wire-exact mirror of\n`app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.\n\nPydantic coerces `start_year` and `count_of_issues` from strings to integers;\nthe conversion helper below does the same so the generated contract types\nthese as integers rather than `unknown`.",
+        "properties": {
+          "count_of_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {},
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewRequest": {
+        "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
+        "properties": {
+          "origin_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_series_external_id": {
+            "type": "string"
+          },
+          "scope_mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "origin_issue_id",
+          "provider",
+          "provider_series_external_id"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/NativeSeriesMappingPreviewCounts"
+          },
+          "expires_at": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issued_at": {
+            "format": "double",
+            "type": "number"
+          },
+          "preview_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/NativeSeriesMappingPreviewRow"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NativeSeriesMappingPreviewScope"
+          }
+        },
+        "required": [
+          "scope",
+          "counts",
+          "rows",
+          "issued_at"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewRow": {
+        "description": "Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.\n\nEvery field is always emitted, including the nullable ones and the two\ndefaults (`metadata_refresh_required: false`, `reason: null`). Internal plan\nfields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,\n`_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the\nPython Pydantic model drops them, so a raw `Value` would leak them and omit\nthe defaults.",
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_selected": {
+            "type": "boolean"
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "metadata_refresh_required": {
+            "type": "boolean"
+          },
+          "proposed_mapping": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "row_id",
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected",
+          "metadata_refresh_required"
+        ],
+        "type": "object"
+      },
+      "NativeSeriesMappingPreviewScope": {
+        "properties": {
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "scope_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "origin_issue_id"
         ],
         "type": "object"
       },
@@ -12112,6 +13053,140 @@
         },
         "required": [
           "reading_orders"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewConflict": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewEntry": {
+        "properties": {
+          "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewRequest": {
+        "properties": {
+          "reading_order_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reading_order_id"
+        ],
+        "type": "object"
+      },
+      "ReadingOrderProjectPreviewResponse": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewConflict"
+            },
+            "type": "array"
+          },
+          "dropped_node_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewEntry"
+            },
+            "type": "array"
+          },
+          "plan_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
         ],
         "type": "object"
       },
@@ -17156,13 +18231,12 @@
     },
     "/api/v1/catalog/series-mappings/preview": {
       "post": {
-        "description": "Preview a series mapping with safe scoping and classification.\n\nThis endpoint provides a read-only preview of what issues would be mapped\nto a selected ComicVine series, with safe scoping rules and classification\nof each issue mapping status.\n\nArgs:\n    request: Preview request with origin issue, provider, and series ID.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    Preview response with scope information, counts, and classified rows.",
         "operationId": "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewRequest"
               }
             }
           },
@@ -17173,21 +18247,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
+                  "$ref": "#/components/schemas/NativeSeriesMappingPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Read-only series mapping preview"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -17195,10 +18265,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Series Mapping",
         "tags": [
-          "catalog",
-          "catalog"
+          "crate::catalog_series_mapping_preview"
         ]
       }
     },
@@ -18560,15 +19628,15 @@
     },
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
       "post": {
-        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
         "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
         "parameters": [
           {
+            "description": "Continuity plan id",
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "title": "Plan Id",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -18577,7 +19645,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
               }
             }
           },
@@ -18588,21 +19656,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Deterministic projection preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -18610,11 +19680,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Plan Projection",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "reading-orders"
+          "crate::continuity_plans_project_preview"
         ]
       }
     },
@@ -20555,15 +21622,15 @@
     },
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
-        "operationId": "cbl_adoption_preview_documentation",
+        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
         "parameters": [
           {
-            "description": "CBL source list identifier",
+            "description": "CBL source list id",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -20577,23 +21644,16 @@
                 }
               }
             },
-            "description": "Adoption preview for the active CBL list"
+            "description": "Read-only adoption preview"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "CBL source list not found or not active"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            },
-            "description": "Path failed validation"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -20601,23 +21661,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
         "tags": [
-          "issue-identity"
+          "crate::issue_identity_adoption_preview"
         ]
       }
     },
     "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
       "post": {
-        "description": "Preview the prospective reading graph for a CBL selection (read-only).\n\nThe graph comes from the same Option E evaluator and cycle validator that\nexecute the reader's saved lists. It never writes list membership, issue\nstatus, or an overlap decision.\n\nArgs:\n    list_id: Shared CBL source list being adopted or updated.\n    payload: Included source positions, prior answers, and optional list\n        to preview as updated instead of newly added.\n    current_user: Authenticated reader whose existing lists are included.\n    db: Async database session for the request.\n\nReturns:\n    Prospective series nodes, overlap questions with both choice effects,\n    the issue directory with active blockers, and any cycle rejection.",
         "operationId": "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
         "parameters": [
           {
+            "description": "CBL source list id",
             "in": "path",
             "name": "list_id",
             "required": true,
             "schema": {
-              "title": "List Id",
+              "format": "int64",
               "type": "integer"
             }
           }
@@ -20626,7 +21685,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+                "$ref": "#/components/schemas/NativeReadingGraphPreviewRequest"
               }
             }
           },
@@ -20637,21 +21696,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingGraphPreview"
+                  "$ref": "#/components/schemas/NativeReadingGraphPreview"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Read-only graph preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
           }
         },
         "security": [
@@ -20659,11 +21717,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Preview Cbl Reading Graph",
         "tags": [
-          "dependencies",
-          "dependencies",
-          "issue-identity"
+          "crate::issue_identity_cbl_reading_graph_preview"
         ]
       }
     },
@@ -21294,22 +22349,26 @@
     },
     "/api/v1/reading-order-groups/": {
       "get": {
-        "description": "List the current user's groups and memberships.",
-        "operationId": "list_groups_api_v1_reading_order_groups__get",
+        "operationId": "dependency_groups_list",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupResponse"
+                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                   },
-                  "title": "Response List Groups Api V1 Reading Order Groups  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned groups with memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21317,21 +22376,18 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Groups",
+        "summary": "Documentation-only operation for listing reading-order groups.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "post": {
-        "description": "Create a user-owned named group.",
-        "operationId": "create_group_api_v1_reading_order_groups__post",
+        "operationId": "dependency_groups_create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreate"
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
               }
             }
           },
@@ -21342,21 +22398,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21364,25 +22422,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Group",
+        "summary": "Documentation-only operation for creating a reading-order group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
       "get": {
-        "description": "List groups containing an owned thread or any of its owned issues.",
-        "operationId": "list_thread_groups_api_v1_reading_order_groups_threads__thread_id__groups_get",
+        "operationId": "dependency_groups_list_thread_groups",
         "parameters": [
           {
+            "description": "Owned thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21393,24 +22449,25 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
-                  "title": "Response List Thread Groups Api V1 Reading Order Groups Threads  Thread Id  Groups Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Groups containing the thread or its issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21418,42 +22475,42 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Groups",
+        "summary": "Documentation-only operation for listing groups for a thread.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
-        "description": "Delete one owned group and its memberships.",
-        "operationId": "delete_group_api_v1_reading_order_groups__group_id__delete",
+        "operationId": "dependency_groups_delete",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21461,23 +22518,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Group",
+        "summary": "Documentation-only operation for deleting one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "get": {
-        "description": "Return one owned group.",
-        "operationId": "get_group_api_v1_reading_order_groups__group_id__get",
+        "operationId": "dependency_groups_get",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21487,21 +22542,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21509,23 +22566,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group",
+        "summary": "Documentation-only operation for fetching one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "patch": {
-        "description": "Rename one owned group.",
-        "operationId": "update_group_api_v1_reading_order_groups__group_id__patch",
+        "operationId": "dependency_groups_update",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21534,7 +22589,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdate"
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
               }
             }
           },
@@ -21545,21 +22600,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Renamed group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21567,25 +22627,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Group",
+        "summary": "Documentation-only operation for renaming one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/detail": {
       "get": {
-        "description": "Return one owned group with enriched member, plan, and project data.",
-        "operationId": "get_group_detail_api_v1_reading_order_groups__group_id__detail_get",
+        "operationId": "dependency_groups_get_detail",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21595,21 +22653,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21617,25 +22677,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group Detail",
+        "summary": "Documentation-only operation for fetching enriched group detail.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
       "post": {
-        "description": "Add one inclusive issue-position range from an owned thread to a group.",
-        "operationId": "add_issue_range_api_v1_reading_order_groups__group_id__issue_ranges_post",
+        "operationId": "dependency_groups_add_issue_range",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21644,7 +22702,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreate"
+                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreateRequest"
               }
             }
           },
@@ -21655,21 +22713,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupIssueRangeResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupIssueRangeResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Range membership result"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or thread not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21677,25 +22737,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Add Issue Range",
+        "summary": "Documentation-only operation for adding an issue-position range.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/members": {
       "post": {
-        "description": "Add one owned thread or issue to an owned group.",
-        "operationId": "add_member_api_v1_reading_order_groups__group_id__members_post",
+        "operationId": "dependency_groups_add_member",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21704,7 +22762,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupMemberCreate"
+                "$ref": "#/components/schemas/DependencyGroupMemberCreateRequest"
               }
             }
           },
@@ -21715,21 +22773,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created membership"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, thread, or issue not found"
+          },
+          "409": {
+            "description": "This member is already in the group"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21737,51 +22800,52 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Add Member",
+        "summary": "Documentation-only operation for adding a group member.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/members/{member_id}": {
       "delete": {
-        "description": "Remove one membership from an owned group.",
-        "operationId": "remove_member_api_v1_reading_order_groups__group_id__members__member_id__delete",
+        "operationId": "dependency_groups_remove_member",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Membership identifier",
             "in": "path",
             "name": "member_id",
             "required": true,
             "schema": {
-              "title": "Member Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Membership removed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or member not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21789,25 +22853,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Remove Member",
+        "summary": "Documentation-only operation for removing a group member.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
-        "description": "Set the authoritative ordered reading sequence of a crossover's issue-level members.",
-        "operationId": "set_group_order_api_v1_reading_order_groups__group_id__order_put",
+        "operationId": "dependency_groups_set_order",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21816,7 +22878,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupOrderUpdate"
+                "$ref": "#/components/schemas/DependencyGroupOrderUpdateRequest"
               }
             }
           },
@@ -21827,21 +22889,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Updated group with reordered memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, issue, or membership not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21849,25 +22913,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Set Group Order",
+        "summary": "Documentation-only operation for setting crossover order.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/plans": {
       "get": {
-        "description": "List continuity plans that reference this crossover as a node.",
-        "operationId": "list_crossover_plans_api_v1_reading_order_groups__group_id__plans_get",
+        "operationId": "dependency_groups_list_plans",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -21878,24 +22940,25 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
-                  "title": "Response List Crossover Plans Api V1 Reading Order Groups  Group Id  Plans Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Linked continuity plans"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -21903,10 +22966,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Crossover Plans",
+        "summary": "Documentation-only operation for listing linked continuity plans.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }

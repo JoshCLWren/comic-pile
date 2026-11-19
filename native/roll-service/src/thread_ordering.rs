@@ -448,7 +448,7 @@ async fn get_thread_blocking_info(
 }
 
 /// Coerce one JSON element the way pydantic's lax `int` does for plain values.
-fn coerce_json_int(value: &Value) -> Option<i64> {
+pub(crate) fn coerce_json_int(value: &Value) -> Option<i64> {
     match value {
         Value::Number(number) => number.as_i64().or_else(|| {
             number

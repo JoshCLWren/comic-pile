@@ -230,3 +230,6 @@ openapi.json
 # Factory Greptile outcome file (generated, never committed)
 .factory-greptile-outcomes.json
 docs/typing/mypy-inventory.json
+
+# Rotisserie factory runtime checkout (see .rotisserie/config.toml)
+/.rotisserie/runtime/
