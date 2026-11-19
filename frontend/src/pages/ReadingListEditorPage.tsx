@@ -42,7 +42,7 @@ export default function ReadingListEditorPage() {
           memberThreads={memberThreads}
         />
       )}
-      <CustomCBLBuilder key={listId} initialListId={listId} />
+      <CustomCBLBuilder key={listId} initialListId={listId} lockListSelection />
     </div>
   )
 }

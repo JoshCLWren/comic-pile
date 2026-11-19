@@ -117,7 +117,7 @@ export default function ContainerQueueActions({
       return inOtherList
     },
     enabled: removeOpen && memberIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 0,
     retry: 1,
     retryDelay: 0,
   })
