@@ -284,6 +284,8 @@ export const queryKeys = {
     all: ['dependencies'] as const,
     readingBoundaries: (threadIds: number[]) =>
       ['dependencies', 'reading-boundaries', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
+    readingBoundariesAll: () => ['dependencies', 'reading-boundaries'] as const,
+    blockingBatchAll: () => ['dependencies', 'blocking-batch'] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
@@ -296,10 +298,6 @@ export const queryKeys = {
   readingOrders: {
     all: ['readingOrders'] as const,
     forThread: (threadId: number) => ['readingOrders', 'thread', threadId] as const,
-  },
-  analytics: {
-    all: ['analytics'] as const,
-    overview: () => ['analytics', 'overview'] as const,
   },
   comicVine: {
     all: ['comicVine'] as const,

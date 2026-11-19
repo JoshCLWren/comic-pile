@@ -2,7 +2,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod activity;
-pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
@@ -16,6 +15,7 @@ pub mod config;
 pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
+pub mod creators_v2;
 pub mod cron_auth;
 pub mod custom_cbl;
 pub mod db;
@@ -27,16 +27,20 @@ pub mod dice_state;
 pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
+pub mod issue_identity;
 pub mod issue_mutation;
 pub mod issue_read;
+pub mod issue_read_state;
 pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
+pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
 pub mod queue;
+pub mod reader_context;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
@@ -68,7 +72,12 @@ pub mod session_history;
 pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
+pub mod thread_issues;
+pub mod thread_lifecycle;
+pub mod thread_ordering;
+pub mod thread_validation;
 pub mod threads;
+pub mod threads_v1_openapi;
 pub mod undo_apply;
 pub mod undo_snapshots;
 
@@ -104,12 +113,20 @@ pub struct AppState {
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
+    /// Deployment environment; used for environment-aware error sanitization
+    /// (e.g. validation details are omitted in production).
+    pub environment: config::Environment,
     /// Validate a checked-out socket with a read-only probe before a handler can
     /// use it, replacing one that cannot carry a statement (#4732).
     ///
     /// Production always enables this. The regression suite disables it to prove
     /// the first-statement failure it prevents; no environment variable can.
     pub connection_recovery: bool,
+    /// Outbound HTTPS seam (GitHub issue creation, ComicVine). Production
+    /// installs the real client; test builds/environments install a recording
+    /// fake that never opens a socket, so no test can reach the network
+    /// (#5339). See [`outbound`].
+    pub outbound: Arc<dyn outbound::OutboundHttp>,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -128,6 +145,33 @@ impl AppState {
     pub fn with_recycling(
         config: Config,
         recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound::default_transport())
+    }
+
+    /// Construct with an explicit outbound transport. Production callers use
+    /// [`Self::new`]; tests install a recording fake (#5339).
+    pub fn with_outbound(
+        config: Config,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, RecyclingMethod::Fast, outbound)
+    }
+
+    /// Construct with an explicit pool recycling method and outbound
+    /// transport; test-only combination.
+    pub fn with_recycling_and_outbound(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
+    ) -> Result<Self, ConfigError> {
+        Self::build(config, recycling_method, outbound)
+    }
+
+    fn build(
+        config: Config,
+        recycling_method: RecyclingMethod,
+        outbound: Arc<dyn outbound::OutboundHttp>,
     ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
@@ -164,8 +208,16 @@ impl AppState {
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
+            environment: config.environment,
             connection_recovery: true,
+            outbound,
         })
+    }
+
+    /// The recording fake outbound client when one is installed (test
+    /// contexts), so tests can assert on recorded calls.
+    pub fn recording_fake(&self) -> Option<&outbound::RecordingFakeOutbound> {
+        self.outbound.as_any().downcast_ref()
     }
 }
 
@@ -710,9 +762,106 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/issues",
             get(issue_read::list_thread_issues),
         )
+        // axum/matchit rejects a parameter followed by literal text, so the
+        // `{thread_id}:action` operation family is routed through the single
+        // `{thread_id}` segment and dispatched on the action suffix.
+        .route(
+            "/api/v1/threads/{thread_id}",
+            post(thread_ordering::post_thread_action),
+        )
+        // Same single-segment technique for `{issue_id}:markRead|markUnread|move`.
+        .route(
+            "/api/v1/issues/{issue_id}",
+            post(issue_read_state::post_issue_action),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkRead",
+            post(issue_read_state::bulk_mark_issues_read),
+        )
+        .route(
+            "/api/v1/issues:bulkMarkUnread",
+            post(issue_read_state::bulk_mark_issues_unread),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/reader-context",
+            get(reader_context::get_issue_reader_context),
+        )
+        .route(
+            "/api/v1/threads:getBlockingInfo",
+            post(thread_ordering::get_threads_blocking_info),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/connected",
+            get(thread_ordering::get_thread_connected_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/dependency-order-check",
+            get(thread_ordering::check_thread_dependency_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            post(thread_issues::create_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues/creators",
+            get(thread_issues::list_thread_issue_creators),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:reorder",
+            post(thread_issues::reorder_thread_issues),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues:validateOrder",
+            get(thread_ordering::validate_issue_order),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/reading-orders",
+            get(thread_ordering::get_thread_reading_orders),
+        )
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
+        )
+        .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
+        .route(
+            "/api/v1/threads/check-duplicates",
+            post(thread_lifecycle::check_potential_duplicates),
+        )
+        .route(
+            "/api/v1/threads/excluded/threads",
+            get(thread_lifecycle::list_excluded_threads),
+        )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(thread_lifecycle::list_thread_groups_batch),
+        )
+        .route(
+            "/api/v1/threads/reactivate",
+            post(thread_lifecycle::reactivate_thread),
+        )
+        .route(
+            "/api/v1/threads/stale",
+            get(thread_lifecycle::list_stale_threads),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(thread_lifecycle::update_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            delete(thread_lifecycle::delete_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/exclude",
+            post(thread_lifecycle::exclude_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/restore",
+            post(thread_lifecycle::restore_thread),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/set-pending",
+            post(thread_lifecycle::set_pending_thread),
         )
         .route(
             "/api/v2/reading-lists",
@@ -810,7 +959,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/dependencies/{dependency_id}",
             delete(legacy_dependencies::delete),
         )
-        .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v2/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
@@ -836,6 +984,43 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
+        )
+        // Issue Identity / CBL Adoption family (#4843).
+        .route(
+            "/api/v1/issue-identity/cbl-sources",
+            get(issue_identity::discover_cbl_source_lists),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/{list_id}",
+            get(issue_identity::get_cbl_source_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+            get(issue_identity::find_cbl_sources_by_comicvine_issue),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/compare",
+            post(issue_identity::compare_cbl_sources),
+        )
+        .route(
+            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            get(issue_identity::find_cbl_candidates_for_reading_list),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity::cbl_adoption_preview),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+            post(issue_identity::cbl_adoption_plan),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/adoption-commit",
+            post(issue_identity::cbl_adoption_commit),
+        )
+        .route(
+            "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+            post(issue_identity::cbl_targeted_adoption_commit),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
@@ -967,6 +1152,45 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators", get(creators::list_creators))
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        .route("/api/v2/creators", get(creators_v2::list_creators))
+        .route("/api/v2/creators/", get(creators_v2::list_creators))
+        .route(
+            "/api/v2/creators/summaries",
+            get(creators_v2::get_summaries),
+        )
+        .route("/api/v2/creators/compare", get(creators_v2::get_comparison))
+        .route(
+            "/api/v2/creators/discoveries",
+            get(creators_v2::get_discoveries),
+        )
+        .route(
+            "/api/v2/creators/team-chemistry",
+            get(creators_v2::get_team_chemistry),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}",
+            get(creators_v2::get_detail),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+            get(creators_v2::get_series_issues),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            get(creators_v2::get_metric_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(creators_v2::get_rating_distribution_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+            get(creators_v2::get_role_drilldown),
+        )
+        .route(
+            "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(creators_v2::get_series_drilldown),
+        )
         .route(
             "/api/v1/continuity-rules/",
             get(continuity_rules::list).post(continuity_rules::create),

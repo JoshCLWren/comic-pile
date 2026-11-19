@@ -95,7 +95,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
     route.fulfill({ json: [] }),
   )
   await page.route('**/v1/issues/*/reader-context', (route) => route.fulfill({ json: null }))
-  await page.route('**/v1/creators/summaries', (route) =>
+  await page.route('**/v2/creators/summaries', (route) =>
     route.fulfill({ json: { summaries: {}, coverage: null } }),
   )
   await page.route('**/v1/issues/*/comicvine', (route) =>

@@ -96,6 +96,19 @@ export function queueThreadTitle(page: Page, title: string): Locator {
   return page.getByText(title, { exact: true })
 }
 
+/**
+ * Roll pool thread locator by title.
+ *
+ * Scoped to the roll pool's thread buttons to avoid duplicate-advisory title
+ * collisions when the same title appears elsewhere on the page.
+ */
+export function rollPoolThreadByTitle(page: Page, title: string): Locator {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return page.getByRole('button', {
+    name: new RegExp(`^Die face \\d+: ${escaped}(,|:|$)`, 'i'),
+  })
+}
+
 /** Live geometry of the production page scroller (`#root`, not the window). */
 export type AppScrollState = {
   windowScrollY: number

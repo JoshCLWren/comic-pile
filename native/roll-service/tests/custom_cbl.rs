@@ -9,7 +9,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -29,20 +29,17 @@ struct Fixture {
 
 async fn setup() -> Fixture {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => {
-                    Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
-                }
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => {
+                Some(comicpile_roll_service::test_support::TEST_JWT_SECRET.into())
+            }
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
 
     let suffix = std::time::SystemTime::now()
@@ -920,4 +917,69 @@ async fn overlap_decisions_accept_non_numeric_comicvine_volume_keys() {
         }),
         "saved non-numeric overlap decision missing: {body}"
     );
+}
+
+#[tokio::test]
+async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_distinct() {
+    let fixture = setup().await;
+    let user_id = fixture.user_id;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        "INSERT INTO threads
+           (id, user_id, title, format, issues_remaining, queue_position, status,
+            manual_creator_credits, is_test, is_blocked, queue_position_is_manual, created_at)
+         VALUES (910301, {user_id}, 'Mutant X', 'Comic', 2, 2, 'active',
+                 '[]'::json, false, false, false, NOW()),
+                (910302, {user_id}, 'Mutant X', 'Comic', 1, 3, 'active',
+                 '[]'::json, false, false, false, NOW());
+         INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910311, 910301, '1', 'unread', NOW(), 1),
+                (910313, 910301, '2', 'unread', NOW(), 3),
+                (910321, 910302, '1', 'unread', NOW(), 1);"
+    ))
+    .await
+    .expect("seed duplicate fixture");
+    drop(conn);
+
+    let (status, body) = get(
+        &fixture.state,
+        &fixture.token,
+        "/api/v1/custom-cbls/issue-search?q=Mutant%20X%20%231&limit=10",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let pairs: Vec<(i64, i64)> = body
+        .as_array()
+        .expect("array body")
+        .iter()
+        .map(|i| {
+            (
+                i["thread_id"].as_i64().unwrap(),
+                i["issue_id"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        pairs,
+        vec![(910301, 910311), (910302, 910321)],
+        "each canonical issue once; same-titled series stay distinct: {body}"
+    );
+
+    // A bounded result must still reach every same-titled series even when the
+    // first series has more matching issues than the limit.
+    let (status, body) = get(
+        &fixture.state,
+        &fixture.token,
+        "/api/v1/custom-cbls/issue-search?q=Mutant%20X&limit=2",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let mut threads: Vec<i64> = body
+        .as_array()
+        .expect("array body")
+        .iter()
+        .map(|i| i["thread_id"].as_i64().unwrap())
+        .collect();
+    threads.sort();
+    assert_eq!(threads, vec![910301, 910302], "{body}");
 }

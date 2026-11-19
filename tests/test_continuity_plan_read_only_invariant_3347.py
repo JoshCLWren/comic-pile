@@ -32,7 +32,6 @@ from app.schemas.continuity_plan import (
     ContinuityPlanWrite,
 )
 from app.schemas.cbl_adoption import CBLAdoptionCommitResponse
-from app.schemas.custom_cbl import CustomCBLApplyResponse
 from tests.conftest import get_or_create_user_async
 
 
@@ -201,7 +200,7 @@ class TestResponseFromProductionPath:
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC),
         })()
-        response = to_plan_response(plan_like)  # type: ignore[arg-type]
+        response = to_plan_response(cast(ContinuityPlan, plan_like))
         assert response.id == 5
         assert [node.ref_id for node in response.nodes] == [1, 1]
         assert response.name == "Legacy plan"
@@ -209,26 +208,6 @@ class TestResponseFromProductionPath:
 
 class TestSubclassesReadLegacyData:
     """ContinuityPlanResponse subclasses must also degrade gracefully on reads."""
-
-    def test_custom_cbl_apply_response_reads_duplicate_legacy_nodes(self) -> None:
-        """CustomCBLApplyResponse inherits the read-only base and tolerates legacy duplicates."""
-        legacy_nodes_json = [
-            _node("a", 1, 0).model_dump(),
-            _node("b", 1, 1).model_dump(),
-        ]
-        response = CustomCBLApplyResponse(
-            id=5,
-            user_id=42,
-            name="Plan",
-            ordering_mode="informational",
-            lanes=[_lane().model_dump()],
-            nodes=legacy_nodes_json,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-            added_issue_ids=[3],
-            skipped_existing_issue_ids=[1],
-        )
-        assert [node.ref_id for node in response.nodes] == [1, 1]
 
     def test_cbl_adoption_commit_response_reads_duplicate_legacy_nodes(self) -> None:
         """CBLAdoptionCommitResponse inherits the read-only base and tolerates legacy duplicates."""

@@ -3,15 +3,13 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import create_access_token
 from app.constants import Bandwidth, BandwidthSource
 from app.models import ReadingSession
-from app.models import Snapshot, Thread
+from app.models import Thread
 from app.schemas.session import SessionListItem
 from comic_pile.bandwidth import (
     BANDWIDTH_CHOICES,
@@ -472,46 +470,6 @@ def test_restore_rejects_invalid_source_and_confidence() -> None:
         restore_ephemeral_bandwidth(_StubSession(), {"bandwidth_confidence": -0.2})
 
 
-@pytest.mark.asyncio
-async def test_current_session_endpoint_exposes_bandwidth_state(
-    client: AsyncClient, async_db: AsyncSession, default_user
-) -> None:
-    """Active-session reads expose stored predicted/active bandwidth independently."""
-    from app.models import User as UserModel
-
-    result = await async_db.execute(select(UserModel).where(UserModel.id == default_user.id))
-    user = result.scalar_one()
-
-    session = ReadingSession(
-        start_die=6,
-        user_id=user.id,
-        started_at=datetime.now(UTC),
-        predicted_bandwidth="balanced",
-        active_bandwidth="light",
-        bandwidth_source="manual",
-        bandwidth_confidence=0.75,
-        bandwidth_version="1",
-        bandwidth_updated_at=datetime.now(UTC),
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    token = create_access_token(data={"sub": user.username, "jti": "test"})
-    response = await client.get(
-        "/api/v1/sessions/current/", headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == session.id
-    # Bandwidth state is nested under the "bandwidth" field
-    assert data["bandwidth"] is not None
-    assert data["bandwidth"]["predicted_bandwidth"] == "balanced"
-    assert data["bandwidth"]["active_bandwidth"] == "light"
-    assert data["bandwidth"]["confidence"] == 0.75
-    assert data["bandwidth"]["source"] == "manual"
-    assert data["bandwidth"]["mode_version"] == "1"
-
-
 def test_bandwidth_state_never_lands_on_thread_or_list_view() -> None:
     """AC5: Ephemeral state stays off durable affinity data and narrow views."""
     assert not hasattr(Thread, "predicted_bandwidth")
@@ -523,75 +481,6 @@ def test_bandwidth_state_never_lands_on_thread_or_list_view() -> None:
     assert BANDWIDTH_SOURCE_CHOICES == {"inferred", "manual", "snooze", "quiz"}
 
 
-@pytest.mark.asyncio
-async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
-    async_db: AsyncSession, sample_data: dict, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Undoing a rating restores the exact bandwidth captured before it."""
-    from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
-    from app.services.undo_snapshot_service import UndoSnapshotService
-    from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
-
-    session = sample_data["sessions"][0]
-    thread = sample_data["threads"][0]
-
-    service = UndoSnapshotService(async_db)
-    repository = UndoSnapshotRepository(async_db)
-
-    pre_state = {
-        "start_die": 6,
-        "manual_die": None,
-        "current_die": 6,
-        "pending_thread_id": None,
-        "pending_thread_updated_at": None,
-        "ended_at": None,
-        "snoozed_thread_ids": None,
-        "predicted_bandwidth": "balanced",
-        "active_bandwidth": "light",
-        "bandwidth_confidence": 0.8,
-        "bandwidth_source": "inferred",
-        "bandwidth_version": CURRENT_BANDWIDTH_MODE_VERSION,
-        "bandwidth_updated_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
-    }
-    snapshot = Snapshot(
-        session_id=session.id,
-        event_id=None,
-        thread_states={
-            SNAPSHOT_VERSION_KEY: SNAPSHOT_VERSION,
-            str(thread.id): {"issues_remaining": thread.issues_remaining},
-        },
-        session_state=pre_state,
-        description="After rating",
-    )
-    async_db.add(snapshot)
-    await async_db.commit()
-    await async_db.refresh(snapshot)
-
-    assert service._is_delta_snapshot(snapshot)
-
-    # Simulate a post-rating correction changing the live state.
-    session.predicted_bandwidth = "deep"
-    session.active_bandwidth = "deep"
-    session.bandwidth_source = "snooze"
-    session.bandwidth_confidence = 0.1
-    session.bandwidth_version = "42"
-    session.bandwidth_updated_at = datetime.now(UTC)
-    await async_db.commit()
-
-    latest = await repository.get_latest_delta_snapshot(session.id)
-    assert latest is not None and latest.id == snapshot.id
-
-    refreshed = await async_db.get(ReadingSession, session.id)
-    assert refreshed is not None
-    await service._apply_delta_snapshot(refreshed, latest)
-
-    assert refreshed.predicted_bandwidth == "balanced"
-    assert refreshed.active_bandwidth == "light"
-    assert refreshed.bandwidth_source == "inferred"
-    assert refreshed.bandwidth_confidence == 0.8
-    assert refreshed.bandwidth_version == CURRENT_BANDWIDTH_MODE_VERSION
-    assert refreshed.bandwidth_updated_at is not None
-    assert refreshed.bandwidth_updated_at.tzinfo is not None
 
 
 @pytest.mark.asyncio

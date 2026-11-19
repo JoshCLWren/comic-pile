@@ -16,7 +16,12 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::State,
     http::{HeaderMap, HeaderValue},
@@ -25,9 +30,7 @@ use axum::{
 };
 use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
-use http_body_util::{BodyExt, Empty};
-use hyper::client::conn::http1;
-use hyper_util::rt::TokioIo;
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -681,43 +684,36 @@ fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
     })
 }
 
-#[allow(dead_code)]
-async fn comicvine_get(path_and_query: &str) -> Result<Value, String> {
-    let connect = async {
-        let tcp = tokio::net::TcpStream::connect((COMICVINE_HOST, 443))
+/// Fetch one ComicVine page through the app's outbound seam (#5339): the
+/// real HTTPS client in production, a recording fake in test contexts.
+async fn comicvine_get(
+    outbound: &Arc<dyn OutboundHttp>,
+    path_and_query: &str,
+) -> Result<Value, String> {
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: path_and_query.to_string(),
+        headers: vec![
+            ("accept".to_string(), "application/json".to_string()),
+            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound
+            .send(COMICVINE_HOST, request)
             .await
             .map_err(|e| e.to_string())?;
-        let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
-        let tls = tokio_native_tls::TlsConnector::from(tls)
-            .connect(COMICVINE_HOST, tcp)
-            .await
-            .map_err(|e| e.to_string())?;
-        let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
-            .await
-            .map_err(|e| e.to_string())?;
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let request = hyper::Request::builder()
-            .method("GET")
-            .uri(path_and_query)
-            .header("host", COMICVINE_HOST)
-            .header("accept", "application/json")
-            .header("user-agent", "ComicPile/1.0")
-            .body(Empty::<Bytes>::new())
-            .map_err(|e| e.to_string())?;
-        let mut response = sender
-            .send_request(request)
-            .await
-            .map_err(|e| e.to_string())?;
-        if !response.status().is_success() {
-            return Err(format!("HTTP {}", response.status()));
+        let status = response.status;
+        if !status.is_success() {
+            return Err(format!("HTTP {}", status));
         }
         let mut body = Vec::new();
-        while let Some(frame) = response.frame().await {
+        let mut response_body = response.body;
+        while let Some(frame) = response_body.frame().await {
             let frame = frame.map_err(|e| e.to_string())?;
-            if let Some(data) = frame.data_ref() {
-                body.extend_from_slice(data);
+            if let Ok(data) = frame.into_data() {
+                body.extend_from_slice(&data);
                 if body.len() > MAX_BODY {
                     return Err("response too large".to_string());
                 }
@@ -725,13 +721,17 @@ async fn comicvine_get(path_and_query: &str) -> Result<Value, String> {
         }
         serde_json::from_slice::<Value>(&body).map_err(|e| e.to_string())
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
+    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
         .await
         .map_err(|_| "provider timeout".to_string())?
 }
 
 #[allow(dead_code)]
-async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>, String> {
+async fn fetch_volume_issues(
+    outbound: &Arc<dyn OutboundHttp>,
+    api_key: &str,
+    volume_id: i32,
+) -> Result<Vec<Value>, String> {
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err("COMICVINE_API_KEY is required".to_string());
     }
@@ -742,7 +742,7 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
         let path = format!(
             "/api/issues/?api_key={api_key}&format=json&filter=volume:{volume_id}&limit=100&offset={offset}"
         );
-        let payload = comicvine_get(&path).await?;
+        let payload = comicvine_get(outbound, &path).await?;
         let status_code = payload
             .get("status_code")
             .and_then(Value::as_i64)
@@ -1179,7 +1179,7 @@ pub async fn sync_released_issues_for_user(
                 Ok(Vec::new())
             }
         } else {
-            fetch_volume_issues(&api_key, volume_id).await
+            fetch_volume_issues(&state.outbound, &api_key, volume_id).await
         };
         let roster = match roster {
             Ok(roster) => roster,
