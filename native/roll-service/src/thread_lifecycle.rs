@@ -1140,6 +1140,29 @@ async fn delete_once(
         }
 
         tx.execute(
+            "DELETE FROM reading_order_items WHERE thread_id = $1",
+            &[&id],
+        )
+        .await
+        .map_err(db::tx_error)?;
+
+        if !deleted_issue_ids.is_empty() {
+            tx.execute(
+                "DELETE FROM continuity_rules
+                 WHERE user_id = $1 AND checkpoint_issue_id = ANY($2::int[])",
+                &[&user_id, &deleted_issue_ids],
+            )
+            .await
+            .map_err(delete_error)?;
+        }
+
+        // Remove the thread's existing events before recording the delete action
+        // so deletion succeeds even when events.thread_id lacks ON DELETE CASCADE.
+        tx.execute("DELETE FROM events WHERE thread_id = $1", &[&id])
+            .await
+            .map_err(delete_error)?;
+
+        tx.execute(
         "INSERT INTO events (type, timestamp, user_id, thread_id) VALUES ('delete', NOW(), $1, NULL)",
         &[&user_id],
     )

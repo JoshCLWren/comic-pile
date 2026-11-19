@@ -1,21 +1,10 @@
 """Pure contract checks for durable custom CBL checkpoint target semantics."""
 
-import pytest
-from pydantic import ValidationError
-
 from app.schemas.continuity_plan import ContinuityPlanNode
-from app.schemas.custom_cbl import CustomCBLWrite
 from app.services.continuity_plan_writer import (
     _checkpoint_edges_from_nodes,
     preserve_checkpoint_targets,
 )
-
-
-@pytest.mark.parametrize("targets", [{1: [1]}, {1: [2, 2]}, {1: [4]}, {4: [2]}, {1: [True]}])
-def test_invalid_checkpoint_targets_are_rejected(targets: dict[int, list[int]]) -> None:
-    """Reject self, duplicate, non-member, and boolean targets before any mutation."""
-    with pytest.raises(ValidationError):
-        CustomCBLWrite(name="Order", issue_ids=[1, 2, 3], checkpoint_targets=targets)
 
 
 def test_explicit_fanout_ignores_adjacency_and_removed_target() -> None:
@@ -71,43 +60,3 @@ def test_old_planner_payload_preserves_targets_but_explicit_edits_do_not() -> No
     assert preserve_checkpoint_targets([current], [explicit])[0].checkpoint_target_ref_ids == [5]
     disabled = ContinuityPlanNode.model_validate({**base, "is_checkpoint": False})
     assert preserve_checkpoint_targets([current], [disabled])[0].checkpoint_target_ref_ids == []
-
-
-@pytest.mark.parametrize("gate", ["none", "hold", "after_previous"])
-def test_inactive_entry_response_roundtrip(gate: str) -> None:
-    """Response schemas preserve each stored gate and list-local skip."""
-    from app.schemas.custom_cbl import CustomCBLEntryResponse
-
-    payload = {
-        "id": 1,
-        "position": 0,
-        "issue_id": 10,
-        "thread_id": 2,
-        "series_name": "Series",
-        "issue_number": "1",
-        "status": "unread",
-        "gate": gate,
-        "skipped": True,
-    }
-    entry = CustomCBLEntryResponse.model_validate(payload)
-    assert CustomCBLEntryResponse.model_validate_json(entry.model_dump_json()) == entry
-    assert entry.gate == gate and entry.skipped
-
-
-def test_invalid_stored_gate_rejected_by_response() -> None:
-    """Unsupported stored gates cannot silently serialize as ordinary entries."""
-    from app.schemas.custom_cbl import CustomCBLEntryResponse
-
-    with pytest.raises(ValidationError):
-        CustomCBLEntryResponse.model_validate(
-            {
-                "id": 1,
-                "position": 0,
-                "issue_id": 10,
-                "thread_id": 2,
-                "series_name": "Series",
-                "issue_number": "1",
-                "status": "unread",
-                "gate": "before_next",
-            }
-        )

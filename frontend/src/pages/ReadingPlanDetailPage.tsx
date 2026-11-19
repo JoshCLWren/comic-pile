@@ -199,7 +199,7 @@ export default function ReadingPlanDetailPage() {
   const [visibleOrderCount, setVisibleOrderCount] = useState(40)
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
-  const readerQuery = useReadingPlanReader(planId)
+  const readerQuery = useReadingPlanReader(planId, { refetchOnWindowFocus: 'always' })
   // Hydrate only rendered rows. Expanding a section fetches newly visible ids.
   // Hidden 400+ issue lanes must not trigger large initial batches.
   const planView = readerQuery.data
@@ -221,7 +221,7 @@ export default function ReadingPlanDetailPage() {
             : []),
         ]
       : [],
-    { enabled: readerQuery.isSuccess },
+    { enabled: readerQuery.isSuccess, refetchOnWindowFocus: 'always' },
   )
   const cardsByIssue = indexIssueCards(planCardsQuery.data)
 
