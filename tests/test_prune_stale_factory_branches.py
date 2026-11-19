@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
@@ -367,3 +368,56 @@ def test_open_pr_still_protects_branch_with_old_closed_pr():
     assert not d.eligible
     assert d.open_pr is True
     assert "open PR exists" in d.reasons
+
+
+class _FakeResult:
+    """Minimal CompletedProcess stand-in for captured command tests."""
+
+    def __init__(self, payload):
+        self.returncode = 0
+        self.stdout = json.dumps(payload)
+        self.stderr = ""
+
+
+def test_fetch_pr_records_paginates_all_states_without_a_result_cap(monkeypatch):
+    """The PR inventory must not silently drop older open PRs at a result limit."""
+    calls = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(cmd)
+        return _FakeResult([[
+            {
+                "number": 9,
+                "state": "open",
+                "head": {"ref": "factory/9-1-open"},
+                "merged_at": None,
+                "closed_at": None,
+            }
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    records = prune.fetch_pr_records("owner/repo")
+    cmd = calls[0]
+    assert "--paginate" in cmd and "--slurp" in cmd
+    assert "--limit" not in cmd
+    assert any("state=all" in arg for arg in cmd)
+    assert "factory/9-1-open" in records
+    assert records["factory/9-1-open"][0]["state"] == "OPEN"
+
+
+def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
+    """GitHub CLI pagination size belongs in the endpoint query, not a flag."""
+    calls = []
+
+    def fake_run(cmd, *, check=True):
+        calls.append(cmd)
+        return _FakeResult([[
+            {"body": "retired <!-- comic-pile-factory-no-progress-retired-v1:issue-1:pr-2:sha-x:epoch-3 -->"}
+        ]])
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    assert prune.fetch_issue_retired("owner/repo", 1) is True
+    cmd = calls[0]
+    assert "--per_page" not in cmd
+    assert "--paginate" in cmd and "--slurp" in cmd
+    assert any(arg.endswith("comments?per_page=100") for arg in cmd)

@@ -213,35 +213,51 @@ def is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> bool
 
 
 def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
-    """Fetch open and closed PR heads grouped by branch name.
+    """Fetch the complete open+closed PR history grouped by branch name.
 
     Raises on lookup failure so cleanup cannot proceed with incomplete safety
-    data. ``state``, ``mergedAt`` and ``closedAt`` are included so the
-    post-merge/abandonment waiting period is measured from the real event rather
-    than from the last commit on the branch.
+    data. Pagination is followed to completion: a capped list would let an old
+    open PR fall outside the result and lose its protection. Normalized records
+    carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
+    wait is measured from the real event rather than from the last commit.
     """
     proc = run([
-        "gh", "pr", "list", "--repo", repo, "--state", "all", "--limit", "500",
-        "--json",
-        "number,headRefName,state,isDraft,mergedAt,closedAt,updatedAt,labels,title,url",
+        "gh", "api", "--paginate", "--slurp",
+        f"repos/{repo}/pulls?state=all&per_page=100",
     ], check=False)
     if proc.returncode != 0:
         raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
-        prs = json.loads(proc.stdout or "[]")
+        pages = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"unable to parse PR list: {exc}") from exc
-    if not isinstance(prs, list):
+    if not isinstance(pages, list):
         raise RuntimeError("PR list response was not a list")
     by_head: dict[str, list[dict[str, object]]] = {}
-    for pr in prs:
-        if not isinstance(pr, dict):
-            raise RuntimeError("PR list contained a non-object entry")
-        head_obj = pr.get("headRefName")
-        head = head_obj if isinstance(head_obj, str) else ""
-        if not head:
-            continue
-        by_head.setdefault(head, []).append(pr)
+    for page in pages:
+        if not isinstance(page, list):
+            raise RuntimeError("PR list page was not a list")
+        for pr in page:
+            if not isinstance(pr, dict):
+                raise RuntimeError("PR list contained a non-object entry")
+            head_obj = pr.get("head")
+            ref = head_obj.get("ref") if isinstance(head_obj, dict) else None
+            head = ref if isinstance(ref, str) else ""
+            if not head:
+                continue
+            record: dict[str, object] = {
+                "number": pr.get("number"),
+                "headRefName": head,
+                "state": str(pr.get("state") or "OPEN").upper(),
+                "isDraft": bool(pr.get("draft")),
+                "mergedAt": pr.get("merged_at"),
+                "closedAt": pr.get("closed_at"),
+                "updatedAt": pr.get("updated_at"),
+                "labels": pr.get("labels") or [],
+                "title": pr.get("title"),
+                "url": pr.get("html_url"),
+            }
+            by_head.setdefault(head, []).append(record)
     return by_head
 
 
@@ -319,8 +335,8 @@ def fetch_issue_retired(repo: str, issue_number: int) -> bool:
     not be treated as "not retired".
     """
     proc = run([
-        "gh", "api", f"repos/{repo}/issues/{issue_number}/comments",
-        "--paginate", "--slurp", "--per_page", "100",
+        "gh", "api", f"repos/{repo}/issues/{issue_number}/comments?per_page=100",
+        "--paginate", "--slurp",
     ], check=False)
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()
