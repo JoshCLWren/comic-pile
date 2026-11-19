@@ -1096,10 +1096,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             put(issue_mutation::reorder_issues),
         )
         .route("/api/v1/creators", get(creators::list_creators))
-        .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .route("/api/v2/creators", get(creators_v2::list_creators))
-        .route("/api/v2/creators/", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
             get(creators_v2::get_summaries),
