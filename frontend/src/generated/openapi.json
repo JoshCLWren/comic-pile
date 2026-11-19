@@ -7081,7 +7081,6 @@
         "description": "Screen diagnostic information (`pixelRatio` alias on the wire).",
         "properties": {
           "height": {
-            "format": "int32",
             "type": "integer"
           },
           "pixelRatio": {
@@ -7089,7 +7088,6 @@
             "type": "number"
           },
           "width": {
-            "format": "int32",
             "type": "integer"
           }
         },
@@ -7104,11 +7102,9 @@
         "description": "Scroll position diagnostic information.",
         "properties": {
           "x": {
-            "format": "int32",
             "type": "integer"
           },
           "y": {
-            "format": "int32",
             "type": "integer"
           }
         },
@@ -7122,11 +7118,9 @@
         "description": "Viewport diagnostic information.",
         "properties": {
           "height": {
-            "format": "int32",
             "type": "integer"
           },
           "width": {
-            "format": "int32",
             "type": "integer"
           }
         },

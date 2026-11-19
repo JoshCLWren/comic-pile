@@ -104,3 +104,11 @@
 **Test:** From the container page, choose "Remove all series from Queue" (or equivalent bulk action), review the affected series list, keep any series that should remain in another active context when offered, and confirm. Inspect Queue active rows, the Removed from Queue section, and Roll eligibility. Then restore the whole removal group from Queue and/or restore all from the container action.
 
 **Expected:** The action removes the selected container series from the active Queue in one operation without deleting issues, read history, ratings, mappings, or list/plan/crossover membership. Removed series appear grouped by the removal source in Queue with group and individual restore available. Restoring returns eligible series to the active Queue and updates Roll eligibility accordingly. The confirmation waits for overlap checks to complete and does not proceed if those checks fail; series intentionally kept in Queue remain active.
+
+## MQA-QUEUE-014: Delete series removes events and related rows atomically
+
+**Setup:** QA account with a queued series that has roll events (for example, after a manual roll pick and a remove/restore cycle) and appears in a reading order.
+
+**Test:** From the Queue row menu choose "Delete series" and confirm "Delete Series" in the "Permanently delete …?" dialog. Reload Queue and reopen the reading order.
+
+**Expected:** The series disappears from Queue with no foreign-key error banner. Its issues, reading history, ratings, events and reading-order entries are removed atomically in one transaction, a delete audit event is recorded, and unrelated series are untouched. Source: #5461, fixed by #5468 (renumbered from MQA-QUEUE-012 after main added the covers scenario with that ID).
