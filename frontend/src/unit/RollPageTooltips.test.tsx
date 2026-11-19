@@ -40,6 +40,7 @@ vi.mock('../components/GlossaryLink', () => ({
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
+  useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),

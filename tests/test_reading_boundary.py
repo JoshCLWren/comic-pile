@@ -96,9 +96,7 @@ def _fixture() -> tuple[ReadingSnapshot, ReadingEligibilitySnapshot, BoundarySha
                 (SeriesOverlapDecision(JLI, MISTER_MIRACLE),),
             ),
         ),
-        prerequisites=(
-            ReadingPrerequisite(1, F2, M1, "reader", ("reader authored",)),
-        ),
+        prerequisites=(ReadingPrerequisite(1, F2, M1, "reader", ("reader authored",)),),
     )
     snapshot = replace(
         build_eligibility_snapshot(state, queued_thread_ids=frozenset({1, 2, 3})),
@@ -226,9 +224,7 @@ async def test_repository_leaves_ambiguous_composite_volume_empty(
     foreign = Thread(user_id=other.id, title="Foreign", format="Comic", queue_position=1)
     async_db.add_all([composite, single, foreign])
     await async_db.flush()
-    composite_issue = Issue(
-        thread_id=composite.id, issue_number="1", position=1, status="unread"
-    )
+    composite_issue = Issue(thread_id=composite.id, issue_number="1", position=1, status="unread")
     single_issue = Issue(thread_id=single.id, issue_number="1", position=1, status="unread")
     foreign_issue = Issue(thread_id=foreign.id, issue_number="1", position=1, status="unread")
     async_db.add_all([composite_issue, single_issue, foreign_issue])
@@ -321,19 +317,25 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
     unrelated, c_issues = await _owned_series(async_db, owner.id, "Unrelated", 3)
     _, foreign_issues = await _owned_series(async_db, foreign.id, "Foreign", 1)
     outbound = Dependency(
-        source_issue_id=a_issues[0].id, target_issue_id=b_issues[0].id,
+        source_issue_id=a_issues[0].id,
+        target_issue_id=b_issues[0].id,
         note="historical outbound",
     )
     inbound = Dependency(
-        source_issue_id=b_issues[1].id, target_issue_id=a_issues[1].id,
-        origin="converted", classification="C", provenance="historical inbound",
+        source_issue_id=b_issues[1].id,
+        target_issue_id=a_issues[1].id,
+        origin="converted",
+        classification="C",
+        provenance="historical inbound",
     )
     internal = Dependency(
-        source_issue_id=a_issues[0].id, target_issue_id=a_issues[1].id,
+        source_issue_id=a_issues[0].id,
+        target_issue_id=a_issues[1].id,
         note="historical internal",
     )
     other = Dependency(
-        source_issue_id=b_issues[0].id, target_issue_id=c_issues[0].id,
+        source_issue_id=b_issues[0].id,
+        target_issue_id=c_issues[0].id,
         note="unrelated historical edge",
     )
     cross_owner = Dependency(
@@ -352,9 +354,7 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
 
     event.listen(Engine, "before_cursor_execute", capture)
     try:
-        labels = await load_boundary_labels(
-            async_db, owner.id, requested_thread_ids={requested.id}
-        )
+        labels = await load_boundary_labels(async_db, owner.id, requested_thread_ids={requested.id})
     finally:
         event.remove(Engine, "before_cursor_execute", capture)
 
@@ -381,17 +381,17 @@ async def test_scoped_boundary_labels_keep_both_directions_and_skip_unrelated_ed
         async_db, owner.id, requested_thread_ids={requested.id, related.id}
     )
     assert set(both.prerequisites) == {outbound.id, inbound.id, internal.id, other.id}
-    assert all(edge_id not in both.prerequisite_ids_by_thread[unrelated.id]
-               for edge_id in (outbound.id, inbound.id, internal.id))
+    assert all(
+        edge_id not in both.prerequisite_ids_by_thread[unrelated.id]
+        for edge_id in (outbound.id, inbound.id, internal.id)
+    )
 
 
 def test_owned_list_names_and_modes_appear_on_next_and_waiting_issues() -> None:
     """Owned list membership labels survive projection onto next and waiting Issues."""
     _state, snapshot, labels = _fixture()
 
-    membership = BoundaryReadingListMembership(
-        list_id=LIST_ID, name="JLI", mode="strict"
-    )
+    membership = BoundaryReadingListMembership(list_id=LIST_ID, name="JLI", mode="strict")
     new_issues = dict(labels.issues)
     for issue_id in (F2, J2, M1):
         row = new_issues[issue_id]
@@ -504,12 +504,10 @@ def test_stacked_hold_and_strict_order_count_one_canonical_requirement() -> None
 
     assert explanation.state == "blocked"
     assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
-    assert [
-        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
-    ] == [REDCOAT_ISSUE]
-    assert explanation.blockers[0].reason == (
-        f"Hold in {QA_LIST_NAME}: read Redcoat #7 first"
-    )
+    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
+        REDCOAT_ISSUE
+    ]
+    assert explanation.blockers[0].reason == (f"Hold in {QA_LIST_NAME}: read Redcoat #7 first")
     # The strict-order rule stays visible and editable without restating Redcoat #7.
     assert explanation.blockers[1].reason == f"Also gated by Strict order in {QA_LIST_NAME}."
     assert explanation.blockers[1].waiting_on == []
@@ -566,9 +564,10 @@ def test_distinct_blocking_issues_remain_separately_visible_and_counted() -> Non
     explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
 
     assert explanation.summary == "Geiger #9 is waiting on 2 live requirements."
-    assert [
-        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
-    ] == [REDCOAT_ISSUE, 302]
+    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
+        REDCOAT_ISSUE,
+        302,
+    ]
     assert "Redcoat #7" in explanation.blockers[0].reason
     assert "Mister Miracle Special #1" in explanation.blockers[1].reason
 
@@ -616,38 +615,11 @@ def test_two_lists_requiring_one_issue_keep_both_editors() -> None:
     explanation = project_boundary_explanation(snapshot, labels, GEIGER_ID)
 
     assert explanation.summary == "Geiger #9 is waiting on 1 live requirement."
-    assert [
-        issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on
-    ] == [REDCOAT_ISSUE]
+    assert [issue.issue_id for blocker in explanation.blockers for issue in blocker.waiting_on] == [
+        REDCOAT_ISSUE
+    ]
     assert {blocker.editor.list_id for blocker in explanation.blockers if blocker.editor} == {
         LIST_ID,
         SECOND_LIST_ID,
     }
     assert explanation.blockers[1].reason == "Also gated by Strict order in Crossover order."
-
-
-def test_recovery_describes_stacked_gates_once_with_every_origin() -> None:
-    """Roll recovery lists one blocker per Issue and keeps both gate origins."""
-    from app.services.reading_recovery_service import build_reading_recovery
-
-    snapshot = replace(
-        _stacked_hold_strict_snapshot(),
-        list_labels={LIST_ID: QA_LIST_NAME},
-        issue_labels={REDCOAT_ISSUE: "Redcoat #7", GEIGER_ISSUE: "Geiger #9"},
-    )
-
-    recovery = build_reading_recovery(
-        snapshot,
-        pending_thread_id=GEIGER_ID,
-        pending_thread_title="Geiger",
-        excluded_thread_ids=frozenset(),
-    )
-
-    assert recovery is not None
-    assert [blocker.source_id for blocker in recovery.direct_blockers] == [REDCOAT_ISSUE]
-    note = recovery.direct_blockers[0].note
-    assert note is not None
-    assert f"Hold in {QA_LIST_NAME}" in note
-    assert f"Strict order in {QA_LIST_NAME}" in note
-
-

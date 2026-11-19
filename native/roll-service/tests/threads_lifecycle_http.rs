@@ -11,7 +11,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -28,6 +28,39 @@ fn unique_suffix() -> u128 {
         .as_nanos()
 }
 
+/// Queue advisory-lock namespace mirrored from `queue::QUEUE_LOCK_NAMESPACE`.
+const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+type Conn = deadpool_postgres::Object;
+
+/// Number of sessions currently waiting on this reader's queue advisory lock.
+async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM pg_locks
+         WHERE locktype = 'advisory' AND NOT granted
+           AND classid::int = $1 AND objid::int = $2",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+/// Block until at least `expected` sessions wait on the queue lock. This spins
+/// on `yield_now` rather than sleeping: PostgreSQL records a lock wait the
+/// moment the request issues its lock statement, so the condition is
+/// guaranteed to become true and no elapsed-time window is involved. The bound
+/// only fails a hung run. Matches the sibling lock-order tests in
+/// `thread_issues_v1_http.rs`.
+async fn wait_for_queue_lock_waiters(conn: &Conn, user_id: i32, expected: i64) {
+    for _ in 0..1_000_000 {
+        if queue_lock_waiters(conn, user_id).await >= expected {
+            return;
+        }
+        tokio::task::yield_now().await;
+    }
+    panic!("expected {expected} queue-lock waiters");
+}
+
 struct Ctx {
     state: Arc<AppState>,
     token: String,
@@ -37,19 +70,22 @@ struct Ctx {
 }
 
 async fn setup(prefix: &str) -> Ctx {
+    setup_with_pool(prefix, "2").await
+}
+
+/// Same fixture as `setup`, with a larger pool for deterministic multi-writer
+/// lock tests (a lock holder plus two in-flight requests need three sockets).
+async fn setup_with_pool(prefix: &str, pool_size: &str) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-lifecycle-secret".into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-lifecycle-secret".into()),
+            "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_owned()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
     let (token, csrf, user_id) = register_user(&state, &username).await;
@@ -300,6 +336,11 @@ async fn every_lifecycle_route_requires_auth() {
         ("POST", "/api/v1/threads/1/exclude"),
         ("POST", "/api/v1/threads/1/restore"),
         ("POST", "/api/v1/threads/1/set-pending"),
+        // Same-path Rust replacements must be mounted in the production
+        // router: an anonymous request must hit the auth extractor (401),
+        // never the inner router's JSON 404 fallback.
+        ("PUT", "/api/v1/threads/1/test-backdate"),
+        ("GET", "/api/v1/threads/1/issues/creators"),
     ];
     for (method, path) in routes {
         let (status, body) = send(
@@ -322,6 +363,12 @@ async fn every_lifecycle_route_requires_auth() {
 
 #[tokio::test]
 async fn mutations_require_a_csrf_token() {
+    // csrf_middleware skips all checks when TEST_ENVIRONMENT=true. Serialize
+    // with the backdate tests (which set that process-global flag) and pin it
+    // off for this test so a concurrent backdate case cannot flip it mid-flight.
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::remove_var("TEST_ENVIRONMENT");
     let ctx = setup("lccsrf").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Csrf", "active", 1, 3).await;
     let (status, body) = send(
@@ -981,18 +1028,21 @@ async fn delete_refused_by_the_database_is_a_400_and_changes_nothing() {
     let ctx = setup("lcdelref").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Referenced", "active", 1, 2).await;
     let pool = ctx.state.pool.get().await.unwrap();
-    let order: i32 = pool
-        .query_one(
-            "INSERT INTO reading_orders (user_id, name) VALUES ($1, 'Order') RETURNING id",
-            &[&ctx.user_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
+    // Force the delete transaction to fail after pruning plan nodes, so the
+    // handler reports "Cannot delete thread..." and rolls everything back.
+    // Deleting the thread removes its plan node, leaving a malformed surviving
+    // node that cannot be rebuilt.
     pool.execute(
-        "INSERT INTO reading_order_items (reading_order_id, thread_id, position)
-         VALUES ($1, $2, 1)",
-        &[&order, &thread],
+        "INSERT INTO continuity_plans (user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES ($1, 'Refusal', 'strict_sequential', $2::jsonb, $3::jsonb, NOW(), NOW())",
+        &[
+            &ctx.user_id,
+            &json!([{"id": "main", "name": "Main", "order": 0}]),
+            &json!([
+                {"id": "gone", "node_type": "thread", "ref_id": thread, "lane_id": "main", "position": 0},
+                {"id": "bad", "node_type": "issue"}
+            ]),
+        ],
     )
     .await
     .unwrap();
@@ -1003,6 +1053,61 @@ async fn delete_refused_by_the_database_is_a_400_and_changes_nothing() {
         .as_str()
         .unwrap()
         .starts_with("Cannot delete thread: "));
+    assert!(thread_row(&ctx, thread).await.is_some());
+    let tombstones: i64 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT count(*) FROM events WHERE type = 'delete'", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(tombstones, 0, "failed delete rolls back the tombstone");
+}
+
+/// A genuine database integrity failure (class 23) during the delete must still
+/// map to Python's 400 "Cannot delete thread..." — not a 500. A different
+/// user's checkpoint rule has a RESTRICT FK to the thread's issue and lies
+/// outside the user-scoped cleanup, so the cascading issue delete is refused by
+/// PostgreSQL itself. This keeps the `delete_error` integrity mapping covered.
+#[tokio::test]
+async fn delete_database_integrity_failure_is_a_400_and_changes_nothing() {
+    let ctx = setup("lcdelfkdb").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Referenced", "active", 1, 1).await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    let issue_ids: Vec<i32> = pool
+        .query(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position) \
+             VALUES ($1, '1', 'unread', NOW(), 0), ($1, '2', 'unread', NOW(), 1) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    let (_, _, other_id) = second_user(&ctx).await;
+    pool.execute(
+        "INSERT INTO continuity_rules (user_id, source_type, source_id, target_type, target_id, \
+             satisfaction_type, checkpoint_issue_id, created_at, updated_at) \
+         VALUES ($1, 'issue', $2, 'issue', $3, 'checkpoint', $2, NOW(), NOW())",
+        &[&other_id, &issue_ids[0], &issue_ids[1]],
+    )
+    .await
+    .unwrap();
+    drop(pool);
+
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{thread}"), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"]
+            .as_str()
+            .unwrap()
+            .starts_with("Cannot delete thread: "),
+        "integrity errors must keep the Python 400 mapping: {body:?}"
+    );
     assert!(thread_row(&ctx, thread).await.is_some());
     let tombstones: i64 = ctx
         .state
@@ -2194,28 +2299,84 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
 }
 
 // ---------------------------------------------------------------------------
-// retired
+// PUT /api/v1/threads/{thread_id}/test-backdate
 // ---------------------------------------------------------------------------
 
+static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+struct EnvRestore(Option<std::ffi::OsString>);
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        if let Some(value) = self.0.take() {
+            std::env::set_var("TEST_ENVIRONMENT", value);
+        } else {
+            std::env::remove_var("TEST_ENVIRONMENT");
+        }
+    }
+}
+
 #[tokio::test]
-async fn test_backdate_is_retired_and_unrouted() {
+async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
     let ctx = setup("lcbackdate").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
-    let (status, _) = call(
+
+    let before = chrono::Utc::now();
+    let (status, body) = call(
         &ctx,
         "PUT",
         &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
         None,
     )
     .await;
-    assert!(
-        matches!(
-            status,
-            StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
-        ),
-        "test-backdate must not be served natively, got {status}"
+
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    // Golden success body measured from the frozen Python route
+    // (`app/services/thread_service.py::backdate_thread_for_testing` ->
+    // `thread_to_response`, schema `app/schemas/thread.py::ThreadResponse`).
+    // Python always emits all 18 fields, including explicit null/[]/false
+    // values; a changed response shape must fail here.
+    assert_eq!(
+        keys(&body),
+        vec![
+            "blocking_reasons",
+            "created_at",
+            "format",
+            "id",
+            "is_blocked",
+            "is_test",
+            "issues_remaining",
+            "last_activity_at",
+            "last_rating",
+            "manual_creator_credits",
+            "next_unread_issue_id",
+            "next_unread_issue_number",
+            "notes",
+            "queue_position",
+            "reading_progress",
+            "status",
+            "title",
+            "total_issues"
+        ]
     );
-    let activity: Option<chrono::DateTime<chrono::Utc>> = ctx
+    assert_eq!(body["id"], thread);
+    assert_eq!(body["title"], "Test");
+    assert_eq!(body["format"], "Comic");
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["queue_position"], 1);
+    assert_eq!(body["issues_remaining"], 2);
+    assert_eq!(body["is_blocked"], false);
+    assert_eq!(body["is_test"], false);
+    assert_eq!(body["last_rating"], Value::Null);
+    assert_eq!(body["notes"], Value::Null);
+    assert_eq!(body["manual_creator_credits"], json!([]));
+    assert_eq!(body["blocking_reasons"], json!([]));
+    assert!(body["created_at"].as_str().unwrap().ends_with('Z'));
+    assert!(body["last_activity_at"].is_string(), "{body:?}");
+
+    let activity: chrono::DateTime<chrono::Utc> = ctx
         .state
         .pool
         .get()
@@ -2228,5 +2389,186 @@ async fn test_backdate_is_retired_and_unrouted() {
         .await
         .unwrap()
         .get(0);
-    assert!(activity.is_none());
+    let expected = before - chrono::Duration::days(5);
+    let delta = (activity - expected).num_seconds().abs();
+    assert!(
+        delta <= 30,
+        "expected last_activity_at near {expected}, got {activity}"
+    );
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_forbidden_without_test_environment() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::remove_var("TEST_ENVIRONMENT");
+    let ctx = setup("lcbackdateforbid").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
+    assert_eq!(
+        body["detail"],
+        "This endpoint is only available in test environment"
+    );
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_not_found_for_other_user() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup("lcbackdatenotfound").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    let thread = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "PUT",
+        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    assert_eq!(body["detail"], format!("Thread {thread} not found"));
+}
+
+#[tokio::test]
+async fn test_backdate_thread_for_testing_validates_days_ago() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup("lcbackdatevalidate").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
+
+    // Golden 422 responses measured from the frozen Python route. FastAPI
+    // raises RequestValidationError for `days_ago: int = Query(..., ge=1,
+    // le=3650)` and `app/exception_handlers.py::validation_exception_handler`
+    // returns `{"detail": "Validation failed"}` in production (the stable
+    // contract), adding `errors`/`body` in dev/test. Assert both so a changed
+    // error envelope cannot pass on status code alone.
+    let production = std::env::var("ENVIRONMENT").as_deref() == Ok("production");
+    let assert_rejection = |status: StatusCode, body: &Value, error: Value| {
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+        assert_eq!(body["detail"], "Validation failed", "{body:?}");
+        if !production {
+            assert_eq!(
+                body["errors"],
+                json!([error]),
+                "Python-measured validation errors"
+            );
+            assert_eq!(body["body"], Value::Null, "Python-measured request body");
+        }
+    };
+    let path = format!("/api/v1/threads/{thread}/test-backdate");
+
+    let (status, body) = call(&ctx, "PUT", &path, None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Field required", "type": "missing"}),
+    );
+
+    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=0"), None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Input should be greater than or equal to 1", "type": "greater_than_equal"}),
+    );
+
+    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=3651"), None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Input should be less than or equal to 3650", "type": "less_than_equal"}),
+    );
+}
+
+/// A changed writer must serialize on the per-reader queue advisory lock
+/// before touching the thread row. Force a deterministic interleaving with the
+/// sibling `exclude` writer: a holder keeps the queue lock, both requests park
+/// on it, then it is released. Without the queue lock, backdate would grab the
+/// thread row first and either deadlock (40P01) or never queue, so this test
+/// fails rather than passing on a lucky serial schedule.
+#[tokio::test]
+async fn test_backdate_and_exclude_do_not_deadlock() {
+    let _env_guard = TEST_ENV_LOCK.lock().await;
+    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
+    std::env::set_var("TEST_ENVIRONMENT", "true");
+    let ctx = setup_with_pool("lcbackdateexdead", "8").await;
+    let mut holder = ctx.state.pool.get().await.unwrap();
+    let conn = ctx.state.pool.get().await.unwrap();
+    let id = seed_thread(&ctx, ctx.user_id, "Contended", "active", 1, 5).await;
+
+    let hold = holder.transaction().await.unwrap();
+    hold.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&QUEUE_LOCK_NAMESPACE, &ctx.user_id],
+    )
+    .await
+    .unwrap();
+
+    let backdate = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "PUT",
+                    &format!("/api/v1/threads/{id}/test-backdate?days_ago=5"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 1).await;
+    let exclude = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{id}/exclude"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 2).await;
+    hold.commit().await.unwrap();
+
+    let (b, e) = tokio::join!(backdate, exclude);
+    let (b_status, b_body) = b.expect("backdate task");
+    let (e_status, e_body) = e.expect("exclude task");
+    assert_ne!(
+        b_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "backdate deadlocked or errored: {b_status} {b_body:?}"
+    );
+    assert_eq!(b_status, StatusCode::OK, "backdate: {b_status} {b_body:?}");
+    assert_ne!(
+        e_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "exclude deadlocked or errored: {e_status} {e_body:?}"
+    );
+    assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
 }

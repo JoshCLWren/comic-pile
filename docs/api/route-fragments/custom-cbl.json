@@ -35,6 +35,16 @@
     },
     {
       "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/reading-lists/memberships:check",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/memberships:check$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435
+    },
+    {
+      "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/reading-lists/{list_id}",
       "dest": "/api/native_roll.rs",
@@ -81,7 +91,8 @@
       "src": "^/api/v1/custom\\-cbls$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -91,7 +102,8 @@
       "src": "^/api/v1/custom\\-cbls$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -101,7 +113,8 @@
       "src": "^/api/v1/custom\\-cbls/issue\\-search$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -111,7 +124,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -121,7 +135,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -131,7 +146,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/export$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -141,7 +157,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -151,7 +168,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -161,7 +179,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -171,7 +190,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/reader$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -181,7 +201,8 @@
       "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4844
+      "owning_issue": 4844,
+      "exclude_from_inventory": true
     }
   ]
 }

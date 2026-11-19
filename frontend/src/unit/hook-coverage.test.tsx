@@ -19,9 +19,8 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
-  tasksApi: { getMetrics: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn() },
   migrationApi: { migrateThread: vi.fn() },
@@ -29,7 +28,6 @@ const api = vi.hoisted(() => ({
 }))
 const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
 const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('../services/api-tasks', () => ({ tasksApi: api.tasksApi }))
 vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
@@ -44,10 +42,9 @@ const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
-import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
 import { useSessions, useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
-import { useAnalytics } from '../hooks/useAnalytics'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useStaleThreads } from '../hooks/useThread'
 
@@ -111,6 +108,8 @@ describe('mutation hook success and failure paths', () => {
     const dismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() }); await act(async () => await dismiss.result.current.mutate())
     const setDie = renderHook(() => useSetDie(), { wrapper: createWrapper() }); await act(async () => await setDie.result.current.mutate(6))
     const reroll = renderHook(() => useReroll(), { wrapper: createWrapper() }); await act(async () => await reroll.result.current.mutate())
+    const unsnooze = renderHook(() => useUnsnooze(), { wrapper: createWrapper() }); await act(async () => await unsnooze.result.current.mutate(8))
+    expect(api.rollApi.unsnooze).toHaveBeenCalledWith(8)
     expect(roll.result.current.isError).toBe(false)
     api.rollApi.reroll.mockRejectedValueOnce(new Error('fail'))
     const failed = renderHook(() => useReroll(), { wrapper: createWrapper() })
@@ -136,22 +135,13 @@ describe('mutation hook success and failure paths', () => {
 })
 
 describe('data hooks', () => {
-  it('loads analytics and snapshots', async () => {
-    api.tasksApi.getMetrics.mockResolvedValue({ total_threads: 1 })
-    const analytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
-    await waitFor(() => expect(analytics.result.current.data).toEqual({ total_threads: 1 }))
+  it('loads snapshots', async () => {
     api.undoApi.listSnapshots.mockResolvedValue({ snapshots: [] })
     const snapshots = renderHook(() => useSnapshots(1), { wrapper: createWrapper() })
     await waitFor(() => expect(snapshots.result.current.data).toEqual({ snapshots: [] }))
     const empty = renderHook(() => useSnapshots(null), { wrapper: createWrapper() })
     expect(empty.result.current.data).toBeNull()
 
-    api.tasksApi.getMetrics.mockRejectedValueOnce(new Error('metrics failed'))
-    const failedAnalytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
-    await waitFor(() => expect(failedAnalytics.result.current.error).toBeInstanceOf(Error))
-    api.tasksApi.getMetrics.mockRejectedValueOnce('metrics unavailable')
-    const stringAnalytics = renderHook(() => useAnalytics(), { wrapper: createWrapper() })
-    await waitFor(() => expect(stringAnalytics.result.current.error?.message).toBe('metrics unavailable'))
     api.undoApi.listSnapshots.mockRejectedValueOnce(new Error('snapshots failed'))
     const failedSnapshots = renderHook(() => useSnapshots(2), { wrapper: createWrapper() })
     await waitFor(() => expect(failedSnapshots.result.current.isError).toBe(true))

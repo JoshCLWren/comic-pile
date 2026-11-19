@@ -78,6 +78,15 @@ pub struct QueueSeriesMetadata {
     pub publisher: Option<String>,
 }
 
+/// Bulk exclusion provenance attached to an excluded queue thread (#5435).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct QueueExclusionGroupRef {
+    pub id: i32,
+    pub source_kind: String,
+    pub source_id: i32,
+    pub source_name: String,
+}
+
 /// One reader threads collection item.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadListItem {
@@ -99,6 +108,14 @@ pub struct ThreadListItem {
     pub tags: Vec<ThreadTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_metadata: Option<QueueSeriesMetadata>,
+    /// Present when this excluded thread was removed as part of a bulk action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_exclusion_group: Option<QueueExclusionGroupRef>,
+    /// Derived series cover: the exact provider CDN URL of the thread's next
+    /// unread confirmed issue, falling back to the first confirmed issue with a
+    /// cover. Null when the series has no confirmed issue cover.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_cover_image_url: Option<String>,
 }
 
 /// Paginated reader threads collection.
@@ -110,7 +127,7 @@ pub struct ThreadListResponse {
 }
 
 /// The legacy single-thread response retained for the v1 and bare aliases.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
     pub id: i32,
     pub title: String,
@@ -163,21 +180,6 @@ fn normalize_search(search: Option<&str>) -> String {
     search
         .map(|value| value.trim().case_fold().collect::<String>())
         .unwrap_or_default()
-}
-
-pub(crate) fn option_e_enabled() -> bool {
-    let enabled = std::env::var("OPTION_E_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "t" | "yes" | "y" | "on"
-            )
-        })
-        .unwrap_or(false);
-    enabled
-        && std::env::var("OPTION_E_APPROVED_PREVIEW")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
 }
 
 /// Canonical SQL expression that groups blocked rows last in display order.
@@ -344,7 +346,7 @@ pub async fn list_threads(
         return Err(unprocessable("search must be at least 1 character"));
     }
     let search = normalize_search(raw_search);
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let execution = if option_e { "option_e" } else { "legacy" };
     let cursor = query
         .page_token
@@ -447,7 +449,7 @@ pub async fn get_thread_detail(
     // The detail must rank by the same blocked expression as the Queue list,
     // otherwise a stored `is_blocked` flag that disagrees with the Option E
     // evaluation gives the two views different positions for the same thread.
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let mut candidates: Vec<i32> = Vec::new();
     if option_e {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
@@ -666,18 +668,69 @@ pub(crate) async fn list_excluded_page(
     } else {
         None
     };
-    let threads = rows
+    let mut threads = rows
         .into_iter()
         .map(|mut row| {
             row.queue_position = 0;
             row.into_item(None, None)
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
+    attach_queue_exclusion_groups(state, claims, &mut threads).await?;
     Ok(Json(ThreadListResponse {
         threads,
         next_page_token,
         active_count: 0,
     }))
+}
+
+/// Attach bulk exclusion provenance to excluded thread list items in one query.
+async fn attach_queue_exclusion_groups(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    threads: &mut [ThreadListItem],
+) -> Result<(), ApiError> {
+    if threads.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<i32> = threads.iter().map(|thread| thread.id).collect();
+    let connection = db::checkout(state).await?;
+    let user_id: i32 = connection
+        .query_one(
+            "SELECT id FROM users WHERE username = $1",
+            &[&claims.username()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
+    let rows = connection
+        .query(
+            "SELECT t.id, g.id, g.source_kind, g.source_id, g.source_name \
+             FROM threads t \
+             JOIN queue_exclusion_groups g ON g.id = t.queue_exclusion_group_id \
+             WHERE t.user_id = $1 AND t.id = ANY($2::int[]) AND t.status = 'excluded'",
+            &[&user_id, &ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    drop(connection);
+    let mut groups = std::collections::HashMap::with_capacity(rows.len());
+    for row in rows {
+        groups.insert(
+            row.get::<_, i32>(0),
+            QueueExclusionGroupRef {
+                id: row.get(1),
+                source_kind: row.get(2),
+                source_id: row.get(3),
+                source_name: row.get(4),
+            },
+        );
+    }
+    for thread in threads {
+        if let Some(group) = groups.remove(&thread.id) {
+            thread.queue_exclusion_group = Some(group);
+        }
+    }
+    Ok(())
 }
 
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
@@ -735,6 +788,7 @@ struct PageRow {
     tags: Vec<ThreadTag>,
     series_documents: Vec<Value>,
     health: Option<MappingHealthRow>,
+    series_cover_image_url: Option<String>,
 }
 
 impl PageRow {
@@ -802,6 +856,8 @@ impl PageRow {
             },
             tags: self.tags,
             series_metadata: series_metadata(&self.series_documents, &self.title),
+            queue_exclusion_group: None,
+            series_cover_image_url: self.series_cover_image_url,
         })
     }
 }
@@ -1107,7 +1163,7 @@ ranked AS (
     WHERE t.status = 'active'
 ),
 page AS (
-    SELECT t.id, t.title, t.format, t.queue_position, t.status,
+    SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
            t.last_activity_at, t.is_blocked, t.total_issues, t.notes, t.created_at,
            t.manual_creator_credits,
            r.display_position,
@@ -1164,6 +1220,44 @@ health AS (
         GROUP BY thread_state.thread_id
     ) state ON state.thread_id = p.id
     WHERE p.total_issues IS NOT NULL
+),
+-- One representative cover per page thread, computed set-based in one
+-- statement. Each issue first takes the same mapping the issue card uses
+-- (confirmed only, then confidence, updated_at and mapping id), so issue
+-- actions and Queue never disagree. The thread then takes the next unread
+-- issue's cover, falling back to the first covered issue by position.
+-- Only ComicVine confirmed mappings expose covers, matching issue_service.rs.
+issue_cover AS (
+    SELECT DISTINCT ON (i.id)
+           i.id AS issue_id, i.thread_id, i.position,
+           COALESCE(
+               NULLIF(BTRIM(ei.metadata_json->>'image_url'), ''),
+               NULLIF(BTRIM(ei.metadata_json->>'primary_image'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,original_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,super_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,medium_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json#>>'{image,small_url}'), ''),
+               NULLIF(BTRIM(ei.metadata_json->>'cover_image_url'), '')
+           ) AS cover_url
+    FROM page p
+    JOIN issues i ON i.thread_id = p.id
+    JOIN issue_external_identity_mappings m
+        ON m.issue_id = i.id AND m.status = 'confirmed'
+    JOIN external_identities ei
+        ON ei.id = m.external_identity_id
+       AND ei.entity_type = 'issue'
+       AND lower(ei.provider) IN ('comicvine', 'comic_vine')
+    ORDER BY i.id, m.confidence DESC NULLS LAST, m.updated_at DESC, m.id DESC
+),
+series_cover AS (
+    SELECT DISTINCT ON (ic.thread_id) ic.thread_id, ic.cover_url
+    FROM issue_cover ic
+    JOIN page p ON p.id = ic.thread_id
+    WHERE ic.cover_url IS NOT NULL
+    ORDER BY ic.thread_id,
+             COALESCE(ic.issue_id = p.next_unread_issue_id, false) DESC,
+             ic.position,
+             ic.issue_id
 )
 SELECT json_build_object(
     'auth', (SELECT json_build_object(
@@ -1191,6 +1285,7 @@ SELECT json_build_object(
             'is_blocked', p.is_blocked,
             'total_issues', p.total_issues,
             'next_issue_number', p.next_issue_number,
+            'series_cover_image_url', cov.cover_url,
             'notes', p.notes,
             'created_at', {created_timestamp},
             'manual_creator_credits', p.manual_creator_credits,
@@ -1226,6 +1321,7 @@ SELECT json_build_object(
             ) FROM health h WHERE h.thread_id = p.id)
         ) ORDER BY p.page_ord)
         FROM page p
+        LEFT JOIN series_cover cov ON cov.thread_id = p.id
     ), '[]'::json)
 )::text
 "#;

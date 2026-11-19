@@ -527,3 +527,591 @@ async fn plan_updated_at_is_iso_and_version_check_is_timezone_aware() {
         "non-ISO conflict token: {conflict}"
     );
 }
+
+/// Issue #5462: an empty authored plan (0 lanes, 0 nodes) saves but must open
+/// and be editable. A plan that never recorded an owned Reading List stays
+/// editable after its first issue is saved too (Greptile finding on #5467).
+#[tokio::test]
+async fn empty_plan_reader_opens_as_editable_without_recovery_409() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-empty-reader").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA empty plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["plan_id"], plan_id, "{reader}");
+    assert_eq!(reader["name"], "QA empty plan", "{reader}");
+    assert_eq!(reader["execution_mode"], "legacy", "{reader}");
+    assert_eq!(reader["ordering_mode"], "informational", "{reader}");
+    assert_eq!(reader["progress"]["total_issues"], 0, "{reader}");
+    assert_eq!(reader["progress"]["read_issues"], 0, "{reader}");
+    assert_eq!(reader["available_now"], json!([]), "{reader}");
+    assert_eq!(reader["blocked_next"], json!([]), "{reader}");
+    assert_eq!(reader["lanes"], json!([]), "{reader}");
+    assert_eq!(reader["sources"], json!([]), "{reader}");
+
+    // Save an issue through the same authoring path the legacy editor uses.
+    // It creates retained membership but no Reading List link; reopening must
+    // still yield the editable legacy plan, never a 409 recovery conflict.
+    let user_id = user_id_for(&state, "cp-empty-reader").await;
+    seed_thread_issue(&state, user_id, 546201, 546211, "QA Series", "1").await;
+    let (status, saved) = authed_json(
+        &state,
+        "PUT",
+        &format!("/api/v1/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        Some(json!({
+            "name": "QA empty plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [{
+                "id": "issue-546211",
+                "node_type": "issue",
+                "ref_id": 546211,
+                "lane_id": "main",
+                "position": 0,
+                "label": "QA Series #1"
+            }],
+            "expected_updated_at": created["updated_at"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+
+    let (status, reopened) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reopened}");
+    assert_eq!(reopened["execution_mode"], "legacy", "{reopened}");
+    assert_eq!(reopened["progress"]["total_issues"], 1, "{reopened}");
+    assert_eq!(
+        reopened["lanes"].as_array().map(Vec::len),
+        Some(1),
+        "{reopened}"
+    );
+    assert_eq!(reopened["lanes"][0]["id"], "main", "{reopened}");
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_id"], 546211,
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["lanes"][0]["issues"][0]["issue_number"], "1",
+        "{reopened}"
+    );
+}
+
+/// Issue #4724: a saved Strict plan linked to a loose (or stale) Reading List
+/// must keep displaying Strict. The List stays the sole authority for
+/// *execution*, but `ordering_mode` is the plan's explicit saved display intent
+/// and must agree with the plans index and the planner editor after refresh.
+#[tokio::test]
+async fn strict_plan_linked_to_loose_list_keeps_explicit_ordering_mode() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-mode-strict-loose").await;
+    let user_id = user_id_for(&state, "cp-mode-strict-loose").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "Plan A mode regression",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+
+    seed_thread_issue(&state, user_id, 547301, 547311, "Mode Series A", "1").await;
+    seed_thread_issue(&state, user_id, 547302, 547312, "Mode Series B", "1").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA loose authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned loose list")
+        .get(0);
+    conn.execute(
+        "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
+         VALUES ($1, 547311, 0, NOW()), ($1, 547312, 1, NOW())",
+        &[&list_id],
+    )
+    .await
+    .expect("seed owned list entries");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &format!("custom-cbl:{list_id}"), &list_id],
+    )
+    .await
+    .expect("link plan to authoritative list");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["execution_mode"], "option_e", "{reader}");
+    assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
+    // Availability is still projected by the linked loose List, not the mode
+    // we display for the plan.
+    assert_eq!(
+        reader["lanes"][0]["issues"].as_array().map(Vec::len),
+        Some(2),
+        "{reader}"
+    );
+    assert_eq!(
+        reader["available_now"].as_array().map(Vec::len),
+        Some(2),
+        "{reader}"
+    );
+
+    let (status, listed) = authed_json(
+        &state,
+        "GET",
+        "/api/v1/continuity-plans/",
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    let item = listed
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["id"] == plan_id))
+        .expect("created plan in index");
+    assert_eq!(item["ordering_mode"], "strict_sequential", "{listed}");
+}
+
+/// Issue #4724 legacy fallback: a plan that never had an authoritative List
+/// keeps its explicit saved mode too, so a refresh cannot silently downgrade
+/// it when the source link is absent.
+#[tokio::test]
+async fn strict_legacy_plan_keeps_explicit_ordering_mode_without_list() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-mode-strict-legacy").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "Plan A legacy mode regression",
+            "ordering_mode": "strict_sequential",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["execution_mode"], "legacy", "{reader}");
+    assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
+    assert_eq!(reader["available_now"], json!([]), "{reader}");
+    assert_eq!(reader["blocked_next"], json!([]), "{reader}");
+}
+
+/// A plan whose owned Reading List link was removed must still require the
+/// explicit recovery flow. The FK sets custom_cbl_list_id to NULL on list
+/// deletion while the immutable `custom-cbl:<id>` provenance survives.
+#[tokio::test]
+async fn plan_with_removed_list_authority_still_requires_recovery() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-orphaned-reader").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA orphaned plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let conn = db::checkout(&state).await.expect("seed connection");
+    conn.execute(
+        "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
+         VALUES ($1, 'custom-cbl:999999', NOW())",
+        &[&plan_id_i32],
+    )
+    .await
+    .expect("seed removed-list provenance");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reader}");
+    assert!(
+        reader.to_string().contains("Open recovery to relink"),
+        "{reader}"
+    );
+}
+
+/// Recovery relink records Reading List authority independently of plan nodes.
+/// Saving through the authoring editor must not erase that provenance, or an
+/// orphaned plan could silently become a never-linked legacy plan.
+#[tokio::test]
+async fn authoring_save_preserves_removed_list_authority() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-preserve-authority").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA relinked plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-preserve-authority").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    conn.execute("DELETE FROM custom_cbl_lists WHERE id=$1", &[&list_id])
+        .await
+        .expect("delete the list; FK sets custom_cbl_list_id to NULL");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reader}");
+
+    let (status, saved) = authed_json(
+        &state,
+        "PUT",
+        &format!("/api/v1/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        Some(json!({
+            "name": "QA relinked plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [],
+            "expected_updated_at": created["updated_at"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+
+    let (status, reopened) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reopened}");
+    assert!(
+        reopened.to_string().contains("Open recovery to relink"),
+        "{reopened}"
+    );
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let preserved: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources
+              WHERE plan_id=$1 AND raw_source_path LIKE 'custom-cbl:%'",
+            &[&plan_id_i32],
+        )
+        .await
+        .expect("verify preserved provenance")
+        .get(0);
+    drop(conn);
+    assert_eq!(preserved, 1, "authoring save erased list provenance");
+}
+
+/// Concurrency guard for the changed membership writer: two overlapping saves
+/// of the same plan must both settle (one wins, one version-conflicts) without
+/// deadlocking or losing preserved Reading List provenance.
+#[tokio::test]
+async fn concurrent_authoring_saves_keep_source_history() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-save-race").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA race plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-save-race").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA race authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    drop(conn);
+
+    let payload = |name: &str| {
+        json!({
+            "name": name,
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [],
+            "expected_updated_at": created["updated_at"]
+        })
+    };
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
+    let (first, second) = tokio::join!(
+        authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race A"))),
+        authed_json(&state, "PUT", &uri, &token, &csrf, Some(payload("race B"))),
+    );
+    let statuses = [first.0, second.0];
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::OK)
+            .count(),
+        1,
+        "expected exactly one winning save: {first:?} {second:?}"
+    );
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::CONFLICT)
+            .count(),
+        1,
+        "expected one optimistic-lock conflict: {first:?} {second:?}"
+    );
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let preserved: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources
+              WHERE plan_id=$1 AND raw_source_path=$2",
+            &[&plan_id_i32, &raw_source_path],
+        )
+        .await
+        .expect("verify preserved provenance")
+        .get(0);
+    drop(conn);
+    assert_eq!(preserved, 1, "concurrent saves lost list provenance");
+}
+
+/// Repeated authoring saves of a preserved `custom-cbl:` placement must rebuild
+/// its placement row rather than duplicating or stranding it.
+#[tokio::test]
+async fn repeated_authoring_saves_do_not_duplicate_preserved_placements() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-repeat-save").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA repeat plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-repeat-save").await;
+    seed_thread_issue(&state, user_id, 546301, 546311, "Repeat Series", "1").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA repeat authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    drop(conn);
+
+    let build_payload = |version: &serde_json::Value| {
+        json!({
+            "name": "QA repeat plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [{
+                "id": "issue-546311",
+                "node_type": "issue",
+                "ref_id": 546311,
+                "lane_id": "main",
+                "position": 0,
+                "source_paths": [raw_source_path]
+            }],
+            "expected_updated_at": version
+        })
+    };
+
+    let uri = format!("/api/v1/continuity-plans/{plan_id}");
+    let (status, first) = authed_json(
+        &state,
+        "PUT",
+        &uri,
+        &token,
+        &csrf,
+        Some(build_payload(&created["updated_at"])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+
+    let (status, plan) = authed_json(&state, "GET", &uri, &token, &csrf, None).await;
+    assert_eq!(status, StatusCode::OK, "{plan}");
+    let (status, second) = authed_json(
+        &state,
+        "PUT",
+        &uri,
+        &token,
+        &csrf,
+        Some(build_payload(&plan["updated_at"])),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let placements: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_source_placements
+              WHERE plan_id=$1",
+            &[&plan_id_i32],
+        )
+        .await
+        .expect("verify placements")
+        .get(0);
+    drop(conn);
+    assert_eq!(placements, 1, "repeated save duplicated a placement row");
+}

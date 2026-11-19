@@ -20,9 +20,10 @@ import {
   createThread,
   dismissRollNudgeIfPresent,
   getAuthToken,
-  gotoRollPage,
   gotoQueue,
+  gotoRollPage,
   openThreadActions,
+  rollPoolThreadByTitle,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
@@ -54,7 +55,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Snooze Me Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Snooze Me Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const offer = page.waitForResponse(
@@ -63,7 +64,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
         && response.url().includes('/api/v2/roll/offer')
         && response.status() === 200,
     )
-    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
+    await page.getByTestId('reroll-offer').click()
     // SAFETY: the response is the native offer handler's JSON for this test request.
     const body = (await (await offer).json()) as { thread_id: number; snoozed_thread_id: number | null }
     expect(body.snoozed_thread_id).toBe(snoozed.id)
@@ -93,16 +94,15 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
 
     await page.locator('#main-die-3d').click()
     await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await page.getByText('Queue Snooze Thread').first().click()
+    await rollPoolThreadByTitle(page, 'Queue Snooze Thread').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
+    await page.getByTestId('reroll-offer').click()
     await expect.poll(() => cookieSnoozes(page)).toContain(snoozed.id)
 
     await gotoQueue(page)
-    await page.getByText('Queue Snooze Thread').first().waitFor({ state: 'visible', timeout: 10000 })
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Queue Snooze Thread' })
-    await expect(threadItem).toBeVisible()
+    await expect(threadItem).toBeVisible({ timeout: 10000 })
   })
 
   test('queue row snooze settles the current session through one owner (#4276)', async ({

@@ -10,6 +10,8 @@
 
 **Expected:** Exact canonical issue IDs/order remain, with no duplicate or unintended addition; an unchanged save doesn't change eligibility or reading state.
 
+**Issue search (owner issue #4725):** Searching the Reading List editor for an issue (e.g. `Mutant X #1`) lists each canonical issue once; the database already forbids a duplicate issue number within one series, so the only look-alike rows are distinct series sharing a title. Those stay separate rows (the editor groups them by series) and show a `Series ID` label so they can be told apart. Search deliberately remains click/Enter-driven ("Find issues"): live as-you-type suggestions are not offered, to avoid one request per keystroke against the issue table; revisit only with debounced, cancelled requests.
+
 ## MQA-LIST-002: Strict means earlier remaining entries first
 
 **Setup:** Strict QA list interleaving multiple series and a curated later annual.
@@ -43,6 +45,8 @@
 **Expected:** There is one global read state; all active list and explicit prerequisites combine, and a loose list cannot cancel a strict blocker.
 
 ## MQA-LIST-006: Eligibility explanations agree
+
+**Owner ruling (2026-10-14, [#3636 comment](https://github.com/JoshCLWren/comic-pile/issues/3636#issuecomment-6174141373)):** a dependency may be described from both ends -- "Young Justice blocked by Hourman #9" and "Hourman blocking Young Justice #16" are the source and dependent of one prerequisite and legitimately name different issue numbers. Do not change edges or labels to make the numbers equal; flag only if an endpoint is not actually related.
 
 **Test:** View a thread waiting on a real requirement, read its source issue, and revisit Queue, Roll and list.
 
@@ -83,3 +87,37 @@
 **Authority:** [Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md), with the owner-approved series/issue selection design. The checkbox selection controls list membership; the separate overlap exception changes strict eligibility only for an explicitly approved pair.
 
 Some currently deployed routes may still implement older Reading Plans behavior. This inventory states intended acceptance criteria for the guarded transition, not a claim that it has already been deployed.
+
+## MQA-LIST-011: An empty Reading Plan can be opened and edited
+
+**Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload. Add an issue with the legacy editor, save, and reopen both the detail page and the edit route. For a plan whose Reading List was removed, open the recovery screen and click "open the Plan authoring UI".
+
+**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Adding an issue does not strand it: the reopened detail page shows the authored issue and the editor still opens. The recovery authoring link opens that saved plan's editor, not an authority error and not a blank new plan. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462).
+
+## MQA-LIST-012: Orphaned plans recover only through explicit preview and relink
+
+**Setup:** QA plan whose Reading List identity was deleted.
+
+**Test:** Open the plan, review the recovery diff, then explicitly relink.
+
+**Expected:** The reader sees a preview of surviving issue references and chooses the relink; nothing is relinked automatically, and other owners' lists are never targets. Source: #4684 (Nov 5 recovery work).
+
+## MQA-LIST-013: Dependency cycles are contained, not outages
+
+**Test:** Attempt a list edit or CBL adoption that would create a prerequisite cycle.
+
+**Expected:** The write fails closed with a clear message before any change is committed; Roll and Queue remain usable. Source: P0 #4759.
+
+## MQA-LIST-014: Displayed plan reading mode survives refresh and recovery
+
+**Setup:** A saved Strict (`strict_sequential`) Reading Plan, including one linked to a Loose (`loose`) authoritative Reading List and one that never had a List link.
+
+**Test:** Open the plan detail page, refresh it, and reopen it after an orphaned-plan recovery relink. Compare the eyebrow mode label with the plans index and the planner editor.
+
+**Expected:** Every surface shows Strict for a plan saved as Strict; a missing, stale or Loose authoritative List never silently downgrades the displayed mode to Informational. The linked Reading List remains the sole authority for actual availability, blockers and explanations (MQA-LIST-002/003), so a mode change is only ever the result of an explicit save or relink choice, never a refresh-time projection. Source: #4724 (post-Rust QA follow-up to #4684).
+
+## MQA-PLAN-SYNC: Open plan detail follows a thread rename from another tab
+
+**Test:** Open a plan detail and a thread detail in separate tabs. Rename the thread in the thread tab, then switch back to the plan tab without reloading.
+
+**Expected:** The plan detail shows the new series title as soon as the tab regains focus, with no reload. Source: #5486 (part of #5264); related MQA-QUEUE-010.

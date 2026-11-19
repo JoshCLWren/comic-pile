@@ -147,8 +147,7 @@ Live queued active threads: **320** (includes clone thread 1019018). Denormalize
 **268 blocked / 52 rollable.** Exactly **18 newly available**. **0 newly blocked.**
 50 + 189 + 29 = 268. 34 + 18 = 52.
 
-Reproduce: `forecast_roll_eligibility.sql` or
-`app.services.roll_cutover_forecast.forecast_roll_eligibility`.
+Reproduce: `forecast_roll_eligibility.sql`.
 
 The approved FF merge is **not** in this forecast. After `001`, thread 18560
 leaves the pool and #103 is same-thread behind #16, so the 18 become 17 and

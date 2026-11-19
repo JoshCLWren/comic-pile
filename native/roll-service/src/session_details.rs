@@ -1,8 +1,8 @@
-//! Native same-path session details read (#4839, parent #4335).
+//! Native resource-shaped session details read (#4839, parent #4335).
 //!
-//! Migrates `GET /api/sessions/{session_id}/details` and
-//! `GET /api/v1/sessions/{session_id}/details` to the native Rust router with
-//! identical method/path and wire contract.
+//! Serves `GET /api/v2/reading-sessions/{session_id}/details` from the native
+//! Rust router with the same wire contract as the retired v1/unversioned
+//! session details paths.
 //!
 //! Wire parity with Python `get_session_details` (`app/api/session.py`):
 //!
@@ -67,9 +67,19 @@ pub struct SessionDetailsResponse {
 }
 
 const SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, user_id, pending_thread_id, timezone, reading_bandwidth, reading_intent, reading_mode_source, reading_mode_suggested, predicted_bandwidth, active_bandwidth, bandwidth_confidence, bandwidth_source, bandwidth_version, predicted_intent, active_intent, intent_confidence, intent_source, intent_version, snoozed_thread_ids FROM sessions WHERE id = $1 AND user_id = $2";
-const EVENTS_SQL: &str = "SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context, die, result, selection_method, rating, issues_read, queue_move, die_after FROM events WHERE session_id = $1 ORDER BY timestamp DESC, id DESC";
+/// Events that belong to a session. Dice commands (snooze via reroll, rate via
+/// roll rating) are persisted by `dice_mutation` with `user_id` but no
+/// `session_id`, so the session timeline also claims that reader's session-less
+/// `rate`/`snooze`/`unsnooze` events that fall inside the session's own window.
+/// An unended session is bounded by the next session for the same reader so a
+/// later session's session-less actions are not absorbed by an abandoned row.
+macro_rules! session_events_filter {
+    () => {
+        "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND ((s.ended_at IS NOT NULL AND events.timestamp <= s.ended_at) OR (s.ended_at IS NULL AND events.timestamp < COALESCE((SELECT MIN(s2.started_at) FROM sessions s2 WHERE s2.user_id = s.user_id AND s2.id <> s.id AND s2.started_at > s.started_at), 'infinity'::timestamptz))))))"
+    };
+}
+const EVENTS_SQL: &str = concat!("SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context::text, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ", session_events_filter!(), " ORDER BY timestamp DESC, id DESC");
 const SNAPSHOT_TITLES_SQL: &str = "SELECT thread_states::text FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
-const LADDER_SQL: &str = "SELECT die_after FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE (user_id = $1 OR session_id = $2) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 
 fn not_found() -> ApiError {
@@ -133,6 +143,29 @@ fn deleted_title(title: &str) -> String {
     format!("{} (deleted)", title)
 }
 
+/// Python appends the "(deleted)" marker only to events whose thread is gone.
+fn display_title(title: &str, thread_deleted: bool) -> String {
+    if thread_deleted {
+        deleted_title(title)
+    } else {
+        title.to_string()
+    }
+}
+
+/// A Roll-offer rating is persisted twice: `dice_mutation` records the die step
+/// and `issue_service` records the reader-visible rating/read event. Keep the
+/// richer issue-service record and suppress the session-less dice-mutation
+/// companion so timeline, ladder and summary count the action once.
+fn is_dice_mutation_roll_rating_companion(type_: &str, sessionless: bool, context: &Value) -> bool {
+    sessionless
+        && type_ == "rate"
+        && context
+            .get("dice_command")
+            .and_then(|command| command.get("kind"))
+            .and_then(Value::as_str)
+            == Some("roll_rating")
+}
+
 fn mode_label(value: &str) -> String {
     let label = value.replace('_', " ").trim().to_string();
     if label.is_empty() {
@@ -181,7 +214,7 @@ fn session_mode_description(event: &serde_json::Value) -> String {
     }
 }
 
-/// `GET /api/sessions/{session_id}/details` and `GET /api/v1/sessions/{session_id}/details`.
+/// `GET /api/v2/reading-sessions/{session_id}/details`.
 pub async fn get_session_details(
     Path(session_id): Path<i32>,
     user: AuthenticatedUser,
@@ -236,30 +269,45 @@ pub async fn get_session_details(
     // absent. Preserve the null/empty distinction here.
     let snoozed_raw: Option<Value> = session_row.try_get(21).ok();
 
-    // Fetch all events for this session
+    // Fetch all events for this session (newest first).
     let event_rows = connection
-        .query(EVENTS_SQL, &[&session_id])
+        .query(EVENTS_SQL, &[&session_id, &user.id()])
         .await
         .map_err(db::query_error)?;
 
-    // Build ladder path
-    let ladder_rows = connection
-        .query(LADDER_SQL, &[&session_id])
-        .await
-        .map_err(db::query_error)?;
-    let ladder_values: Vec<i32> = ladder_rows
-        .iter()
-        .map(|row| {
-            row.try_get(0).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            })
+    // Drop dice-mutation RollRating companions: the paired issue-service rate
+    // event carries the reader-visible action, so keeping both would duplicate
+    // timeline entries, ladder steps and narrative reads.
+    let event_rows: Vec<tokio_postgres::Row> = event_rows
+        .into_iter()
+        .filter(|row| {
+            let type_: String = row.try_get(1).unwrap_or_default();
+            let sessionless: bool = row.try_get(14).unwrap_or(false);
+            let context_text: Option<String> = row.try_get(6).ok();
+            let context: Value = context_text
+                .as_deref()
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or(Value::Null);
+            !is_dice_mutation_roll_rating_companion(&type_, sessionless, &context)
         })
-        .collect::<Result<_, ApiError>>()?;
+        .collect();
+
+    // Build ladder path from the filtered session events (chronological).
+    let mut ladder_values: Vec<i32> = event_rows
+        .iter()
+        .rev()
+        .filter_map(|row| {
+            let type_: String = row.try_get(1).ok()?;
+            let die_after: Option<i32> = row.try_get(13).ok().flatten();
+            if matches!(type_.as_str(), "rate" | "snooze" | "undo") {
+                die_after
+            } else {
+                None
+            }
+        })
+        .collect();
     let ladder = ladder_path(start_die, &ladder_values);
+    ladder_values.clear();
 
     // Current die
     let die_row = connection
@@ -300,15 +348,34 @@ pub async fn get_session_details(
         if let Some(tid) = thread_id.or(selected_thread_id) {
             thread_ids.insert(tid);
         }
+        // Dismissals are summarised by the cancelled roll's selected thread.
+        if let Some(tid) = selected_thread_id {
+            thread_ids.insert(tid);
+        }
+    }
+    // Still-snoozed series usually have no event naming them on the boundary,
+    // so their titles must be resolved too.
+    let persisted_snoozed: Option<Vec<i32>> = snoozed_raw.as_ref().and_then(|value| {
+        value.as_array().map(|ids| {
+            ids.iter()
+                .filter_map(|value| value.as_i64())
+                .filter_map(|id| i32::try_from(id).ok())
+                .collect()
+        })
+    });
+    if let Some(ids) = &persisted_snoozed {
+        thread_ids.extend(ids.iter().copied());
     }
 
     // Load live thread titles
     let mut thread_titles = HashMap::new();
+    let mut thread_owners: HashMap<i32, Option<i32>> = HashMap::new();
+    let mut thread_statuses: HashMap<i32, String> = HashMap::new();
     if !thread_ids.is_empty() {
         let thread_id_list: Vec<i32> = thread_ids.iter().copied().collect();
         let thread_rows = connection
             .query(
-                "SELECT id, title FROM threads WHERE id = ANY($1)",
+                "SELECT id, title, user_id, status FROM threads WHERE id = ANY($1)",
                 &[&thread_id_list],
             )
             .await
@@ -328,6 +395,10 @@ pub async fn get_session_details(
                 );
                 internal()
             })?;
+            let owner: Option<i32> = row.try_get(2).ok();
+            let status: Option<String> = row.try_get(3).ok();
+            thread_owners.insert(tid, owner);
+            thread_statuses.insert(tid, status.unwrap_or_default());
             thread_titles.insert(tid, title);
         }
     }
@@ -382,53 +453,122 @@ pub async fn get_session_details(
         }
     }
 
-    // Python `build_narrative_summary` always returns four keys, including
-    // `snoozed` (series still snoozed at the session boundary).
-    let still_snoozed_ids: Vec<i32> = match snoozed_raw.as_ref().and_then(|value| value.as_array())
-    {
-        Some(ids) => ids
-            .iter()
-            .filter_map(|value| value.as_i64())
-            .filter_map(|id| i32::try_from(id).ok())
-            .collect(),
-        None => {
-            // No persisted boundary state: replay the session's own ordered
-            // snooze/unsnooze actions. EVENTS_SQL is DESC, so reverse for ASC.
-            let mut replay = std::collections::BTreeSet::new();
-            for row in event_rows.iter().rev() {
-                let event_type: Option<String> = row.try_get(1).ok();
-                let tid: Option<i32> = row.try_get(3).ok();
-                match (event_type.as_deref(), tid) {
-                    (Some("snooze"), Some(tid)) => {
-                        replay.insert(tid);
-                    }
-                    (Some("unsnooze"), Some(tid)) => {
-                        replay.remove(&tid);
-                    }
-                    _ => {}
-                }
+    // Python `build_narrative_summary` always returns four keys. `snoozed` is the
+    // set of series still snoozed at the session boundary. The persisted column
+    // is authoritative for legacy rows; when it is absent the session's own
+    // ordered snooze/unsnooze actions are replayed. Dice-command actions are
+    // written without touching that column, so they are replayed over it.
+    // EVENTS_SQL is DESC, so reverse for chronological replay.
+    let column_present = persisted_snoozed.is_some();
+    let mut replay: std::collections::BTreeSet<i32> = persisted_snoozed
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    for row in event_rows.iter().rev() {
+        let event_type: Option<String> = row.try_get(1).ok();
+        let tid: Option<i32> = row.try_get(3).ok();
+        let sessionless: bool = row.try_get(14).unwrap_or(false);
+        if column_present && !sessionless {
+            continue;
+        }
+        match (event_type.as_deref(), tid) {
+            (Some("snooze"), Some(tid)) => {
+                replay.insert(tid);
             }
-            replay.into_iter().collect()
+            (Some("unsnooze"), Some(tid)) => {
+                replay.remove(&tid);
+            }
+            _ => {}
+        }
+    }
+    let title_for = |tid: Option<i32>| -> String {
+        match tid {
+            Some(tid) => thread_titles
+                .get(&tid)
+                .cloned()
+                .unwrap_or_else(|| format!("Thread #{}", tid)),
+            None => "Thread #None".to_string(),
         }
     };
-    let snoozed_titles: Vec<String> = {
-        let titles: std::collections::BTreeSet<String> = still_snoozed_ids
-            .into_iter()
-            .map(|tid| {
-                thread_titles
-                    .get(&tid)
-                    .cloned()
-                    .unwrap_or_else(|| format!("Thread #{}", tid))
-            })
-            .collect();
-        titles.into_iter().collect()
-    };
+    // A foreign reader's series must not leak into this reader's summary.
+    let snoozed_titles: Vec<String> = replay
+        .into_iter()
+        .filter(|tid| match thread_owners.get(tid) {
+            Some(owner) => owner.is_none_or(|owner| owner == user.id()),
+            None => true,
+        })
+        .map(|tid| title_for(Some(tid)))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Net undo events against rate events: each undo reverts the most recent
+    // not-yet-undone rate before it.
+    let mut undone_rate_ids = std::collections::HashSet::new();
+    let mut open_rate_ids: Vec<i32> = Vec::new();
+    for row in event_rows.iter().rev() {
+        let event_type: Option<String> = row.try_get(1).ok();
+        let event_id: Option<i32> = row.try_get(0).ok();
+        match (event_type.as_deref(), event_id) {
+            (Some("rate"), Some(id)) => open_rate_ids.push(id),
+            (Some("undo"), _) => {
+                if let Some(id) = open_rate_ids.pop() {
+                    undone_rate_ids.insert(id);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut read_entries: Vec<String> = Vec::new();
+    let mut skipped_titles = std::collections::BTreeSet::new();
+    let mut completed_titles = std::collections::BTreeSet::new();
+    for row in event_rows.iter().rev() {
+        let event_id: i32 = row.try_get(0).unwrap_or_default();
+        let event_type: String = row.try_get(1).unwrap_or_default();
+        let thread_id: Option<i32> = row.try_get(3).ok().flatten();
+        let selected_thread_id: Option<i32> = row.try_get(4).ok().flatten();
+        let issue_number: Option<String> = row.try_get(5).ok().flatten();
+        let rating: Option<f64> = row.try_get(10).ok().flatten();
+        // A dismissal names the cancelled roll through `selected_thread_id`.
+        let tid = if event_type == "dismiss" {
+            selected_thread_id
+        } else {
+            thread_id
+        };
+        let suffix = match issue_number.as_deref() {
+            Some(number) if !number.is_empty() => format!(" #{}", number),
+            _ => String::new(),
+        };
+        let label = format!("{}{}", title_for(tid), suffix);
+        match event_type.as_str() {
+            "rate" if !undone_rate_ids.contains(&event_id) => {
+                let rating_text = rating
+                    .map(|value| format!("{:?}", value))
+                    .unwrap_or_else(|| "None".to_string());
+                read_entries.push(format!("{} ({}/5.0)", label, rating_text));
+                let completed = tid
+                    .and_then(|tid| thread_statuses.get(&tid))
+                    .is_some_and(|status| status == "completed");
+                if completed {
+                    completed_titles.insert(label);
+                }
+            }
+            "rolled_but_skipped" | "dismiss" => {
+                skipped_titles.insert(label);
+            }
+            _ => {}
+        }
+    }
 
     let mut narrative_summary: HashMap<String, Vec<String>> = HashMap::new();
-    narrative_summary.insert("read".to_string(), Vec::new());
-    narrative_summary.insert("skipped".to_string(), Vec::new());
+    narrative_summary.insert("read".to_string(), read_entries);
+    narrative_summary.insert("skipped".to_string(), skipped_titles.into_iter().collect());
     narrative_summary.insert("snoozed".to_string(), snoozed_titles);
-    narrative_summary.insert("completed".to_string(), Vec::new());
+    narrative_summary.insert(
+        "completed".to_string(),
+        completed_titles.into_iter().collect(),
+    );
 
     // Format events
     let mut formatted_events = Vec::with_capacity(event_rows.len());
@@ -487,7 +627,7 @@ pub async fn get_session_details(
             "roll" => Some(format!(
                 "Selected {}",
                 thread_title
-                    .map(deleted_title)
+                    .map(|title| display_title(title, thread_deleted))
                     .unwrap_or_else(|| "a thread".to_string())
             )),
             "rate" => {
@@ -513,13 +653,13 @@ pub async fn get_session_details(
             "snooze" => Some(format!(
                 "Snoozed {}",
                 thread_title
-                    .map(deleted_title)
+                    .map(|title| display_title(title, thread_deleted))
                     .unwrap_or("thread".to_string())
             )),
             "unsnooze" => Some(format!(
                 "Unsnoozed {}",
                 thread_title
-                    .map(deleted_title)
+                    .map(|title| display_title(title, thread_deleted))
                     .unwrap_or("thread".to_string())
             )),
             "dismiss" => {
@@ -528,7 +668,7 @@ pub async fn get_session_details(
                     "{} {}",
                     word,
                     thread_title
-                        .map(deleted_title)
+                        .map(|title| display_title(title, thread_deleted))
                         .unwrap_or("thread".to_string())
                 ))
             }
@@ -538,20 +678,20 @@ pub async fn get_session_details(
                     "{} {}",
                     word,
                     thread_title
-                        .map(deleted_title)
+                        .map(|title| display_title(title, thread_deleted))
                         .unwrap_or("thread".to_string())
                 ))
             }
             "move" => Some(format!(
                 "Moved {}",
                 thread_title
-                    .map(deleted_title)
+                    .map(|title| display_title(title, thread_deleted))
                     .unwrap_or("thread".to_string())
             )),
             "shuffle" => Some(format!(
                 "Shuffled {}",
                 thread_title
-                    .map(deleted_title)
+                    .map(|title| display_title(title, thread_deleted))
                     .unwrap_or("thread".to_string())
             )),
             "session_mode" => Some(session_mode_description(&context)),
@@ -561,7 +701,7 @@ pub async fn get_session_details(
                     "{} {}",
                     word,
                     thread_title
-                        .map(deleted_title)
+                        .map(|title| display_title(title, thread_deleted))
                         .unwrap_or("thread".to_string())
                 )];
                 if let Some(r) = rating {
@@ -574,30 +714,6 @@ pub async fn get_session_details(
             }
             _ => Some(event_word(&type_)),
         };
-
-        // Add to narrative summary
-        if type_ == "rate" && rating.is_some_and(|r| r >= 3.0) {
-            if let Some(tt) = thread_title {
-                narrative_summary
-                    .entry("read".to_string())
-                    .or_default()
-                    .push(tt.to_string());
-            }
-        } else if matches!(type_.as_str(), "skip" | "rolled_but_skipped") {
-            if let Some(tt) = thread_title {
-                narrative_summary
-                    .entry("skipped".to_string())
-                    .or_default()
-                    .push(tt.to_string());
-            }
-        } else if matches!(type_.as_str(), "complete" | "completion") {
-            if let Some(tt) = thread_title {
-                narrative_summary
-                    .entry("completed".to_string())
-                    .or_default()
-                    .push(tt.to_string());
-            }
-        }
 
         formatted_events.push(SessionEventDetail {
             id,
@@ -630,10 +746,10 @@ pub async fn get_session_details(
     }))
 }
 
-/// Documentation-only operation for the unversioned details.
+/// Documentation-only operation for the v2 session details.
 #[utoipa::path(
     get,
-    path = "/api/sessions/{session_id}/details",
+    path = "/api/v2/reading-sessions/{session_id}/details",
     tag = "sessions",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(
@@ -647,77 +763,22 @@ pub async fn get_session_details(
 #[allow(dead_code)]
 pub fn get_session_details_documentation() {}
 
-/// Documentation-only operation for the versioned details.
-#[utoipa::path(
-    get,
-    path = "/api/v1/sessions/{session_id}/details",
-    tag = "sessions",
-    params(("session_id" = i32, Path, description = "Owned reading session")),
-    responses(
-        (status = 200, description = "Session details with events", body = SessionDetailsResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Session not found"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_session_details_v1_documentation() {}
-
-/// OpenAPI document for the session details same-path surface.
-#[derive(utoipa::OpenApi)]
-#[openapi(
-    paths(
-        get_session_details_documentation,
-        get_session_details_v1_documentation
-    ),
-    components(schemas(
-        SessionEventDetail,
-        SessionDetailsResponse
-    )),
-    modifiers(&SessionDetailsSecurityAddon)
-)]
-pub struct SessionDetailsApi;
-
-struct SessionDetailsSecurityAddon;
-
-impl utoipa::Modify for SessionDetailsSecurityAddon {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme(
-                "HTTPBearer",
-                utoipa::openapi::security::SecurityScheme::Http(
-                    utoipa::openapi::security::Http::new(
-                        utoipa::openapi::security::HttpAuthScheme::Bearer,
-                    ),
-                ),
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{db, test_support};
-    use utoipa::OpenApi;
 
     #[test]
-    fn session_details_openapi_covers_both_same_paths() {
-        let document = serde_json::to_value(SessionDetailsApi::openapi()).expect("openapi");
+    fn session_details_openapi_covers_the_v2_path() {
+        let document = serde_json::to_value(crate::openapi::canonical_openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/sessions/{session_id}/details"));
-        assert!(paths.contains_key("/api/v1/sessions/{session_id}/details"));
-        for path in [
-            "/api/sessions/{session_id}/details",
-            "/api/v1/sessions/{session_id}/details",
-        ] {
-            let operation = &document["paths"][path]["get"];
-            assert!(operation["operationId"].is_string());
-            assert!(operation["responses"]["200"].as_object().is_some());
-            assert!(operation["responses"]["404"].as_object().is_some());
-            assert!(operation["security"].is_array());
-        }
+        assert!(paths.contains_key("/api/v2/reading-sessions/{session_id}/details"));
+        assert!(!paths.contains_key("/api/v1/sessions/{session_id}/details"));
+        let operation = &document["paths"]["/api/v2/reading-sessions/{session_id}/details"]["get"];
+        assert!(operation["operationId"].is_string());
+        assert!(operation["responses"]["200"].as_object().is_some());
+        assert!(operation["responses"]["404"].as_object().is_some());
+        assert!(operation["security"].is_array());
         assert!(document["components"]["schemas"]["SessionDetailsResponse"].is_object());
         let event_schema = &document["components"]["schemas"]["SessionEventDetail"];
         let props = event_schema["properties"]
@@ -869,6 +930,152 @@ mod tests {
         assert_eq!(
             roll.description.as_deref(),
             Some("Selected Lost Comic (deleted)")
+        );
+    }
+
+    #[tokio::test]
+    async fn session_details_include_session_less_dice_rate_and_snooze_events() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "UPDATE sessions SET snoozed_thread_ids = '[]'::json WHERE id = 9303;
+                 INSERT INTO events (user_id, session_id, type, timestamp, thread_id, die, die_after, rating) VALUES
+                   (9101, NULL, 'rate', NOW() + interval '2 minutes', 9201, 6, 8, 4.0),
+                   (9101, NULL, 'snooze', NOW() + interval '3 minutes', 9201, 8, 12, NULL),
+                   (9102, NULL, 'rate', NOW() + interval '2 minutes', 9202, 6, 20, 5.0),
+                   (9101, NULL, 'rate', NOW() - interval '1 hour', 9201, 6, 4, 1.0);",
+            )
+            .await
+            .expect("seed session-less dice events");
+        drop(connection);
+        let Json(response) = get_session_details(Path(9303), user, State(state.clone()))
+            .await
+            .expect("session details");
+        let types: Vec<&str> = response.events.iter().map(|e| e.type_.as_str()).collect();
+        assert_eq!(types, ["snooze", "rate", "roll"], "newest first");
+        assert_eq!(response.ladder_path, "6 → 8 → 12");
+        assert_eq!(response.current_die, 12);
+        assert_eq!(
+            response.events[0].description.as_deref(),
+            Some("Snoozed Owned Comic")
+        );
+        assert_eq!(response.narrative_summary["snoozed"], ["Owned Comic"]);
+        assert_eq!(
+            response.narrative_summary["read"],
+            ["Owned Comic (4.0/5.0)"]
+        );
+    }
+
+    #[tokio::test]
+    async fn session_details_narrative_summary_reports_read_skipped_completed() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9210, 9101, 'Done Comic', 'comics', 0, NULL, NULL, 2, 'completed', false);
+                 INSERT INTO events (session_id, type, timestamp, thread_id, selected_thread_id, issue_number, rating) VALUES
+                   (9303, 'rate', NOW() + interval '1 second', 9201, NULL, '5', 3.5),
+                   (9303, 'undo', NOW() + interval '2 seconds', 9201, NULL, NULL, NULL),
+                   (9303, 'rate', NOW() + interval '3 seconds', 9201, NULL, '6', 4.0),
+                   (9303, 'rate', NOW() + interval '4 seconds', 9210, NULL, NULL, 5.0),
+                   (9303, 'rolled_but_skipped', NOW() + interval '5 seconds', 9201, NULL, NULL, NULL),
+                   (9303, 'dismiss', NOW() + interval '6 seconds', NULL, 9201, NULL, NULL);",
+            )
+            .await
+            .expect("seed narrative events");
+        drop(connection);
+        let Json(response) = get_session_details(Path(9303), user, State(state.clone()))
+            .await
+            .expect("session details");
+        assert_eq!(
+            response.narrative_summary["read"],
+            ["Owned Comic #6 (4.0/5.0)", "Done Comic (5.0/5.0)"]
+        );
+        assert_eq!(response.narrative_summary["skipped"], ["Owned Comic"]);
+        assert_eq!(response.narrative_summary["completed"], ["Done Comic"]);
+    }
+
+    #[tokio::test]
+    async fn session_details_dedupes_roll_offer_rate_companion_events() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "INSERT INTO issues (id, thread_id, issue_number, position, status, created_at) VALUES (9401, 9201, '7', 1, 'read', NOW());
+                 INSERT INTO events (user_id, session_id, type, timestamp, thread_id, issue_id, issue_number, die, die_after, rating, issues_read, context) VALUES
+                   (9101, NULL, 'rate', NOW() + interval '1 minute', 9201, 9401, NULL, 6, 8, 4.0, NULL, '{\"dice_command_key\":\"roll-rating-9201-k\",\"dice_command\":{\"kind\":\"roll_rating\",\"thread_id\":9201,\"issue_id\":9401,\"rating\":4.0}}'),
+                   (9101, NULL, 'rate', NOW() + interval '1 minute 1 millisecond', 9201, 9401, '7', 6, 8, 4.0, 1, '{\"source\":\"roll_offer\",\"issue_command_key\":\"k\",\"issue_command_payload\":{},\"source_roll_event_id\":null}');",
+            )
+            .await
+            .expect("seed roll-offer companion events");
+        drop(connection);
+        let Json(response) = get_session_details(Path(9303), user, State(state.clone()))
+            .await
+            .expect("session details");
+        let rate_events: Vec<_> = response
+            .events
+            .iter()
+            .filter(|event| event.type_ == "rate")
+            .collect();
+        assert_eq!(
+            rate_events.len(),
+            1,
+            "dice-mutation companion must not duplicate the roll-offer rate"
+        );
+        assert_eq!(rate_events[0].issue_number.as_deref(), Some("7"));
+        assert_eq!(
+            response.narrative_summary["read"],
+            ["Owned Comic #7 (4.0/5.0)"]
+        );
+        assert_eq!(
+            response.ladder_path, "6 → 8",
+            "companion die step must not be counted twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn session_details_do_not_absorb_sessionless_events_into_unended_predecessor() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("connection");
+        connection
+            .batch_execute(
+                "INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES
+                   (9310, 9101, NOW() - interval '2 hours', NULL, 6, NULL, NULL, false, NULL),
+                   (9311, 9101, NOW() - interval '30 minutes', NULL, 6, NULL, NULL, false, NULL);
+                 INSERT INTO events (session_id, type, timestamp, thread_id, selected_thread_id, die, result) VALUES
+                   (9310, 'roll', NOW() - interval '90 minutes', NULL, 9201, 6, 2),
+                   (9311, 'roll', NOW() - interval '20 minutes', NULL, 9201, 6, 3);
+                 INSERT INTO events (user_id, session_id, type, timestamp, thread_id, die, die_after, rating) VALUES
+                   (9101, NULL, 'rate', NOW() - interval '10 minutes', 9201, 6, 8, 4.0);",
+            )
+            .await
+            .expect("seed overlapping unended sessions");
+        drop(connection);
+        let Json(old_session) = get_session_details(Path(9310), user, State(state.clone()))
+            .await
+            .expect("old session details");
+        assert!(
+            old_session.events.iter().all(|event| event.type_ == "roll"),
+            "later session-less action must not leak into abandoned predecessor: {:?}",
+            old_session
+                .events
+                .iter()
+                .map(|event| event.type_.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(old_session.narrative_summary["read"].is_empty());
+
+        let Json(new_session) = get_session_details(Path(9311), user, State(state.clone()))
+            .await
+            .expect("new session details");
+        assert!(
+            new_session.events.iter().any(|event| event.type_ == "rate"),
+            "action belongs to the active session window"
+        );
+        assert_eq!(
+            new_session.narrative_summary["read"],
+            ["Owned Comic (4.0/5.0)"]
         );
     }
 }

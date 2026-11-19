@@ -94,7 +94,7 @@ test('unbundled Node ESM can load the Vercel auth/me function', async (t) => {
   try {
     ({ default: handler } = await import(pathToFileURL(entry).href));
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    const code = error && Object(error) === error && 'code' in error ? error.code : undefined;
     assert.notEqual(
       code,
       'ERR_MODULE_NOT_FOUND',

@@ -166,6 +166,21 @@ const waitingConfirmationError = {
 }
 
 describe('CustomCBLBuilder', () => {
+  it('says so when a global CBL source search matches nothing instead of rendering silently (#5485)', async () => {
+    cblMocks.discover.mockResolvedValue([])
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #55')
+    fireEvent.click(screen.getByRole('button', { name: 'Replace using CBL' }))
+    fireEvent.change(screen.getByLabelText('Search global CBL sources'), { target: { value: 'Batman' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Find CBLs' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /No active global CBL sources match .Batman./,
+    )
+    expect(screen.queryByLabelText('Global CBL source candidates')).not.toBeInTheDocument()
+  })
+
   it('explains a Create cycle with named comics and an owned prerequisite editor link', async () => {
     mocks.create.mockRejectedValueOnce({
       isAxiosError: true,
@@ -300,6 +315,22 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Previous 30' })[0])
     expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
     expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
+  })
+
+  it('labels same-named series with their series ID only when results are ambiguous', async () => {
+    const user = userEvent.setup()
+    mocks.searchIssues.mockResolvedValue([
+      { issue_id: 40001, thread_id: 9101, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
+      { issue_id: 40002, thread_id: 9102, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
+      { issue_id: 40003, thread_id: 9103, series_name: 'Starman', issue_number: '1', status: 'unread' },
+    ])
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    await user.type(await screen.findByLabelText('Search issues for custom CBL'), 'Mutant X #1{Enter}')
+    expect(await screen.findByRole('button', { name: /Mutant X #1\s*Series ID 9101/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9102/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Starman #1\s*Add$/ })).toBeInTheDocument()
   })
 
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {

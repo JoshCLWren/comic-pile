@@ -342,6 +342,10 @@ export async function invalidateAfterQueueMovement(
       exact: true,
     }),
     client.invalidateQueries({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    }),
+    client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     }),
     client.invalidateQueries({
@@ -352,6 +356,9 @@ export async function invalidateAfterQueueMovement(
     // that changes membership. Reset it the same way the Queue list resets:
     // a cached page still lists a series on the wrong side of the boundary.
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
+    // Container-level bulk actions derive removable/restorable members from a
+    // scoped excluded-member-status query; refresh it with the boundary change.
+    client.invalidateQueries({ queryKey: queryKeys.excluded.memberStatusAll() }),
   ])
 }
 
@@ -413,6 +420,68 @@ export async function invalidateComicVineImportStatus(
 }
 
 /**
+ * Refresh open views after a thread rename or format edit (#5264).
+ *
+ * Queue rows and thread detail/summary are patched in place by the caller, so
+ * this only reconciles surfaces that render thread metadata from other caches:
+ * Roll bootstrap/pool, the current session, reading plan/CBL views, and shared
+ * issue-card batches so plan cards show renamed series titles. Queue order does
+ * not change, so queue pages are not invalidated or reset here.
+ */
+export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
+    invalidateIssueCards(client),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
+    // The thread page's "Next issue" line renders the series title from the
+    // reading-boundary and blocking projections (#5486).
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.readingBoundariesAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.blockingBatchAll() }),
+  ])
+}
+
+/**
+ * Refresh surfaces that show thread-level ComicVine mapping health after an
+ * issue mapping confirm, replace, sibling mapping, or removal (#5264).
+ *
+ * Queue rows display "mapped N of M" counts from thread list data, and the
+ * Roll manual picker reads mapping health from the bootstrap pool. Order does
+ * not change, so queue pages are invalidated (not reset) to keep cursors
+ * intact. Batched issue-card projections are refreshed so mapped badges and
+ * confirmed covers stay current on every appearance.
+ */
+export async function invalidateAfterIssueMappingChange(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
+    invalidateIssueCards(client),
+  ])
+}
+
+/**
  * Refresh every surface an undo (or session restore) rewrites (#3194).
  *
  * An undo restores queue order/membership, the current session, the roll
@@ -469,6 +538,13 @@ export async function invalidateReadingPlanReleaseSources(
       queryKey: queryKeys.readingPlans.releaseSources(0).slice(0, 2),
     }),
   ])
+}
+
+export async function invalidateReadingPlanReader(
+  client: QueryClient,
+  planId: number,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.reader(planId) })
 }
 
 /**
@@ -870,6 +946,20 @@ export async function invalidateAfterCrossoverMutation(
 }
 
 /**
+ * Refresh the batched crossover-membership lookup for a specific thread set.
+ * Used to retry a failed overlap check without invalidating unrelated caches.
+ */
+export async function invalidateCrossoverGroupsForThreads(
+  client: QueryClient,
+  threadIds: number[],
+): Promise<void> {
+  if (threadIds.length === 0) return
+  await client.invalidateQueries({
+    queryKey: queryKeys.crossover.groups(threadIds),
+  })
+}
+
+/**
  * Apply a migrated thread to the cache and invalidate thread list.
  * Used after a thread is migrated to issue tracking.
  */
@@ -945,6 +1035,17 @@ export async function invalidateRollBootstrapOnNavigation(
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
     refetchType: 'none',
+  })
+}
+
+/**
+ * Refresh the roll bootstrap so active Roll views refetch authoritative state
+ * (used after direct issue corrections that bypass cache-effect helpers).
+ */
+export async function invalidateRollBootstrap(client: QueryClient): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.roll.bootstrap(),
+    exact: true,
   })
 }
 
@@ -1105,6 +1206,14 @@ export async function applyIssueCardMutation(
   }
   await Promise.all([
     invalidateAfterReaderProgress(client),
+    // Crossover detail rows and CBL adoption previews render the read label,
+    // progress and Next Up from their own parent queries, which none of the
+    // reader-progress prefixes above cover. Refresh them so a direct read on
+    // one of the new #4445 controls cannot leave those rows stale (#4445).
+    // Invalidating a preview refetches its server projection but leaves the
+    // reader's local checklist decisions untouched (same content_hash).
+    client.invalidateQueries({ queryKey: queryKeys.crossover.all }),
+    client.invalidateQueries({ queryKey: queryKeys.cblSources.previewAll() }),
     // Creator ratings, averages, comparison breakdowns and issue evidence are
     // derived from saved ratings; keep them coherent with the shared card.
     client.invalidateQueries({ queryKey: queryKeys.creator.all }),

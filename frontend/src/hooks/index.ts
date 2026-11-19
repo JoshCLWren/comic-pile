@@ -5,7 +5,6 @@ export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useResetDice, u
 export { useSessions, useSessionDetails, useSessionSnapshots } from './useSession'
 export { useUndo, useSnapshots } from './useUndo'
 export { useSnooze } from './useSnooze'
-export { useAnalytics } from './useAnalytics'
 export { useBugReport } from './useBugReport'
 export { useComicVineIssueIntelligence } from './useComicVineIssueIntelligence'
 export { useCreatorDetail, creatorDetailQueryOptions, CREATOR_DETAIL_PAGE_SIZE } from './useCreatorDetail'

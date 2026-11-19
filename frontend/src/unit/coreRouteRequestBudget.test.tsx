@@ -202,6 +202,7 @@ function RollMoveBudgetProbe() {
         isPending: moveToFrontMutation.isPending,
       },
       moveToBackMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}), isPending: false },
       shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
     },
     refetchBootstrap,
@@ -628,7 +629,7 @@ describe('core route request budgets', () => {
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/sessions/7/details') {
+      if (call.url === '/v2/reading-sessions/7/details') {
         return {
           session_id: 7,
           started_at: '2026-11-01T00:00:00Z',
@@ -640,7 +641,7 @@ describe('core route request budgets', () => {
           events: [],
         }
       }
-      if (call.url === '/v1/sessions/7/snapshots') return { session_id: 7, snapshots: [] }
+      if (call.url === '/v2/reading-sessions/7/snapshots') return { session_id: 7, snapshots: [] }
       return {}
     })
     setDefaultHttpClient(client)
@@ -655,13 +656,13 @@ describe('core route request budgets', () => {
     )
 
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/sessions/7/snapshots')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/reading-sessions/7/snapshots')).toBe(true),
     )
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
-      'GET /v1/sessions/7/details': 1,
-      'GET /v1/sessions/7/snapshots': 1,
+      'GET /v2/reading-sessions/7/details': 1,
+      'GET /v2/reading-sessions/7/snapshots': 1,
     })
     expect(screen.queryByRole('button', { name: /restore start/i })).not.toBeInTheDocument()
     expect(calls.filter((call) => call.url.includes('restore-session-start'))).toEqual([])

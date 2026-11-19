@@ -11,6 +11,7 @@ import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { rollApi } from '../services/api-roll'
 
 const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() }))
 vi.mock('../hooks/useCompletedThreads', () => ({
@@ -21,7 +22,8 @@ vi.mock('../hooks/useCompletedThreads', () => ({
 }))
 
 vi.mock('../hooks/useThread', () => ({ useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
+vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
+  useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
@@ -340,7 +342,7 @@ describe('QueuePage callback coverage', () => {
 
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'], is_blocked: true }).mockRejectedValueOnce(new Error('reason failed'))
+    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'], is_blocked: true, blocking_dependencies: [] }).mockRejectedValueOnce(new Error('reason failed'))
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
@@ -502,15 +504,42 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [], is_blocked: false })
+    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
+    // SAFETY: only `restored` is read from the response; a partial stub suffices
+    const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({ restored: true } as never)
     renderPage()
     await user.click(screen.getByText('read callback'))
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
-    // Queue unsnooze is client-only since the v1 unsnooze route was retired:
-    // it drops the id from the browser snooze cookie without a server write.
-    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[1]')}; path=/`
+    // Queue unsnooze calls the native v2 unsnooze endpoint, which restores the
+    // pending roll and reverts the die (#4589).
     await user.click(screen.getByText('snooze callback'))
-    await waitFor(() => expect(document.cookie).not.toContain(encodeURIComponent('[1]')))
+    await waitFor(() => expect(unsnoozeSpy).toHaveBeenCalledWith(1))
+    unsnoozeSpy.mockRestore()
+    expect(toastMocks.showToast).toHaveBeenCalledWith(expect.stringContaining('as the pending roll'), 'success')
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Failed'), 'error')
+  })
+
+  it('uses snoozed and blocked card branches and reports blocked reads without claiming a restore when the server only removed the snooze', async () => {
+    const user = userEvent.setup()
+  // SAFETY: as never is used for type narrowing in mock data
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
+    vi.mocked(useRollBootstrap).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
+    vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
+    vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
+    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
+    // SAFETY: only `restored` is read from the response; a partial stub suffices
+    const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({ restored: false } as never)
+    renderPage()
+    await user.click(screen.getByText('read callback'))
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+    // Queue unsnooze calls the native v2 unsnooze endpoint, which restores the
+    // pending roll and reverts the die (#4589).
+    await user.click(screen.getByText('snooze callback'))
+    await waitFor(() => expect(unsnoozeSpy).toHaveBeenCalledWith(1))
+    unsnoozeSpy.mockRestore()
+    expect(toastMocks.showToast).toHaveBeenCalledWith(expect.stringContaining('left as is'), 'success')
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('as the pending roll'), 'success')
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Failed'), 'error')
   })
 

@@ -38,10 +38,11 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection, reading_eligibility,
-    ApiError, AppState,
+    thread_issues, ApiError, AppState,
 };
 use axum::{
     extract::{rejection::PathRejection, Path, State},
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
@@ -188,7 +189,7 @@ fn parse_thread_id(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiE
 }
 
 /// Accept the decimal integers pydantic's lax int parser accepts for a path value.
-fn parse_int_text(raw: &str) -> Option<i32> {
+pub(crate) fn parse_int_text(raw: &str) -> Option<i32> {
     let trimmed = raw.trim();
     let digits = trimmed
         .strip_prefix(['+', '-'])
@@ -392,7 +393,7 @@ async fn blocking_details(
     user: AuthenticatedUser,
     thread_ids: &[i32],
 ) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    if crate::queue::option_e_enabled() {
+    if state.option_e {
         return option_e_explanations(state, user, thread_ids).await;
     }
     let connection = db::checkout(state).await?;
@@ -408,10 +409,22 @@ pub async fn post_thread_action(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     segment: Result<Path<String>, PathRejection>,
-) -> Result<Json<BlockingExplanation>, ApiError> {
+    body: axum::body::Bytes,
+) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| validation_failed())?;
     match segment.split_once(':') {
-        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id).await,
+        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id)
+            .await
+            .map(IntoResponse::into_response),
+        Some((raw_id, "migrateToIssues")) => {
+            thread_issues::migrate_to_issues(&state, user, raw_id, &body).await
+        }
+        Some((raw_id, "migrateToIssuesSimple")) => {
+            thread_issues::migrate_to_issues_simple(&state, user, raw_id, &body).await
+        }
+        Some((raw_id, "setCurrentIssue")) => {
+            thread_issues::set_current_issue(&state, user, raw_id, &body).await
+        }
         _ => Err(ApiError::NotFound("Not Found".to_string())),
     }
 }
@@ -435,7 +448,7 @@ async fn get_thread_blocking_info(
 }
 
 /// Coerce one JSON element the way pydantic's lax `int` does for plain values.
-fn coerce_json_int(value: &Value) -> Option<i64> {
+pub(crate) fn coerce_json_int(value: &Value) -> Option<i64> {
     match value {
         Value::Number(number) => number.as_i64().or_else(|| {
             number
@@ -767,7 +780,7 @@ pub async fn get_thread_connected_threads(
     let connection = db::checkout(&state).await?;
     require_owned_thread(&**connection, user, thread_id).await?;
 
-    let reader_only = crate::queue::option_e_enabled();
+    let reader_only = state.option_e;
     let blocking = dependency_rows(
         &connection
             .query(CONNECTED_BLOCKING_SQL, &[&thread_id, &reader_only])

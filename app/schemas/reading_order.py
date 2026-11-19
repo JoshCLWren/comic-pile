@@ -24,12 +24,6 @@ class ReadingOrderResponse(BaseModel):
     items: list[ReadingOrderItemResponse] = []
 
 
-class ThreadReadingOrdersResponse(BaseModel):
-    """Response schema for reading orders containing a specific thread."""
-
-    reading_orders: list[ReadingOrderResponse]
-
-
 class ReadingOrderSummary(BaseModel):
     """Compact reading order metadata for projection and picker surfaces."""
 

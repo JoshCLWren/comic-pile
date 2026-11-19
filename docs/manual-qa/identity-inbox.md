@@ -21,3 +21,11 @@
 **Test:** Resolve one issue and compare inbox, thread detail and Queue.
 
 **Expected:** Each surface reflects persisted scope and remaining work; one mapped issue does not imply a fully mapped series.
+
+## MQA-IDENTITY-004: Collapsed items report real candidate state
+
+**Setup:** Unresolved QA items, some with one candidate and some with none.
+
+**Test:** Inspect collapsed inbox rows, then expand each.
+
+**Expected:** The collapsed header reflects the same candidate state as the expanded item: no "No candidates found" text when a candidate exists, and a reason shown when none validates. Source: [#5382](https://github.com/JoshCLWren/comic-pile/issues/5382), fixed by #5427.

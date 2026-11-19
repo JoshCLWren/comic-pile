@@ -3,15 +3,23 @@
 //! Rust replacement for the Python `/api/v1/identity-inbox/*` routes. The HTTP
 //! method and exact path are preserved; only the implementation moves.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser,
+    db,
+    outbound::{OutboundHttp, OutboundRequest},
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
+use bytes::Bytes;
+use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
@@ -491,7 +499,7 @@ pub async fn search_issues(
     user: AuthenticatedUser,
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<IdentityInboxSearchResponse>, ApiError> {
-    let _ = (state, user);
+    let _ = user;
     if q.q.trim().is_empty() || q.q.len() > 200 || q.q.is_empty() {
         return Err(unprocessable("q invalid"));
     }
@@ -516,10 +524,7 @@ pub async fn search_issues(
     }
 
     let url = build_search_url(&api_key, &q.q, clamped);
-    let payload = tokio::task::spawn_blocking(move || fetch_comicvine(url))
-        .await
-        .ok()
-        .flatten();
+    let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
     let mut total_available = Some(0i64);
@@ -653,26 +658,49 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
     )
 }
 
-fn fetch_comicvine(url: String) -> Option<Value> {
-    use native_tls::TlsConnector;
-    use std::io::{Read, Write};
+/// Search-result payload cap. ComicVine search responses are small; the cap
+/// keeps a hostile provider from driving unbounded allocation.
+const MAX_SEARCH_BODY: usize = 5_000_000;
+const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Fetch one ComicVine search page through the app's outbound seam (#5339):
+/// the real HTTPS client in production, a recording fake in test contexts
+/// that never opens a socket. Any failure yields `None`, as before.
+async fn fetch_comicvine(outbound: &Arc<dyn OutboundHttp>, url: String) -> Option<Value> {
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
-    let path = format!("/{rest}");
-    let addr = format!("{host}:443");
-    let stream = std::net::TcpStream::connect(&addr).ok()?;
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
-    let connector = TlsConnector::new().ok()?;
-    let mut tls = connector.connect(host, stream).ok()?;
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
-    );
-    tls.write_all(request.as_bytes()).ok()?;
-    let mut buf = Vec::new();
-    tls.read_to_end(&mut buf).ok()?;
-    let text = String::from_utf8_lossy(&buf);
-    let body = text.split("\r\n\r\n").nth(1)?;
-    serde_json::from_str(body).ok()
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!("/{rest}"),
+        headers: vec![
+            ("user-agent".to_string(), "ComicPile/1.0".to_string()),
+            ("accept".to_string(), "application/json".to_string()),
+            ("connection".to_string(), "close".to_string()),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(host, request).await.ok()?;
+        if !response.status.is_success() {
+            return None;
+        }
+        let mut data = Vec::new();
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
+            let frame = frame.ok()?;
+            if let Ok(bytes) = frame.into_data() {
+                data.extend_from_slice(&bytes);
+                if data.len() > MAX_SEARCH_BODY {
+                    return None;
+                }
+            }
+        }
+        serde_json::from_slice(&data).ok()
+    };
+    tokio::time::timeout(SEARCH_TIMEOUT, exchange)
+        .await
+        .ok()
+        .flatten()
 }
 
 pub async fn confirm(
@@ -937,7 +965,7 @@ pub async fn defer(
     Path(mapping_id): Path<i32>,
 ) -> Result<Json<IdentityInboxActionResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
-    let tx = conn
+    let mut tx = conn
         .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
@@ -974,12 +1002,43 @@ pub async fn defer(
         return Err(bad_request("mapping not owned by this user"));
     }
 
-    tx.execute(
-        "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
-        &[&mapping_id],
-    )
-    .await
-    .map_err(db::query_error)?;
+    // Some deployed databases are stamped at a revision that added 'deferred'
+    // to the status allow-list without the constraint change having actually
+    // run (issue #5378). Writing status='deferred' then fails with a check
+    // violation and used to surface as a generic HTTP 500. Use a savepoint so
+    // the failed statement cannot poison the outer transaction, and fall back
+    // to a representation the stale constraint accepts: a rejected mapping
+    // with an explicit defer reason. Either way the item leaves the unresolved
+    // inbox and the defer succeeds instead of returning a 500.
+    let savepoint = tx
+        .savepoint("identity_inbox_defer_status")
+        .await
+        .map_err(db::query_error)?;
+    match savepoint
+        .execute(
+            "UPDATE issue_external_identity_mappings SET status='deferred', updated_at=NOW() WHERE id=$1",
+            &[&mapping_id],
+        )
+        .await
+    {
+        Ok(_) => {
+            savepoint.commit().await.map_err(db::query_error)?;
+        }
+        Err(error)
+            if error.code() == Some(&tokio_postgres::error::SqlState::CHECK_VIOLATION) =>
+        {
+            savepoint.rollback().await.map_err(db::query_error)?;
+            tx.execute(
+                "UPDATE issue_external_identity_mappings SET status='rejected', \
+                 rejection_reason='deferred by user', evidence_source='deferred', \
+                 updated_at=NOW() WHERE id=$1",
+                &[&mapping_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+        Err(error) => return Err(db::query_error(error)),
+    }
     tx.commit().await.map_err(db::query_error)?;
 
     let updated = fetch_item(&state, user.id(), mapping_id).await?;
@@ -1132,6 +1191,130 @@ mod tests {
     use super::*;
     use crate::auth::AuthenticatedUser;
     use crate::test_support;
+
+    /// ComICVine search must go through the outbound seam: the fake records
+    /// the host and query and supplies the payload, never a socket (#5339).
+    #[tokio::test]
+    async fn fetch_comicvine_records_host_and_query_and_parses_the_payload() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":40001,"name":"Batman"}]}"#,
+            ),
+        );
+        let url = build_search_url("KEY123", "bat man", 10);
+        let payload = fetch_comicvine(&fake, url)
+            .await
+            .expect("canned provider payload must parse");
+        assert_eq!(payload["number_of_total_results"], 1);
+        assert_eq!(payload["results"][0]["id"], 40001);
+
+        let calls = recorder.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+        assert_eq!(calls[0].method, "GET");
+        assert!(
+            calls[0].path.starts_with("/api/search/?api_key=KEY123"),
+            "unexpected search path {}",
+            calls[0].path
+        );
+        assert!(calls[0].path.contains("query=bat%20man"));
+        assert!(calls[0].path.contains("resources=issue"));
+    }
+
+    #[tokio::test]
+    async fn fetch_comicvine_returns_none_on_error_status_failure_and_oversize() {
+        let recorder = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let fake: Arc<dyn OutboundHttp> = recorder.clone();
+        // Non-success status.
+        recorder.push_ok(
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            http::HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1}"#),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Transport failure (the default fake behavior).
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        // Oversized body is dropped instead of allocated unbounded.
+        recorder.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from(vec![b'x'; MAX_SEARCH_BODY + 1]),
+        );
+        assert!(fetch_comicvine(&fake, build_search_url("K", "q", 10))
+            .await
+            .is_none());
+        assert_eq!(recorder.calls().len(), 3);
+    }
+
+    /// End-to-end through the handler: a test-configured app answers search
+    /// from the recording fake, so the route never touches the network.
+    #[tokio::test]
+    async fn search_issues_serves_results_from_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"Detective Comics","issue_number":"1","volume":{"id":40509},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "detective".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("search must succeed against the fake");
+        assert_eq!(response.total_available, Some(1));
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "exactly one outbound call, no socket");
+        assert_eq!(calls[0].host, "comicvine.gamespot.com");
+    }
+
+    /// Save/restore `COMICVINE_API_KEY` around one test (same pattern as the
+    /// bug-reports GitHub env guard).
+    struct ComicvineKeyEnv {
+        previous: Option<String>,
+    }
+
+    impl ComicvineKeyEnv {
+        fn install() -> Self {
+            let previous = std::env::var("COMICVINE_API_KEY").ok();
+            std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+            Self { previous }
+        }
+    }
+
+    impl Drop for ComicvineKeyEnv {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+                None => std::env::remove_var("COMICVINE_API_KEY"),
+            }
+        }
+    }
 
     #[test]
     fn why_stopped_uses_candidate_count_and_keeps_zero_candidate_reasons() {
@@ -1388,5 +1571,113 @@ mod tests {
         )
         .await;
         let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
+    }
+
+    /// A raw admin connection is needed only to simulate production's stale
+    /// status constraint; the handler itself still runs as the DML-only role.
+    async fn admin_client() -> tokio_postgres::Client {
+        let (client, connection) = tokio_postgres::connect(
+            &test_support::required_test_admin_url(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .expect("admin test connection");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+    }
+
+    /// Regression for #5378: production is stamped past the revision that
+    /// added 'deferred' to the status allow-list, but its live constraint does
+    /// not contain that value. Defer must succeed (and remove the item from the
+    /// unresolved inbox) instead of failing with a check-violation 500.
+    #[tokio::test]
+    async fn defer_succeeds_when_status_constraint_predates_deferred_value() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let admin = admin_client().await;
+
+        // Reproduce the deployed constraint from before c85700000001.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected'));",
+            )
+            .await
+            .expect("install stale status constraint");
+
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'owner',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                 (1,1,'Owned','comics',1,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                 (1,1,'#6','unread',0,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                 (1,'comicvine','issue','901096','{}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                 (id, issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) VALUES \
+                 (1,1,1,'unresolved','heuristic','{}'::json,NOW(),NOW());",
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let response = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await;
+
+        // Restore the canonical constraint before asserting so a failure here
+        // cannot leak the stale schema into the next serialized test.
+        admin
+            .batch_execute(
+                "ALTER TABLE issue_external_identity_mappings DROP CONSTRAINT IF EXISTS \
+                 ck_issue_external_identity_status; \
+                 ALTER TABLE issue_external_identity_mappings ADD CONSTRAINT \
+                 ck_issue_external_identity_status CHECK (status IN \
+                 ('unresolved','candidate','confirmed','rejected','deferred'));",
+            )
+            .await
+            .expect("restore canonical status constraint");
+
+        let body = response.expect("defer must succeed on a stale status constraint");
+        assert!(body.success);
+        assert_eq!(body.message, "Item deferred for later review");
+
+        let conn = state.pool.get().await.unwrap();
+        let row = conn
+            .query_one(
+                "SELECT status, rejection_reason FROM issue_external_identity_mappings WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        let status: String = row.get(0);
+        let reason: Option<String> = row.get(1);
+        assert_eq!(status, "rejected");
+        assert_eq!(reason.as_deref(), Some("deferred by user"));
+        drop(conn);
+
+        let list = list_inbox(
+            State(state),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(list.total, 0);
     }
 }

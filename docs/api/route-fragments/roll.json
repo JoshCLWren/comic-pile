@@ -1,11 +1,12 @@
 {
   "family": "roll",
   "owned_path_patterns": [
-    "^/api/v1/roll/override$",
-    "^/api/roll/override$",
-    "^/api/v1/roll/switch-prerequisite$",
     "^/api/v1/roll/events/[^/]+/recommendation-explanation$",
-    "^/api/roll/events/[^/]+/recommendation-explanation$"
+    "^/api/roll/events/[^/]+/recommendation-explanation$",
+    "^/api/v2/roll/unsnooze$",
+    "^/api/v2/roll/override$",
+    "^/api/v2/roll/dismiss-pending$",
+    "^/api/v2/roll/switch-prerequisite$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -17,25 +18,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/roll/override",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/roll/override$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "POST",
-      "path": "/api/roll/override",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/roll/override$",
-      "consumers": [
-        "frontend/src/services/api-roll.ts"
-      ],
-      "exclude_from_inventory": true
-    },
     {
       "bucket": "v1_operations",
       "method": "GET",
@@ -54,12 +36,44 @@
       "exclude_from_inventory": true
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/roll/switch-prerequisite",
+      "path": "/api/v2/roll/unsnooze",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/roll/switch\\-prerequisite$",
-      "exclude_from_inventory": true
+      "src": "^/api/v2/roll/unsnooze$",
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/roll/override",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/override$",
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/roll/dismiss-pending",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/dismiss\\-pending$",
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/roll/switch-prerequisite",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/roll/switch\\-prerequisite$",
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
     }
   ]
 }

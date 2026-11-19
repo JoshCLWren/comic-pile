@@ -113,6 +113,16 @@ export const queryKeys = {
           pageSize,
         },
       ] as const,
+    /** Prefix for every scoped excluded-member-status read. */
+    memberStatusAll: () => ['excluded', 'member-status'] as const,
+    /**
+     * Canonical key for resolving which specific thread IDs are currently
+     * excluded, scoped to the requested member set. Used by container-level
+     * bulk restore to determine restorable members without relying on a single
+     * excluded-page snapshot.
+     */
+    memberStatus: (threadIds: number[]) =>
+      ['excluded', 'member-status', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
   },
   completed: {
     all: ['completed'] as const,
@@ -284,6 +294,8 @@ export const queryKeys = {
     all: ['dependencies'] as const,
     readingBoundaries: (threadIds: number[]) =>
       ['dependencies', 'reading-boundaries', [...new Set(threadIds)].sort((a, b) => a - b)] as const,
+    readingBoundariesAll: () => ['dependencies', 'reading-boundaries'] as const,
+    blockingBatchAll: () => ['dependencies', 'blocking-batch'] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
@@ -296,10 +308,6 @@ export const queryKeys = {
   readingOrders: {
     all: ['readingOrders'] as const,
     forThread: (threadId: number) => ['readingOrders', 'thread', threadId] as const,
-  },
-  analytics: {
-    all: ['analytics'] as const,
-    overview: () => ['analytics', 'overview'] as const,
   },
   comicVine: {
     all: ['comicVine'] as const,
@@ -369,6 +377,8 @@ export const queryKeys = {
     readingListCandidates: (listId: number) =>
       ['cblSources', 'readingListCandidates', listId] as const,
     preview: (listId: number) => ['cblSources', 'preview', listId] as const,
+    /** All CBL adoption previews; a direct read/rate changes their row labels. */
+    previewAll: () => ['cblSources', 'preview'] as const,
     adoptionPlan: (
       listId: number,
       seriesDecisions: Record<string, boolean>,
@@ -411,6 +421,17 @@ export const queryKeys = {
     detail: (listId: number) => ['customCBLs', 'detail', listId] as const,
     issueSearch: (query: string) =>
       ['customCBLs', 'issueSearch', normalizedSearch(query)] as const,
+    /**
+     * Canonical key for a batched membership check: which requested threads
+     * appear in any other owned reading list, scoped to the member set.
+     */
+    threadMemberships: (threadIds: number[], excludeListId?: number) =>
+      [
+        'customCBLs',
+        'thread-memberships',
+        [...new Set(threadIds)].sort((a, b) => a - b),
+        excludeListId ?? null,
+      ] as const,
   },
   taste: {
     all: ['taste'] as const,

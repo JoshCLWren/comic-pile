@@ -8,7 +8,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
-use comicpile_roll_service::{config::Config, router, AppState};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -35,18 +35,15 @@ async fn setup_user(
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    ));
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
     let (token, csrf, user_id) = register_user(&state, &username).await;
@@ -159,7 +156,7 @@ async fn override_requires_auth() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/roll/override")
+            .uri("/api/v2/roll/override")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(json!({"thread_id": 1}).to_string()))
             .unwrap(),
@@ -175,7 +172,7 @@ async fn switch_prerequisite_requires_auth() {
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/roll/switch-prerequisite")
+            .uri("/api/v2/roll/switch-prerequisite")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 json!({"node_type":"issue","node_id":1}).to_string(),
@@ -282,7 +279,7 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": 999999})),
@@ -306,7 +303,7 @@ async fn override_returns_404_for_missing_or_other_users_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": thread_id})),
@@ -340,7 +337,7 @@ async fn override_returns_422_for_non_selectable_thread() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/override",
+            "/api/v2/roll/override",
             &token,
             &csrf,
             Some(json!({"thread_id": thread_id})),
@@ -357,7 +354,7 @@ async fn switch_prerequisite_returns_404_for_missing_or_other_users_issue() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             &token,
             &csrf,
             Some(json!({"node_type":"issue","node_id":999999})),
@@ -374,7 +371,7 @@ async fn switch_prerequisite_rejects_unsupported_node_type() {
         &state,
         authed(
             "POST",
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             &token,
             &csrf,
             Some(json!({"node_type":"crossover","node_id":1})),

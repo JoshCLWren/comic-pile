@@ -11,18 +11,19 @@ import {
 } from './generate_vercel_routes.mjs';
 
 function metadata(withOrphan = true) {
-  return {
-    paths: {
-      '/api/v1/threads/{id}': {get: {}},
-      ...(withOrphan ? {'/api/v1/orphan': {get: {}}} : {}),
-    },
-    registered: [
-      {path: '/api/v1/threads/{id}', methods: ['GET'], visible: true},
-      {path: '/api/v1/cron/release-sync', methods: ['GET'], visible: false},
-      ...(withOrphan ? [{path: '/api/v1/orphan', methods: ['GET'], visible: true}] : []),
-      {path: '/api/{path:path}', methods: ['GET'], visible: false},
-    ],
+  const paths = {
+    '/api/v1/threads/{id}': {get: {}},
   };
+  if (withOrphan) paths['/api/v1/orphan'] = {get: {}};
+
+  const registered = [
+    {path: '/api/v1/threads/{id}', methods: ['GET'], visible: true},
+    {path: '/api/v1/cron/release-sync', methods: ['GET'], visible: false},
+  ];
+  if (withOrphan) registered.push({path: '/api/v1/orphan', methods: ['GET'], visible: true});
+  registered.push({path: '/api/{path:path}', methods: ['GET'], visible: false});
+
+  return {paths, registered};
 }
 const config = {routes: [
   {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_roll.rs'},

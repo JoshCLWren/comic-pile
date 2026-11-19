@@ -3,6 +3,7 @@
   "owned_path_patterns": [
     "^/api/v1/cbl/\\{list_id\\}/adoption\\-commit$",
     "^/api/v1/cbl/\\{list_id\\}/reading\\-plans/\\{plan_id\\}/adoption\\-commit$",
+    "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-preview$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-plan$",
     "^/api/v1/issue\\-identity/cbl\\-sources$",
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
@@ -28,7 +29,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -42,7 +44,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -56,7 +59,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -70,7 +74,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -84,7 +89,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -98,7 +104,8 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -111,7 +118,8 @@
       "owning_issue": 4843,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -124,7 +132,8 @@
       "owning_issue": 4843,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     }
   ]
 }

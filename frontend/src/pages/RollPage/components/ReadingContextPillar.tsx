@@ -17,7 +17,7 @@ interface ReadingContextPillarProps {
   activeRatingThread: RatingThread | null
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
-  onRefreshThread: () => void
+  onRefreshThread: (options?: { forceRefresh?: boolean }) => Promise<void> | void
   rolledResult: number | null
   currentDie: number
   readerContext: ReaderContextResponse | null

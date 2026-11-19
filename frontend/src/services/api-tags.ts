@@ -1,3 +1,4 @@
+import type { components } from '../generated/openapi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /**
@@ -5,29 +6,16 @@ import { defaultHttpClient, type HttpClient } from './httpClient'
  * Hand-written (not from the generated OpenAPI types) because the checked-in
  * generated file predates the tag API; field names mirror `app/schemas/tags.py`.
  */
-export interface Tag {
-  id: number
-  name: string
-  normalized_name: string
+export type Tag = components['schemas']['Tag'] & {
   scope: 'global' | 'private'
   owner_user_id: number | null
-  /** Hex `#RRGGBB` from the fixed 32-color palette. */
-  color: string
-  created_at: string
-  updated_at: string
 }
 
 export interface TagListResponse {
   tags: Tag[]
 }
 
-export interface NearMatch {
-  id: number
-  name: string
-  color: string
-  normalized_name: string
-  scope: string
-}
+export type NearMatch = components['schemas']['NearMatch']
 
 export interface CreateTagPayload {
   name: string
@@ -37,10 +25,8 @@ export interface CreateTagPayload {
   include_near_matches?: boolean
 }
 
-export interface CreateTagResponse {
+export type CreateTagResponse = components['schemas']['CreateTagResponse'] & {
   tag: Tag
-  redirected_to_global: boolean
-  near_matches: NearMatch[]
 }
 
 export interface UpdateTagPayload {
@@ -68,14 +54,7 @@ export interface BulkAssignPayload {
   target_ids: number[]
 }
 
-export interface BulkAssignResponse {
-  tag_id: number
-  target_type: string
-  requested_ids: number[]
-  affected_ids: number[]
-  already_ids: number[]
-  still_inherited_ids: number[]
-}
+export type BulkAssignResponse = components['schemas']['BulkAssignResponse']
 
 export interface TagUsage {
   tag_id: number
@@ -90,18 +69,10 @@ export interface DeleteTagResponse {
   references_removed_by_consumers: Record<string, number>
 }
 
-export interface InheritanceSource {
-  target_type: string
-  target_id: number
-  display_name: string
-}
+export type InheritanceSource = components['schemas']['InheritanceSource']
 
-export interface EffectiveTag {
+export type EffectiveTag = components['schemas']['EffectiveTag'] & {
   tag: Tag
-  /** True when directly assigned to the queried object (may also be inherited). */
-  direct: boolean
-  /** Every object whose direct assignment contributes this tag. */
-  sources: InheritanceSource[]
 }
 
 export interface EffectiveTagsResponse {
