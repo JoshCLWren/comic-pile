@@ -969,10 +969,20 @@ pub async fn apply_correction(
         .await
         .map_err(db::query_error)?;
 
+    // provider value from confirmed identity metadata
+    let pv: Option<String> = tx
+        .query_opt(
+            "SELECT e.metadata_json->>$2 FROM external_identities e JOIN issue_external_identity_mappings m ON m.external_identity_id=e.id WHERE m.issue_id=$1 AND m.status='confirmed' LIMIT 1",
+            &[&issue_id, &req.field_name],
+        )
+        .await
+        .map_err(db::query_error)?
+        .and_then(|r| r.get(0));
+
     tx.execute(
         "INSERT INTO issue_metadata_corrections (issue_id, field_name, provider_value, canonical_value, provenance, created_by, created_at, updated_at) \
-         VALUES ($1,$2,NULL,$3,'user_correction',$4,now(),now())",
-        &[&issue_id, &req.field_name, &req.canonical_value, &user.id()],
+         VALUES ($1,$2,$3,$4,'user_correction',$5,now(),now())",
+        &[&issue_id, &req.field_name, &pv, &req.canonical_value, &user.id()],
     )
     .await
     .map_err(db::query_error)?;

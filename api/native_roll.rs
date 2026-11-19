@@ -1174,6 +1174,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn comicvine_resolution_ingress_preserves_same_path_and_requires_auth() {
+        let cases = [
+            ("GET", "/api/v1/comicvine/issues/1/identity"),
+            ("GET", "/api/v1/comicvine/search/series?q=x"),
+            ("GET", "/api/v1/comicvine/resolve?input=x"),
+            ("GET", "/api/v1/comicvine/series/42/issues"),
+            ("GET", "/api/v1/comicvine/issues/1/metadata:corrections"),
+        ];
+        for (method, uri) in cases {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn bug_report_ingress_preserves_same_paths_and_requires_auth() {
         for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
             let mut router = app();
