@@ -1175,7 +1175,7 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-      "v1_total": 44,
+      "v1_total": 45,
       "v1_shadowed_by_rust": 1,
       "v1_live_python": 27,
       "v1_orphaned": 0,
@@ -1183,7 +1183,7 @@
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-      "total_python_surface": 44,
+      "total_python_surface": 45,
       "total_shadowed_by_rust": 1,
       "total_live_python": 27,
       "total_orphaned": 0
@@ -1387,6 +1387,19 @@
         ],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4842,
+        "method": "POST",
+        "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+        "consumers": [
+          "frontend/src/services/api-reading-orders.ts"
+        ],
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
