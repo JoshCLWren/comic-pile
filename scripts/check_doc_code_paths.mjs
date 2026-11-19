@@ -145,24 +145,27 @@ export function extractPaths(text) {
   let fence = null;
   let inGeneratedBlock = false;
   splitLines(text).forEach((line, index) => {
-    if (line.includes(ROUTE_BURNDOWN_END)) {
-      inGeneratedBlock = false;
-      return;
-    }
-    if (inGeneratedBlock) {
-      return;
-    }
-    if (line.includes(ROUTE_BURNDOWN_BEGIN)) {
-      inGeneratedBlock = true;
-      return;
-    }
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
     fence = next;
     if (isFenceLine) {
       return;
     }
-    if (inFence || stripInlineCode(line).includes(IGNORE_LINE_MARKER)) {
+    if (inGeneratedBlock) {
+      if (!inFence && stripInlineCode(line).includes(ROUTE_BURNDOWN_END)) {
+        inGeneratedBlock = false;
+      }
+      return;
+    }
+    if (inFence) {
+      return;
+    }
+    const visible = stripInlineCode(line);
+    if (visible.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      return;
+    }
+    if (visible.includes(IGNORE_LINE_MARKER)) {
       return;
     }
     for (const match of line.matchAll(INLINE_CODE_RE)) {
@@ -197,24 +200,27 @@ function hasMarker(text, marker) {
   let fence = null;
   let inGeneratedBlock = false;
   for (const line of splitLines(text)) {
-    if (line.includes(ROUTE_BURNDOWN_END)) {
-      inGeneratedBlock = false;
-      continue;
-    }
-    if (inGeneratedBlock) {
-      continue;
-    }
-    if (line.includes(ROUTE_BURNDOWN_BEGIN)) {
-      inGeneratedBlock = true;
-      continue;
-    }
     const [next, isFenceLine] = advanceFence(fence, line);
     const inFence = fence !== null;
     fence = next;
     if (isFenceLine) {
       continue;
     }
-    if (!inFence && stripInlineCode(line).includes(marker)) {
+    if (inGeneratedBlock) {
+      if (!inFence && stripInlineCode(line).includes(ROUTE_BURNDOWN_END)) {
+        inGeneratedBlock = false;
+      }
+      continue;
+    }
+    if (inFence) {
+      continue;
+    }
+    const visible = stripInlineCode(line);
+    if (visible.includes(ROUTE_BURNDOWN_BEGIN)) {
+      inGeneratedBlock = true;
+      continue;
+    }
+    if (visible.includes(marker)) {
       return true;
     }
   }

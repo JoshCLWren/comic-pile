@@ -25,7 +25,11 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export class NativeClientGenerationError extends Error {}
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const tag = (v) => Object.prototype.toString.call(v);
+const isString = (v) => tag(v) === '[object String]';
+const isNumber = (v) => tag(v) === '[object Number]';
+const isBoolean = (v) => v === true || v === false;
+const isObject = (v) => v !== null && tag(v) === '[object Object]';
 const dedupe = (items) => [...new Set(items)];
 
 function obj(value, context) {
@@ -35,10 +39,10 @@ function obj(value, context) {
 
 function literal(value) {
   if (isMarkedFloat(value)) return markedFloatText(value);
-  if (typeof value === 'string') return JSON.stringify(value);
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (isString(value)) return JSON.stringify(value);
+  if (isBoolean(value)) return value ? 'true' : 'false';
   if (value === null) return 'null';
-  if (typeof value === 'number') return String(value);
+  if (isNumber(value)) return String(value);
   return 'unknown';
 }
 
@@ -65,7 +69,7 @@ function typedSchema(schema, typeName) {
   if (typeName === 'object') {
     const properties = schema.properties;
     if (isObject(properties) && Object.keys(properties).length > 0) {
-      const required = new Set(Array.isArray(schema.required) ? schema.required.filter((i) => typeof i === 'string') : []);
+      const required = new Set(Array.isArray(schema.required) ? schema.required.filter(isString) : []);
       const fields = Object.entries(properties).map(
         ([name, prop]) => `${propertyName(name)}${required.has(name) ? '' : '?'}: ${tsType(obj(prop, `property ${name}`))}`,
       );
@@ -81,7 +85,7 @@ function typedSchema(schema, typeName) {
 
 export function tsType(schema) {
   const ref = schema.$ref;
-  if (typeof ref === 'string') {
+  if (isString(ref)) {
     if (!ref.startsWith(REF_PREFIX)) throw new NativeClientGenerationError(`unsupported external reference '${ref}'`);
     return `components['schemas']['${ref.slice(REF_PREFIX.length)}']`;
   }
@@ -101,10 +105,10 @@ export function tsType(schema) {
   }
   const rawType = schema.type;
   if (Array.isArray(rawType)) {
-    const unique = dedupe(rawType.filter((n) => typeof n === 'string').map(primitiveType));
+    const unique = dedupe(rawType.filter(isString).map(primitiveType));
     return unique.length ? unique.join(' | ') : 'unknown';
   }
-  if (typeof rawType === 'string') return typedSchema(schema, rawType);
+  if (isString(rawType)) return typedSchema(schema, rawType);
   if (isObject(schema.properties)) return typedSchema(schema, 'object');
   if ('items' in schema) return typedSchema(schema, 'array');
   return 'unknown';
@@ -145,7 +149,7 @@ function jsonBodySchema(requestBody) {
 function buildOperation(method, p, operation) {
   if (!SUPPORTED_METHODS.has(method)) throw new NativeClientGenerationError(`unsupported native method '${method}' for ${p}`);
   const operationId = operation.operationId;
-  if (typeof operationId !== 'string' || !operationId) {
+  if (!isString(operationId) || !operationId) {
     throw new NativeClientGenerationError(`${method.toUpperCase()} ${p} has no generated operationId`);
   }
   const name = methodName(operationId);
@@ -157,7 +161,7 @@ function buildOperation(method, p, operation) {
     for (const raw of operation.parameters) {
       const parameter = obj(raw, 'parameter');
       const pname = parameter.name;
-      if (typeof pname !== 'string' || !pname) throw new NativeClientGenerationError('parameter has no name');
+      if (!isString(pname) || !pname) throw new NativeClientGenerationError('parameter has no name');
       const typeText = tsType(obj(parameter.schema ?? {}, 'parameter schema'));
       const required = parameter.required === true;
       if (parameter.in === 'path') {

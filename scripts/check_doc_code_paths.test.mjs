@@ -119,3 +119,15 @@ test('route-burndown generated block is skipped', () => {
     'AGENTS.md:5: stale code path: app/also_real_gone.py',
   ]);
 });
+
+test('quoted route-burndown markers do not start a generated block', () => {
+  const body =
+    '```\n' +
+    '`<!-- route-burndown:begin -->`\n' +
+    '```\n' +
+    'Example: `<!-- route-burndown:begin -->` in text.\n' +
+    'after `app/real_gone.py`\n';
+  assert.deepEqual(run({'README.md': body}), [
+    'README.md:5: stale code path: app/real_gone.py',
+  ]);
+});

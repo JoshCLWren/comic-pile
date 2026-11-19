@@ -34,7 +34,8 @@ const FLOAT_MARK = '\u0000float:';
 // so decimals inside string contents are never rewritten.
 const FLOAT_RE = /"(?:[^"\\]|\\.)*"|-?\d+\.\d+(?:[eE][-+]?\d+)?/g;
 
-export const isMarkedFloat = (value) => typeof value === 'string' && value.startsWith(FLOAT_MARK);
+const isString = (value) => Object.prototype.toString.call(value) === '[object String]';
+export const isMarkedFloat = (value) => isString(value) && value.startsWith(FLOAT_MARK);
 export const markedFloatText = (value) => value.slice(FLOAT_MARK.length);
 
 export function parseJsonPreservingFloats(text) {
@@ -46,7 +47,7 @@ export function loadContract(file) {
   return parseJsonPreservingFloats(fs.readFileSync(file, 'utf8'));
 }
 
-const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isObject = (value) => value !== null && Object.prototype.toString.call(value) === '[object Object]';
 const clone = (value) => structuredClone(value);
 
 export function isClientSchemaPath(p) {
@@ -70,7 +71,7 @@ export function rewriteSchemaRefs(value, renames) {
       Object.entries(value).map(([k, v]) => [k, rewriteSchemaRefs(v, renames)]),
     );
     const ref = value.$ref;
-    if (typeof ref === 'string' && ref.startsWith(SCHEMA_REF_PREFIX)) {
+    if (isString(ref) && ref.startsWith(SCHEMA_REF_PREFIX)) {
       const name = ref.slice(SCHEMA_REF_PREFIX.length);
       if (Object.hasOwn(renames, name)) rewritten.$ref = SCHEMA_REF_PREFIX + renames[name];
     }
