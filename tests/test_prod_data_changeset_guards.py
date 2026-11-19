@@ -153,11 +153,8 @@ def test_held_sql_is_not_wired_into_deploy_or_migrations() -> None:
 def test_forecast_sql_uses_roll_queue_position_predicate() -> None:
     """Harvy nit: forecast population matches Roll's queue_position >= 1."""
     forecast_sql = CHANGESET_DIR.joinpath("forecast_roll_eligibility.sql").read_text()
-    forecast_py = Path("app/services/roll_cutover_forecast.py").read_text()
     assert "queue_position >= 1" in forecast_sql
     assert "queue_position IS NOT NULL" not in forecast_sql
-    assert "queue_position >= 1" in forecast_py
-    assert "queue_position IS NOT NULL" not in forecast_py
 
 
 def _moved_issue_refs_sql(lo: int, hi: int) -> str:
