@@ -1430,20 +1430,19 @@ pub async fn create(
     // fake. The `GithubIssuer` closure shape is unchanged so focused tests can
     // still inject their own issuer through `create_with_issuer`.
     let outbound = state.outbound.clone();
-    let issuer =
-        move |settings: GithubSettings,
-              title: String,
-              body: String,
-              labels: Vec<String>|
-              -> GithubFuture {
-            Box::pin(create_github_issue(
-                outbound.clone(),
-                settings,
-                title,
-                body,
-                labels,
-            ))
-        };
+    let issuer = move |settings: GithubSettings,
+                       title: String,
+                       body: String,
+                       labels: Vec<String>|
+          -> GithubFuture {
+        Box::pin(create_github_issue(
+            outbound.clone(),
+            settings,
+            title,
+            body,
+            labels,
+        ))
+    };
     create_with_issuer(state, user.id(), body, &issuer).await
 }
 
