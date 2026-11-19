@@ -39,8 +39,17 @@ use utoipa::OpenApi;
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::list_documentation,
     crate::taste_discoveries::dismiss_documentation,
-    crate::creators::list_creators_documentation,
-    crate::creators::get_summaries_documentation,
+    crate::creators_v2::list_documentation,
+    crate::creators_v2::summaries_documentation,
+    crate::creators_v2::compare_documentation,
+    crate::creators_v2::discoveries_documentation,
+    crate::creators_v2::team_chemistry_documentation,
+    crate::creators_v2::detail_documentation,
+    crate::creators_v2::series_issues_documentation,
+    crate::creators_v2::metric_documentation,
+    crate::creators_v2::rating_distribution_documentation,
+    crate::creators_v2::role_documentation,
+    crate::creators_v2::series_documentation,
 ))]
 struct SamePathApi;
 
