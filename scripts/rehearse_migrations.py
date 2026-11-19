@@ -172,6 +172,38 @@ def _alembic_current(env: dict[str, str]) -> str | None:
     return None
 
 
+def _detect_new_migration_steps(base_ref: str | None) -> int | None:
+    """Return count of Alembic migration version files added/changed vs base ref."""
+    if not base_ref:
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--name-status", f"{base_ref}...HEAD", "--", "alembic/versions"],
+            cwd=str(REPO_ROOT),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    count = 0
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        status = parts[0]
+        path = parts[-1]
+        if not path.endswith(".py"):
+            continue
+        # Count added or modified migration files as steps to rehearse back over.
+        # Renames/copies are rare; treat as 1.
+        if status.startswith(("A", "M", "R", "C")):
+            count += 1
+    return count
+
+
 def _downgrade_target(
     *,
     fixture_revision: str,
@@ -181,13 +213,17 @@ def _downgrade_target(
 ) -> str:
     if explicit_base:
         return explicit_base
-    if base_ref:
-        # Downgrade to fixture revision by default for PR rehearsals unless a
-        # specific pre-migration base is requested; callers can pass --base.
-        return fixture_revision
     if step_down > 0:
         return f"-{step_down}"
-    return fixture_revision
+    detected = _detect_new_migration_steps(base_ref)
+    if detected is not None:
+        # "base revision of the PR (or -1 per new revision)". When no migration
+        # files changed, step back one revision to exercise rollback of tip.
+        return f"-{detected}" if detected > 0 else "-1"
+    # Default: step back one revision. Downgrading to fixture_revision can
+    # cross irreversible historical migrations; PR/deploy callers should pass
+    # --base or --downgrade-steps explicitly when they know the safe target.
+    return "-1"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -300,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             base_ref=args.base_ref,
             step_down=args.downgrade_steps,
         )
+        print(f"[rehearsal] downgrade target: {downgrade_to}", flush=True)
         timings.append(_run_timed("downgrade", [*_alembic_cmd(), "downgrade", downgrade_to], env=env))
         timings.append(_run_timed("upgrade_head_2", [*_alembic_cmd(), "upgrade", "head"], env=env))
         if timings[-1].seconds > args.migration_budget_seconds:
