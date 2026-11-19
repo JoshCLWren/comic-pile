@@ -132,7 +132,7 @@ export function defaultHandlers(auth: AuthMode, user: HarnessUser): HandlerMap {
     'POST /api/v2/auth/refresh': () => (auth === 'authenticated' ? { data: { access_token: 'harness-token', refresh_token: 'harness-refresh' } } : unauthenticated()),
     'GET /api/v1/users/me/preferences': () => ({ data: { theme: 'classic', user_id: user.id } }),
     'GET /api/v2/identity-inbox': () => ({ data: { items: [], total: 0, offset: 0, limit: 1 } }),
-    'GET /api/v1/releases/': () => ({ data: { releases: [], total: 0 } }),
+    'GET /api/v2/releases': () => ({ data: { releases: [], total: 0 } }),
     'GET /api/v2/demo-roll': () => ({ data: DEMO_ROLL }),
     'POST /api/v2/reading-sessions': () => ({ data: { session_id: 1, created: false } }),
   }

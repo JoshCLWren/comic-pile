@@ -1325,3 +1325,649 @@ async fn adoption_commit_rechecks_exclusions_added_after_preview() {
         "{body}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Review previews (#4842): adoption-preview, reading-graph-preview,
+// series-mapping preview and project-preview, against seeded PostgreSQL rows.
+// ---------------------------------------------------------------------------
+
+async fn me_id(state: &Arc<AppState>, token: &str) -> i32 {
+    let (status, me) = get(state, token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    me["id"].as_i64().unwrap() as i32
+}
+
+/// Two series ("Alpha" volume 4050-1000 with a stored start year, "Beta" volume
+/// 4050-2000), each with one owned unread issue confirmed against the Comic Vine
+/// issue identities that the CBL list 40 names. List order is Beta #1 then
+/// Alpha #1, so strict order makes Alpha wait for Beta: one genuine overlap.
+/// Ids: threads 940/941, issues 9401 (Alpha #1) / 9411 (Beta #1).
+async fn seed_overlap_scenario(state: &Arc<AppState>, user_id: i32) {
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (40, '{MIRROR_REPOSITORY}-ov', 'rev-40', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES (40, 40, 'DC/Overlap/Overlap.cbl', 'Overlap Event', 3, 'h-ov', 'rev-40', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (40, 'comicvine', 'issue', '4000-beta1', '{{}}'::json, NOW(), NOW()),
+          (41, 'comicvine', 'issue', '4000-alpha1', '{{}}'::json, NOW(), NOW()),
+          (42, 'comicvine', 'series', '4050-1000', '{{"start_year": 1999}}'::json, NOW(), NOW()),
+          (43, 'comicvine', 'series', '4050-2000', '{{}}'::json, NOW(), NOW()),
+          (44, 'comicvine', 'issue', '4000-ghost', '{{}}'::json, NOW(), NOW());
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          (40, 40, 1, 'Beta', '1', 2001, 2001, 40, 43, NOW()),
+          (41, 40, 2, 'Alpha', '1', NULL, 1999, 41, 42, NOW()),
+          (42, 40, 3, 'Ghost', '1', 2010, 2010, 44, NULL, NOW());
+        INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+        VALUES
+          (940, {user_id}, 'Alpha', 'comic', 1, 90, 'active', 1, 'in_progress', NOW()),
+          (941, {user_id}, 'Beta', 'comic', 1, 91, 'active', 1, 'in_progress', NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES (9401, 940, '1', 1, 'unread', NOW()), (9411, 941, '1', 1, 'unread', NOW());
+        INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+        VALUES (940, 42, 'confirmed', 'test', NOW(), NOW()), (941, 43, 'confirmed', 'test', NOW(), NOW());
+        INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+        VALUES (9401, 41, 'confirmed', 'test', '{{}}'::json, NOW(), NOW()),
+               (9411, 40, 'confirmed', 'test', '{{}}'::json, NOW(), NOW());
+        "#
+    ))
+    .await
+    .unwrap();
+}
+
+async fn raw_request(
+    state: &Arc<AppState>,
+    method: &str,
+    uri: &str,
+    token: Option<&str>,
+    csrf: &str,
+    body: &str,
+) -> (StatusCode, Value) {
+    let mut builder = Request::builder().method(method).uri(uri);
+    if let Some(token) = token {
+        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    send(
+        state,
+        builder
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("x-csrf-token", csrf)
+            .header(header::COOKIE, format!("csrf_token={csrf}"))
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await
+}
+
+fn validation_failed() -> Value {
+    json!({"detail": "Validation failed"})
+}
+
+#[tokio::test]
+async fn adoption_preview_matches_adoption_plan_with_no_decisions() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+
+    let (status, preview) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl/40/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    let (status, plan) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/issue-identity/cbl/40/adoption-plan",
+        json!({"series_decisions": {}, "entry_decisions": {}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{plan}");
+    assert_eq!(preview, plan, "preview is the plan with empty decisions");
+
+    assert_eq!(preview["source"]["source_list_id"], 40);
+    assert_eq!(preview["source"]["content_hash"], "h-ov");
+    assert_eq!(preview["total_positions"], 3);
+    let entries = preview["entries"].as_array().unwrap();
+    assert_eq!(entries[0]["resolved_issue_id"], 9411, "{preview}");
+    assert_eq!(entries[0]["canonical_issue_id"], 9411);
+    assert_eq!(entries[0]["read_status"], "unread");
+    assert_eq!(entries[0]["adoption_decision"], "included_existing");
+    assert_eq!(entries[0]["comicvine_series_id"], "4050-2000");
+    assert_eq!(entries[1]["resolved_issue_id"], 9401);
+    assert_eq!(entries[2]["adoption_decision"], "would_create_missing");
+    assert_eq!(
+        preview["summary"]["reused_existing_positions"],
+        json!([1, 2])
+    );
+    assert_eq!(preview["summary"]["final_adopted_order"], json!([1, 2, 3]));
+}
+
+#[tokio::test]
+async fn adoption_preview_is_owner_scoped_and_read_only() {
+    let (state, token, _csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let (other_token, _) = create_test_user(&state, "other-reader").await;
+
+    let (status, body) = get(
+        &state,
+        &other_token,
+        "/api/v1/issue-identity/cbl/40/adoption-preview",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    for entry in body["entries"].as_array().unwrap() {
+        assert!(
+            entry["resolved_issue_id"].is_null(),
+            "another reader's issues must never resolve: {body}"
+        );
+    }
+    let conn = state.pool.get().await.unwrap();
+    let issues: i64 = conn
+        .query_one("SELECT count(*) FROM issues", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(issues, 2, "preview must not create issues");
+}
+
+#[tokio::test]
+async fn adoption_preview_errors_match_production() {
+    let (state, token, _csrf, _guard) = setup().await;
+    let (status, _) = get(&state, "", "/api/v1/issue-identity/cbl/1/adoption-preview").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    // Inactive (3), missing, and beyond-int4 lists are one 404.
+    for id in ["3", "999", "99999999999"] {
+        let uri = format!("/api/v1/issue-identity/cbl/{id}/adoption-preview");
+        let (status, body) = get(&state, &token, &uri).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{id}: {body}");
+    }
+    for bad in ["abc", "1.5"] {
+        let uri = format!("/api/v1/issue-identity/cbl/{bad}/adoption-preview");
+        let (status, body) = get(&state, &token, &uri).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(body, validation_failed(), "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn reading_graph_preview_projects_overlap_with_both_choice_effects() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let uri = "/api/v1/issue-identity/cbl/40/reading-graph-preview";
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"included_positions": [1, 2]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["source_list_id"], 40);
+    assert_eq!(body["content_hash"], "h-ov");
+    assert_eq!(body["revision_sha"], "rev-40");
+    assert_eq!(body["cycle_errors"], json!([]));
+    // Real owned issue ids (never source positions): Beta rolls, Alpha waits.
+    assert_eq!(body["rollable_issue_ids"], json!([9411]), "{body}");
+    assert_eq!(body["waiting_issue_ids"], json!([9401]), "{body}");
+
+    let series = body["series"].as_array().unwrap();
+    assert_eq!(series.len(), 2, "{body}");
+    assert_eq!(series[0]["series_name"], "Alpha");
+    assert_eq!(series[0]["comicvine_volume_id"], "comicvine:1000");
+    assert_eq!(series[0]["year"], 1999);
+    assert_eq!(series[0]["state"], "waits");
+    assert_eq!(series[0]["waits_for_issue_ids"], json!([9411]));
+    assert_eq!(series[1]["series_name"], "Beta");
+    assert_eq!(series[1]["year"], 2001);
+    assert_eq!(series[1]["state"], "continues");
+    assert_eq!(series[1]["rollable_count"], 1);
+
+    let issues = body["issues"].as_array().unwrap();
+    assert_eq!(issues.len(), 2);
+    let alpha = issues.iter().find(|i| i["issue_id"] == 9401).unwrap();
+    assert_eq!(alpha["series_name"], "Alpha");
+    assert_eq!(alpha["comicvine_volume_id"], "comicvine:1000");
+    assert_eq!(alpha["blockers"][0]["kind"], "strict_order");
+    assert_eq!(alpha["blockers"][0]["waiting_on_issue_ids"], json!([9411]));
+    assert_eq!(
+        alpha["blockers"][0]["explanation"],
+        "Strict order in Overlap Event: waiting on Beta #1"
+    );
+
+    let overlaps = body["overlaps"].as_array().unwrap();
+    assert_eq!(overlaps.len(), 1, "{body}");
+    let overlap = &overlaps[0];
+    assert!(overlap["overlap_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("overlap-"));
+    assert_eq!(
+        overlap["continuing_series"]["comicvine_volume_id"],
+        "comicvine:1000"
+    );
+    assert_eq!(
+        overlap["waiting_series"]["comicvine_volume_id"],
+        "comicvine:2000"
+    );
+    assert_eq!(
+        overlap["question"],
+        "Should Alpha continue while Beta waits?"
+    );
+    assert_eq!(overlap["blocked_issue_ids"], json!([9401]));
+    assert!(overlap["selected_choice"].is_null());
+    assert_eq!(overlap["choices"][0]["choice"], "continue_series");
+    assert_eq!(
+        overlap["choices"][0]["rollable_issue_ids"],
+        json!([9401, 9411])
+    );
+    assert_eq!(overlap["choices"][0]["waiting_issue_ids"], json!([]));
+    assert_eq!(overlap["choices"][1]["choice"], "protect_order");
+    assert_eq!(overlap["choices"][1]["rollable_issue_ids"], json!([9411]));
+    assert_eq!(overlap["choices"][1]["waiting_issue_ids"], json!([9401]));
+
+    // Answering the overlap relaxes only that pair and echoes the selection.
+    let overlap_id = overlap["overlap_id"].clone();
+    let (status, answered) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({
+            "included_positions": [1, 2],
+            "overlap_choices": [{"overlap_id": overlap_id, "choice": "continue_series"}]
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{answered}");
+    assert_eq!(
+        answered["overlaps"][0]["selected_choice"],
+        "continue_series"
+    );
+    assert_eq!(answered["rollable_issue_ids"], json!([9401, 9411]));
+    assert_eq!(answered["waiting_issue_ids"], json!([]));
+
+    // Read-only: no list, entry, or decision was written.
+    let conn = state.pool.get().await.unwrap();
+    for table in [
+        "custom_cbl_lists",
+        "custom_cbl_entries",
+        "custom_cbl_overlap_decisions",
+    ] {
+        let count: i64 = conn
+            .query_one(&format!("SELECT count(*) FROM {table}"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count, 0, "{table}");
+    }
+}
+
+#[tokio::test]
+async fn reading_graph_preview_reports_cycle_against_existing_list() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let conn = state.pool.get().await.unwrap();
+    // An existing strict list orders Alpha before Beta; the proposed list orders
+    // Beta before Alpha, so the combined constraint graph has a cycle.
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
+        VALUES (500, {user_id}, 'Alpha first', 'strict', NOW(), NOW());
+        INSERT INTO custom_cbl_entries (list_id, issue_id, "position", created_at)
+        VALUES (500, 9401, 1, NOW()), (500, 9411, 2, NOW());
+        "#
+    ))
+    .await
+    .unwrap();
+    drop(conn);
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/issue-identity/cbl/40/reading-graph-preview",
+        json!({"included_positions": [1, 2]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let errors = body["cycle_errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{body}");
+    assert_eq!(errors[0]["code"], "reading_constraint_cycle");
+    let message = errors[0]["message"].as_str().unwrap();
+    assert!(
+        message.starts_with("Reading constraint cycle: "),
+        "{message}"
+    );
+    assert!(
+        message.contains("Alpha #1") && message.contains("Beta #1"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn reading_graph_preview_errors_match_production() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let uri = "/api/v1/issue-identity/cbl/40/reading-graph-preview";
+
+    let (status, _) = raw_request(&state, "POST", uri, None, &csrf, "{}").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"included_positions": [9]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"]["code"], "unknown_source_position", "{body}");
+    assert_eq!(
+        body["detail"]["message"],
+        "Source positions are not part of list 40: [9]"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"included_positions": [3]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        body["detail"]["code"], "unresolved_source_position",
+        "{body}"
+    );
+
+    let bogus = json!({"included_positions": [1, 2], "overlap_choices": [{"overlap_id": "overlap-nope", "choice": "protect_order"}]});
+    let (status, body) = post_json(&state, &token, &csrf, uri, bogus).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"]["code"], "unknown_overlap_choice", "{body}");
+
+    let (status, first) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"included_positions": [1, 2]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let overlap_id = first["overlaps"][0]["overlap_id"].clone();
+    let twice = json!({"included_positions": [1, 2], "overlap_choices": [
+        {"overlap_id": overlap_id, "choice": "protect_order"},
+        {"overlap_id": overlap_id, "choice": "continue_series"}]});
+    let (status, body) = post_json(&state, &token, &csrf, uri, twice).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"]["code"], "duplicate_overlap_choice", "{body}");
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"included_positions": [1, 2], "target_list_id": 777}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["detail"]["code"], "reading_list_not_found", "{body}");
+
+    for list in ["3", "999"] {
+        let uri = format!("/api/v1/issue-identity/cbl/{list}/reading-graph-preview");
+        let (status, body) = post_json(&state, &token, &csrf, &uri, json!({})).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{list}");
+        assert_eq!(body["detail"]["code"], "cbl_source_not_found", "{body}");
+    }
+
+    for bad in [
+        json!({"included_positions": [0]}),
+        json!({"included_positions": ["x"]}),
+        json!({"included_positions": 3}),
+        json!({"target_list_id": 0}),
+        json!({"overlap_choices": [{"overlap_id": "", "choice": "protect_order"}]}),
+        json!({"overlap_choices": [{"overlap_id": "a", "choice": "other"}]}),
+    ] {
+        let (status, body) = post_json(&state, &token, &csrf, uri, bad.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(body, validation_failed(), "{bad}");
+    }
+    let (status, body) = raw_request(&state, "POST", uri, Some(&token), &csrf, "not json").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, validation_failed());
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/issue-identity/cbl/abc/reading-graph-preview",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, validation_failed());
+}
+
+#[tokio::test]
+async fn reading_graph_preview_cannot_see_another_readers_issues() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let (other_token, other_csrf) = create_test_user(&state, "other-reader").await;
+    let (status, body) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        "/api/v1/issue-identity/cbl/40/reading-graph-preview",
+        json!({"included_positions": [1, 2]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"]["code"], "unresolved_source_position");
+    // The owner is unaffected.
+    let (status, _) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/issue-identity/cbl/40/reading-graph-preview",
+        json!({"included_positions": [1, 2]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn series_mapping_preview_validation_auth_and_unavailable_scope() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let uri = "/api/v1/catalog/series-mappings/preview";
+
+    let (status, _) = raw_request(&state, "POST", uri, None, &csrf, "{}").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    for bad in [
+        json!({"origin_issue_id": 0, "provider": "comicvine", "provider_series_external_id": "4050-1"}),
+        json!({"origin_issue_id": 1, "provider": "nope", "provider_series_external_id": "4050-1"}),
+        json!({"origin_issue_id": 1, "provider": "comicvine", "provider_series_external_id": ""}),
+        json!({"origin_issue_id": 1, "provider": "comicvine", "provider_series_external_id": "x", "scope_mode": "bad"}),
+        json!({"provider": "comicvine", "provider_series_external_id": "x"}),
+    ] {
+        let (status, body) = post_json(&state, &token, &csrf, uri, bad.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(body, validation_failed(), "{bad}");
+    }
+
+    // An origin issue the reader does not own yields the unavailable scope, no
+    // token, and never reveals another reader's rows.
+    let (other_token, other_csrf) = create_test_user(&state, "other-reader").await;
+    let (status, body) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        uri,
+        json!({"origin_issue_id": 9401, "provider": "comicvine", "provider_series_external_id": "4050-1000"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["scope"]["status"], "unavailable", "{body}");
+    assert!(body["preview_token"].is_null(), "{body}");
+    assert_eq!(body["rows"], json!([]));
+    assert_eq!(body["counts"]["safe_exact_match"], 0);
+
+    // The owner gets an available, read-only scope and a signed token.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"origin_issue_id": 9401, "provider": "comicvine", "provider_series_external_id": "4050-1000"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["scope"]["origin_issue_id"], 9401);
+    assert!(body["issued_at"].is_number());
+    let conn = state.pool.get().await.unwrap();
+    let mappings: i64 = conn
+        .query_one("SELECT count(*) FROM thread_external_series_mappings", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(mappings, 2, "preview must not write mappings");
+}
+
+#[tokio::test]
+async fn project_preview_projects_plan_and_enforces_ownership() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO continuity_plans (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+        VALUES
+          (700, {user_id}, 'Event plan', 'informational',
+           '[{{"id":"n1","node_type":"thread","ref_id":941,"lane_id":"main","position":0}},
+             {{"id":"n2","node_type":"thread","ref_id":940,"lane_id":"main","position":1}}]'::json,
+           '[{{"id":"main","order":0}}]'::json, NOW(), NOW()),
+          (701, {user_id}, 'Bad plan', 'informational',
+           '[{{"id":"n1","node_type":"thread","ref_id":941,"lane_id":"main","position":0}},
+             {{"id":"n2","node_type":"thread","ref_id":941,"lane_id":"main","position":1}},
+             {{"id":"n3","node_type":"series","ref_id":5,"lane_id":"main","position":2}}]'::json,
+           '[{{"id":"main","order":0}}]'::json, NOW(), NOW());
+        INSERT INTO reading_orders (id, name, user_id) VALUES (800, 'My order', {user_id});
+        INSERT INTO reading_order_items (reading_order_id, thread_id, "position") VALUES (800, 940, 1);
+        "#
+    ))
+    .await
+    .unwrap();
+    drop(conn);
+    let uri = "/api/v1/continuity-plans/700/reading-orders/project-preview";
+
+    let (status, _) = raw_request(&state, "POST", uri, None, &csrf, "{}").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, body) =
+        post_json(&state, &token, &csrf, uri, json!({"reading_order_id": 800})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["plan_name"], "Event plan");
+    assert_eq!(body["reading_order_name"], "My order");
+    assert_eq!(body["conflicts"], json!([]));
+    let entries = body["entries"].as_array().unwrap();
+    assert_eq!(entries[0]["thread_id"], 941);
+    assert_eq!(entries[0]["source"], "added");
+    assert_eq!(entries[0]["thread_title"], "Beta");
+    assert_eq!(entries[1]["thread_id"], 940);
+    assert_eq!(
+        entries[1]["source"], "updated",
+        "moved from position 1 to 2"
+    );
+    assert_eq!(body["total_positions"], 2);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/continuity-plans/701/reading-orders/project-preview",
+        json!({"reading_order_id": 800}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let codes: Vec<&str> = body["conflicts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, vec!["duplicate_thread", "non_thread_node"]);
+    assert_eq!(body["entries"], json!([]));
+    assert_eq!(body["total_positions"], 1);
+
+    // Another reader gets the same 404 as a missing plan or reading order.
+    let (other_token, other_csrf) = create_test_user(&state, "other-reader").await;
+    let (status, _) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        uri,
+        json!({"reading_order_id": 800}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = post_json(
+        &state,
+        &token,
+        &csrf,
+        uri,
+        json!({"reading_order_id": 9999}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/continuity-plans/9999/reading-orders/project-preview",
+        json!({"reading_order_id": 800}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    for bad in [
+        json!({}),
+        json!({"reading_order_id": 0}),
+        json!({"reading_order_id": "x"}),
+    ] {
+        let (status, body) = post_json(&state, &token, &csrf, uri, bad.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(body, validation_failed(), "{bad}");
+    }
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v1/continuity-plans/abc/reading-orders/project-preview",
+        json!({"reading_order_id": 800}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, validation_failed());
+}

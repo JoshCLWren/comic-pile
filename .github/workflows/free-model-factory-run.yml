@@ -103,6 +103,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 5ebb57c3d497af114921958ce8ad694676f3da5a
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-state-cache
         with:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
@@ -199,6 +208,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           token: ${{ secrets.PR_REBASE_TOKEN }}
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 5ebb57c3d497af114921958ce8ad694676f3da5a
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Install factory syntax parsers
         uses: ./.github/actions/factory-syntax
@@ -744,6 +762,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 5ebb57c3d497af114921958ce8ad694676f3da5a
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-syntax
       # Only this trusted, separate cleanup job receives the Neon DSN.
       # The model-running factory job above must never see it.
@@ -804,6 +831,15 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/rotisserie
+          ref: 5ebb57c3d497af114921958ce8ad694676f3da5a
+          path: .rotisserie/runtime
+          persist-credentials: false
+      - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        run: bash .rotisserie/runtime/factory/install/overlay.sh .
       - uses: ./.github/actions/factory-syntax
       - name: Configure restricted Neon post-session lease release
         uses: ./.github/actions/factory-state-cache
