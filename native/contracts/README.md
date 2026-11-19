@@ -50,9 +50,9 @@ method/path surface. The aggregate intentionally includes public auth entry
 points, so the artifact guard checks explicit security declarations rather than
 requiring bearer auth on every operation.
 
-`scripts/export_openapi_schema.py` merges this contract into the single
+`scripts/export_openapi_schema.mjs` merges this contract into the single
 client-facing document (`frontend/src/generated/openapi.json`) and then
-`scripts/generate_openapi_types.py` regenerates `openapi.ts` plus the thin
+`scripts/generate_openapi_types.mjs` regenerates `openapi.ts` plus the thin
 `nativeV2Client.ts` request client. A native operation replaces the same
 `(path, method)` FastAPI operation because ingress sends that request to Rust.
 A component-name collision is renamed `Native<Name>` with every reference

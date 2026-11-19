@@ -74,7 +74,7 @@ fn unauthorized(code: &str) -> ApiError {
     ApiError::Unauthorized(code.to_string())
 }
 
-fn now_f64() -> f64 {
+pub(crate) fn now_f64() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -95,7 +95,7 @@ fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
+pub(crate) fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
         .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
     mac.update(message.as_bytes());
@@ -136,7 +136,7 @@ fn python_json_string(value: &str) -> String {
     ascii
 }
 
-fn canonical_json(v: &Value) -> String {
+pub(crate) fn canonical_json(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
@@ -554,7 +554,7 @@ async fn assert_no_confirmed_mapping_conflict(
 // Plan building - compatibility layer. This must produce the same state_digest
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
-async fn build_plan_for_commit(
+pub(crate) async fn build_plan_for_commit(
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,

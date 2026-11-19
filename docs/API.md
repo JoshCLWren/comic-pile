@@ -47,11 +47,12 @@ The checked-in client contract
 (`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
 generated sources:
 
-- `app.openapi()` for the Python/FastAPI routes, and
+- `native/contracts/python-legacy.openapi.json`, a frozen snapshot of the remaining
+  Python/FastAPI routes, and
 - `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
   operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
 
-`scripts/export_openapi_schema.py` merges them: a native operation replaces the
+`scripts/export_openapi_schema.mjs` merges them: a native operation replaces the
 same `(path, method)` because ingress routes that request to Rust, and a native
 component schema that differs from a same-named Python schema is published as
 `Native<Name>` with its internal references rewritten. The same canonical
