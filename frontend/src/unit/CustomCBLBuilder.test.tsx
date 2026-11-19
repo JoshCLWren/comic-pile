@@ -166,6 +166,21 @@ const waitingConfirmationError = {
 }
 
 describe('CustomCBLBuilder', () => {
+  it('says so when a global CBL source search matches nothing instead of rendering silently (#5485)', async () => {
+    cblMocks.discover.mockResolvedValue([])
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    await screen.findByText('Starman #55')
+    fireEvent.click(screen.getByRole('button', { name: 'Replace using CBL' }))
+    fireEvent.change(screen.getByLabelText('Search global CBL sources'), { target: { value: 'Batman' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Find CBLs' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /No active global CBL sources match .Batman./,
+    )
+    expect(screen.queryByLabelText('Global CBL source candidates')).not.toBeInTheDocument()
+  })
+
   it('explains a Create cycle with named comics and an owned prerequisite editor link', async () => {
     mocks.create.mockRejectedValueOnce({
       isAxiosError: true,

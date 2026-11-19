@@ -1256,7 +1256,7 @@ mod tests {
             .iter()
             .filter_map(|value| value.to_str().ok().map(str::to_owned))
             .collect::<Vec<_>>();
-        let body = to_bytes(response.into_body(), 8192)
+        let body = to_bytes(response.into_body(), 1024 * 1024)
             .await
             .expect("response body");
         let text = String::from_utf8_lossy(&body).into_owned();
@@ -1900,6 +1900,97 @@ mod tests {
                     "discovery keeps the raw stored path: {text}"
                 );
                 assert_eq!(items[0]["declared_issue_count"], 12, "{text}");
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn cbl_sources_discover_high_volume_batman_catalog_returns_bounded_active_results() {
+        // Regression for #5485: a realistic catalog has hundreds of Batman
+        // sources, many inactive or with NULL entry counts. Searches for
+        // "Batman"/"batman"/"Bat" must still return a full page of ACTIVE
+        // matches while narrow terms ("Teen Titans", "X-Men") keep working.
+        let url = disposable_schema_url().await;
+        let state = test_state(&url);
+        TEST_ROLL_STATE
+            .scope(state, async {
+                let username = format!("cbl-discover-volume-{}", std::process::id());
+                let (access, _csrf, _user_id) = register_session(&username).await;
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("seed connection");
+                connection
+                    .batch_execute(
+                        "INSERT INTO cbl_sources (id, repository, revision_sha) \
+                         VALUES (1, '/mnt/bigdata/CBL-ReadingLists', 'abc123'); \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT n, 1, 'DC/Batman/Batman Run ' || lpad(n::text, 3, '0') || '.cbl', \
+                                'Batman Run ' || lpad(n::text, 3, '0'), \
+                                CASE WHEN n % 7 = 0 THEN NULL ELSE n END, \
+                                'h' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 120) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 200 + n, 1, 'DC/Old/Batman Old ' || n || '.cbl', \
+                                'AAA Batman Archived ' || n, 3, 'ha' || n, 'abc123', FALSE \
+                         FROM generate_series(1, 60) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         SELECT 300 + n, 1, 'DC/Batman/Crossovers/Event ' || n || '.cbl', \
+                                'Event ' || n, 5, 'hp' || n, 'abc123', TRUE \
+                         FROM generate_series(1, 40) AS n; \
+                         INSERT INTO cbl_source_lists \
+                           (id, source_id, source_path, name, declared_issue_count, \
+                            content_hash, revision_sha, active) \
+                         VALUES \
+                           (400, 1, 'DC/Teen Titans/Teen Titans.cbl', 'Teen Titans', 9, 'ht', 'abc123', TRUE), \
+                           (401, 1, 'Marvel/X-Men/X-Men 1963.cbl', 'X-Men 1963', 9, 'hx1', 'abc123', TRUE), \
+                           (402, 1, 'Marvel/X-Men/X-Men 1991.cbl', 'X-Men 1991', NULL, 'hx2', 'abc123', TRUE);",
+                    )
+                    .await
+                    .expect("seed high-volume cbl catalog");
+                drop(connection);
+
+                let request = |uri: String| {
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .header(header::AUTHORIZATION, format!("Bearer {access}"))
+                        .body(Body::empty())
+                        .expect("cbl discover request")
+                };
+
+                for (query, limit, expected) in [
+                    ("Batman", 25, 25),
+                    ("batman", 25, 25),
+                    ("Bat", 25, 25),
+                    ("Batman", 100, 100),
+                    ("Teen%20Titans", 25, 1),
+                    ("X-Men", 25, 2),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}&limit={limit}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}/{limit}: {text}");
+                    let items = body.as_array().expect("discovery list");
+                    assert_eq!(items.len(), expected, "{query}/{limit}: {text}");
+                    assert!(
+                        items.iter().all(|item| !item["name"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .contains("Archived")),
+                        "inactive rows must be excluded for {query}: {text}"
+                    );
+                }
             })
             .await;
     }
