@@ -1076,16 +1076,23 @@ fn retry_after_seconds(resets_at: DateTime<Utc>, now: DateTime<Utc>) -> i64 {
     seconds.max(1)
 }
 
-/// A provider connection must not outlive its awaited Vercel request.
-struct ConnectionGuard(tokio::task::JoinHandle<()>);
-
-impl Drop for ConnectionGuard {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
+/// Map a transport failure to the exact production GitHub error string.
+fn github_transport_error(error: &OutboundError) -> String {
+    let reason = match error {
+        OutboundError::Connect(_) | OutboundError::Send(_) => "network error",
+        OutboundError::TlsSetup(_) => "TLS not available",
+        OutboundError::TlsHandshake(_) => "TLS handshake failed",
+        OutboundError::HttpHandshake(_) => "connection failed",
+        OutboundError::RequestInvalid(_) => "request invalid",
+    };
+    format!("Failed to create GitHub issue: {reason}")
 }
 
+/// Create the GitHub issue through the app's outbound seam. Production uses
+/// the real HTTPS client; test-configured apps hold a recording fake that
+/// never opens a socket (#5339).
 async fn create_github_issue(
+    outbound: Arc<dyn OutboundHttp>,
     settings: GithubSettings,
     title: String,
     body: String,
@@ -1099,74 +1106,41 @@ async fn create_github_issue(
     }
     let payload = serde_json::json!({"title": title, "body": body, "labels": labels});
     let payload_bytes = payload.to_string().into_bytes();
-    let path = format!("/repos/{owner}/{repo}/issues");
+    let request = OutboundRequest {
+        method: http::Method::POST,
+        path: format!("/repos/{owner}/{repo}/issues"),
+        headers: vec![
+            (
+                "accept".to_string(),
+                "application/vnd.github+json".to_string(),
+            ),
+            ("authorization".to_string(), format!("Bearer {token}")),
+            ("x-github-api-version".to_string(), "2022-11-28".to_string()),
+            (
+                "user-agent".to_string(),
+                "comic-pile-native/1.0 (bug report)".to_string(),
+            ),
+            ("content-type".to_string(), "application/json".to_string()),
+            (
+                "content-length".to_string(),
+                payload_bytes.len().to_string(),
+            ),
+        ],
+        body: HyperBytes::from(payload_bytes),
+    };
 
-    let connect = async move {
-        let tcp = tokio::net::TcpStream::connect((GITHUB_HOST, 443))
-            .await
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                "Failed to create GitHub issue: network error".to_string()
-            })?;
-        let tls = native_tls::TlsConnector::new().map_err(|e| {
+    let exchange = async {
+        let response = outbound.send(GITHUB_HOST, request).await.map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
                 "preserved underlying error before mapping"
             );
-            "Failed to create GitHub issue: TLS not available".to_string()
+            github_transport_error(&e)
         })?;
-        let tls = tokio_native_tls::TlsConnector::from(tls)
-            .connect(GITHUB_HOST, tcp)
-            .await
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                "Failed to create GitHub issue: TLS handshake failed".to_string()
-            })?;
-        let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            "Failed to create GitHub issue: connection failed".to_string()
-        })?;
-        let _connection_guard = ConnectionGuard(tokio::spawn(async move {
-            let _ = connection.await;
-        }));
-        let authorization = format!("Bearer {token}");
-        let request = http::Request::builder()
-            .method("POST")
-            .uri(path)
-            .header("host", GITHUB_HOST)
-            .header("accept", "application/vnd.github+json")
-            .header("authorization", authorization)
-            .header("x-github-api-version", "2022-11-28")
-            .header("user-agent", "comic-pile-native/1.0 (bug report)")
-            .header("content-type", "application/json")
-            .header("content-length", payload_bytes.len().to_string())
-            .body(Full::new(HyperBytes::from(payload_bytes)))
-            .map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                "Failed to create GitHub issue: request invalid".to_string()
-            })?;
-        let mut response = sender.send_request(request).await.map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            "Failed to create GitHub issue: network error".to_string()
-        })?;
-        let status = response.status();
+        let status = response.status;
         let mut data = Vec::new();
-        while let Some(frame) = response.body_mut().frame().await {
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
             let frame = frame.map_err(|e| {
                 tracing::debug!(
                     error_kind = crate::error_kind(&e),
@@ -1208,7 +1182,7 @@ async fn create_github_issue(
             snippet.trim()
         ))
     };
-    tokio::time::timeout(GITHUB_TIMEOUT, connect)
+    tokio::time::timeout(GITHUB_TIMEOUT, exchange)
         .await
         .map_err(|e| {
             tracing::debug!(
