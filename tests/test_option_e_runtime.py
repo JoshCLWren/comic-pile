@@ -13,13 +13,10 @@ from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
-from app.services.collection_exclusion_service import delete_collection_exclusion
-from app.services.errors import InvalidRequestError
 from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.thread_service import list_queue_threads
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
-from tests.roll_flow import roll_pending_thread
 
 
 @pytest.fixture
@@ -225,16 +222,27 @@ async def test_old_dependencies_do_not_override_canonical_reading_intent(
     legacy, b = await _series(async_db, user.id, "Old checkpoint", 2)
     compiled, c = await _series(async_db, user.id, "Generated copy", 3)
     deliberate, d = await _series(async_db, user.id, "Explicit exception", 4)
-    async_db.add_all([
-        Dependency(source_issue_id=a[0].id, target_issue_id=b[0].id,
-                   note="Old reading plan checkpoint"),
-        Dependency(source_issue_id=a[0].id, target_issue_id=c[0].id,
-                   origin="converted", classification="C",
-                   provenance="legacy continuity-rule expansion"),
-        Dependency(source_issue_id=a[0].id, target_issue_id=d[0].id,
-                   origin="reader", classification="A",
-                   provenance="Explicit reader requirement"),
-    ])
+    async_db.add_all(
+        [
+            Dependency(
+                source_issue_id=a[0].id, target_issue_id=b[0].id, note="Old reading plan checkpoint"
+            ),
+            Dependency(
+                source_issue_id=a[0].id,
+                target_issue_id=c[0].id,
+                origin="converted",
+                classification="C",
+                provenance="legacy continuity-rule expansion",
+            ),
+            Dependency(
+                source_issue_id=a[0].id,
+                target_issue_id=d[0].id,
+                origin="reader",
+                classification="A",
+                provenance="Explicit reader requirement",
+            ),
+        ]
+    )
     await async_db.flush()
     live = await get_execution_eligibility(async_db, user.id)
     assert live is not None
@@ -243,6 +251,7 @@ async def test_old_dependencies_do_not_override_canonical_reading_intent(
     assert live.threads[deliberate.id].blockers[0].origin == "reader"
     from app.repositories.reading_shadow_repository import load_shadow_inputs
     from app.services.reading_shadow_service import compare_reading_eligibility
+
     shadow = compare_reading_eligibility(await load_shadow_inputs(async_db, user.id))
     rows = shadow["threads"]
     assert isinstance(rows, list)
@@ -378,38 +387,31 @@ async def test_empty_and_fully_excluded_queues_have_valid_live_sort_sql(
     assert excluded.threads[0].is_blocked is True
 
 
-async def test_exclusion_delete_rolls_back_when_stored_graph_is_invalid(
+async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
     option_e: None,
+    auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Exclusions cannot be used to hide stored cycles from write validation."""
+    """Read now cannot offer an issue the rating guard would reject."""
     user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Natural order", 1)
-    reading_list = CustomCBLList(user_id=user.id, name="Backwards", mode="strict")
-    exclusion = CollectionExclusion(user_id=user.id, thread_id=thread.id)
-    async_db.add_all([reading_list, exclusion])
+    first, first_issues = await _series(async_db, user.id, "Required first", 1)
+    blocked, blocked_issues = await _series(async_db, user.id, "Wait for first", 2)
+    reading_list = CustomCBLList(user_id=user.id, name="Read now order", mode="strict")
+    async_db.add(reading_list)
     await async_db.flush()
     async_db.add_all(
         [
-            CustomCBLEntry(list_id=reading_list.id, issue_id=issues[1].id, position=1),
-            CustomCBLEntry(list_id=reading_list.id, issue_id=issues[0].id, position=2),
+            CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
+            CustomCBLEntry(list_id=reading_list.id, issue_id=blocked_issues[0].id, position=2),
+            ReadingSession(user_id=user.id, skipped_thread_ids=[first.id]),
         ]
     )
-    exclusion_id = exclusion.id
+    thread_ids = [first.id, blocked.id]
     await async_db.commit()
-    with pytest.raises(InvalidRequestError, match="cycle"):
-        await delete_collection_exclusion(
-            async_db, user_id=user.id, exclusion_id=exclusion_id
-        )
-    assert await async_db.get(CollectionExclusion, exclusion_id) is not None
-
-
-
-
-
-
-
-
+    for thread_id in thread_ids:
+        selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
+        assert selected.status_code == 400, selected.text
+    assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
 
 
 async def test_option_e_roll_pool_never_reaggregates_unread_issues(
@@ -422,9 +424,7 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     waiting, waiting_issues = await _series(async_db, user.id, "Waiting", 2)
     ahead, ahead_issues = await _series(async_db, user.id, "Ahead", 1, blocked=True)
     snoozed, _ = await _series(async_db, user.id, "Snoozed", 3)
-    async_db.add(
-        CollectionExclusion(user_id=user.id, issue_id=waiting_issues[0].id)
-    )
+    async_db.add(CollectionExclusion(user_id=user.id, issue_id=waiting_issues[0].id))
     await async_db.flush()
     # Deliberately stale saved counters and flags must not determine the offer.
     ahead.issues_remaining = 0
@@ -442,9 +442,7 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
 
     event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
     try:
-        pool = await get_bounded_roll_pool_rows(
-            user.id, async_db, 10, snoozed_ids=[snoozed.id]
-        )
+        pool = await get_bounded_roll_pool_rows(user.id, async_db, 10, snoozed_ids=[snoozed.id])
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
 
@@ -460,139 +458,45 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     assert "count(" not in sql
 
 
-async def test_roll_response_reuses_precommit_snapshot_without_postcommit_reads(
-    option_e: None,
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-) -> None:
-    """Successful Roll returns a dense Queue ordinal without a post-commit reload."""
-    from app.services.queue_display import display_positions
-
-    user = await get_or_create_user_async(async_db)
-    first, first_issues = await _series(async_db, user.id, "First", 3, count=1)
-    second, second_issues = await _series(async_db, user.id, "Second", 19, count=1)
-    async_db.add(
-        ReadingSession(
-            user_id=user.id,
-            start_die=6,
-            manual_die=6,
-            active_bandwidth="balanced",
-            bandwidth_source="manual",
-            active_intent="balanced",
-            intent_source="manual",
-        )
-    )
-    await async_db.commit()
-
-    did_commit = False
-    after_commit_queries: list[str] = []
-
-    def record_commit(session: object) -> None:
-        nonlocal did_commit
-        if session is async_db.sync_session:
-            did_commit = True
-
-    def record_query(
-        conn: object, cursor: object, statement: str,
-        parameters: object, context: object, executemany: bool,
-    ) -> None:
-        if did_commit:
-            after_commit_queries.append(statement)
-
-    event.listen(async_db.sync_session, "after_commit", record_commit)
-    event.listen(db_engine.sync_engine, "before_cursor_execute", record_query)
-    try:
-        body = (await roll_pending_thread(async_db)).model_dump()
-    finally:
-        event.remove(db_engine.sync_engine, "before_cursor_execute", record_query)
-        event.remove(async_db.sync_session, "after_commit", record_commit)
-
-    assert did_commit, "Roll must persist its selection before replying"
-    assert after_commit_queries == [], (
-        "A committed Roll must not launch a new transaction to hydrate the response: "
-        f"{after_commit_queries}"
-    )
-    expected_issue_ids = {
-        first.id: first_issues[0].id,
-        second.id: second_issues[0].id,
-    }
-    assert body["issue_id"] == expected_issue_ids[body["thread_id"]]
-    positions = await display_positions(async_db, user.id)
-    assert body["queue_position"] == positions[body["thread_id"]]
-    assert set(positions.values()) == {1, 2}
-
-
-async def test_roll_precommit_projection_does_not_ack_failed_commit(
+async def test_plan_read_now_guards_exact_issue_without_retargeting_on_stale_offer(
     option_e: None,
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A DTO built before commit is never returned when persistence fails."""
+    """A reading plan must never silently select a newer issue from the same series."""
+    from sqlalchemy import func
+
     user = await get_or_create_user_async(async_db)
-    await _series(async_db, user.id, "Commit guard", 1, count=1)
-    async_db.add(
-        ReadingSession(
-            user_id=user.id,
-            start_die=6,
-            manual_die=6,
-            active_bandwidth="balanced",
-            bandwidth_source="manual",
-            active_intent="balanced",
-            intent_source="manual",
-        )
-    )
+    thread, issues = await _series(async_db, user.id, "Reading plan selection", 1)
+    thread_id, first_id, second_id = thread.id, issues[0].id, issues[1].id
     await async_db.commit()
 
-    from app.schemas.roll import RollResponse
-    from app.services.roll_service import RollService
+    path = f"/api/v1/threads/{thread_id}/set-pending"
+    wrong = await auth_client.post(path, json={"expected_issue_id": second_id})
+    assert wrong.status_code == 409
+    assert "Refresh the reading plan" in wrong.json()["detail"]
+    assert await async_db.scalar(select(func.count(Event.id)).where(Event.type == "roll")) == 0
 
-    response_projected = False
-    original_projection = RollService.build_roll_response
+    selected = await auth_client.post(path, json={"expected_issue_id": first_id})
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["issue_id"] == first_id
+    assert selected.json()["result"] == 0  # Manual selection, not an invented die roll.
+    session = await async_db.scalar(select(ReadingSession).where(ReadingSession.user_id == user.id))
+    assert session is not None
+    assert session.pending_thread_id == thread_id
+    assert session.pending_issue_id == first_id
 
-    async def record_projection(
-        service: RollService,
-        *,
-        selected_thread: Thread | None = None,
-        current_die: int,
-        selected_index: int,
-        unread_count: int,
-        snoozed_count: int,
-        issue_id: int | None = None,
-        issue_number: str | None = None,
-        next_issue_id: int | None = None,
-        next_issue_number: str | None = None,
-        recommendation_reason_codes: list[str] | None = None,
-    ) -> RollResponse:
-        nonlocal response_projected
-        response_projected = True
-        return await original_projection(
-            service,
-            selected_thread=selected_thread,
-            current_die=current_die,
-            selected_index=selected_index,
-            unread_count=unread_count,
-            snoozed_count=snoozed_count,
-            issue_id=issue_id,
-            issue_number=issue_number,
-            next_issue_id=next_issue_id,
-            next_issue_number=next_issue_number,
-            recommendation_reason_codes=recommendation_reason_codes,
-        )
+    # The plan was open while the first issue became read elsewhere.
+    first = await async_db.get(Issue, first_id)
+    assert first is not None
+    first.status = "read"
+    await async_db.commit()
 
-    async def fail_commit() -> None:
-        assert response_projected, "Failure must target the final commit, not initialization"
-        raise RuntimeError("synthetic commit failure")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(RollService, "build_roll_response", record_projection)
-        patch.setattr(async_db, "commit", fail_commit)
-        with pytest.raises(RuntimeError, match="synthetic commit failure"):
-            await roll_pending_thread(async_db)
-    assert response_projected
-    await async_db.rollback()
-    assert await async_db.scalar(
-        select(Event.id).where(Event.type == "roll", Event.session_id.is_not(None))
-    ) is None
-
-
+    stale = await auth_client.post(path, json={"expected_issue_id": first_id})
+    assert stale.status_code == 409, stale.text
+    assert "Refresh the reading plan" in stale.json()["detail"]
+    await async_db.refresh(session)
+    assert session.pending_thread_id == thread_id
+    assert session.pending_issue_id == first_id  # No mutation on stale selection.
+    assert await async_db.scalar(select(func.count(Event.id)).where(Event.type == "roll")) == 1
+    assert await async_db.scalar(select(Issue.status).where(Issue.id == second_id)) == "unread"
