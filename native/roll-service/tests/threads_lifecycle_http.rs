@@ -2496,6 +2496,13 @@ async fn test_backdate_thread_for_testing_validates_days_ago() {
         &body,
         json!({"field": "query.days_ago", "message": "Input should be less than or equal to 3650", "type": "less_than_equal"}),
     );
+
+    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=abc"), None).await;
+    assert_rejection(
+        status,
+        &body,
+        json!({"field": "query.days_ago", "message": "Input should be a valid integer, unable to parse string as an integer", "type": "int_parsing"}),
+    );
 }
 
 /// A changed writer must serialize on the per-reader queue advisory lock
