@@ -1651,7 +1651,19 @@ mod tests {
                             'Batman Adventures', 6, 'h-adv', 'abc123', TRUE), \
                            (3, 1, 'Marvel/X-Men.cbl', 'X-Men', 30, 'h-x', 'abc123', TRUE), \
                            (4, 1, 'DC/Archived.cbl', 'Archived Batman', 1, \
-                            'h-arch', 'abc123', FALSE);",
+                            'h-arch', 'abc123', FALSE), \
+                           (5, 1, 'DC/Special/100% Complete.cbl', '100% Complete', 2, \
+                            'h-pct', 'abc123', TRUE), \
+                           (6, 1, 'DC/Special/100X Complete.cbl', '100X Complete', 2, \
+                            'h-pctx', 'abc123', TRUE), \
+                           (7, 1, 'DC/Special/Under_score.cbl', 'Under_score', 3, \
+                            'h-us', 'abc123', TRUE), \
+                           (8, 1, 'DC/Special/UnderXscore.cbl', 'UnderXscore', 3, \
+                            'h-usx', 'abc123', TRUE), \
+                           (9, 1, 'DC/Special/Back\\Slash.cbl', 'Back\\Slash', 4, \
+                            'h-bs', 'abc123', TRUE), \
+                           (10, 1, 'DC/Special/BackSlash.cbl', 'BackSlash', 4, \
+                            'h-bsx', 'abc123', TRUE);",
                     )
                     .await
                     .expect("seed cbl catalog");
@@ -1682,7 +1694,7 @@ mod tests {
                     call_app(request("/api/v1/issue-identity/cbl-sources".into())).await;
                 assert_eq!(status, StatusCode::OK, "{text}");
                 let items = body.as_array().expect("discovery list");
-                assert_eq!(items.len(), 3, "inactive lists must be excluded: {text}");
+                assert_eq!(items.len(), 9, "inactive lists must be excluded: {text}");
                 assert!(
                     items
                         .iter()
@@ -1723,6 +1735,29 @@ mod tests {
                     assert!(
                         items.iter().all(|item| item["name"] != "Archived Batman"),
                         "inactive lists must stay excluded for {query:?}: {text}"
+                    );
+                }
+
+                // Literal LIKE metacharacters must be escaped so user terms match
+                // %, _, and \ characters exactly (not as SQL wildcards/escapes).
+                for (query, expected_name, excluded_name) in [
+                    ("100%25", "100% Complete", "100X Complete"),
+                    ("Under_score", "Under_score", "UnderXscore"),
+                    ("Back%5CSlash", "Back\\Slash", "BackSlash"),
+                ] {
+                    let (status, body, _, text) = call_app(request(format!(
+                        "/api/v1/issue-identity/cbl-sources?q={query}"
+                    )))
+                    .await;
+                    assert_eq!(status, StatusCode::OK, "{query}: {text}");
+                    let items = body.as_array().expect("filtered discovery list");
+                    assert!(
+                        items.iter().any(|item| item["name"] == expected_name),
+                        "literal search {query:?} must match {expected_name:?}: {text}"
+                    );
+                    assert!(
+                        items.iter().all(|item| item["name"] != excluded_name),
+                        "literal search {query:?} must not wildcard-match {excluded_name:?}: {text}"
                     );
                 }
 
