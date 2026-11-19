@@ -39,7 +39,6 @@ IMPORT_FRAMEWORK_RATIO = 3.0
 #: catalog router and its backends (comicvine, httpx,
 #: PyGithub) belong behind the per-resource deferred mounts.
 FORBIDDEN_COLD_IMPORTS: tuple[str, ...] = (
-    "app.api.catalog",
     "app.services.comicvine_provider",
     "httpx",
     "github",

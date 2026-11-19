@@ -649,6 +649,14 @@
     "name": "commit_series_mapping"
   },
   {
+    "path": "/api/v1/catalog/series-mappings/preview",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.catalog",
+    "name": "preview_series_mapping"
+  },
+  {
     "path": "/api/v1/identity-inbox",
     "methods": [
       "GET"
@@ -721,6 +729,14 @@
     "name": "confirm_plan_projection"
   },
   {
+    "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_order_projection",
+    "name": "preview_plan_projection"
+  },
+  {
     "path": "/api/v1/issue-identity/cbl-sources/folders",
     "methods": [
       "GET"
@@ -775,6 +791,14 @@
     ],
     "module": "app.api.cbl_sources",
     "name": "get_cbl_source_list"
+  },
+  {
+    "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.cbl_sources",
+    "name": "preview_cbl_reading_graph"
   },
   {
     "path": "/api/v1/cbl/{list_id}/adoption-commit",
