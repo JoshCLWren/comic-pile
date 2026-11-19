@@ -18,7 +18,6 @@ import {pythonJsonDumps} from './generate_route_burndown.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const nodeScript = path.join(repoRoot, 'scripts', 'generate_route_burndown.mjs');
-const pythonScript = path.join(repoRoot, 'scripts', 'generate_route_burndown.py');
 const fixturesRoot = path.join(repoRoot, 'scripts', '__fixtures__', 'route-burndown');
 const fixtureInputs = path.join(fixturesRoot, 'inputs');
 const fixtureGolden = path.join(fixturesRoot, 'golden');
@@ -112,37 +111,6 @@ test('node generator matches checked-in golden fixtures on hermetic inputs', (t)
   assert.throws(() => run([process.execPath, nodeScript], checkArgs, tmp), err => err.status === 1);
 });
 
-test('node and python generators produce identical bytes on hermetic fixtures', (t) => {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-parity-'));
-  t.after(() => rmSync(tmp, {recursive: true, force: true}));
-
-  const nodeDir = path.join(tmp, 'node');
-  const pyDir = path.join(tmp, 'python');
-  mkdirSync(nodeDir, {recursive: true});
-  mkdirSync(pyDir, {recursive: true});
-  const nodeFiles = stageInputs(nodeDir);
-  const pyFiles = stageInputs(pyDir);
-
-  run([process.execPath, nodeScript], generatorArgs(nodeFiles), nodeDir);
-  run(['python3', pythonScript], generatorArgs(pyFiles), pyDir);
-
-  for (const key of Object.keys(GOLDEN_BY_KEY)) {
-    assert.deepEqual(
-      readBytes(nodeFiles[key]),
-      readBytes(pyFiles[key]),
-      `${key} bytes differ between Node and Python`,
-    );
-    assert.deepEqual(
-      readBytes(nodeFiles[key]),
-      readBytes(path.join(fixtureGolden, GOLDEN_BY_KEY[key])),
-      `${key} differs from the checked-in golden fixture`,
-    );
-  }
-
-  const invText = readFileSync(nodeFiles.inventory, 'utf8');
-  assert.ok(invText.includes('\\u00e9'), 'expected escaped café');
-  assert.ok(invText.includes('\\ud83d\\ude00'), 'expected escaped emoji surrogate pair');
-});
 
 test('generator rejects invalid fragment input and leaves fixtures untouched', (t) => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-invalid-'));

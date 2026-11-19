@@ -54,6 +54,17 @@ parse_database_url() {
     PGPORT="${rest%%/*}"
     PGDATABASE="${rest#*/}"
 
+    # Safety guard (#5431): a restore wipes the target database, so refuse any
+    # host that is not provably local. There is intentionally no override.
+    case "${PGHOST,,}" in
+        localhost|localhost.localdomain|127.*|::1|\[::1\]) ;;
+        *)
+            echo -e "${RED}ERROR: refusing to restore into non-local host '$PGHOST'${NC}"
+            echo -e "${YELLOW}Restore only targets a loopback/local PostgreSQL database.${NC}"
+            exit 1
+            ;;
+    esac
+
     echo "Database: $PGDATABASE"
     echo "Host: $PGHOST:$PGPORT"
     echo "User: $PGUSER"

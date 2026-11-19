@@ -36,7 +36,7 @@ The `scripts/restore_postgres.sh` script:
 1. Parses `DATABASE_URL` from `.env` file
 2. Lists available backups when run without arguments
 3. Verifies backup file integrity with `gzip -t`
-4. Prompts for confirmation before restoring
+4. Refuses any non-local database host (loopback/localhost only, no override), then prompts for confirmation before restoring
 5. Restores database using `gunzip` and `psql`
 6. Verifies database contents after restore
 
