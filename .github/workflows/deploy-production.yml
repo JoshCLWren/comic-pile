@@ -1,6 +1,6 @@
 name: Deploy Production
 # Dispatched runs show who asked and why ("Deploy Production [source=manual] <reason>");
-# factory-dispatch-production-deploy.sh matches this prefix to find a queued
+# dispatch-production-deploy.sh (and the Rotisserie factory copy) matches this prefix to find a queued
 # manual run. Other events evaluate to '' and keep GitHub's default run name.
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Deploy Production [source={0}] {1}', inputs.source, inputs.reason) || '' }}
 

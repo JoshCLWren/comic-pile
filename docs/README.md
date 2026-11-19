@@ -25,9 +25,9 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [SEO launch runbook](operations/SEO_LAUNCH_RUNBOOK.md): operator steps for Search Console ownership, sitemap submission, index inspection, baseline metrics, and legitimate off-site discovery.
 - [Agent engineering rules](../AGENTS.md): mandatory repository conventions for coding agents.
 - [Manual QA behavior inventory](manual-qa/README.md): agent-friendly workflows and expected outcomes for manual product QA.
-- [Autonomous factory policy](AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
+- [Autonomous factory policy](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md): canonical autonomous delivery lifecycle and merge policy.
 - [Issue execution protocol](ISSUE_EXECUTION_PROTOCOL.md): issue ownership, implementation, validation, and closure procedure.
-- [Factory GitHub visibility](FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
+- [Factory GitHub visibility](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/FACTORY_GITHUB_VISIBILITY.md): canonical factory labels and GitHub visibility rules.
 - [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
 - [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
 - [API documentation](API.md): REST API contracts and examples.

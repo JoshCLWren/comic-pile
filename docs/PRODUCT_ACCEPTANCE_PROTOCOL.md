@@ -6,7 +6,7 @@ This document defines the mandatory product-acceptance stage for PRDs and epics 
 
 ## Merge-automation guard (issue #1620)
 
-Merge automation must never close an acceptance parent. `factory_post_merge_closure.py` refuses closure for any acceptance parent and reports one of:
+Merge automation must never close an acceptance parent. [factory_post_merge_closure.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory_post_merge_closure.py) refuses closure for any acceptance parent and reports one of:
 
 - `acceptance-parent-incomplete` — a declared child is still open, or one of
   the parent's own acceptance-criterion checkboxes is still unchecked (even
@@ -44,7 +44,7 @@ section naming the issue that owns the operator verification pass (#3037), a
 harness issue that hands its go/no-go to another issue (#2718), or a narrow
 child that says a parent "can use this path for production acceptance" (#2128).
 Those issues are ordinary implementation work: they stay in factory intake and
-intake/claim fences (`factory_work_policy.py`, `scripts/next_task.py`) and merge
+intake/claim fences ([factory_work_policy.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.github/scripts/factory_work_policy.py), [scripts/next_task.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/scripts/next_task.py)) and merge
 closure still closes them when their delivery PR merges. Over-broad detection
 here is a delivery defect, not a safe default.
 

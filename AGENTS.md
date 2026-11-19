@@ -4,18 +4,18 @@ Guidelines for AI agents working in this codebase.
 
 ## Rust-cutover backlog freeze (owner direction, 2026-11-15)
 
-Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See `docs/AUTONOMOUS_FACTORY_POLICY.md` for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
 
 ## Engineering objective completion
 
 For Comic Pile local factory delivery in Codex, use
-[the Codex Crouton adapter](.agents/skills/crouton-factory-codex/SKILL.md).
+[the Codex Crouton adapter](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/crouton-factory-codex/SKILL.md).
 Carry authorized work through CI repair, actual independent review (including
 the live-model OpenCode ACP lane), gated merge, deployment and
 real acceptance. Start eligible local reviewers instead of waiting for scheduled
 pickup and record actual identity and exact-head evidence. Read only ACP
 checkpoints/model-selection metadata and final reports/verdicts, never full logs
-or transcripts. See [the executable review path](docs/LOCAL_FACTORY_REVIEW.md).
+or transcripts. See [the executable review path](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/LOCAL_FACTORY_REVIEW.md).
 Existing authorization, leases, independent review and exact-head CI gates remain;
 remote factory WIP/backpressure limits do not block locals.
 
@@ -178,7 +178,7 @@ Never skip, disable, or weaken tests; run the relevant tests locally and require
 
 CI is not a debugging tool. Run focused local validation appropriate to the change before pushing whenever the execution environment provides a checkout and required dependencies.
 
-For autonomous factory work, `docs/AUTONOMOUS_FACTORY_POLICY.md` is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
+For autonomous factory work, [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
 
 Before pushing Python changes from a normal local checkout:
 1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
@@ -581,33 +581,23 @@ The following rules in `.greptile/config.json` are enforced by Greptile during P
 - Run the required lint/typecheck/build gates and targeted tests before committing; leave full test suites and aggregate coverage to CI
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
-- **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
+- **Local factory sessions**: before the first commit of any issue-driven session, load the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill ([local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session/SKILL.md)). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 
-## Factory provider discovery and durable slots
+## Factory runtime (Rotisserie)
 
-Factory worker IDs are generated from the provider integration registry by
-`.github/scripts/factory_worker_slots.py`. They are stable per provider and
-slot index, independent of the live catalog and model identity. Do not add a
-source-controlled model/worker roster or expected-worker snapshot.
+The factory code, its tests and its docs live in
+[Rotisserie](https://github.com/JoshCLWren/rotisserie/tree/main/factory). Comic Pile keeps
+only its adopter configuration (`.rotisserie/config.toml`), the installed workflows, and its
+factory state files under `.github/`. Change factory behavior in Rotisserie, then reinstall the
+workflows here with [factory/install/install.py](https://github.com/JoshCLWren/rotisserie/blob/main/factory/install/install.py); never re-add factory scripts or tests to this
+repository.
 
-The trusted dispatcher leases work only to credential-eligible providers that
-are not in cooldown and have capacity. The runner discovers the exact upstream
-model ID from the OpenCode CLI, Kilo CLI or the published provider catalog at
-execution time. The selected model must be passed unchanged to OpenCode.
-Catalog listing alone does not establish callability; actual useful execution
-and its trusted outcome are the evidence of a working route. Pricing is not
-an eligibility gate. Credential failures, provider quotas, throttles and
-observed failures produce bounded retries and cooldowns, never permanent
-inventory retirement.
-
-The model selection/regression contract is checked with:
+Local factory sessions get the factory scripts, prompts and skills by running Rotisserie's
+overlay once per checkout. The copies stay untracked:
 
 ```bash
-python3 .github/scripts/validate-free-model-factories.py
-python3 -m pytest --noconftest -o addopts='' -q tests/test_factory_provider_candidates.py tests/test_factory_worker_slots.py tests/test_factory_runtime_model_select.py
+bash /path/to/rotisserie/factory/install/overlay.sh .
 ```
-
-<!-- docs-path-check: ignore --> Do not resurrect the removed `.github/free-model-factories.tsv` or `.github/factory-roster-snapshot.json` files, or the removed retirement workflow.
 
 ## GitHub Issue Workflow
 
@@ -621,16 +611,16 @@ make next-task
 ```
 
 For a complete copy-paste execution prompt, read
-[`prompts/agent-next-task.md`](prompts/agent-next-task.md).
+[prompts/agent-next-task.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/prompts/agent-next-task.md).
 
-**Local factory sessions**: load the `local-factory-next-task` skill
-(`.agents/skills/local-factory-next-task/SKILL.md`) for the full startup flow — private
+**Local factory sessions**: load the [local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task) skill
+([local-factory-next-task](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-next-task/SKILL.md)) for the full startup flow — private
 worktree and port-slot claiming (so parallel local agents such as Codex never clobber each
 other's branches, artifacts, or ports), session bootstrap, how `make next-task` orders
 claimable work (priority, then oldest issue number), how to check factory leases (labels,
 claim markers) before claiming so a local session never interferes with the scheduled GitHub
 Action factories, the two-step atomic claim (`make start-task` + full factory label set with
-`factory:local`), and the handoff into the `local-factory-session` skill.
+`factory:local`), and the handoff into the [local-factory-session](https://github.com/JoshCLWren/rotisserie/blob/main/factory/.agents/skills/local-factory-session) skill.
 
 Agents with the `github-issue-kanban` skill should follow that skill. Other
 agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
@@ -640,7 +630,7 @@ before closing the issue.
 ### Factory labels are mandatory agent work
 
 All local agents and scheduled factories must apply the canonical issue and PR label state
-machine in `docs/AUTONOMOUS_FACTORY_POLICY.md` automatically. Label reconciliation is part of
+machine in [docs/AUTONOMOUS_FACTORY_POLICY.md](https://github.com/JoshCLWren/rotisserie/blob/main/factory/docs/AUTONOMOUS_FACTORY_POLICY.md) automatically. Label reconciliation is part of
 claiming, implementation, review, CI, handoff, blocking, readiness, merge, and closure—not a task
 for Josh.
 
