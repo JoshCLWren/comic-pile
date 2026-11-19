@@ -37,13 +37,15 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Check out Rotisserie factory runtime  # rotisserie-factory-runtime
+        if: env.REVIEW_FAILURE == 'true'
         uses: actions/checkout@v7
         with:
           repository: JoshCLWren/rotisserie
-          ref: c4ab2f271374bd630766d5061d1c1e46da6cd53d
+          ref: 8f917f8f73b6255207a7b7038280d843ba07bb7b
           path: .rotisserie/runtime
           persist-credentials: false
       - name: Overlay Rotisserie factory runtime  # rotisserie-factory-runtime
+        if: env.REVIEW_FAILURE == 'true'
         run: bash .rotisserie/runtime/factory/install/overlay.sh .
 
       - name: Configure restricted Neon for failed-review cooldown only
