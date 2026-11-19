@@ -18,11 +18,13 @@ use crate::{
     auth::AuthenticatedUser,
     db::checkout,
     option_inputs::{
-        load_option_diagnostics, OptionInputs, OverlapDecision, Prerequisite, ReadingEntry,
-        ReadingList,
+        load_option_diagnostics, OptionInputs, Prerequisite, ReadingEntry, ReadingList,
     },
-    reading_constraints::{evaluate, ThreadEligibility, ValidatedReadingInputs},
-    reading_inputs::{self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
+    reading_constraints::{ThreadEligibility, ValidatedReadingInputs},
+    reading_eligibility::evaluate,
+    reading_inputs::{
+        self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
+    },
     ApiError, AppState,
 };
 
@@ -215,7 +217,7 @@ pub async fn preview_reading_graph_handler(
     }
 
     // Load owner reading data via the same diagnostics path the reading graph uses.
-    let inputs = load_option_diagnostics(&state, auth.id()).await?;
+    let inputs = load_option_diagnostics(&state, auth).await?;
 
     // Build list name map for validation.
     let list_names: BTreeMap<i32, String> = inputs
@@ -225,7 +227,8 @@ pub async fn preview_reading_graph_handler(
         .collect();
 
     // Validate inputs (contains cycle detection via contained path).
-    let validated = ValidatedReadingInputs::contained(inputs, &list_names)?;
+    let validated = ValidatedReadingInputs::contained(inputs, &list_names)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     // Evaluate eligibility.
     let eligibility = evaluate(&validated)?;
@@ -240,7 +243,7 @@ pub async fn preview_reading_graph_handler(
     let issues = build_issue_references(&validated, &eligibility);
 
     let rollable = build_rollable_ids(&eligibility);
-    let waiting = build_waiting_ids(&eligibility);
+    let waiting = build_waiting_ids(&validated, &eligibility);
 
     // Build cycle errors from validated graph problem.
     let cycle_errors = validated
@@ -304,7 +307,7 @@ async fn load_cbl_source_list_preview(
 
     // Load the list metadata.
     let row = conn
-        .run_query_opt(
+        .query_opt(
             r#"
         SELECT csl.id, csl.name, csl.content_hash, csl.revision_sha
         FROM cbl_source_lists csl
@@ -326,7 +329,7 @@ async fn load_cbl_source_list_preview(
 
     // Load entries.
     let entries_rows = conn
-        .run_query(
+        .query(
             r#"
         SELECT cse.position, cse.series_name, cse.issue_number,
                cse.volume_year, cse.publication_year,
@@ -338,7 +341,7 @@ async fn load_cbl_source_list_preview(
               AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
         LEFT JOIN external_identities ev
                ON ev.id = cse.external_series_identity_id
-              AND ev.provider = 'comicvine' AND ev.entity_type = 'series'
+              AND ev.provider = 'comicvine' AND ei.entity_type = 'series'
         WHERE cse.list_id = $1
         ORDER BY cse.position ASC, cse.id ASC
         "#,
@@ -398,7 +401,7 @@ fn build_series_nodes(
         .core
         .threads
         .iter()
-        .map(|t| (t.id, inputs.thread_volumes.get(&t.id).cloned()))
+        .map(|t| (t.id, inputs.thread_volumes.get(&t.id).map(|s| s.clone())))
         .collect();
 
     let mut grouped: HashMap<String, SeriesAggregate> = HashMap::new();
@@ -412,7 +415,7 @@ fn build_series_nodes(
             .core
             .issues
             .iter()
-            .filter(|i| i.thread_id == *thread_id && !excluded.contains(&i.issue_id))
+            .filter(|i| i.thread_id == *thread_id && !excluded.contains(&i.id))
             .count() as i32;
 
         let state = eligibility.get(thread_id);
@@ -456,7 +459,7 @@ fn build_series_nodes(
                 .threads
                 .iter()
                 .find(|t| t.id == aggregate.thread_id)
-                .map(|t| t.name.clone())
+                .map(|t| t.title.clone())
                 .unwrap_or_else(|| format!("Series {}", aggregate.thread_id));
 
             let state = if aggregate.rollable.len() > 0 && aggregate.waiting.len() > 0 {
@@ -518,7 +521,7 @@ fn build_issue_references(
         .core
         .threads
         .iter()
-        .map(|t| (t.id, t.name.clone()))
+        .map(|t| (t.id, t.title.clone()))
         .collect();
 
     inputs
@@ -529,7 +532,7 @@ fn build_issue_references(
             let volume_id = inputs
                 .thread_volumes
                 .get(&issue.thread_id)
-                .and_then(|v| v.as_deref());
+                .map(|s| s.as_str());
             let series_name = thread_names
                 .get(&issue.thread_id)
                 .cloned()
@@ -563,7 +566,7 @@ fn build_issue_references(
                 issue_id: issue.id,
                 series_name,
                 issue_number: String::new(),
-                comicvine_volume_id: volume_id.cloned(),
+                comicvine_volume_id: volume_id.map(|s| s.to_string()),
                 blockers,
             }
         })
