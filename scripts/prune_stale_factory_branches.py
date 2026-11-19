@@ -3,29 +3,36 @@
 
 Safety-first cleanup for Comic Pile factory branch hygiene.
 This script never deletes branches with open PRs or live local worktrees, and it
-protects default/protected/release refs, active factory leases, and unexpired
-handoffs. It defaults to dry-run/report mode and only deletes when --apply is
-explicitly requested.
+protects default/protected/release refs, active factory leases, checkpoint
+handoff branches, and branches whose safety cannot be proven. It defaults to
+dry-run/report mode and only deletes when --apply is explicitly requested.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable, Iterable, Mapping, Sequence
 
 STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
 CHECKPOINT_PREFIX = "factory/work-checkpoints/"
 DEFAULT_AGE_DAYS = 14
-LOCAL_LEASE_TTL = timedelta(minutes=60)
+
+# Match shared factory policy defaults: local leases default to 24h and are
+# stale only when there is verified inactivity older than the TTL. Unknown
+# activity must be treated as active (fail closed).
+LOCAL_LEASE_TTL = timedelta(
+    seconds=int(os.environ.get("FACTORY_LOCAL_LEASE_TTL_SECONDS", "86400"))
+)
 NUMBERED_LEASE_RECENT_ACTIVITY = timedelta(minutes=15)
 
 ISSUE_PATTERNS = (
@@ -33,6 +40,9 @@ ISSUE_PATTERNS = (
     re.compile(r"factory/(?:[0-9]+-)?(?P<issue>\d+)-"),
     re.compile(r"factory/work-checkpoints/issue-(?P<issue>\d+)/"),
     re.compile(r"issue[-/](?P<issue>\d+)"),
+    re.compile(r"^local/(?P<issue>\d{3,6})(?:[-_]|$)"),
+    re.compile(r"^local/acp-(?P<issue>\d{3,6})(?:[-_]|$)"),
+    re.compile(r"^local/(?:fix|task|issue|pr)[-_]?(?P<issue>\d{3,6})(?:[-_]|$)"),
 )
 OWNER_RE = re.compile(r"^factory:(?:local|[1-9][0-9]*)$")
 ACTIVE_STAGE_LABELS = {
@@ -73,6 +83,7 @@ class Decision:
     """Pruning decision for one branch."""
 
     branch: str
+    sha: str
     action: str  # delete | skip
     reasons: tuple[str, ...]
     category: str
@@ -185,19 +196,26 @@ def is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> bool
 
 
 def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch open PR heads grouped by branch name."""
+    """Fetch open PR heads grouped by branch name.
+
+    Raises on lookup failure so cleanup cannot proceed with incomplete safety data.
+    """
     proc = run([
         "gh", "pr", "list", "--repo", repo, "--state", "open", "--limit", "500",
         "--json", "number,headRefName,isDraft,updatedAt,labels,title,url",
     ], check=False)
     if proc.returncode != 0:
-        return {}
+        raise RuntimeError(f"unable to list open PRs: {proc.stderr.strip() or proc.stdout.strip()}")
     try:
         prs = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError:
-        return {}
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse open PR list: {exc}") from exc
+    if not isinstance(prs, list):
+        raise RuntimeError("open PR list response was not a list")
     by_head: dict[str, list[dict[str, Any]]] = {}
     for pr in prs:
+        if not isinstance(pr, dict):
+            raise RuntimeError("open PR list contained a non-object entry")
         head = str(pr.get("headRefName") or "")
         if not head:
             continue
@@ -206,36 +224,53 @@ def fetch_open_pr_heads(repo: str) -> dict[str, list[dict[str, Any]]]:
 
 
 def fetch_protected_branches(repo: str) -> set[str]:
-    """Fetch protected branch names from GitHub."""
-    proc = run(["gh", "api", f"repos/{repo}/branches?protected=true&per_page=100", "--paginate", "--slurp"], check=False)
+    """Fetch protected branch names from GitHub.
+
+    Raises on lookup failure so cleanup cannot proceed with incomplete safety data.
+    """
+    proc = run([
+        "gh", "api", f"repos/{repo}/branches?protected=true&per_page=100", "--paginate", "--slurp",
+    ], check=False)
     if proc.returncode != 0:
-        return set()
+        raise RuntimeError(
+            f"unable to list protected branches: {proc.stderr.strip() or proc.stdout.strip()}"
+        )
     try:
         pages = json.loads(proc.stdout or "[]")
-    except json.JSONDecodeError:
-        return set()
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse protected branch list: {exc}") from exc
+    if not isinstance(pages, list):
+        raise RuntimeError("protected branch response was not a list")
     protected: set[str] = set()
     for page in pages:
         if not isinstance(page, list):
-            continue
+            raise RuntimeError("protected branch page was not a list")
         for item in page:
-            name = item.get("name") if isinstance(item, dict) else None
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
             if isinstance(name, str):
                 protected.add(name)
     return protected
 
 
 def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
-    """Fetch lease-relevant issue metadata from GitHub."""
+    """Fetch lease-relevant issue metadata from GitHub.
+
+    Returns None for a missing issue. Raises on other lookup failures.
+    """
     proc = run(["gh", "api", f"repos/{repo}/issues/{issue_number}"], check=False)
     if proc.returncode != 0:
-        return None
+        detail = (proc.stderr or proc.stdout or "").strip()
+        if "404" in detail or "Not Found" in detail:
+            return None
+        raise RuntimeError(f"unable to fetch issue #{issue_number}: {detail}")
     try:
         issue = json.loads(proc.stdout or "{}")
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"unable to parse issue #{issue_number}: {exc}") from exc
     if not isinstance(issue, dict):
-        return None
+        raise RuntimeError(f"issue #{issue_number} response was not an object")
     labels = {
         str(label.get("name"))
         for label in (issue.get("labels") or [])
@@ -261,7 +296,9 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
     owner = signal.owner
     if owner is None:
         # Multiple owners or no owner: multiple means ambiguous/unsafe.
-        owners = sorted(label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned")
+        owners = sorted(
+            label for label in signal.labels if OWNER_RE.fullmatch(label) and label != "factory:unowned"
+        )
         if len(owners) > 1:
             return True, f"ambiguous active owners on {signal.target}"
         return False, None
@@ -269,6 +306,8 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
         return False, None
     updated = signal.updated_at
     if owner == "factory:local":
+        # Shared policy: a local lease is stale only with verified inactivity
+        # older than the TTL. Unknown activity cannot prove inactivity.
         if updated is None or now - updated <= LOCAL_LEASE_TTL:
             return True, f"active local lease on {signal.target}"
         return False, None
@@ -281,19 +320,18 @@ def active_lease(signal: LeaseSignal | None, now: datetime) -> tuple[bool, str |
     return True, f"cannot verify numbered lease expiry on {signal.target}"
 
 
-def unexpired_handoff(branch: BranchInfo, linked_signal: LeaseSignal | None, now: datetime) -> tuple[bool, str | None]:
-    """Return whether a branch represents an unexpired handoff/checkpoint."""
+def unexpired_handoff(
+    branch: BranchInfo, linked_signal: LeaseSignal | None, now: datetime
+) -> tuple[bool, str | None]:
+    """Return whether a branch represents a protected handoff/checkpoint.
+
+    Checkpoint branches are persisted recovery refs. Safe retirement requires
+    explicit incorporation and ownership/hold proof; this cleanup script cannot
+    prove that, so checkpoint branches are never auto-deleted.
+    """
     if not branch.name.startswith(CHECKPOINT_PREFIX):
         return False, None
-    # Checkpoint branches are persisted handoff/recovery refs. Treat as unexpired
-    # unless clearly old and not tied to active/open work.
-    if linked_signal and linked_signal.state.lower() == "open":
-        return True, f"open linked target for checkpoint handoff {linked_signal.target}"
-    if now - branch.committed_at <= timedelta(days=DEFAULT_AGE_DAYS):
-        return True, "recent checkpoint handoff branch"
-    # If linked issue/PR is closed and branch is old, allow normal age/merge
-    # evaluation to decide; still conservative because other guards apply.
-    return False, None
+    return True, "checkpoint branch requires explicit incorporated-retirement proof"
 
 
 def evaluate_branch(
@@ -327,10 +365,18 @@ def evaluate_branch(
     if not is_stale_scope_branch(branch.name):
         reasons.append("outside factory/local/backup scope")
 
-    signal = lease_lookup(issue) if issue is not None else None
-    leased, lease_reason = active_lease(signal, now)
-    if leased and lease_reason:
-        reasons.append(lease_reason)
+    leased = False
+    handoff_blocked = False
+    signal: LeaseSignal | None = None
+    if issue is not None:
+        try:
+            signal = lease_lookup(issue)
+        except Exception as exc:
+            reasons.append(f"unable to verify lease state: {exc}")
+        else:
+            leased, lease_reason = active_lease(signal, now)
+            if leased and lease_reason:
+                reasons.append(lease_reason)
     handoff_blocked, handoff_reason = unexpired_handoff(branch, signal, now)
     if handoff_blocked and handoff_reason:
         reasons.append(handoff_reason)
@@ -347,20 +393,27 @@ def evaluate_branch(
 
     if not merged and age >= age_days:
         # "merged or abandoned for more than 14 days"
-        reasons.append("age threshold met and branch is not merged; treated as abandoned candidate only with other safety checks")
+        reasons.append(
+            "age threshold met and branch is not merged; treated as abandoned candidate only with other safety checks"
+        )
 
     # Eligible only when it matches scope, has no hard protections, and is
     # merged-or-abandoned and older than threshold.
-    hard_protections = any(
-        r in reasons
-        for r in (
-            "protected branch",
-            "default or release ref",
-            "open PR exists",
-            "checked out in live local worktree",
-            "outside factory/local/backup scope",
+    hard_protections = (
+        any(
+            r in reasons
+            for r in (
+                "protected branch",
+                "default or release ref",
+                "open PR exists",
+                "checked out in live local worktree",
+                "outside factory/local/backup scope",
+            )
         )
-    ) or leased or handoff_blocked or any(r.startswith("unable to verify") for r in reasons)
+        or leased
+        or handoff_blocked
+        or any(r.startswith("unable to verify") for r in reasons)
+    )
 
     stale_enough = age >= age_days
     eligible = (not hard_protections) and stale_enough and (merged or True)
@@ -369,6 +422,7 @@ def evaluate_branch(
     if eligible:
         return Decision(
             branch=branch.name,
+            sha=branch.sha,
             action="delete",
             reasons=(f"eligible: {'merged' if merged else 'abandoned'} for {age:.1f} days",),
             category=category,
@@ -388,6 +442,7 @@ def evaluate_branch(
         filtered.append(f"younger than {age_days} days")
     return Decision(
         branch=branch.name,
+        sha=branch.sha,
         action="skip",
         reasons=tuple(dict.fromkeys(filtered)),
         category=category,
@@ -398,8 +453,30 @@ def evaluate_branch(
     )
 
 
-def delete_remote_branch(repo_root: Path, remote: str, branch: str) -> None:
-    """Delete a remote branch."""
+def remote_branch_sha(repo_root: Path, remote: str, branch: str) -> str | None:
+    """Return the current remote head SHA for a branch, or None if missing."""
+    proc = run(
+        ["git", "-C", str(repo_root), "ls-remote", "--heads", remote, f"refs/heads/{branch}"],
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"unable to read remote branch {remote}/{branch}: {proc.stderr.strip()}")
+    line = proc.stdout.strip().splitlines()
+    if not line:
+        return None
+    return line[0].split()[0]
+
+
+def delete_remote_branch(repo_root: Path, remote: str, branch: str, expected_sha: str) -> None:
+    """Delete a remote branch only if its current head matches the evaluated SHA."""
+    current = remote_branch_sha(repo_root, remote, branch)
+    if current is None:
+        raise RuntimeError(f"remote branch {remote}/{branch} no longer exists")
+    if current != expected_sha:
+        raise RuntimeError(
+            f"remote branch {remote}/{branch} changed since evaluation "
+            f"(expected {expected_sha}, found {current})"
+        )
     run(["git", "-C", str(repo_root), "push", remote, "--delete", branch])
 
 
@@ -479,16 +556,34 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the stale branch pruning command."""
     args = build_parser().parse_args(argv)
+    if not args.repo:
+        raise SystemExit(
+            "error: --repo is required so open PR, protection, and lease safety checks "
+            "cannot be bypassed"
+        )
+
     repo_root = Path.cwd()
     now = utc_now()
     remote = args.remote
     default_branch = remote_default_branch(repo_root, remote)
+
+    # Refresh remote-tracking refs before building the inventory so dry-run and
+    # apply decisions are made against current remote state.
+    fetch_proc = run(["git", "-C", str(repo_root), "fetch", remote, "--prune"], check=False)
+    if fetch_proc.returncode != 0:
+        raise SystemExit(
+            f"error: unable to refresh remote refs: {fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
+        )
+
     branches = list_remote_branches(repo_root, remote)
     if not args.all_branches:
         branches = [b for b in branches if is_stale_scope_branch(b.name)]
-    protected = fetch_protected_branches(args.repo) if args.repo else set()
+
+    # Fail closed: complete, successful safety lookups are required before any
+    # branch can be reported deletable or deleted.
+    protected = fetch_protected_branches(args.repo)
     protected.update({default_branch, "main", "master", "gh-pages"})
-    open_pr_heads = fetch_open_pr_heads(args.repo) if args.repo else {}
+    open_pr_heads = fetch_open_pr_heads(args.repo)
     live_refs = local_worktree_branches(repo_root)
 
     lease_cache: dict[int, LeaseSignal | None] = {}
@@ -496,9 +591,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     def lease_lookup(issue_number: int) -> LeaseSignal | None:
         if issue_number in lease_cache:
             return lease_cache[issue_number]
-        if not args.repo:
-            lease_cache[issue_number] = None
-            return None
         lease_cache[issue_number] = fetch_issue_signal(args.repo, issue_number)
         return lease_cache[issue_number]
 
@@ -527,6 +619,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "decisions": [
                 {
                     "branch": d.branch,
+                    "sha": d.sha,
                     "action": d.action,
                     "eligible": d.eligible,
                     "reasons": list(d.reasons),
@@ -557,7 +650,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not decision.eligible:
                 continue
             try:
-                delete_remote_branch(repo_root, remote, decision.branch)
+                delete_remote_branch(repo_root, remote, decision.branch, decision.sha)
                 deleted += 1
                 print(f"DELETED {remote}/{decision.branch}", file=sys.stderr)
             except Exception as exc:

@@ -89,6 +89,25 @@ def test_preserves_active_local_factory_lease_by_verified_recent_activity():
     assert any("active local lease" in r for r in d.reasons)
 
 
+def test_preserves_local_lease_within_shared_ttl():
+    """Preserve local leases within the shared 24-hour TTL (not expired at 3h)."""
+    signal = prune.LeaseSignal(
+        target="issue:4749",
+        state="open",
+        owner="factory:local",
+        labels=frozenset({"factory", "factory:local", "factory:building"}),
+        updated_at=NOW - timedelta(hours=3),
+    )
+    decisions = decide(
+        [branch("local-factory/i4749")],
+        lease_signals={4749: signal},
+        merged_names={"local-factory/i4749"},
+    )
+    d = by_name(decisions)["local-factory/i4749"]
+    assert not d.eligible
+    assert any("active local lease" in r for r in d.reasons)
+
+
 def test_expired_local_lease_can_be_pruned_when_otherwise_eligible():
     """Allow pruning when a local lease is expired by verified inactivity."""
     signal = prune.LeaseSignal(
@@ -96,7 +115,7 @@ def test_expired_local_lease_can_be_pruned_when_otherwise_eligible():
         state="open",
         owner="factory:local",
         labels=frozenset({"factory", "factory:local", "factory:building"}),
-        updated_at=NOW - timedelta(hours=3),
+        updated_at=NOW - timedelta(hours=25),
     )
     decisions = decide(
         [branch("local-factory/i4749")],
@@ -125,8 +144,8 @@ def test_preserves_numbered_lease_when_expiry_cannot_be_verified():
     assert any("cannot verify numbered lease expiry" in r for r in d.reasons)
 
 
-def test_preserves_unexpired_checkpoint_handoff_branch():
-    """Preserve unexpired checkpoint handoff branches."""
+def test_preserves_checkpoint_handoff_branch_without_incorporation_proof():
+    """Never auto-delete checkpoint branches; retirement requires incorporation proof."""
     signal = prune.LeaseSignal(
         target="issue:4853",
         state="open",
@@ -140,7 +159,7 @@ def test_preserves_unexpired_checkpoint_handoff_branch():
     )
     d = by_name(decisions)["factory/work-checkpoints/issue-4853/kilo-auto-free/43724877464"]
     assert not d.eligible
-    assert any("checkpoint handoff" in r or "recent checkpoint" in r for r in d.reasons)
+    assert any("checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons)
 
 
 def test_preserves_main_protected_and_release_refs():
@@ -206,8 +225,8 @@ def test_skips_recent_branches_even_if_merged_and_scoped():
     assert any("younger than 14 days" in r for r in d.reasons)
 
 
-def test_closed_issue_with_old_checkpoint_not_treated_as_open_handoff():
-    """Allow old checkpoint branches when linked work is closed."""
+def test_closed_issue_checkpoint_branch_still_requires_retirement_proof():
+    """Closed linked work does not make checkpoint branches auto-deletable."""
     signal = prune.LeaseSignal(
         target="issue:4853",
         state="closed",
@@ -220,4 +239,37 @@ def test_closed_issue_with_old_checkpoint_not_treated_as_open_handoff():
         lease_signals={4853: signal},
     )
     d = by_name(decisions)["factory/work-checkpoints/issue-4853/kilo-auto-free/43724877464"]
-    assert d.eligible
+    assert not d.eligible
+    assert any("checkpoint branch requires explicit incorporated-retirement proof" in r for r in d.reasons)
+
+
+def test_local_numeric_branch_resolves_issue_for_lease_check():
+    """Recognize local/<issue>-... branches so active leases protect them."""
+    signal = prune.LeaseSignal(
+        target="issue:4504",
+        state="open",
+        owner="factory:local",
+        labels=frozenset({"factory", "factory:local", "factory:building"}),
+        updated_at=VERY_RECENT,
+    )
+    decisions = decide([branch("local/4504-network-budget")], lease_signals={4504: signal})
+    d = by_name(decisions)["local/4504-network-budget"]
+    assert d.linked_issue == 4504
+    assert not d.eligible
+    assert any("active local lease" in r for r in d.reasons)
+
+
+def test_local_acp_branch_resolves_issue_for_lease_check():
+    """Recognize local/acp-<issue> branches so active leases protect them."""
+    signal = prune.LeaseSignal(
+        target="issue:3802",
+        state="open",
+        owner="factory:local",
+        labels=frozenset({"factory", "factory:local", "factory:building"}),
+        updated_at=VERY_RECENT,
+    )
+    decisions = decide([branch("local/acp-3802")], lease_signals={3802: signal})
+    d = by_name(decisions)["local/acp-3802"]
+    assert d.linked_issue == 3802
+    assert not d.eligible
+    assert any("active local lease" in r for r in d.reasons)
