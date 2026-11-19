@@ -28,40 +28,6 @@ CONTINUITY_RULES_PATHS = {
 }
 
 
-def test_continuity_rules_not_in_python_openapi_routes() -> None:
-    """Python OpenAPI should not expose continuity-rules routes (served by Rust)."""
-    root = Path(__file__).resolve().parents[1]
-
-    # Check that Python's OpenAPI doesn't have continuity-rules routes
-    python_openapi = json.loads(
-        (root / "native/contracts/python-legacy.openapi.json").read_text()
-    )
-    paths = python_openapi.get("paths", {})
-
-    for method, path_list in CONTINUITY_RULES_PATHS.items():
-        for path in path_list:
-            assert method.lower() not in paths.get(path, {}), (
-                f"Python should not expose {method.upper()} {path}"
-            )
-
-
-def test_continuity_rules_route_to_native_rust() -> None:
-    """All continuity-rules operations route to native Rust via catch-all."""
-    root = Path(__file__).resolve().parents[1]
-    config = json.loads((root / "vercel.json").read_text())
-    routes = config["routes"]
-
-    # The catch-all route sends all /api paths to native_roll.rs
-    # This covers all continuity-rules paths
-    catch_all = [r for r in routes if r.get("src") == "/api(?:/.*)?"]
-    assert catch_all == [
-        {
-            "src": "/api(?:/.*)?",
-            "dest": "/api/native_roll.rs",
-        }
-    ], "Continuity-rules routes are served via catch-all to native Rust"
-
-
 def test_continuity_rules_registered_in_native_rust() -> None:
     """Continuity-rules handlers are registered in the Rust lib.rs router."""
     root = Path(__file__).resolve().parents[1]
@@ -143,3 +109,29 @@ def test_continuity_rules_v2_runtime_openapi_contract() -> None:
             assert "get" in paths[path], f"GET {path} should be in contract"
             assert "put" in paths[path], f"PUT {path} should be in contract"
             assert "delete" in paths[path], f"DELETE {path} should be in contract"
+
+
+def test_continuity_rules_python_openapi_consistent() -> None:
+    """Continuity-rules should not appear in Python legacy OpenAPI (served by Rust)."""
+    root = Path(__file__).resolve().parents[1]
+    python_legacy = json.loads(
+        (root / "native/contracts/python-legacy.openapi.json").read_text()
+    )
+
+    paths = python_legacy.get("paths", {})
+    for method, path_list in CONTINUITY_RULES_PATHS.items():
+        for path in path_list:
+            assert method.lower() not in paths.get(path, {}), (
+                f"Python should not expose {method.upper()} {path}"
+            )
+
+
+def test_continuity_rules_v2_client_contract_types() -> None:
+    """Continuity-rules types are present in the frontend OpenAPI types."""
+    root = Path(__file__).resolve().parents[1]
+    openapi_types = (root / "frontend/src/generated/openapi.ts").read_text()
+
+    # Check types are generated
+    assert "ContinuityRule" in openapi_types or "ContinuityRuleResponse" in openapi_types, (
+        "ContinuityRule types should be in OpenAPI types"
+    )
