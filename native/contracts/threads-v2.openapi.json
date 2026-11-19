@@ -294,6 +294,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "series_cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Derived series cover: the exact provider CDN URL of the thread's next\nunread confirmed issue, falling back to the first confirmed issue with a\ncover. Null when the series has no confirmed issue cover."
+          },
           "series_metadata": {
             "oneOf": [
               {

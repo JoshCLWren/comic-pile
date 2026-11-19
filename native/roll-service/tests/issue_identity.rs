@@ -48,6 +48,7 @@ async fn isolated_test_database_url() -> String {
             let dml_shared = comicpile_roll_service::test_support::database_url().await;
             let admin = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
                 .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+            comicpile_roll_service::test_support::assert_safe_test_database(&admin);
             let with_database = |dsn: &str, database: &str| -> String {
                 let (prefix, _) = dsn
                     .rsplit_once('/')

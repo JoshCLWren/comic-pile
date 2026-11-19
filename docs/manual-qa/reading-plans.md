@@ -88,9 +88,9 @@ Some currently deployed routes may still implement older Reading Plans behavior.
 
 ## MQA-LIST-011: An empty Reading Plan can be opened and edited
 
-**Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload.
+**Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload. Add an issue with the legacy editor, save, and reopen both the detail page and the edit route. For a plan whose Reading List was removed, open the recovery screen and click "open the Plan authoring UI".
 
-**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Its "open the Plan authoring UI" link opens that saved plan, not a blank new one. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462).
+**Expected:** The saved plan opens as an empty plan (not a 409 recovery screen) and can be edited. Adding an issue does not strand it: the reopened detail page shows the authored issue and the editor still opens. The recovery authoring link opens that saved plan's editor, not an authority error and not a blank new plan. Source: [#5462](https://github.com/JoshCLWren/comic-pile/issues/5462).
 
 ## MQA-LIST-012: Orphaned plans recover only through explicit preview and relink
 

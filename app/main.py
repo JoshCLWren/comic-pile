@@ -316,8 +316,6 @@ logger.info(
 #: A request for one of these answers must not pay to register anything else
 #: (issue #3479).
 _EAGER_ROUTE_PREFIXES: tuple[str, ...] = (
-    "/api/metrics",
-    "/api/v1/metrics",
     "/health",
 )
 
@@ -339,16 +337,12 @@ def _is_eager_path(path: str) -> bool:
 def _register_lightweight_routers(app: FastAPI) -> None:
     """Register lightweight routers that are always needed.
 
-    These routers have zero or negligible import overhead and are needed for
-    basic functionality and cold-start mitigation.
+    The former lightweight metrics and keepalive handlers were retired with
+    their Python implementations (their routes are served by native Rust v2),
+    so no Python router remains in the cold-start table. Registration happens
+    entirely through the deferred mounts.
     """
-    # Expose the metrics router in every environment so production performance
-    # tracking (issue #834) and future regression checks can read startup
-    # telemetry. It returns only process startup epoch and duration.
-    from app.api import metrics
-
-    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
-    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
+    return
 
 
 def register_all_routers(app: FastAPI, environment: str) -> None:
@@ -356,8 +350,9 @@ def register_all_routers(app: FastAPI, environment: str) -> None:
 
     Router modules are imported lazily inside each mount so that a cold probe
     invocation does not load the full import graph. Registration order is the
-    historical ``include_router`` order: lightweight metrics then every deferred
-    mount from :mod:`app.router_mounts``.
+    historical ``include_router`` order: every deferred mount from
+    :mod:`app.router_mounts`` (the lightweight metrics/keepalive routers were
+    retired with their Python handlers).
 
     Args:
         app: The FastAPI application instance.
@@ -495,8 +490,8 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         return await call_next(request)
 
     # Register routers with deferred, per-resource module imports to reduce
-    # cold-start cost. In deferred mode only the lightweight ping/metrics
-    # routers are registered now. Each real request registers just the
+    # cold-start cost. In deferred mode only the lightweight ping route is
+    # registered now. Each real request registers just the
     # mounts its resource segment needs (issue #3479) and splices them in after
     # the lightweight routes so the JSON 404 fallback and SPA routes keep
     # matching last.

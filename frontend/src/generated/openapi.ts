@@ -3888,54 +3888,6 @@ export interface components {
             rejection_reason?: string | null;
             search_query?: string | null;
         };
-        /**
-         * ActiveThreadInfo
-         * @description Schema for active thread information in session response.
-         */
-        ActiveThreadInfo: {
-            /** Format */
-            format: string;
-            /** Id */
-            id: number | null;
-            /**
-             * Issue Id
-             * @description DEPRECATED: Always equals next_issue_id. Use next_issue_id instead.
-             */
-            issue_id?: number | null;
-            /**
-             * Issue Number
-             * @description DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.
-             */
-            issue_number?: string | null;
-            /** Issues Read */
-            issues_read?: number | null;
-            /** Issues Remaining */
-            issues_remaining: number;
-            /** Last Rating */
-            last_rating?: number | null;
-            /** Last Rolled Result */
-            last_rolled_result: number | null;
-            /**
-             * Next Issue Id
-             * @description The next unread issue ID to read
-             */
-            next_issue_id?: number | null;
-            /**
-             * Next Issue Number
-             * @description The next unread issue number (e.g., '5', 'Annual 1')
-             */
-            next_issue_number?: string | null;
-            /** Queue Position */
-            queue_position: number;
-            /** Reading Progress */
-            reading_progress?: string | null;
-            /** Tags */
-            tags?: components["schemas"]["TagResponse"][];
-            /** Title */
-            title: string;
-            /** Total Issues */
-            total_issues?: number | null;
-        };
         ActivityItem: {
             /** Format: int32 */
             die_after?: number | null;
@@ -3978,32 +3930,20 @@ export interface components {
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
         /** @enum {string} */
         BlockerOrigin: "reading_list" | "reader_prerequisite";
-        /**
-         * BlockingDependency
-         * @description One unread Issue required by a list or explicit prerequisite.
-         */
+        /** @description One blocking issue (Python `BlockingDependency`). */
         BlockingDependency: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id?: number | null;
-            /** Issue Number */
             issue_number: string;
-            /** Label */
             label: string;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
         };
-        /**
-         * BlockingExplanation
-         * @description Schema for blocked thread explanation.
-         */
+        /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
         BlockingExplanation: {
-            /** Blocking Dependencies */
-            blocking_dependencies?: components["schemas"]["BlockingDependency"][];
-            /** Blocking Reasons */
+            blocking_dependencies: components["schemas"]["BlockingDependency"][];
             blocking_reasons: string[];
-            /** Is Blocked */
             is_blocked: boolean;
         };
         /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
@@ -4436,16 +4376,6 @@ export interface components {
             folders: components["schemas"]["CBLSourceFolder"][];
             /** Format: int32 */
             total_list_count: number;
-        };
-        /**
-         * CBLPlacement
-         * @description One ordered CBL observation with inseparable provenance.
-         */
-        CBLPlacement: {
-            /** Position */
-            position: number;
-            /** Source Path */
-            source_path: string;
         };
         /**
          * CBLSourceFingerprintResponse
@@ -5047,19 +4977,12 @@ export interface components {
             thread_id: number;
             title: string;
         };
-        /**
-         * ContinuityPlanLane
-         * @description One visual lane in a continuity plan.
-         */
         ContinuityPlanLane: {
-            /** Id */
             id: string;
-            /** Inferred Gate Kind */
-            inferred_gate_kind?: ("thread_entry" | "reading_order") | null;
-            migration_contract?: components["schemas"]["ExplicitReaderOrderMigrationContract"] | null;
-            /** Name */
+            inferred_gate_kind?: string | null;
+            migration_contract?: unknown;
             name: string;
-            /** Order */
+            /** Format: int32 */
             order: number;
         };
         ContinuityPlanListItem: {
@@ -5075,63 +4998,37 @@ export interface components {
             step_count: number;
             updated_at: string;
         };
-        /**
-         * ContinuityPlanNode
-         * @description One ordered reference in a continuity plan.
-         */
         ContinuityPlanNode: {
-            /** Checkpoint Target Ref Id */
+            /** Format: int32 */
             checkpoint_target_ref_id?: number | null;
-            /** Checkpoint Target Ref Ids */
             checkpoint_target_ref_ids?: number[];
-            /** Convergence Gate */
-            convergence_gate?: components["schemas"]["ConvergenceGateTarget"][];
-            /** Id */
+            convergence_gate: unknown[];
             id: string;
-            /**
-             * Is Checkpoint
-             * @default false
-             */
-            is_checkpoint: boolean;
-            /** Label */
-            label?: string | null;
-            /** Lane Id */
+            is_checkpoint?: boolean;
+            label: string | null;
             lane_id: string;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover" | "thread";
-            /** Position */
+            node_type: string;
+            /** Format: int32 */
             position: number;
-            /** Reader Optional */
-            reader_optional?: boolean | null;
-            /** Reader Role */
-            reader_role?: ("required/core" | "recommended" | "optional" | "context/prelude" | "aftermath/epilogue" | "skipped/excluded") | null;
-            /** Ref Id */
+            reader_optional: boolean | null;
+            reader_role: string | null;
+            /** Format: int32 */
             ref_id: number;
-            /** Source Cbl Placements */
-            source_cbl_placements?: components["schemas"]["CBLPlacement"][] | null;
-            /** Source Confidence */
-            source_confidence?: ("high" | "medium" | "low") | null;
-            /** Source Explanation */
-            source_explanation?: string | null;
-            /** Source Paths */
-            source_paths?: string[] | null;
-            /** Source Role */
-            source_role?: ("core" | "context/prelude" | "epilogue" | "unknown") | null;
-            /** Source Story Arc Ids */
-            source_story_arc_ids?: string[] | null;
-            /** Source Target Story Arc Id */
-            source_target_story_arc_id?: string | null;
+            source_cbl_placements: unknown[] | null;
+            source_confidence: string | null;
+            source_explanation: string | null;
+            source_paths: string[] | null;
+            source_role: string | null;
+            source_story_arc_ids: string[] | null;
+            source_target_story_arc_id: string | null;
         };
         ContinuityPlanResponse: {
             created_at: string;
             /** Format: int32 */
             id: number;
-            lanes: components["schemas"]["NativeContinuityPlanLane"][];
+            lanes: components["schemas"]["ContinuityPlanLane"][];
             name: string;
-            nodes: components["schemas"]["NativeContinuityPlanNode"][];
+            nodes: components["schemas"]["ContinuityPlanNode"][];
             ordering_mode: string;
             updated_at: string;
             /** Format: int32 */
@@ -5151,9 +5048,9 @@ export interface components {
         };
         ContinuityPlanWrite: {
             expected_updated_at?: string | null;
-            lanes?: components["schemas"]["NativeContinuityPlanLane"][];
+            lanes?: components["schemas"]["ContinuityPlanLane"][];
             name: string;
-            nodes?: components["schemas"]["NativeContinuityPlanNode"][];
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
             ordering_mode: string;
         };
         ContinuityReleaseSourceResponse: {
@@ -5206,19 +5103,6 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
-        };
-        /**
-         * ConvergenceGateTarget
-         * @description A node a convergence gate waits for.
-         */
-        ConvergenceGateTarget: {
-            /** Node Id */
-            node_id: string;
-            /**
-             * Node Type
-             * @enum {string}
-             */
-            node_type: "issue" | "crossover" | "thread";
         };
         ConvergenceTarget: {
             /** Format: int32 */
@@ -5753,136 +5637,62 @@ export interface components {
         CsrfResponse: {
             csrf_token: string;
         };
-        /**
-         * CustomCBLApplyRequest
-         * @description Options for explicitly applying a custom CBL to an existing Reading Plan.
-         */
         CustomCBLApplyRequest: {
-            /**
-             * Expected Updated At
-             * @description Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``plan_version_conflict``, matching PUT.
-             */
             expected_updated_at?: string | null;
-            /** Lane Id */
             lane_id?: string | null;
         };
-        /**
-         * CustomCBLApplyResponse
-         * @description Updated Reading Plan after custom CBL material is merged into it.
-         */
         CustomCBLApplyResponse: {
-            /** Added Issue Ids */
             added_issue_ids: number[];
-            /**
-             * Created At
-             * Format: date-time
-             */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Lanes */
-            lanes: components["schemas"]["ContinuityPlanLane"][];
-            /** Name */
+            lanes: unknown[];
             name: string;
-            /** Nodes */
-            nodes?: components["schemas"]["ContinuityPlanNode"][];
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /** Skipped Existing Issue Ids */
+            nodes: unknown[];
+            ordering_mode: string;
             skipped_existing_issue_ids: number[];
-            /**
-             * Updated At
-             * Format: date-time
-             */
             updated_at: string;
-            /** User Id */
+            /** Format: int32 */
             user_id: number;
         };
         CustomCBLEntryIntent: {
             gate: string;
             skipped?: boolean;
         };
-        /**
-         * CustomCBLEntryResponse
-         * @description One resolved custom CBL entry.
-         */
         CustomCBLEntryResponse: {
-            /** Checkpoint Target Issue Ids */
-            checkpoint_target_issue_ids?: number[];
-            /**
-             * Gate
-             * @default none
-             * @enum {string}
-             */
-            gate: "none" | "hold" | "after_previous";
-            /** Id */
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
             id: number;
-            /**
-             * Is Checkpoint
-             * @default false
-             */
             is_checkpoint: boolean;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Position */
+            /** Format: int32 */
             position: number;
-            /** Series Name */
             series_name: string;
-            /**
-             * Skipped
-             * @default false
-             */
             skipped: boolean;
-            /** Status */
             status: string;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * CustomCBLIssueSearchResult
-         * @description Owned canonical issue candidate available for custom CBL authoring.
-         */
         CustomCBLIssueSearchResult: {
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Series Name */
             series_name: string;
-            /** Status */
             status: string;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * CustomCBLListItem
-         * @description Compact list-row representation for the custom CBL picker.
-         */
         CustomCBLListItem: {
-            /** Description */
-            description: string | null;
-            /** Id */
+            description?: string | null;
+            /** Format: int32 */
             id: number;
-            /** Issue Count */
+            /** Format: int32 */
             issue_count: number;
-            /**
-             * Mode
-             * @default loose
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
+            mode: string;
             name: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
             updated_at: string;
         };
         CustomCBLPredecessorChange: {
@@ -5894,68 +5704,34 @@ export interface components {
             issue_id: number;
             issue_name: string;
         };
-        /**
-         * CustomCBLResponse
-         * @description Full custom CBL including its ordered canonical issue references.
-         */
         CustomCBLResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
             created_at: string;
-            /** Description */
-            description: string | null;
-            /** Entries */
+            description?: string | null;
             entries: components["schemas"]["CustomCBLEntryResponse"][];
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Issue Count */
+            /** Format: int32 */
             issue_count: number;
-            /**
-             * Mode
-             * @default loose
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
+            mode: string;
             name: string;
-            /** Predecessor Changes */
-            predecessor_changes?: components["schemas"]["ReadingListPredecessorChange"][];
-            /**
-             * Updated At
-             * Format: date-time
-             */
+            predecessor_changes?: components["schemas"]["CustomCBLPredecessorChange"][];
             updated_at: string;
-            /** User Id */
+            /** Format: int32 */
             user_id: number;
-            /** Warnings */
             warnings?: string[];
         };
-        /**
-         * CustomCBLWrite
-         * @description Create or replace one custom CBL and its ordered issue membership.
-         */
         CustomCBLWrite: {
-            /** Checkpoint Issue Ids */
             checkpoint_issue_ids?: number[] | null;
-            /** Checkpoint Targets */
             checkpoint_targets?: {
                 [key: string]: number[];
             } | null;
-            /** Confirmed Predecessor Changes */
-            confirmed_predecessor_changes?: components["schemas"]["ReadingListPredecessorChange"][] | null;
-            /** Description */
+            confirmed_predecessor_changes?: unknown;
             description?: string | null;
-            /** Entry Intents */
             entry_intents?: {
-                [key: string]: components["schemas"]["ReadingListEntryIntent"];
+                [key: string]: components["schemas"]["CustomCBLEntryIntent"];
             } | null;
-            /** Issue Ids */
             issue_ids?: number[];
-            /** Mode */
-            mode?: ("strict" | "loose") | null;
-            /** Name */
+            mode?: string | null;
             name: string;
         };
         /** @description The product-owned deterministic guest Roll fixture. */
@@ -6248,25 +6024,19 @@ export interface components {
         };
         /** @description Screen diagnostic information (`pixelRatio` alias on the wire). */
         DiagnosticScreen: {
-            /** Format: int32 */
             height: number;
             /** Format: double */
             pixelRatio: number;
-            /** Format: int32 */
             width: number;
         };
         /** @description Scroll position diagnostic information. */
         DiagnosticScroll: {
-            /** Format: int32 */
             x: number;
-            /** Format: int32 */
             y: number;
         };
         /** @description Viewport diagnostic information. */
         DiagnosticViewport: {
-            /** Format: int32 */
             height: number;
-            /** Format: int32 */
             width: number;
         };
         DiceCommandReceipt: {
@@ -6291,73 +6061,6 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
-        };
-        /**
-         * EventDetail
-         * @description Schema for event detail in session details.
-         */
-        EventDetail: {
-            /** Description */
-            description?: string | null;
-            /** Die */
-            die?: number | null;
-            /** Die After */
-            die_after?: number | null;
-            /** Id */
-            id: number;
-            /**
-             * Issue Number
-             * @description Denormalized issue number captured at event time
-             */
-            issue_number?: string | null;
-            /** Issues Read */
-            issues_read?: number | null;
-            /** Queue Move */
-            queue_move?: string | null;
-            /** Rating */
-            rating?: number | null;
-            /** Result */
-            result?: number | null;
-            /** Selection Method */
-            selection_method?: string | null;
-            /**
-             * Thread Deleted
-             * @description True when the event referenced a thread that no longer exists. The title is the last known snapshot title when recoverable.
-             * @default false
-             */
-            thread_deleted: boolean;
-            /** Thread Title */
-            thread_title: string | null;
-            /** Timestamp */
-            timestamp: string;
-            /** Type */
-            type: string;
-        };
-        /**
-         * ExplicitReaderOrderMigrationContract
-         * @description Server-owned proof that a plan replaced classified reader-order edges.
-         */
-        ExplicitReaderOrderMigrationContract: {
-            /** Classification Family Keys */
-            classification_family_keys: string[];
-            /** Edge Fingerprint */
-            edge_fingerprint: string;
-            /** Edges */
-            edges: [
-                number,
-                number
-            ][];
-            /** Issue Fingerprint */
-            issue_fingerprint: string;
-            /** Issue Ids */
-            issue_ids: number[];
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "explicit_reader_order";
-            /** Selected Dependency Ids */
-            selected_dependency_ids: number[];
         };
         /** @description Request body for an enumeration-safe password-recovery email. */
         ForgotPasswordRequest: {
@@ -7018,22 +6721,6 @@ export interface components {
             updated_at: string;
             visibility: string;
         };
-        /** @description One blocking issue (Python `BlockingDependency`). */
-        NativeBlockingDependency: {
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number: string;
-            label: string;
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-        };
-        /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
-        NativeBlockingExplanation: {
-            blocking_dependencies: components["schemas"]["NativeBlockingDependency"][];
-            blocking_reasons: string[];
-            is_blocked: boolean;
-        };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
             /** Format: int32 */
@@ -7047,122 +6734,6 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
-        };
-        NativeContinuityPlanLane: {
-            id: string;
-            inferred_gate_kind?: string | null;
-            migration_contract?: unknown;
-            name: string;
-            /** Format: int32 */
-            order: number;
-        };
-        NativeContinuityPlanNode: {
-            /** Format: int32 */
-            checkpoint_target_ref_id?: number | null;
-            checkpoint_target_ref_ids?: number[];
-            convergence_gate: unknown[];
-            id: string;
-            is_checkpoint?: boolean;
-            label: string | null;
-            lane_id: string;
-            node_type: string;
-            /** Format: int32 */
-            position: number;
-            reader_optional: boolean | null;
-            reader_role: string | null;
-            /** Format: int32 */
-            ref_id: number;
-            source_cbl_placements: unknown[] | null;
-            source_confidence: string | null;
-            source_explanation: string | null;
-            source_paths: string[] | null;
-            source_role: string | null;
-            source_story_arc_ids: string[] | null;
-            source_target_story_arc_id: string | null;
-        };
-        NativeCustomCBLApplyRequest: {
-            expected_updated_at?: string | null;
-            lane_id?: string | null;
-        };
-        NativeCustomCBLApplyResponse: {
-            added_issue_ids: number[];
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            lanes: unknown[];
-            name: string;
-            nodes: unknown[];
-            ordering_mode: string;
-            skipped_existing_issue_ids: number[];
-            updated_at: string;
-            /** Format: int32 */
-            user_id: number;
-        };
-        NativeCustomCBLEntryResponse: {
-            checkpoint_target_issue_ids: number[];
-            gate: string;
-            /** Format: int32 */
-            id: number;
-            is_checkpoint: boolean;
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            /** Format: int32 */
-            position: number;
-            series_name: string;
-            skipped: boolean;
-            status: string;
-            /** Format: int32 */
-            thread_id: number;
-        };
-        NativeCustomCBLIssueSearchResult: {
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            series_name: string;
-            status: string;
-            /** Format: int32 */
-            thread_id: number;
-        };
-        NativeCustomCBLListItem: {
-            description?: string | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            issue_count: number;
-            mode: string;
-            name: string;
-            updated_at: string;
-        };
-        NativeCustomCBLResponse: {
-            created_at: string;
-            description?: string | null;
-            entries: components["schemas"]["NativeCustomCBLEntryResponse"][];
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            issue_count: number;
-            mode: string;
-            name: string;
-            predecessor_changes?: components["schemas"]["CustomCBLPredecessorChange"][];
-            updated_at: string;
-            /** Format: int32 */
-            user_id: number;
-            warnings?: string[];
-        };
-        NativeCustomCBLWrite: {
-            checkpoint_issue_ids?: number[] | null;
-            checkpoint_targets?: {
-                [key: string]: number[];
-            } | null;
-            confirmed_predecessor_changes?: unknown;
-            description?: string | null;
-            entry_intents?: {
-                [key: string]: components["schemas"]["CustomCBLEntryIntent"];
-            } | null;
-            issue_ids?: number[];
-            mode?: string | null;
-            name: string;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
         NativeIssueCreateRange: {
@@ -7227,34 +6798,6 @@ export interface components {
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
-        };
-        NativeOverlapDecisionItem: {
-            continuing_volume_id: string;
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            list_id: number;
-            updated_at: string;
-            waiting_volume_id: string;
-        };
-        NativeOverlapDecisionSetResponse: {
-            candidate_volumes?: components["schemas"]["NativeOverlapVolumeCandidate"][];
-            decisions?: components["schemas"]["NativeOverlapDecisionItem"][];
-            /** Format: int32 */
-            list_id: number;
-            updated_at: string;
-        };
-        NativeOverlapDecisionWrite: {
-            continuing_volume_id: string;
-            expected_updated_at?: string | null;
-            waiting_volume_id: string;
-        };
-        NativeOverlapVolumeCandidate: {
-            /** Format: int32 */
-            thread_id: number;
-            thread_title: string;
-            volume_id: string;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -7376,38 +6919,6 @@ export interface components {
             recent_ratings: components["schemas"]["NativeReaderContextRecentRating"][];
             series_name?: string | null;
         };
-        NativeReadingListEntryIntent: {
-            gate: string;
-            skipped?: boolean;
-        };
-        NativeReadingListPredecessorChange: {
-            after_issue_ids: number[];
-            after_issue_names: string[];
-            before_issue_ids: number[];
-            before_issue_names: string[];
-            /** Format: int32 */
-            issue_id: number;
-            issue_name: string;
-        };
-        NativeReadingListReaderEntry: {
-            availability: string;
-            checkpoint_target_issue_ids: number[];
-            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
-            gate: string;
-            /** Format: int32 */
-            id: number;
-            is_checkpoint: boolean;
-            /** Format: int32 */
-            issue_id: number;
-            issue_number: string;
-            /** Format: int32 */
-            position: number;
-            series_name: string;
-            skipped: boolean;
-            status: string;
-            /** Format: int32 */
-            thread_id: number;
-        };
         /** @description Python `ReadingOrderItemResponse`. */
         NativeReadingOrderItemResponse: {
             is_read: boolean;
@@ -7465,46 +6976,6 @@ export interface components {
             /** Format: int64 */
             total_items: number;
         };
-        /** @description Canonical bandwidth state. */
-        NativeSessionBandwidthState: {
-            active_bandwidth?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_bandwidth?: string | null;
-            source?: string | null;
-        };
-        /** @description Full session details response with events and narrative summary. */
-        NativeSessionDetailsResponse: {
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            events: components["schemas"]["SessionEventDetail"][];
-            ladder_path: string;
-            narrative_summary: {
-                [key: string]: string[];
-            };
-            /** Format: int32 */
-            session_id: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-        };
-        /** @description Paginated session history list response. */
-        NativeSessionHistoryListResponse: {
-            next_page_token?: string | null;
-            sessions: components["schemas"]["SessionListItemResponse"][];
-        };
-        /** @description Canonical intent state. */
-        NativeSessionIntentState: {
-            active_intent?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_intent?: string | null;
-            source?: string | null;
-        };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         NativeSetCurrentIssueRequest: {
             issue_number: string;
@@ -7528,98 +6999,6 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
-        };
-        NativeSourceSyncFailure: {
-            error: string;
-            /** Format: int32 */
-            plan_id: number;
-            /** Format: int32 */
-            source_id: number;
-            /** Format: int32 */
-            thread_id: number;
-            /** Format: int32 */
-            volume_id: number;
-        };
-        NativeSyncReport: {
-            /** Format: int64 */
-            checked_sources: number;
-            /** Format: int64 */
-            conflicts: number;
-            /** Format: int64 */
-            created_issues: number;
-            /** Format: int64 */
-            enabled_sources: number;
-            /** Format: int64 */
-            excluded_issues?: number;
-            /** Format: int64 */
-            excluded_sources?: number;
-            /** Format: int64 */
-            failed_sources: number;
-            failures: components["schemas"]["NativeSourceSyncFailure"][];
-            /** Format: int64 */
-            future_skips: number;
-            /** Format: int64 */
-            issue_failures: number;
-            /** Format: int64 */
-            issues_checked: number;
-            /** Format: int64 */
-            reused_issues: number;
-            /** Format: int64 */
-            skipped_sources?: number;
-            /** Format: int64 */
-            successful_sources: number;
-            /** Format: int64 */
-            total_sources: number;
-            /** Format: int64 */
-            unknown_date_skips: number;
-        };
-        NativeSyncRequest: {
-            /** Format: date-time */
-            as_of: string;
-            refresh?: boolean;
-        };
-        NativeSyncResponse: {
-            message: string;
-            result: components["schemas"]["NativeSyncReport"];
-            success: boolean;
-        };
-        NativeSyncStatusResponse: {
-            /** Format: int64 */
-            enabled_sources: number;
-            sources: components["schemas"]["NativeSyncStatusSource"][];
-            /** Format: int64 */
-            total_sources: number;
-        };
-        NativeSyncStatusSource: {
-            enabled: boolean;
-            /** Format: int32 */
-            external_identity_id: number;
-            /** Format: int32 */
-            id: number;
-            last_synced_at?: string | null;
-            provider_volume_id: string;
-            /** Format: int32 */
-            reading_plan_id: number;
-            /** Format: int32 */
-            thread_id: number;
-        };
-        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
-        NativeTasteDiscovery: {
-            display_name: string;
-            /** Format: int32 */
-            distinct_thread_count: number;
-            /** Format: int32 */
-            evidence_count: number;
-            external_key: string;
-            /** Format: int32 */
-            id: number;
-            prompt: string;
-            signal_type: string;
-        };
-        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
-        NativeTasteDiscoveryListResponse: {
-            discoveries: components["schemas"]["NativeTasteDiscovery"][];
-            generated_at: string;
         };
         /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
         NativeThreadIssueCreatorsResponse: {
@@ -7668,82 +7047,34 @@ export interface components {
         };
         /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
         OrderedExplanations: {
-            [key: string]: components["schemas"]["NativeBlockingExplanation"];
+            [key: string]: components["schemas"]["BlockingExplanation"];
         };
-        /**
-         * OverlapDecisionItem
-         * @description One stored reader-approved overlap choice inside one Reading List.
-         */
         OverlapDecisionItem: {
-            /** Continuing Volume Id */
             continuing_volume_id: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Waiting Volume Id */
-            waiting_volume_id: string;
-        };
-        /**
-         * OverlapDecisionSetResponse
-         * @description One owned Reading List's overlap decisions and their version token.
-         *
-         *     ``updated_at`` is the version of this list's decision set. It changes only
-         *     when an approved choice changes, so an ordinary membership upsert never
-         *     invalidates a stored choice.
-         */
-        OverlapDecisionSetResponse: {
-            /** Candidate Volumes */
-            candidate_volumes?: components["schemas"]["OverlapVolumeCandidate"][];
-            /** Decisions */
-            decisions?: components["schemas"]["OverlapDecisionItem"][];
-            /** List Id */
+            /** Format: int32 */
             list_id: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
             updated_at: string;
-        };
-        /**
-         * OverlapDecisionWrite
-         * @description One reader-approved overlap choice for one owned Reading List.
-         */
-        OverlapDecisionWrite: {
-            /**
-             * Continuing Volume Id
-             * @description Exact Comic Vine volume allowed to keep progressing.
-             */
-            continuing_volume_id: string;
-            /**
-             * Expected Updated At
-             * @description Optimistic-concurrency token from GET ``updated_at``. When present, a mismatch returns 409 ``reading_overlap_version_conflict``.
-             */
-            expected_updated_at?: string | null;
-            /**
-             * Waiting Volume Id
-             * @description Exact Comic Vine volume allowed to keep waiting.
-             */
             waiting_volume_id: string;
         };
-        /**
-         * OverlapVolumeCandidate
-         * @description One owned Thread with the exact Comic Vine volume it resolves to.
-         */
+        OverlapDecisionSetResponse: {
+            candidate_volumes?: components["schemas"]["OverlapVolumeCandidate"][];
+            decisions?: components["schemas"]["OverlapDecisionItem"][];
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+        };
+        OverlapDecisionWrite: {
+            continuing_volume_id: string;
+            expected_updated_at?: string | null;
+            waiting_volume_id: string;
+        };
         OverlapVolumeCandidate: {
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Thread Title */
             thread_title: string;
-            /** Volume Id */
             volume_id: string;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
@@ -8633,114 +7964,45 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /**
-         * ReadingListEntryIntent
-         * @description Explicit positional intent for one stable member Issue.
-         */
         ReadingListEntryIntent: {
-            /**
-             * Gate
-             * @default none
-             * @enum {string}
-             */
-            gate: "none" | "hold" | "after_previous";
-            /**
-             * Skipped
-             * @default false
-             */
-            skipped: boolean;
+            gate: string;
+            skipped?: boolean;
         };
-        /**
-         * ReadingListPredecessorChange
-         * @description Named before/after requirements that the reader must acknowledge.
-         */
         ReadingListPredecessorChange: {
-            /** After Issue Ids */
             after_issue_ids: number[];
-            /** After Issue Names */
             after_issue_names: string[];
-            /** Before Issue Ids */
             before_issue_ids: number[];
-            /** Before Issue Names */
             before_issue_names: string[];
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Name */
             issue_name: string;
         };
         ReadingListReader: {
-            entries: components["schemas"]["NativeReadingListReaderEntry"][];
+            entries: components["schemas"]["ReadingListReaderEntry"][];
             execution_mode: string;
             /** Format: int32 */
             list_id: number;
             mode: string;
             name: string;
         };
-        /**
-         * ReadingListReaderEntry
-         * @description One current list member with the execution authority's decision.
-         */
         ReadingListReaderEntry: {
-            /**
-             * Availability
-             * @enum {string}
-             */
-            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive" | "legacy";
-            /** Checkpoint Target Issue Ids */
-            checkpoint_target_issue_ids?: number[];
-            explanation?: components["schemas"]["BlockingExplanation"] | null;
-            /**
-             * Gate
-             * @default none
-             * @enum {string}
-             */
-            gate: "none" | "hold" | "after_previous";
-            /** Id */
+            availability: string;
+            checkpoint_target_issue_ids: number[];
+            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
+            gate: string;
+            /** Format: int32 */
             id: number;
-            /**
-             * Is Checkpoint
-             * @default false
-             */
             is_checkpoint: boolean;
-            /** Issue Id */
+            /** Format: int32 */
             issue_id: number;
-            /** Issue Number */
             issue_number: string;
-            /** Position */
+            /** Format: int32 */
             position: number;
-            /** Series Name */
             series_name: string;
-            /**
-             * Skipped
-             * @default false
-             */
             skipped: boolean;
-            /** Status */
             status: string;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-        };
-        /**
-         * ReadingListReaderResponse
-         * @description Full current list order; never reconstructed from plan membership.
-         */
-        ReadingListReaderResponse: {
-            /** Entries */
-            entries?: components["schemas"]["ReadingListReaderEntry"][];
-            /**
-             * Execution Mode
-             * @enum {string}
-             */
-            execution_mode: "legacy" | "option_e";
-            /** List Id */
-            list_id: number;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "strict" | "loose";
-            /** Name */
-            name: string;
         };
         ReadingListSummary: {
             description?: string | null;
@@ -8764,7 +8026,7 @@ export interface components {
             confirmed_predecessor_changes?: unknown;
             description?: string | null;
             entry_intents?: {
-                [key: string]: components["schemas"]["NativeReadingListEntryIntent"];
+                [key: string]: components["schemas"]["ReadingListEntryIntent"];
             } | null;
             issue_ids: number[];
             mode?: string | null;
@@ -9595,31 +8857,19 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /**
-         * SessionBandwidthState
-         * @description Canonical ephemeral bandwidth state for the active reading session.
-         *
-         *     Every field is always present but nullable so legacy sessions that predate
-         *     bandwidth tracking serialize to a stable, safe shape instead of a missing
-         *     or partially shaped object. This is the single canonical source consumed by
-         *     later weighting and UI work.
-         */
+        /** @description Canonical bandwidth state. */
         SessionBandwidthState: {
-            /** Active Bandwidth */
-            active_bandwidth: ("light" | "balanced" | "deep") | null;
-            /** Confidence */
-            confidence: number | null;
-            /** Mode Version */
-            mode_version: string | null;
-            /** Predicted Bandwidth */
-            predicted_bandwidth: ("light" | "balanced" | "deep") | null;
-            /** Source */
-            source: ("inferred" | "manual" | "snooze" | "quiz") | null;
+            active_bandwidth?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_bandwidth?: string | null;
+            source?: string | null;
         };
         /** @description Wire shape of Python `SessionResponse` for `get_session`. */
         SessionDetailResponse: {
             active_thread?: components["schemas"]["SessionActiveThread"] | null;
-            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
+            bandwidth?: components["schemas"]["SessionBandwidthState"] | null;
             correction?: unknown;
             /** Format: int32 */
             current_die: number;
@@ -9627,7 +8877,7 @@ export interface components {
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: components["schemas"]["NativeSessionIntentState"] | null;
+            intent?: components["schemas"]["SessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -9652,30 +8902,21 @@ export interface components {
             /** Format: int32 */
             user_id: number;
         };
-        /**
-         * SessionDetailsResponse
-         * @description Schema for session details with all events.
-         */
+        /** @description Full session details response with events and narrative summary. */
         SessionDetailsResponse: {
-            /** Current Die */
+            /** Format: int32 */
             current_die: number;
-            /** Ended At */
-            ended_at: string | null;
-            /** Events */
-            events: components["schemas"]["EventDetail"][];
-            /** Ladder Path */
+            ended_at?: string | null;
+            events: components["schemas"]["SessionEventDetail"][];
             ladder_path: string;
-            /** Narrative Summary */
             narrative_summary: {
                 [key: string]: string[];
             };
-            /** Session Id */
+            /** Format: int32 */
             session_id: number;
-            /** Start Die */
+            /** Format: int32 */
             start_die: number;
-            /** Started At */
-            started_at: string | null;
-            /** Timezone */
+            started_at: string;
             timezone?: string | null;
         };
         /** @description Event detail for session details response. */
@@ -9701,80 +8942,19 @@ export interface components {
             timestamp: string;
             type: string;
         };
-        /**
-         * SessionHistoryListResponse
-         * @description Schema for paginated session history list response.
-         */
+        /** @description Paginated session history list response. */
         SessionHistoryListResponse: {
-            /** Next Page Token */
             next_page_token?: string | null;
-            /** Sessions */
-            sessions: components["schemas"]["SessionListItem"][];
+            sessions: components["schemas"]["SessionListItemResponse"][];
         };
-        /**
-         * SessionIntentState
-         * @description Canonical ephemeral reading-intent state for the active reading session.
-         *
-         *     Symmetric to :class:`SessionBandwidthState`. Every field is always present
-         *     but nullable so legacy sessions that predate intent tracking serialize to a
-         *     stable, safe shape instead of a missing or partially shaped object. A fully
-         *     null object means the session defaults to the balanced intent.
-         */
+        /** @description Canonical intent state. */
         SessionIntentState: {
-            /** Active Intent */
-            active_intent: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
-            /** Confidence */
-            confidence: number | null;
-            /** Mode Version */
-            mode_version: string | null;
-            /** Predicted Intent */
-            predicted_intent: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
-            /** Source */
-            source: ("inferred" | "manual" | "snooze" | "quiz") | null;
-        };
-        /**
-         * SessionListItem
-         * @description Schema for a single session in the history list view.
-         *
-         *     A deliberate subset of SessionResponse. The list view does not need
-         *     snoozed_thread_ids, snoozed_threads, pending_thread_id, or timezone,
-         *     which reduces payload size for session history lists.
-         */
-        SessionListItem: {
-            active_thread: components["schemas"]["ActiveThreadInfo"] | null;
-            /** Current Die */
-            current_die: number;
-            /** Ended At */
-            ended_at: string | null;
-            /** Has Restore Point */
-            has_restore_point: boolean;
-            /** Id */
-            id: number;
-            /** Ladder Path */
-            ladder_path: string;
-            /** Last Rolled Result */
-            last_rolled_result: number | null;
-            /** Manual Die */
-            manual_die: number | null;
-            /** Reading Bandwidth */
-            reading_bandwidth?: string | null;
-            /** Reading Intent */
-            reading_intent?: string | null;
-            /** Reading Mode Source */
-            reading_mode_source?: string | null;
-            /**
-             * Reading Mode Suggested
-             * @default false
-             */
-            reading_mode_suggested: boolean;
-            /** Snapshot Count */
-            snapshot_count: number;
-            /** Start Die */
-            start_die: number;
-            /** Started At */
-            started_at: string | null;
-            /** User Id */
-            user_id: number;
+            active_intent?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_intent?: string | null;
+            source?: string | null;
         };
         /** @description List-item session response (history list endpoint). */
         SessionListItemResponse: {
@@ -9810,76 +8990,6 @@ export interface components {
              */
             page_size: number | null;
             page_token?: string | null;
-        };
-        /**
-         * SessionResponse
-         * @description Schema for session response.
-         */
-        SessionResponse: {
-            active_thread: components["schemas"]["ActiveThreadInfo"] | null;
-            /** @description Canonical ephemeral bandwidth state for the session. Null on endpoints that do not load bandwidth state. */
-            bandwidth?: components["schemas"]["SessionBandwidthState"] | null;
-            /** @description Structured correction result from the most recent Snooze. Null when no correction was applied. */
-            correction?: components["schemas"]["SnoozeCorrectionInfo"] | null;
-            /** Current Die */
-            current_die: number;
-            /** Ended At */
-            ended_at: string | null;
-            /** Has Restore Point */
-            has_restore_point: boolean;
-            /** Id */
-            id: number;
-            /** @description Canonical ephemeral reading-intent state for the session. Null on endpoints that do not load intent state. */
-            intent?: components["schemas"]["SessionIntentState"] | null;
-            /** Ladder Path */
-            ladder_path: string;
-            /** Last Rolled Result */
-            last_rolled_result: number | null;
-            /** Manual Die */
-            manual_die: number | null;
-            /** Pending Thread Id */
-            pending_thread_id?: number | null;
-            /** Reading Bandwidth */
-            reading_bandwidth?: string | null;
-            /** Reading Intent */
-            reading_intent?: string | null;
-            /** Reading Mode Source */
-            reading_mode_source?: string | null;
-            /**
-             * Reading Mode Suggested
-             * @default false
-             */
-            reading_mode_suggested: boolean;
-            /**
-             * Skipped Thread Ids
-             * @default []
-             */
-            skipped_thread_ids: number[];
-            /**
-             * Skipped Threads
-             * @default []
-             */
-            skipped_threads: components["schemas"]["SnoozedThreadInfo"][];
-            /** Snapshot Count */
-            snapshot_count: number;
-            /**
-             * Snoozed Thread Ids
-             * @default []
-             */
-            snoozed_thread_ids: number[];
-            /**
-             * Snoozed Threads
-             * @default []
-             */
-            snoozed_threads: components["schemas"]["SnoozedThreadInfo"][];
-            /** Start Die */
-            start_die: number;
-            /** Started At */
-            started_at: string | null;
-            /** Timezone */
-            timezone?: string | null;
-            /** User Id */
-            user_id: number;
         };
         SessionSnapshotItem: {
             created_at: string;
@@ -9954,98 +9064,15 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /**
-         * SnapshotResponse
-         * @description Schema for snapshot response.
-         */
-        SnapshotResponse: {
-            /** Created At */
-            created_at: string;
-            /** Description */
-            description: string | null;
-            /** Event Id */
-            event_id?: number | null;
-            /** Id */
-            id: number;
-            /** Session Id */
-            session_id: number;
-        };
-        /**
-         * SnapshotsListResponse
-         * @description Schema for snapshots list response.
-         */
-        SnapshotsListResponse: {
-            /** Session Id */
-            session_id: number;
-            /** Snapshots */
-            snapshots: components["schemas"]["SnapshotResponse"][];
-        };
-        /**
-         * SnoozeCorrectionInfo
-         * @description Structured Snooze correction guidance for the client (#1726).
-         *
-         *     Returned with every Snooze response so the frontend can later decide
-         *     whether to show a clarification sheet, without implementing modal UI in
-         *     this phase. Fields are compact codes and flags, never prose.
-         */
-        SnoozeCorrectionInfo: {
-            /**
-             * Active Bandwidth
-             * @description Active bandwidth level after correction: light, balanced, or deep
-             */
-            active_bandwidth?: string | null;
-            /**
-             * Active Confidence
-             * @description Confidence in the proposed active bandwidth (0.0-1.0)
-             */
-            active_confidence?: number | null;
-            /**
-             * Bandwidth Changed
-             * @description Whether the active bandwidth level changed after this snooze
-             */
-            bandwidth_changed: boolean;
-            /**
-             * Predicted Bandwidth
-             * @description Original launch prediction bandwidth (unchanged)
-             */
-            predicted_bandwidth?: string | null;
-            /**
-             * Reason Code
-             * @description Compact reason code: heavy_snooze_shift, light_snooze_deflate, confidence_degrade, no_correction, or clarification_needed
-             * @enum {string}
-             */
-            reason_code: "heavy_snooze_shift" | "light_snooze_deflate" | "confidence_degrade" | "no_correction" | "clarification_needed";
-            /**
-             * Suggest Clarification
-             * @description True when repeated contradictory snoozes make the mode uncertain
-             * @default false
-             */
-            suggest_clarification: boolean;
-        };
-        /**
-         * SnoozedThreadInfo
-         * @description Schema for snoozed thread information in session response.
-         */
-        SnoozedThreadInfo: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-        };
-        /**
-         * SourceSyncFailure
-         * @description One source that could not be evaluated during a sync run.
-         */
         SourceSyncFailure: {
-            /** Error */
             error: string;
-            /** Plan Id */
+            /** Format: int32 */
             plan_id: number;
-            /** Source Id */
+            /** Format: int32 */
             source_id: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
-            /** Volume Id */
+            /** Format: int32 */
             volume_id: number;
         };
         StartupMetricsResponse: {
@@ -10064,112 +9091,67 @@ export interface components {
             /** Format: int32 */
             total_related_count?: number | null;
         };
-        /**
-         * SyncReport
-         * @description Structured per-run counters for observability.
-         */
         SyncReport: {
-            /** Checked Sources */
+            /** Format: int64 */
             checked_sources: number;
-            /** Conflicts */
+            /** Format: int64 */
             conflicts: number;
-            /** Created Issues */
+            /** Format: int64 */
             created_issues: number;
-            /** Enabled Sources */
+            /** Format: int64 */
             enabled_sources: number;
-            /**
-             * Excluded Issues
-             * @default 0
-             */
-            excluded_issues: number;
-            /**
-             * Excluded Sources
-             * @default 0
-             */
-            excluded_sources: number;
-            /** Failed Sources */
+            /** Format: int64 */
+            excluded_issues?: number;
+            /** Format: int64 */
+            excluded_sources?: number;
+            /** Format: int64 */
             failed_sources: number;
-            /** Failures */
             failures: components["schemas"]["SourceSyncFailure"][];
-            /** Future Skips */
+            /** Format: int64 */
             future_skips: number;
-            /** Issue Failures */
+            /** Format: int64 */
             issue_failures: number;
-            /** Issues Checked */
+            /** Format: int64 */
             issues_checked: number;
-            /** Reused Issues */
+            /** Format: int64 */
             reused_issues: number;
-            /**
-             * Skipped Sources
-             * @default 0
-             */
-            skipped_sources: number;
-            /** Successful Sources */
+            /** Format: int64 */
+            skipped_sources?: number;
+            /** Format: int64 */
             successful_sources: number;
-            /** Total Sources */
+            /** Format: int64 */
             total_sources: number;
-            /** Unknown Date Skips */
+            /** Format: int64 */
             unknown_date_skips: number;
         };
-        /**
-         * SyncRequest
-         * @description Request one release-source sync run for the authenticated user.
-         */
         SyncRequest: {
-            /**
-             * As Of
-             * Format: date-time
-             * @description UTC timestamp defining the release boundary. Only issues whose ComicVine store_date is on or before this instant are adopted.
-             */
+            /** Format: date-time */
             as_of: string;
-            /**
-             * Refresh
-             * @description Force live provider requests instead of reading the ComicVine cache.
-             * @default true
-             */
-            refresh: boolean;
+            refresh?: boolean;
         };
-        /**
-         * SyncResponse
-         * @description Response of a completed release-source sync run.
-         */
         SyncResponse: {
-            /** Message */
             message: string;
             result: components["schemas"]["SyncReport"];
-            /** Success */
             success: boolean;
         };
-        /**
-         * SyncStatusResponse
-         * @description Sync state for every release source owned by the authenticated user.
-         */
         SyncStatusResponse: {
-            /** Enabled Sources */
+            /** Format: int64 */
             enabled_sources: number;
-            /** Sources */
             sources: components["schemas"]["SyncStatusSource"][];
-            /** Total Sources */
+            /** Format: int64 */
             total_sources: number;
         };
-        /**
-         * SyncStatusSource
-         * @description One release source's persisted sync state.
-         */
         SyncStatusSource: {
-            /** Enabled */
             enabled: boolean;
-            /** External Identity Id */
+            /** Format: int32 */
             external_identity_id: number;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Provider Volume Id */
+            last_synced_at?: string | null;
             provider_volume_id: string;
-            /** Reading Plan Id */
+            /** Format: int32 */
             reading_plan_id: number;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
         Tag: {
@@ -10246,37 +9228,22 @@ export interface components {
             /** Format: int64 */
             total_assignments: number;
         };
-        /**
-         * TasteDiscovery
-         * @description One prompt-eligible inferred taste pattern shown on Roll.
-         */
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
         TasteDiscovery: {
-            /** Display Name */
             display_name: string;
-            /** Distinct Thread Count */
+            /** Format: int32 */
             distinct_thread_count: number;
-            /** Evidence Count */
+            /** Format: int32 */
             evidence_count: number;
-            /** External Key */
             external_key: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Prompt */
             prompt: string;
-            /** Signal Type */
             signal_type: string;
         };
-        /**
-         * TasteDiscoveryListResponse
-         * @description Ranked prompt-eligible discoveries for the authenticated user.
-         */
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
         TasteDiscoveryListResponse: {
-            /** Discoveries */
             discoveries: components["schemas"]["TasteDiscovery"][];
-            /**
-             * Generated At
-             * Format: date-time
-             */
             generated_at: string;
         };
         /** @description Wire parity with Python `{"dismissed": True}`. */
@@ -10446,6 +9413,12 @@ export interface components {
             notes?: string | null;
             /** Format: int32 */
             queue_position: number;
+            /**
+             * @description Derived series cover: the exact provider CDN URL of the thread's next
+             *     unread confirmed issue, falling back to the first confirmed issue with a
+             *     cover. Null when the series has no confirmed issue cover.
+             */
+            series_cover_image_url?: string | null;
             series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
             status: string;
             tags: components["schemas"]["ThreadTag"][];
@@ -10577,14 +9550,14 @@ export interface components {
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
             active_thread?: components["schemas"]["SessionActiveThread"] | null;
-            bandwidth?: components["schemas"]["NativeSessionBandwidthState"] | null;
+            bandwidth?: components["schemas"]["SessionBandwidthState"] | null;
             /** Format: int32 */
             current_die: number;
             ended_at?: string | null;
             has_restore_point: boolean;
             /** Format: int32 */
             id: number;
-            intent?: components["schemas"]["NativeSessionIntentState"] | null;
+            intent?: components["schemas"]["SessionIntentState"] | null;
             ladder_path: string;
             /** Format: int32 */
             last_rolled_result?: number | null;
@@ -12329,7 +11302,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLListItem"][];
+                    "application/json": components["schemas"]["CustomCBLListItem"][];
                 };
             };
             /** @description Not authenticated */
@@ -12357,7 +11330,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeCustomCBLWrite"];
+                "application/json": components["schemas"]["CustomCBLWrite"];
             };
         };
         responses: {
@@ -12367,7 +11340,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
+                    "application/json": components["schemas"]["CustomCBLResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12413,7 +11386,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLIssueSearchResult"][];
+                    "application/json": components["schemas"]["CustomCBLIssueSearchResult"][];
                 };
             };
             /** @description Not authenticated */
@@ -12459,7 +11432,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
+                    "application/json": components["schemas"]["CustomCBLResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12497,7 +11470,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeCustomCBLWrite"];
+                "application/json": components["schemas"]["CustomCBLWrite"];
             };
         };
         responses: {
@@ -12507,7 +11480,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLResponse"];
+                    "application/json": components["schemas"]["CustomCBLResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12602,7 +11575,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12640,7 +11613,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeOverlapDecisionWrite"];
+                "application/json": components["schemas"]["OverlapDecisionWrite"];
             };
         };
         responses: {
@@ -12650,7 +11623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12713,7 +11686,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeOverlapDecisionSetResponse"];
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -12811,7 +11784,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeCustomCBLApplyRequest"];
+                "application/json": components["schemas"]["CustomCBLApplyRequest"];
             };
         };
         responses: {
@@ -12821,7 +11794,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCustomCBLApplyResponse"];
+                    "application/json": components["schemas"]["CustomCBLApplyResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -14766,7 +13739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSyncStatusResponse"];
+                    "application/json": components["schemas"]["SyncStatusResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -14794,7 +13767,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeSyncRequest"];
+                "application/json": components["schemas"]["SyncRequest"];
             };
         };
         responses: {
@@ -14804,7 +13777,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSyncResponse"];
+                    "application/json": components["schemas"]["SyncResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15078,7 +14051,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSessionHistoryListResponse"];
+                    "application/json": components["schemas"]["SessionHistoryListResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15159,7 +14132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSessionDetailsResponse"];
+                    "application/json": components["schemas"]["SessionDetailsResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15580,7 +14553,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeTasteDiscoveryListResponse"];
+                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -16683,7 +15656,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeBlockingExplanation"];
+                    "application/json": components["schemas"]["BlockingExplanation"];
                 };
             };
             /** @description Not authenticated */
