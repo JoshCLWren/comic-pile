@@ -43,13 +43,33 @@ const BARE_CODE_EXTENSIONS = new Set([
   'py', 'rs', 'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'sh', 'yml', 'yaml',
 ]);
 const INLINE_CODE_RE = /`([^`\n]+)`/g;
-const FENCE_RE = /^\s*(```|~~~)/;
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const PATH_RE = new RegExp(
   `^(?:\\./)?[A-Za-z0-9_.@\\-]+(?:/[A-Za-z0-9_.@\\-]+)+\\.${CODE_EXTENSIONS}$` +
     `|^[A-Za-z0-9_\\-]+\\.${CODE_EXTENSIONS}$`,
 );
 const SUFFIX_RE = /(?:::[\p{L}\p{N}_:]+|:\d+(?:-\d+)?|#L?\d+\S*)$/u;
 const PLACEHOLDER_RE = /[*{}<>$]|YYYY|NNN|\bXXX/;
+
+/**
+ * Advance CommonMark fence state for one line. `fence` is null outside a fence, otherwise the
+ * opening marker; only a same-character, at-least-as-long, info-free marker closes it.
+ * Returns `[nextFence, isFenceLine]`.
+ */
+function advanceFence(fence, line) {
+  const match = FENCE_RE.exec(line);
+  if (!match) {
+    return [fence, false];
+  }
+  const [, marker, rest] = match;
+  if (fence === null) {
+    return marker[0] === '`' && rest.includes('`') ? [fence, false] : [marker, true];
+  }
+  if (marker[0] === fence[0] && marker.length >= fence.length && rest.trim() === '') {
+    return [null, true];
+  }
+  return [fence, false];
+}
 
 /** Split text into lines the way Python's `str.splitlines` does. */
 function splitLines(text) {
@@ -120,10 +140,12 @@ export function trackedFiles(root) {
 /** Return `[lineNumber, candidatePath]` pairs from inline code outside fences. */
 export function extractPaths(text) {
   const found = [];
-  let inFence = false;
+  let fence = null;
   splitLines(text).forEach((line, index) => {
-    if (FENCE_RE.test(line)) {
-      inFence = !inFence;
+    const [next, isFenceLine] = advanceFence(fence, line);
+    const inFence = fence !== null;
+    fence = next;
+    if (isFenceLine) {
       return;
     }
     if (inFence || stripInlineCode(line).includes(IGNORE_LINE_MARKER)) {
@@ -158,10 +180,12 @@ export function pathResolves(root, doc, candidate, basenames, tracked) {
 
 /** Return whether `marker` appears as a real comment, not in a code span or fence. */
 function hasMarker(text, marker) {
-  let inFence = false;
+  let fence = null;
   for (const line of splitLines(text)) {
-    if (FENCE_RE.test(line)) {
-      inFence = !inFence;
+    const [next, isFenceLine] = advanceFence(fence, line);
+    const inFence = fence !== null;
+    fence = next;
+    if (isFenceLine) {
       continue;
     }
     if (!inFence && stripInlineCode(line).includes(marker)) {

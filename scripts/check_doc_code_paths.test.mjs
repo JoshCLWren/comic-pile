@@ -93,3 +93,11 @@ test('ignored directories are excluded from Markdown discovery', () => {
 test('current repository has no stale code paths', () => {
   assert.deepEqual(findStalePaths(repoRoot, iterMarkdownFiles(repoRoot)), []);
 });
+
+test('longer or mixed fences stay open until a valid closing fence', () => {
+  const body =
+    '````md\n```\n`app/gone.py`\n```\n`app/also_gone.py`\n````\n' +
+    '~~~\n```\n`app/gone.py`\n~~~\n' +
+    'After `app/real_gone.py`.\n';
+  assert.deepEqual(run({'README.md': body}), ['README.md:11: stale code path: app/real_gone.py']);
+});
