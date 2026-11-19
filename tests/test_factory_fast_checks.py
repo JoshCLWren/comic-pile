@@ -170,6 +170,65 @@ def test_python_checks_run_ci_parity_lint_types_and_targeted_tests(tmp_path: Pat
 
 
 
+def test_openapi_paths_select_schema_freshness_check(tmp_path: Path) -> None:
+    """Contract sources and generated artifacts must select the contract gate."""
+    paths = {
+        "native/contracts/v2-runtime.openapi.json": "{}\n",
+        "scripts/export_openapi_schema.mjs": "export {};\n",
+        "frontend/src/generated/openapi.json": "{}\n",
+        "frontend/src/generated/openapi.ts": "export {};\n",
+        "frontend/src/generated/nativeV2Client.ts": "export {};\n",
+    }
+    repo = repo_with(tmp_path, paths)
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    plan = set(result.stdout.splitlines())
+    for path in paths:
+        assert f"openapi\t{path}" in plan
+
+
+def test_stale_openapi_blocks_factory_push(tmp_path: Path) -> None:
+    """A stale generated schema fails closed while the change is still local."""
+    repo = repo_with(tmp_path, {"native/contracts/v2-runtime.openapi.json": "{}\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "node",
+        'echo "node $*" >> ../node.log\n'
+        'case "$*" in\n'
+        '  *export_openapi_schema.mjs*--check*) echo "Generated OpenAPI schema is stale"; exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "FAST CHECKS FAILED: OpenAPI schema freshness" in result.stdout
+    assert "Generated OpenAPI schema is stale" in result.stdout
+    assert "scripts/export_openapi_schema.mjs --check" in (tmp_path / "node.log").read_text()
+
+
+def test_current_openapi_passes_factory_gate(tmp_path: Path) -> None:
+    """A current schema does not block the push."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    bin_dir = tmp_path / "bin"
+    stub(bin_dir, "node", 'echo "node $*" >> ../node.log\nexit 0')
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert "FAST CHECKS FAILED" not in result.stdout, result.stdout
+    assert "export_openapi_schema.mjs --check" in (tmp_path / "node.log").read_text()
+
+
+def test_missing_openapi_toolchain_blocks_generated_schema_change(tmp_path: Path) -> None:
+    """Missing node fails closed rather than silently pushing a stale schema."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    result = run_checks(repo, prelude="command() { return 1; }")
+    assert result.returncode == 1
+    assert "OpenAPI check toolchain (node)" in result.stdout
+
+
 def test_manifest_only_change_checks_frozen_pnpm_lockfile(tmp_path: Path) -> None:
     """A package-only change fails before push if its lockfile is stale."""
     repo = repo_with(tmp_path, {"package.json": '{"devDependencies": {"x": "2"}}\n'})
