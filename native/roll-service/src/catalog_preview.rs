@@ -577,13 +577,13 @@ fn plan_state_digest(
     for row in rows {
         let parts = [
             format!("{}{}", ROW_ID_PREFIX, row.get("issue_id").and_then(|v| v.as_i64()).unwrap_or(0)),
-            row.get("issue_number").and_then(|v| v.as_str()).unwrap_or(""),
-            row.get("classification").and_then(|v| v.as_str()).unwrap_or(""),
-            row.get("current_mapping_status").and_then(|v| v.as_str()).unwrap_or(""),
-            row.get("provider").and_then(|v| v.as_str()).unwrap_or(""),
-            row.get("external_id").and_then(|v| v.as_str()).unwrap_or(""),
-            row.get("thread_id").and_then(|v| v.as_i64()).map(|v| v.to_string()).unwrap_or(""),
-            row.get("metadata_refresh_required").and_then(|v| v.as_bool()).map(|v| v.to_string()).unwrap_or(""),
+            row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            row.get("classification").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            row.get("current_mapping_status").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            row.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            row.get("external_id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            row.get("thread_id").and_then(|v| v.as_i64()).map(|v| v.to_string()).unwrap_or("".to_string()),
+            row.get("metadata_refresh_required").and_then(|v| v.as_bool()).map(|v| v.to_string()).unwrap_or("".to_string()),
         ];
         parts.join("|").hash(&mut hasher);
     }
@@ -602,7 +602,7 @@ async fn generate_preview_token(
     classification_digest: &str,
     scope_mode: &str,
 ) -> Result<String, PreviewError> {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, Mac, digest::KeyInit};
     use sha2::Sha256;
     
     let secret_key = std::env::var("PREVIEW_TOKEN_SECRET_KEY").unwrap_or_default();

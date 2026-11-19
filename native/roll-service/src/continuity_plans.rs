@@ -3548,7 +3548,8 @@ pub async fn preview_plan_projection(
             });
             position += 1;
         }
-        (entries, std::cmp::max(entries.len(), existing_positions.len()) as i32)
+        let total_positions = std::cmp::max(entries.len(), existing_positions.len()) as i32;
+        (entries, total_positions)
     };
 
     Ok(Json(ReadingOrderProjectionPreview {
@@ -3557,7 +3558,7 @@ pub async fn preview_plan_projection(
         plan_ordering_mode: ordering_mode,
         reading_order_id,
         reading_order_name,
-        entries,
+        entries: entries.clone(),
         conflicts,
         total_positions,
         dropped_node_ids,
