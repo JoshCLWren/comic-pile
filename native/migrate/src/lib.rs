@@ -183,6 +183,7 @@ async fn run_in_transaction(client: &mut Client) -> Result<Report, MigrateError>
     }
 
     if !report.applied.is_empty() || !report.adopted.is_empty() {
+        ensure_deferred_identity_status(client).await?;
         stamp_current_head(client).await?;
     }
 
@@ -239,6 +240,44 @@ async fn adopt_alembic_migrations(client: &Client) -> Result<Vec<i64>, MigrateEr
         ));
     }
     Ok(Vec::new())
+}
+
+/// Repair external-identity status checks to allow `deferred` (#5378).
+///
+/// Some databases stamped at the baseline Alembic head may have stale
+/// check constraints that predate the deferred-status repair. The merged
+/// Rust/Alembic head includes that repair, so upgrades must apply it
+/// idempotently before stamping the merged head.
+async fn ensure_deferred_identity_status(client: &Client) -> Result<(), MigrateError> {
+    client
+        .batch_execute(
+            "DO $$\n\
+             BEGIN\n\
+               IF EXISTS (\n\
+                 SELECT 1 FROM information_schema.tables\n\
+                 WHERE table_schema = 'public' AND table_name = 'issue_external_identity_mappings'\n\
+               ) THEN\n\
+                 ALTER TABLE public.issue_external_identity_mappings\n\
+                   DROP CONSTRAINT IF EXISTS ck_issue_external_identity_status;\n\
+                 ALTER TABLE public.issue_external_identity_mappings\n\
+                   ADD CONSTRAINT ck_issue_external_identity_status\n\
+                   CHECK (status IN ('unresolved', 'candidate', 'confirmed', 'rejected', 'deferred'));\n\
+               END IF;\n\
+               IF EXISTS (\n\
+                 SELECT 1 FROM information_schema.tables\n\
+                 WHERE table_schema = 'public' AND table_name = 'thread_external_series_mappings'\n\
+               ) THEN\n\
+                 ALTER TABLE public.thread_external_series_mappings\n\
+                   DROP CONSTRAINT IF EXISTS ck_thread_external_series_status;\n\
+                 ALTER TABLE public.thread_external_series_mappings\n\
+                   ADD CONSTRAINT ck_thread_external_series_status\n\
+                   CHECK (status IN ('unresolved', 'candidate', 'confirmed', 'rejected', 'deferred'));\n\
+               END IF;\n\
+             END\n\
+             $$;",
+        )
+        .await?;
+    Ok(())
 }
 
 /// Keep Alembic's bookkeeping truthful while both tools exist.

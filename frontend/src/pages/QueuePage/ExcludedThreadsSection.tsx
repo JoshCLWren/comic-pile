@@ -113,7 +113,7 @@ export default function ExcludedThreadsSection({
                 </p>
                 <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{group.source_name}</p>
                 <p className="text-xs text-[var(--theme-text-dim)]">
-                  {groupThreads.length} series removed together
+                  {groupThreads.length} shown here (Restore All restores the whole group)
                 </p>
               </div>
               <button

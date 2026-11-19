@@ -285,3 +285,70 @@ async fn checksum_mismatch_is_refused() {
     drop(client);
     db.drop_database().await;
 }
+
+#[tokio::test]
+async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    client.batch_execute(MIGRATIONS[0].sql).await.unwrap();
+    client.batch_execute("RESET ALL").await.unwrap();
+    client
+        .batch_execute(
+            "ALTER TABLE public.issue_external_identity_mappings \
+             DROP CONSTRAINT IF EXISTS ck_issue_external_identity_status; \
+             ALTER TABLE public.issue_external_identity_mappings \
+             ADD CONSTRAINT ck_issue_external_identity_status \
+             CHECK (status IN ('unresolved', 'candidate', 'confirmed', 'rejected')); \
+             ALTER TABLE public.thread_external_series_mappings \
+             DROP CONSTRAINT IF EXISTS ck_thread_external_series_status; \
+             ALTER TABLE public.thread_external_series_mappings \
+             ADD CONSTRAINT ck_thread_external_series_status \
+             CHECK (status IN ('unresolved', 'candidate', 'confirmed', 'rejected')); \
+             INSERT INTO public.alembic_version (version_num) VALUES ('c44050000002');",
+        )
+        .await
+        .unwrap();
+
+    let report = run(&mut client).await.unwrap();
+    let pending: Vec<i64> = MIGRATIONS.iter().skip(1).map(|m| m.version).collect();
+    assert_eq!(report.applied, pending);
+    assert_eq!(report.adopted, vec![MIGRATIONS[0].version]);
+
+    let stamp: String = client
+        .query_one("SELECT version_num FROM public.alembic_version", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(stamp, BASELINE_ALEMBIC_HEAD);
+
+    let issue_check: String = client
+        .query_one(
+            "SELECT pg_get_constraintdef(c.oid) \
+             FROM pg_constraint c \
+             JOIN pg_class t ON t.oid = c.conrelid \
+             WHERE t.relname = 'issue_external_identity_mappings' \
+               AND c.conname = 'ck_issue_external_identity_status'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(issue_check.contains("deferred"), "{issue_check}");
+
+    let thread_check: String = client
+        .query_one(
+            "SELECT pg_get_constraintdef(c.oid) \
+             FROM pg_constraint c \
+             JOIN pg_class t ON t.oid = c.conrelid \
+             WHERE t.relname = 'thread_external_series_mappings' \
+               AND c.conname = 'ck_thread_external_series_status'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(thread_check.contains("deferred"), "{thread_check}");
+
+    drop(client);
+    db.drop_database().await;
+}
