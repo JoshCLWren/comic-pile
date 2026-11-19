@@ -668,15 +668,13 @@ async fn strict_plan_linked_to_loose_list_keeps_explicit_ordering_mode() {
         .await
         .expect("create owned loose list")
         .get(0);
-    for (position, issue_id) in [547311, 547312].iter().enumerate() {
-        conn.execute(
-            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
-             VALUES ($1, $2, $3, NOW())",
-            &[&list_id, issue_id, &(position as i32)],
-        )
-        .await
-        .expect("seed owned list entries");
-    }
+    conn.execute(
+        "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
+         VALUES ($1, 547311, 0, NOW()), ($1, 547312, 1, NOW())",
+        &[&list_id],
+    )
+    .await
+    .expect("seed owned list entries");
     conn.execute(
         "INSERT INTO reading_plan_sources
             (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
