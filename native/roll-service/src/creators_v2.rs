@@ -4332,7 +4332,7 @@ pub async fn get_series_drilldown(
 // OpenAPI documentation-only operations (registered in openapi.rs)
 // ---------------------------------------------------------------------------
 
-#[utoipa::path(get, path = "/api/v2/creators", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators", tag = "creators",
     operation_id = "creators_list",
     params(CreatorListQuery),
     responses((status = 200, description = "Creator list", body = CreatorListResponse),
@@ -4341,7 +4341,7 @@ pub async fn get_series_drilldown(
     security(("HTTPBearer" = [])))]
 pub fn list_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/summaries", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/summaries", tag = "creators",
     params(CreatorKeysQuery),
     responses((status = 200, description = "Creator summaries", body = CreatorSummariesResponse),
         (status = 400, description = "Invalid creator keys"),
@@ -4349,7 +4349,7 @@ pub fn list_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn summaries_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/compare", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/compare", tag = "creators",
     params(CreatorKeysQuery),
     responses((status = 200, description = "Creator comparison", body = CreatorComparisonResponse),
         (status = 400, description = "Invalid creator keys"),
@@ -4357,19 +4357,19 @@ pub fn summaries_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn compare_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/discoveries", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/discoveries", tag = "creators",
     responses((status = 200, description = "Creator discoveries", body = CreatorDiscoveryResponse),
         (status = 401, description = "Not authenticated")),
     security(("HTTPBearer" = [])))]
 pub fn discoveries_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/team-chemistry", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/team-chemistry", tag = "creators",
     responses((status = 200, description = "Creator team chemistry", body = CreatorTeamChemistryResponse),
         (status = 401, description = "Not authenticated")),
     security(("HTTPBearer" = [])))]
 pub fn team_chemistry_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         CreatorPageQuery
@@ -4381,7 +4381,7 @@ pub fn team_chemistry_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn detail_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/series/{series_key}/issues", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}/series/{series_key}/issues", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         ("series_key" = String, Path, description = "Series key"),
@@ -4394,7 +4394,7 @@ pub fn detail_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn series_issues_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/{metric_type}", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}/metrics/{metric_type}", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         ("metric_type" = String, Path, description = "Metric type"),
@@ -4407,7 +4407,7 @@ pub fn series_issues_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn metric_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         ("rating_value" = String, Path, description = "Rating value"),
@@ -4420,7 +4420,7 @@ pub fn metric_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn rating_distribution_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/role-stats/{role}", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}/metrics/role-stats/{role}", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         ("role" = String, Path, description = "Creator role"),
@@ -4433,7 +4433,7 @@ pub fn rating_distribution_documentation() {}
     security(("HTTPBearer" = [])))]
 pub fn role_documentation() {}
 
-#[utoipa::path(get, path = "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}", tag = "creators",
+#[utoipa::path(get, path = "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}", tag = "creators",
     params(
         ("creator_key" = String, Path, description = "Canonical creator key"),
         ("series_key" = String, Path, description = "Series key"),
