@@ -170,21 +170,6 @@ fn normalize_search(search: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-pub(crate) fn option_e_enabled() -> bool {
-    let enabled = std::env::var("OPTION_E_ENABLED")
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "t" | "yes" | "y" | "on"
-            )
-        })
-        .unwrap_or(false);
-    enabled
-        && std::env::var("OPTION_E_APPROVED_PREVIEW")
-            .map(|value| !value.trim().is_empty())
-            .unwrap_or(false)
-}
-
 /// Canonical SQL expression that groups blocked rows last in display order.
 ///
 /// The Queue list, the single-thread detail and the pending Roll offer all use
@@ -349,7 +334,7 @@ pub async fn list_threads(
         return Err(unprocessable("search must be at least 1 character"));
     }
     let search = normalize_search(raw_search);
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let execution = if option_e { "option_e" } else { "legacy" };
     let cursor = query
         .page_token
@@ -452,7 +437,7 @@ pub async fn get_thread_detail(
     // The detail must rank by the same blocked expression as the Queue list,
     // otherwise a stored `is_blocked` flag that disagrees with the Option E
     // evaluation gives the two views different positions for the same thread.
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let mut candidates: Vec<i32> = Vec::new();
     if option_e {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
