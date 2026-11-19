@@ -438,6 +438,18 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["detail"], "continuity_cycle");
 
+    // A second rule extends the graph: 820012 -> 820013.
+    let (status, second) = authed_json(
+        &state,
+        "POST",
+        uri,
+        &token,
+        &csrf,
+        Some(item_read_rule(820012, 820013)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{second}");
+
     // Foreign rule is invisible: get/put/delete -> 404.
     let foreign_uri = format!("/api/v1/continuity-rules/{foreign_rule_id}");
     for (method, body) in [
@@ -453,20 +465,19 @@ async fn continuity_rule_validation_ownership_duplicate_and_cycle_errors() {
         );
     }
 
-    // Update to the reverse edge also trips the cycle guard -> 409.
-    let mut reverse = item_read_rule(820012, 820011);
+    // Updating the first rule to 820013 -> 820012 would close the loop
+    // 820012 -> 820013 -> 820012 through the surviving second rule -> 409.
     let (status, body) = authed_json(
         &state,
         "PUT",
         &format!("/api/v1/continuity-rules/{rule_id}"),
         &token,
         &csrf,
-        Some(reverse.clone()),
+        Some(item_read_rule(820013, 820012)),
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["detail"], "continuity_cycle");
-    let _ = &mut reverse;
 }
 
 /// Converged rules persist their convergence targets and compile one canonical
