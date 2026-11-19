@@ -3053,8 +3053,7 @@ async fn reconcile_entries_impl<E: DbExec>(
             series_external_id.as_deref(),
             &canonical_issues,
             fallback_index.as_ref(),
-        )
-        .await?;
+        );
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
