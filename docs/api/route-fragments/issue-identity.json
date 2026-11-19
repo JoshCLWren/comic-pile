@@ -5,6 +5,7 @@
     "^/api/v1/cbl/\\{list_id\\}/reading\\-plans/\\{plan_id\\}/adoption\\-commit$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-preview$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-plan$",
+    "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/reading\\-graph\\-preview$",
     "^/api/v1/issue\\-identity/cbl\\-sources$",
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/\\{comicvine_issue_id\\}$",
@@ -101,6 +102,20 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4843,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842,
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-reading-graph.ts"
