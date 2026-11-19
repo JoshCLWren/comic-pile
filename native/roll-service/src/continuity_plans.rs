@@ -3482,9 +3482,7 @@ pub async fn project_preview(
         .map(|lanes| {
             lanes
                 .iter()
-                .filter_map(|lane| lane.get("id")?.as_str()?.to_string())
-                .collect::<Vec<_>>()
-                .into_iter()
+                .filter_map(|lane| lane.get("id")?.as_str().map(|s| s.to_string()))
                 .collect()
         })
         .unwrap_or_default();
