@@ -79,7 +79,7 @@ const MAX_ISSUES_TO_ADD: i64 = 10_000;
 // Wire types
 // ---------------------------------------------------------------------------
 
-/// The Python `ThreadResponse` projection every lifecycle writer returns.
+/// Python `ThreadResponse`.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadResponse {
     pub id: i32,
@@ -99,6 +99,7 @@ pub struct ThreadResponse {
     pub reading_progress: Option<String>,
     pub next_unread_issue_id: Option<i32>,
     pub next_unread_issue_number: Option<String>,
+    #[schema(value_type = Vec<Object>)]
     pub manual_creator_credits: Value,
 }
 
