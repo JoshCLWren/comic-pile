@@ -37,7 +37,8 @@
       "path": "/api/v1/undo/{session_id}/snapshots",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/undo/[^/]+/snapshots$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -45,7 +46,8 @@
       "path": "/api/v1/undo/{session_id}/undo/{snapshot_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
-      "owning_issue": 4839
+      "owning_issue": 4839,
+      "exclude_from_inventory": true
     }
   ]
 }

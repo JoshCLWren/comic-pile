@@ -81,7 +81,7 @@ function creatorDetailPayload() {
 }
 
 async function installCreatorRoutes(page: Page) {
-  await page.route('**/v1/creators/*', (route) =>
+  await page.route('**/v2/creators/*', (route) =>
     route.fulfill({ json: creatorDetailPayload() }),
   )
 }

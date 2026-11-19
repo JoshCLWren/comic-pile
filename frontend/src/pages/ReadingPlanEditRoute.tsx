@@ -1,19 +1,30 @@
 import type { ReactNode } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
-import { useReadingPlanReader } from '../hooks/useReadingPlans'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
+import { useReadingPlanReader, useReadingPlanRecoveryPreview } from '../hooks/useReadingPlans'
 
 /**
  * Keep old edit bookmarks useful after the Option E single-authority cutover.
  *
  * A linked Plan must be edited through its owned Reading List. The legacy Plan
- * editor is only available when the reader explicitly reports legacy mode.
- * Failure to resolve the authority must never fall back to a stale Plan edit.
+ * editor is available when the reader reports legacy mode, or when the owner
+ * follows the recovery screen's explicit authoring link (?authoring=1) and the
+ * recovery preview confirms the plan is orphaned. A relinked, ambiguous, or
+ * transiently failing reader never unlocks a stale Plan edit.
  */
 export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: ReactNode }) {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const authoring = searchParams.get('authoring') === '1'
   const parsedId = Number(id)
   const planId = id && Number.isSafeInteger(parsedId) && parsedId > 0 ? parsedId : null
   const reader = useReadingPlanReader(planId)
+  // An authoring link is only a fallback when the plan is actually orphaned.
+  // Confirm with the recovery preview so a relinked, ambiguous, or temporarily
+  // failing reader never unlocks the stale editor (and its authority-erasing
+  // save path).
+  const recovery = useReadingPlanRecoveryPreview(
+    authoring && reader.isError ? planId : null,
+  )
 
   if (planId === null) {
     return <p role="alert">Invalid Reading Plan ID.</p>
@@ -24,6 +35,16 @@ export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: R
   }
 
   if (reader.isError || !reader.data) {
+    // The recovery screen explicitly offers authoring as an alternative to
+    // relinking an orphaned plan. That link opts into the legacy editor, which
+    // loads the owned Plan directly and can save a fresh authored order. A
+    // linked Option E plan still resolves below and is sent to its List.
+    if (authoring && recovery.isPending) {
+      return <p role="status">Checking Reading Plan recovery state…</p>
+    }
+    if (authoring && recovery.data?.status === 'orphaned') {
+      return <>{legacyEditor}</>
+    }
     return (
       <div role="alert">
         Could not determine this Plan's reading-order authority. No legacy edits were made.{' '}

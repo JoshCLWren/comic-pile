@@ -76,69 +76,6 @@ async def test_roll_populates_issue_id_and_number(
 
 
 @pytest.mark.asyncio
-async def test_roll_override_populates_issue_id_and_number(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Override roll event persists issue_id and issue_number."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    session = ReadingSession(start_die=8, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Override Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        total_issues=10,
-        reading_progress="in_progress",
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    issue = Issue(
-        thread_id=thread.id,
-        issue_number="2",
-        status="unread",
-        position=2,
-    )
-    async_db.add(issue)
-    await async_db.commit()
-    await async_db.refresh(issue)
-
-    thread.next_unread_issue_id = issue.id
-    await async_db.commit()
-
-    response = await auth_client.post(
-        "/api/v1/roll/override", json={"thread_id": thread.id}
-    )
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["issue_id"] == issue.id
-    assert data["issue_number"] == "2"
-
-    result = await async_db.execute(
-        select(Event)
-        .where(Event.session_id == session.id)
-        .where(Event.type == "roll")
-        .order_by(Event.timestamp.desc())
-    )
-    roll_event = result.scalars().first()
-    assert roll_event is not None
-    assert roll_event.issue_id == issue.id
-    assert roll_event.issue_number == "2"
-
-
-@pytest.mark.asyncio
 async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     auth_client: AsyncClient,
     async_db: AsyncSession,

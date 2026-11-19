@@ -732,6 +732,10 @@ pub(crate) async fn persist(
 ) -> Result<IssueReadRateResponse, ApiError> {
     validate(request)?;
     let source = rating_source(request)?;
+    // Queue lock first, then row locks — one global order with every queue writer
+    // (thread_lifecycle / Python oracle). Prevents deadlock with issue read-state
+    // writers that race on the same thread/queue.
+    queue::lock_queue(tx, user.id()).await?;
     // This must be the first DB statement, consistent with the Rust dice writer.
     tx.query_one(
         "SELECT pg_advisory_xact_lock($1::bigint)",
