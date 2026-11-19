@@ -2413,6 +2413,20 @@ mod tests {
         assert!(RECORD_SQL.contains("to_timestamp($2)"));
     }
 
+    /// The checked-in native contract for this slice must match what the
+    /// current generator emits. Without this guard the artifact drifts
+    /// silently (a stale copy emitted the `diagnostics` `oneOf` branches in
+    /// the wrong order while the same-path runtime contract and the generated
+    /// frontend client both carry the current order).
+    #[test]
+    fn bug_reports_contract_is_current() {
+        let expected = include_str!("../../contracts/bug-reports-v1.openapi.json");
+        let generated = BugReportsApi::openapi()
+            .to_pretty_json()
+            .expect("serializable OpenAPI document");
+        assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
     #[test]
     fn github_settings_require_all_three_values() {
         let configured = GithubSettings::from_lookup(|name| match name {
