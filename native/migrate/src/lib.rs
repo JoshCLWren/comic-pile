@@ -19,7 +19,12 @@ use std::fmt;
 use tokio_postgres::Client;
 
 /// Alembic revision whose schema the baseline migration reproduces.
-pub const BASELINE_ALEMBIC_HEAD: &str = "c44050000002";
+///
+/// `i5378deferred01` is an idempotent repair that widens two already-wide
+/// check constraints; it changes no canonical schema, so the baseline still
+/// reproduces it. The stamp must track the real Alembic head for the Rust
+/// migration runner to adopt already-managed production databases.
+pub const BASELINE_ALEMBIC_HEAD: &str = "i5378deferred01";
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
