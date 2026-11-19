@@ -105,3 +105,11 @@ Some currently deployed routes may still implement older Reading Plans behavior.
 **Test:** Attempt a list edit or CBL adoption that would create a prerequisite cycle.
 
 **Expected:** The write fails closed with a clear message before any change is committed; Roll and Queue remain usable. Source: P0 #4759.
+
+## MQA-LIST-014: Displayed plan reading mode survives refresh and recovery
+
+**Setup:** A saved Strict (`strict_sequential`) Reading Plan, including one linked to a Loose (`loose`) authoritative Reading List and one that never had a List link.
+
+**Test:** Open the plan detail page, refresh it, and reopen it after an orphaned-plan recovery relink. Compare the eyebrow mode label with the plans index and the planner editor.
+
+**Expected:** Every surface shows Strict for a plan saved as Strict; a missing, stale or Loose authoritative List never silently downgrades the displayed mode to Informational. The linked Reading List remains the sole authority for actual availability, blockers and explanations (MQA-LIST-002/003), so a mode change is only ever the result of an explicit save or relink choice, never a refresh-time projection. Source: #4724 (post-Rust QA follow-up to #4684).
