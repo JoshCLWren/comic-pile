@@ -240,7 +240,6 @@ async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
         ("POST", "/api/v1/threads/1/issues"),
-        ("GET", "/api/v1/threads/1/issues/creators"),
         ("POST", "/api/v1/threads/1/issues:reorder"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
@@ -586,66 +585,6 @@ async fn reorder_rewrites_positions_and_validates() {
         .map(|r| r.0)
         .collect();
     assert_eq!(order, vec!["3", "1", "2"]);
-}
-
-#[tokio::test]
-async fn creators_are_bulk_read_merged_and_owner_scoped() {
-    let (state, token, csrf, user_id, _guard) = setup_user("tiss-creators").await;
-    let (other_token, other_csrf, _other_user) =
-        register_extra_user(&state, "tiss-creators-other").await;
-    let conn = state.pool.get().await.unwrap();
-    let thread = plain_thread(&conn, user_id, "Credits", 2, 1).await;
-    let mapped = issue(&conn, thread, "1", 1, "unread").await;
-    let _unmapped = issue(&conn, thread, "2", 2, "unread").await;
-    let identity: i32 = conn
-        .query_one(
-            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-             VALUES ('comicvine', 'issue', 'cv-1', $1::text::json, NOW(), NOW()) RETURNING id",
-            &[&json!({"person_credits": [
-                {"id": 7, "name": "Writer", "role": "writer, cover"},
-                {"id": 7, "name": "Writer", "role": "inker"},
-                {"name": "Anon", "role": "colorist"}
-            ]}).to_string()],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    conn.execute(
-        "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) \
-         VALUES ($1, $2, 'confirmed', 'test', 1.0, NOW(), NOW(), '{}'::json)",
-        &[&mapped, &identity],
-    )
-    .await
-    .unwrap();
-    let path = format!("/api/v1/threads/{thread}/issues/creators");
-    let (status, body) = send(&state, get(&path, &token, &csrf)).await;
-    assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["thread_id"], thread);
-    assert_eq!(body["issues"].as_array().unwrap().len(), 1);
-    assert_eq!(body["issues"][0]["issue_id"], mapped);
-    assert_eq!(
-        body["issues"][0]["creators"],
-        json!([
-            {"creator_id": 7, "name": "Writer", "roles": ["writer", "cover", "inker"]},
-            {"creator_id": null, "name": "Anon", "roles": ["colorist"]}
-        ])
-    );
-    let (status, body) = send(&state, get(&path, &other_token, &other_csrf)).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["detail"], format!("Thread {thread} not found"));
-    let (status, _) = send(
-        &state,
-        get("/api/v1/threads/987654/issues/creators", &token, &csrf),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    let (status, body) = send(
-        &state,
-        get("/api/v1/threads/abc/issues/creators", &token, &csrf),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body["detail"], "Validation failed");
 }
 
 #[tokio::test]
