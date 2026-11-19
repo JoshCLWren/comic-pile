@@ -931,6 +931,15 @@ mod tests {
     }
 
     #[test]
+    fn invalid_request_returns_validation_failed() {
+        let mut input = request("item_read");
+        input.source_id = 0;
+        let error = validate_request(&input).expect_err("invalid request");
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(error.detail(), "Validation failed");
+    }
+
+    #[test]
     fn request_normalization_matches_pydantic_deduplication() {
         let mut input = request("selected_members_read");
         input.selected_member_issue_ids = vec![30, 30, 20];
