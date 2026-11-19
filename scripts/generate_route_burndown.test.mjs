@@ -137,3 +137,153 @@ test('generator rejects invalid fragment input and leaves fixtures untouched', (
     'rejected input must not modify the staged inventory',
   );
 });
+
+/**
+ * Real source-fragment regression checks. The fixture tests above prove the
+ * generator is deterministic; these prove active route declarations retain
+ * their intended contracts before bot-owned outputs regenerate post-merge.
+ * Ported from tests/test_route_burndown.py when the Python tool was retired.
+ */
+function liveFragment(name) {
+  return JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/route-fragments', name + '.json'), 'utf8'));
+}
+
+function liveOperation(fragment, method, route) {
+  const op = fragment.operations.find(item => item.method === method && item.path === route);
+  assert.ok(op, 'missing ' + method + ' ' + route + ' from ' + fragment.family);
+  return op;
+}
+
+test('real creator source retains all eleven native v2 browser routes', () => {
+  const fragment = liveFragment('creators');
+  const routes = fragment.operations.filter(op => op.path.startsWith('/api/v2/creators'));
+  assert.equal(routes.length, 11);
+  assert.equal(new Set(routes.map(op => op.method + ' ' + op.path)).size, 11);
+  for (const op of routes) {
+    assert.equal(op.bucket, 'operations', op.path);
+    assert.equal(op.method, 'GET', op.path);
+    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.runtime, 'native-rust', op.path);
+    assert.equal(op.status, 'target', op.path);
+    assert.equal(op.owning_issue, 4836, op.path);
+  }
+  for (const route of [
+    '/api/v2/creators',
+    '/api/v2/creators/{creator_key}',
+    '/api/v2/creators/{creator_key}/series/{series_key}/issues',
+  ]) {
+    liveOperation(fragment, 'GET', route);
+  }
+  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/index.py');
+});
+
+test('real custom CBL source retains native v1 and v2 route ownership', () => {
+  const fragment = liveFragment('custom-cbl');
+  const v1 = fragment.operations.filter(op => op.bucket === 'v1_operations');
+  const v2 = fragment.operations.filter(op => op.bucket === 'operations');
+  assert.equal(v1.length, 11);
+  assert.equal(v2.length, 6);
+  for (const op of v1) {
+    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.runtime, 'native-rust', op.path);
+    assert.equal(op.owning_issue, 4844, op.path);
+    assert.equal(op.exclude_from_inventory, true, op.path);
+  }
+  for (const op of v2) {
+    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.runtime, 'native-rust', op.path);
+  }
+});
+
+test('real taste and bug-report fragments cannot regress to Python ingress', () => {
+  const taste = liveFragment('taste-discoveries');
+  assert.equal(taste.operations.length, 2);
+  liveOperation(taste, 'GET', '/api/v1/taste/discoveries');
+  liveOperation(taste, 'POST', '/api/v1/taste/discoveries/{signal_id}/dismiss');
+  assert.ok(!taste.operations.some(op => op.method === 'OPTIONS'));
+  assert.equal(taste.defaults.runtime, 'native-rust');
+  for (const op of taste.operations) assert.equal(op.dest, '/api/native_roll.rs', op.path);
+
+  const bugs = liveFragment('bug-reports');
+  assert.deepEqual(
+    new Set(bugs.operations.map(op => op.method + ' ' + op.path)),
+    new Set(['POST /api/bug-reports/', 'POST /api/v1/bug-reports/']),
+  );
+  for (const op of bugs.operations) {
+    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.exclude_from_inventory, true, op.path);
+    assert.equal(op.owning_issue, 4852, op.path);
+  }
+});
+
+test('real session and undo fragments retain native-only supported operations', () => {
+  const sessions = liveFragment('sessions');
+  const undo = liveFragment('undo');
+  const expected = [
+    ['GET', '/api/sessions/'],
+    ['GET', '/api/v1/sessions/'],
+    ['GET', '/api/sessions/{session_id}/details'],
+    ['GET', '/api/v1/sessions/{session_id}/details'],
+    ['GET', '/api/undo/{session_id}/snapshots'],
+    ['POST', '/api/undo/{session_id}/undo/{snapshot_id}'],
+    ['GET', '/api/v1/undo/{session_id}/snapshots'],
+    ['POST', '/api/v1/undo/{session_id}/undo/{snapshot_id}'],
+  ];
+  for (const [method, route] of expected) {
+    const fragment = route.includes('/undo/') ? undo : sessions;
+    const op = liveOperation(fragment, method, route);
+    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.exclude_from_inventory, true, route);
+    assert.equal(op.owning_issue, 4839, route);
+  }
+  assert.ok(![...sessions.operations, ...undo.operations].some(
+    op => op.path.includes('current-session') || op.path.includes('restore-session-start'),
+  ));
+});
+
+test('real releases and dependency fragments retain declared browser routes', () => {
+  const releases = liveFragment('releases');
+  const expectedReleases = [
+    ['GET', '/api/v1/releases/'],
+    ['PUT', '/api/v1/releases/'],
+    ['GET', '/api/v1/releases/source'],
+    ['GET', '/api/v1/releases/{release_id}'],
+    ['POST', '/api/v1/releases/{release_id}/retract'],
+  ];
+  assert.equal(releases.operations.length, expectedReleases.length);
+  for (const [method, route] of expectedReleases) {
+    const op = liveOperation(releases, method, route);
+    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.exclude_from_inventory, true, route);
+  }
+  const dependencies = liveFragment('dependencies');
+  assert.deepEqual(new Set(dependencies.operations.map(op => op.bucket)), new Set(['operations', 'v1_operations']));
+  for (const [method, route] of [
+    ['POST', '/api/v2/dependencies/'],
+    ['DELETE', '/api/v2/dependencies/{dependency_id}'],
+  ]) {
+    const op = liveOperation(dependencies, method, route);
+    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.runtime, 'native-rust', route);
+  }
+});
+
+test('retired identity-inbox handlers retain all seven native same-path contracts', () => {
+  const native = JSON.parse(readFileSync(
+    path.join(repoRoot, 'native/contracts/same-path-runtime.openapi.json'), 'utf8',
+  ));
+  const expected = [
+    ['GET', '/api/v1/identity-inbox'],
+    ['GET', '/api/v1/identity-inbox/search/issues'],
+    ['GET', '/api/v1/identity-inbox/{mapping_id}'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/confirm'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/defer'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/reject'],
+    ['POST', '/api/v1/identity-inbox/{mapping_id}/skip'],
+  ];
+  for (const [method, route] of expected) {
+    const op = native.paths[route]?.[method.toLowerCase()];
+    assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
+    assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
+  }
+});
