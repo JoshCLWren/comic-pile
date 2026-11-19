@@ -773,7 +773,7 @@ export interface SeriesImportStatusRequest {
   }
 }
 
-export type SeriesImportStatusResponse = components['schemas']['NativeSeriesImportStatusResponse']
+export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
 export interface SeriesImportStatusV2Request {
   path: {
@@ -781,7 +781,7 @@ export interface SeriesImportStatusV2Request {
   }
 }
 
-export type SeriesImportStatusV2Response = components['schemas']['NativeSeriesImportStatusResponse']
+export type SeriesImportStatusV2Response = components['schemas']['SeriesImportStatusResponse']
 
 export interface SeriesIssuesRequest {
   path: {

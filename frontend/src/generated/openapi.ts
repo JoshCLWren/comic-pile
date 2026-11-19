@@ -7380,16 +7380,6 @@ export interface components {
             comicvine_issue_id: number;
             reason?: string | null;
         };
-        NativeSeriesImportStatusResponse: {
-            /** Format: int32 */
-            comicvine_volume_id: number;
-            imported: boolean;
-            /** Format: int32 */
-            issue_count?: number | null;
-            series_name?: string | null;
-            /** Format: int32 */
-            thread_id?: number | null;
-        };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         NativeSetCurrentIssueRequest: {
             issue_number: string;
@@ -8987,7 +8977,6 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
         SeriesImportStatusResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
@@ -11066,7 +11055,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSeriesImportStatusResponse"];
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -17413,7 +17402,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeSeriesImportStatusResponse"];
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
                 };
             };
             /** @description Invalid or revoked access token */

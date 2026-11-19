@@ -10599,42 +10599,6 @@
         ],
         "type": "object"
       },
-      "NativeSeriesImportStatusResponse": {
-        "properties": {
-          "comicvine_volume_id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "imported": {
-            "type": "boolean"
-          },
-          "issue_count": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "series_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "comicvine_volume_id",
-          "imported"
-        ],
-        "type": "object"
-      },
       "NativeSetCurrentIssueRequest": {
         "description": "Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`.",
         "properties": {
@@ -15431,7 +15395,6 @@
         "type": "object"
       },
       "SeriesImportStatusResponse": {
-        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "properties": {
           "comicvine_volume_id": {
             "format": "int32",
@@ -19921,7 +19884,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSeriesImportStatusResponse"
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
                 }
               }
             },
@@ -27961,7 +27924,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeSeriesImportStatusResponse"
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
                 }
               }
             },
