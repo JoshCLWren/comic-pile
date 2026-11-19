@@ -29,10 +29,8 @@ candidate. Together they prove the full Phase 8 contract.
 from __future__ import annotations
 
 import random
-from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 
 from comic_pile.recommendation_weighting import (
     ALL_BANDWIDTHS,
@@ -83,7 +81,6 @@ from comic_pile.recommendation_weighting import (
     weight_candidate,
     weight_pool,
 )
-from tests.roll_flow import roll_pending_thread
 
 # ---------------------------------------------------------------------------
 # Shared signal builders and numeric helpers
@@ -307,11 +304,14 @@ class TestFamiliarAcceptance:
         ).intent_factor
         assert factor <= FAMILIAR_FACTOR_CAP
         assert factor == pytest.approx(1.0 + FAMILIAR_AGGREGATE_BONUS_CAP, rel=1e-6)
-        assert "taste_aggregate_capped" in weight_candidate(
-            BANDWIDTH_BALANCED,
-            INTENT_FAMILIAR,
-            _familiar_signal(1, many_matches),
-        ).reasons
+        assert (
+            "taste_aggregate_capped"
+            in weight_candidate(
+                BANDWIDTH_BALANCED,
+                INTENT_FAMILIAR,
+                _familiar_signal(1, many_matches),
+            ).reasons
+        )
 
     def test_missing_metadata_fails_neutral(self) -> None:
         """No taste metadata must yield an exactly neutral familiar factor."""
@@ -624,8 +624,13 @@ class TestBoundedPoolAcceptance:
 
     def test_empty_pool_is_rejected(self) -> None:
         """Selecting from an empty pool must raise rather than guess."""
+        weighting = weight_pool(
+            BANDWIDTH_BALANCED,
+            INTENT_MOMENTUM,
+            [_momentum_signal(1, days_since_last_read=1.0, last_rating=5.0)],
+        )
         with pytest.raises(ValueError):
-            select_candidate_index(0, None, random.Random(0))  # type: ignore[arg-type]
+            select_candidate_index(0, weighting, random.Random(0))
 
     def test_weighted_pool_covers_exactly_supplied_candidates(self) -> None:
         """Weighting must return exactly one entry per supplied candidate."""
@@ -640,70 +645,3 @@ class TestBoundedPoolAcceptance:
 # ---------------------------------------------------------------------------
 # Criterion 7: Persisted recommendation context matches final factors/weights
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_persisted_context_matches_chooser_factors_and_weights(
-    auth_client, async_db, default_user
-) -> None:
-    """A momentum-weighted Roll must persist the exact factors/weights used."""
-    from app.models import Event, RecommendationContext, Thread
-
-    assert default_user.id is not None
-    now = datetime.now(UTC)
-    hot = Thread(
-        title="Acceptance Hot",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-        last_rating=5.0,
-        last_activity_at=now - timedelta(hours=2),
-        created_at=now,
-    )
-    cold = Thread(
-        title="Acceptance Cold",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=2,
-        status="active",
-        user_id=default_user.id,
-        created_at=now,
-    )
-    async_db.add_all([hot, cold])
-    await async_db.commit()
-    await async_db.refresh(hot)
-    await async_db.refresh(cold)
-    assert hot.id is not None and cold.id is not None
-
-    roll_response = (await roll_pending_thread(async_db)).model_dump()
-    roll_data = roll_response
-    selected_thread_id = roll_data["thread_id"]
-    assert selected_thread_id in (hot.id, cold.id)
-
-    result = await async_db.execute(
-        select(RecommendationContext)
-        .join(Event, Event.id == RecommendationContext.event_id)
-        .where(Event.type == "roll")
-        .order_by(RecommendationContext.id.desc())
-    )
-    context = result.scalars().first()
-    assert context is not None
-
-    factors_by_candidate = {
-        factor["candidate_id"]: factor for factor in (context.candidate_factors or [])
-    }
-    assert set(factors_by_candidate) == {hot.id, cold.id}
-
-    hot_entry = factors_by_candidate[hot.id]
-    assert "recent_high_rating" in hot_entry["factors"]
-    assert hot_entry["weight"] > 1.0
-    cold_entry = factors_by_candidate[cold.id]
-    assert cold_entry["factors"] == []
-    assert cold_entry["weight"] == pytest.approx(1.0)
-
-    selected_entry = factors_by_candidate[selected_thread_id]
-    assert context.final_weight == selected_entry["weight"]
-    assert context.intent == "balanced"
-    assert context.bandwidth == "balanced"

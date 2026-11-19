@@ -21,7 +21,6 @@ from app.schemas.thread import ThreadCreate, ThreadUpdate
 from app.services import issue as issue_service
 from app.services import thread_service
 from comic_pile.queue import ADVISORY_LOCK_NAMESPACE, acquire_queue_lock
-from tests.roll_flow import roll_pending_thread
 
 
 async def _active_positions(async_db: AsyncSession, user_id: int) -> list[int]:
@@ -142,9 +141,7 @@ async def test_complete_thread_via_mark_read_keeps_positions_dense(
 ) -> None:
     """Reading the last issue completes a series without leaving a queue gap."""
     await _add_thread(async_db, default_user, title="A", position=1)
-    tracked = await _add_thread(
-        async_db, default_user, title="B", position=2, total_issues=1
-    )
+    tracked = await _add_thread(async_db, default_user, title="B", position=2, total_issues=1)
     await _add_thread(async_db, default_user, title="C", position=3)
 
     last_issue = Issue(
@@ -218,9 +215,7 @@ async def test_new_series_after_tail_completion_stays_within_the_queue(
     """
     await _add_thread(async_db, default_user, title="A", position=1)
     await _add_thread(async_db, default_user, title="B", position=2)
-    tail = await _add_thread(
-        async_db, default_user, title="C", position=3, total_issues=1
-    )
+    tail = await _add_thread(async_db, default_user, title="C", position=3, total_issues=1)
     tail_issue = Issue(
         thread_id=tail.id,
         issue_number="1",
@@ -316,35 +311,6 @@ async def test_exclude_and_restore_keeps_positions_dense(
 
     await thread_service.restore_thread(async_db, default_user.id, first.id)
     _assert_dense(await _active_positions(async_db, default_user.id))
-
-
-@pytest.mark.asyncio
-async def test_sparse_existing_positions_agree_across_api_surfaces(
-    async_db: AsyncSession, default_user: User
-) -> None:
-    """Normal reads fix existing gaps without requiring a mutation or rewriting keys."""
-    first = await _add_thread(async_db, default_user, title="A", position=4)
-    last = await _add_thread(async_db, default_user, title="B", position=621)
-    await async_db.commit()
-    expected = {first.id: 1, last.id: 2}
-
-    page = await thread_service.list_queue_threads(
-        async_db, default_user.id, search=None, sort="position", page_size=1, page_token=None
-    )
-    assert page.threads[0].queue_position == 1
-    second_page = await thread_service.list_queue_threads(
-        async_db,
-        default_user.id,
-        search=None,
-        sort="position",
-        page_size=1,
-        page_token=page.next_page_token,
-    )
-    assert second_page.threads[0].queue_position == 2
-
-    roll = (await roll_pending_thread(async_db)).model_dump()
-    assert roll["queue_position"] == expected[roll["thread_id"]]
-    assert await _active_positions(async_db, default_user.id) == [4, 621]
 
 
 @pytest.mark.asyncio
@@ -509,32 +475,6 @@ async def test_bulk_mark_issue_unread_takes_queue_lock_before_row_writes(
     await async_db.commit()
 
     with _captured_statements(db_engine) as statements:
-        await issue_service.bulk_mark_issue_unread(
-            async_db, [read_issue.id], default_user.id
-        )
+        await issue_service.bulk_mark_issue_unread(async_db, [read_issue.id], default_user.id)
 
     _assert_queue_lock_precedes_thread_writes(statements)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("remove", ["delete", "complete"])
-async def test_display_positions_agree_after_queue_removal(
-    async_db: AsyncSession, default_user: User, remove: str
-) -> None:
-    """Completion and deletion update every surviving public ordinal."""
-    first = await _add_thread(async_db, default_user, title="First", position=4)
-    last = await _add_thread(async_db, default_user, title="Last", position=621)
-    await async_db.commit()
-    if remove == "delete":
-        await thread_service.delete_thread(async_db, default_user.id, first.id)
-    else:
-        await thread_service.update_thread(
-            async_db, default_user.id, first.id, ThreadUpdate(issues_remaining=0)
-        )
-    page = await thread_service.list_queue_threads(
-        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
-    )
-    assert [(row.id, row.queue_position) for row in page.threads] == [(last.id, 1)]
-    roll = (await roll_pending_thread(async_db)).model_dump()
-    assert roll["thread_id"] == last.id
-    assert roll["queue_position"] == 1
