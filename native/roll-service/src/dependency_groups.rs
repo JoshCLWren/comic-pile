@@ -78,7 +78,8 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      t.notes, t.is_test, t.is_blocked, \
      to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS created_at, \
      t.total_issues, t.reading_progress, t.next_unread_issue_id, \
-     t.next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
+     (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id) \
+     AS next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
@@ -92,7 +93,7 @@ const OTHER_COUPLERS_SQL: &str =
      WHERE m.group_id <> $2 AND (m.thread_id = ANY($3::int[]) OR i.thread_id = ANY($3::int[])) \
      ORDER BY g.name";
 const LINKED_PLANS_SQL: &str = "SELECT id, name FROM continuity_plans \
-     WHERE user_id = $1 AND nodes_json @> $2::jsonb ORDER BY name, id";
+     WHERE user_id = $1 AND nodes_json::jsonb @> $2::jsonb ORDER BY name, id";
 const DELETE_GROUP_SQL: &str = "DELETE FROM dependency_groups WHERE id = $1 AND user_id = $2";
 const SEQUENCE_OCCUPIED_SQL: &str = "SELECT id FROM dependency_group_memberships \
      WHERE group_id = $1 AND sequence_order = $2 LIMIT 1";
@@ -106,8 +107,8 @@ const INSERT_MEMBERSHIP_SQL: &str = "INSERT INTO dependency_group_memberships \
      VALUES ($1, $2, $3, $4) RETURNING id, group_id, thread_id, issue_id, sequence_order";
 const INSERT_ISSUE_MEMBERSHIPS_SQL: &str = "INSERT INTO dependency_group_memberships (group_id, issue_id) \
      SELECT $1, issue_id FROM unnest($2::int[]) AS issue_ids(issue_id) ON CONFLICT DO NOTHING RETURNING issue_id";
-const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name) \
-     VALUES ($1, $2) RETURNING id, name, created_at";
+const INSERT_GROUP_SQL: &str = "INSERT INTO dependency_groups (user_id, name, created_at) \
+     VALUES ($1, $2, now()) RETURNING id, name, created_at";
 
 /// Wire request mirroring the Python `DependencyGroupCreate` payload.
 #[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
@@ -642,7 +643,7 @@ async fn linked_plans(
             LINKED_PLANS_SQL,
             &[
                 &user_id,
-                &serde_json::json!({ "node_type": "crossover", "ref_id": group_id }),
+                &serde_json::json!([{ "node_type": "crossover", "ref_id": group_id }]),
             ],
         )
         .await
