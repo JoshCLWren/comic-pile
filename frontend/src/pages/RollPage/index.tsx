@@ -349,31 +349,44 @@ export default function RollPage() {
   const snoozedCoverQuery = useQuery({
     queryKey: queryKeys.roll.snoozedSeriesCovers(snoozedThreads.map((thread) => thread.id)),
     queryFn: async (): Promise<Record<number, string | null>> => {
-      const remaining = new Set(snoozedThreads.map((thread) => thread.id))
-      const covers: Record<number, string | null> = {}
-      const applyThreads = (threads: ThreadListItem[]) => {
+      const wantedIds = new Set(snoozedThreads.map((thread) => thread.id))
+      const latestById = new Map<number, { url: string | null; updatedAt: number }>()
+      const now = Date.now()
+      const applyThreads = (threads: ThreadListItem[], updatedAt: number) => {
+        // Invalidated, expired and older projections must never overrule a
+        // corrected issue mapping. One timestamp applies to the whole batch.
+        if (!updatedAt || now - updatedAt > 60_000) return
         for (const thread of threads) {
-          if (!remaining.has(thread.id)) continue
-          covers[thread.id] = thread.series_cover_image_url ?? null
-          remaining.delete(thread.id)
+          if (!wantedIds.has(thread.id)) continue
+          const previous = latestById.get(thread.id)
+          if (previous && previous.updatedAt > updatedAt) continue
+          latestById.set(thread.id, {
+            url: thread.series_cover_image_url ?? null,
+            updatedAt,
+          })
         }
       }
 
-      // Planner and Queue may have already read exactly these series.
-      applyThreads(queryClient.getQueryData<ThreadListItem[]>(queryKeys.thread.list()) ?? [])
+      const plannerState = queryClient.getQueryState<ThreadListItem[]>(queryKeys.thread.list())
+      if (plannerState?.data && !plannerState.isInvalidated) {
+        applyThreads(plannerState.data, plannerState.dataUpdatedAt)
+      }
       const loadedQueuePages = queryClient.getQueriesData<InfiniteData<ThreadListResponse>>({
         queryKey: queryKeys.queue.pages(),
       })
-      for (const [, pageData] of loadedQueuePages) {
-        for (const page of pageData?.pages ?? []) applyThreads(page.threads)
+      for (const [key, pageData] of loadedQueuePages) {
+        const state = queryClient.getQueryState<InfiniteData<ThreadListResponse>>(key)
+        if (!state || state.isInvalidated) continue
+        for (const page of pageData?.pages ?? []) {
+          applyThreads(page.threads, state.dataUpdatedAt)
+        }
       }
-      if (remaining.size > 0) {
+      if ([...wantedIds].some((id) => !latestById.has(id))) {
+        // A hard upper limit: never walk all queue pages just for art.
         const page = await threadsApi.list({ page_size: 200 })
-        applyThreads(page.threads)
+        applyThreads(page.threads, Date.now())
       }
-      // A series not found in loaded or first-page data keeps the shared
-      // no-cover placeholder; loading the entire graph is not warranted.
-      return covers
+      return Object.fromEntries([...latestById].map(([id, value]) => [id, value.url]))
     },
     enabled: state.snoozedExpanded && snoozedThreads.length > 0 && !state.isRatingView,
     staleTime: 60_000,
