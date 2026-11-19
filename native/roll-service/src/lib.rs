@@ -46,6 +46,7 @@ pub mod reading_boundary;
 pub mod reading_constraints;
 pub mod reading_eligibility;
 pub mod reading_graph;
+pub mod reading_graph_preview;
 pub mod reading_inputs;
 pub mod reading_list;
 pub mod reading_mode;
