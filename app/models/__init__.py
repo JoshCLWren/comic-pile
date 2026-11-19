@@ -10,7 +10,6 @@ from app.models.comicvine_metadata_refresh import ComicVineMetadataRefreshReques
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
-from app.models.custom_cbl_source_link import CustomCBLSourceLink
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.delivery import DeliveryRecord
@@ -62,7 +61,6 @@ __all__ = [
     "CustomCBLEntry",
     "CustomCBLList",
     "CustomCBLOverlapDecision",
-    "CustomCBLSourceLink",
     "Dependency",
     "DependencyGroup",
     "DependencyGroupMembership",
