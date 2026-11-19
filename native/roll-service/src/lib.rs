@@ -1021,6 +1021,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_identity::cbl_adoption_plan),
         )
         .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity::cbl_reading_graph_preview),
+        )
+        .route(
+            "/api/v1/issue-identity/preview-consolidation",
+            post(issue_identity::preview_consolidation),
+        )
+        .route(
             "/api/v1/cbl/{list_id}/adoption-commit",
             post(issue_identity::cbl_adoption_commit),
         )

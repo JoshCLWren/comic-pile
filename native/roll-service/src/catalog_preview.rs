@@ -123,7 +123,7 @@ struct ValidationErrorResponse {
 }
 
 #[derive(Debug)]
-enum PreviewError {
+pub enum PreviewError {
     Api(ApiError),
     Validation(Vec<ValidationErrorItem>),
     ProviderUnavailable,

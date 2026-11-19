@@ -51,14 +51,6 @@
       "dest": "/api/native_issue.rs"
     },
     {
-      "src": "^/api/v1/catalog/series\\-mappings/preview$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/comicvine/issues/[^/]+/identity$",
       "methods": [
         "GET",
@@ -149,14 +141,6 @@
     },
     {
       "src": "^/api/v1/comicvine/series:import$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
       "methods": [
         "POST",
         "OPTIONS"

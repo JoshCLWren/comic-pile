@@ -1,6 +1,8 @@
 {
   "family": "continuity-plans",
-  "owned_path_patterns": [],
+  "owned_path_patterns": [
+    "^/api/v1/continuity\\-plans/.*$"
+  ],
   "defaults": {
     "runtime": "native-rust",
     "status": "target",
@@ -177,12 +179,13 @@
       "exclude_from_inventory": true,
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
-      "runtime": "python-fastapi",
-      "status": "transitional",
-      "owning_issue": null,
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842,
       "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
       ]
     },

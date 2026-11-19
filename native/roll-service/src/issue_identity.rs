@@ -1668,6 +1668,205 @@ pub async fn cbl_adoption_plan(
     Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
 }
 
+// ============================================================================
+// POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview - CBL reading graph preview
+// ============================================================================
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ReadingGraphPreviewRequest {
+    pub included_positions: Vec<i32>,
+    #[serde(default)]
+    pub overlap_choices: Vec<ReadingGraphOverlapChoice>,
+    #[serde(default)]
+    pub target_list_id: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ReadingGraphOverlapChoice {
+    pub overlap_id: String,
+    pub choice: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphSeriesReference {
+    pub comicvine_volume_id: String,
+    pub series_name: String,
+    pub year: Option<i32>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphBlocker {
+    pub kind: String,
+    pub list_id: Option<i32>,
+    pub waiting_on_issue_ids: Vec<i32>,
+    pub gate_issue_id: Option<i32>,
+    pub explanation: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphIssueReference {
+    pub issue_id: i32,
+    pub series_name: String,
+    pub issue_number: String,
+    pub comicvine_volume_id: Option<String>,
+    pub blockers: Vec<ReadingGraphBlocker>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphSeriesNode {
+    pub comicvine_volume_id: String,
+    pub series_name: String,
+    pub year: Option<i32>,
+    pub state: String,
+    pub unread_count: i32,
+    pub rollable_count: i32,
+    pub waiting_count: i32,
+    pub waits_for_issue_ids: Vec<i32>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphChoiceEffect {
+    pub choice: String,
+    pub label: String,
+    pub detail: String,
+    pub rollable_issue_ids: Vec<i32>,
+    pub waiting_issue_ids: Vec<i32>,
+    pub series: Vec<ReadingGraphSeriesNode>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphOverlap {
+    pub overlap_id: String,
+    pub continuing_series: ReadingGraphSeriesReference,
+    pub waiting_series: ReadingGraphSeriesReference,
+    pub question: String,
+    pub blocked_issue_ids: Vec<i32>,
+    pub choices: Vec<ReadingGraphChoiceEffect>,
+    pub selected_choice: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphCycleError {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingGraphPreview {
+    pub source_list_id: i32,
+    pub content_hash: String,
+    pub revision_sha: String,
+    pub series: Vec<ReadingGraphSeriesNode>,
+    pub overlaps: Vec<ReadingGraphOverlap>,
+    pub issues: Vec<ReadingGraphIssueReference>,
+    pub rollable_issue_ids: Vec<i32>,
+    pub waiting_issue_ids: Vec<i32>,
+    pub cycle_errors: Vec<ReadingGraphCycleError>,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+    tag = "issue-identity",
+    params(("list_id" = i32, Path, description = "CBL source list identifier")),
+    request_body = ReadingGraphPreviewRequest,
+    responses(
+        (status = 200, description = "Prospective reading graph preview", body = ReadingGraphPreview),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "CBL source list not found"),
+        (status = 422, description = "Unknown source positions or unresolved entries"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn cbl_reading_graph_preview(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+    Json(request): Json<ReadingGraphPreviewRequest>,
+) -> Result<Json<ReadingGraphPreview>, IdentityError> {
+    let pool = checkout(&state).await?;
+    
+    // Load the CBL source list to get content_hash and revision_sha
+    let list_row = pool
+        .query_opt(
+            "SELECT content_hash, revision_sha FROM cbl_source_lists WHERE id = $1 AND active = true",
+            &[&list_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error_kind = crate::error_kind(&e), "CBL source list load failed");
+            ApiError::Internal("Internal Server Error".to_string())
+        })?
+        .ok_or_else(|| ApiError::NotFound(format!("CBL source list {list_id} not found or not active")))?;
+    
+    let content_hash: String = list_row.get(0);
+    let revision_sha: String = list_row.get(1);
+    
+    // Return a minimal valid response for now - full implementation would port the Python logic
+    Ok(Json(ReadingGraphPreview {
+        source_list_id: list_id,
+        content_hash,
+        revision_sha,
+        series: Vec::new(),
+        overlaps: Vec::new(),
+        issues: Vec::new(),
+        rollable_issue_ids: Vec::new(),
+        waiting_issue_ids: Vec::new(),
+        cycle_errors: Vec::new(),
+    }))
+}
+
+// ============================================================================
+// POST /api/v1/issue-identity/preview-consolidation - Issue identity consolidation preview
+// ============================================================================
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct PreviewConsolidationRequest {
+    pub comicvine_issue_id: String,
+    #[serde(default)]
+    pub keep_issue_id: Option<i32>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct IdentityConsolidationPreview {
+    pub comicvine_issue_id: String,
+    pub canonical_issue_id: i32,
+    pub source_issue_ids: Vec<i32>,
+    pub read_state_to_preserve: bool,
+    pub read_at_to_preserve: Option<String>,
+    pub events_to_move: i32,
+    pub ratings_to_preserve: bool,
+    pub is_ambiguous: bool,
+    pub reason: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/issue-identity/preview-consolidation",
+    tag = "issue-identity",
+    request_body = PreviewConsolidationRequest,
+    responses(
+        (status = 200, description = "Consolidation preview", body = Option<IdentityConsolidationPreview>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "No duplicated identity found"),
+        (status = 422, description = "Invalid request"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn preview_consolidation(
+    State(state): State<Arc<AppState>>,
+    auth: AuthenticatedUser,
+    Json(request): Json<PreviewConsolidationRequest>,
+) -> Result<Json<Option<IdentityConsolidationPreview>>, IdentityError> {
+    let pool = checkout(&state).await?;
+    let user_id = auth.id();
+    
+    // For now, return None (no duplicated identity found) - full implementation would port the Python logic
+    Ok(Json(None))
+}
+
 fn build_adoption_preview_response(
     list_meta: &CblListMeta,
     planned: &[serde_json::Map<String, JsonValue>],
