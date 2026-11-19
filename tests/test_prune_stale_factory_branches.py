@@ -5,8 +5,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "scripts" / "prune_stale_factory_branches.py"
@@ -22,46 +24,83 @@ RECENT = NOW - timedelta(days=2)
 VERY_RECENT = NOW - timedelta(minutes=10)
 
 
-def branch(name: str, *, age: datetime = OLD, sha: str = "deadbeef", protected: bool = False):
-    """Build a BranchInfo fixture."""
+def branch(
+    name: str,
+    *,
+    age: datetime = OLD,
+    sha: str = "deadbeef",
+    protected: bool = False,
+) -> prune.BranchInfo:
+    """Build a BranchInfo fixture.
+
+    Args:
+        name: Branch name.
+        age: Commit timestamp for the branch head.
+        sha: Commit SHA for the branch head.
+        protected: Whether the branch is marked protected.
+
+    Returns:
+        A ``BranchInfo`` fixture for tests.
+    """
     return prune.BranchInfo(name=name, sha=sha, committed_at=age, protected=protected)
 
 
 def decide(
-    branches,
+    branches: list[prune.BranchInfo],
     *,
-    open_pr_heads=None,
-    live_worktrees=None,
-    protected=None,
-    merged_names=None,
-    lease_signals=None,
-    retired_issues=None,
-    default_branch="main",
-):
-    """Run branch decisions against deterministic fixtures."""
+    open_pr_heads: dict[str, list[dict[str, object]]] | None = None,
+    live_worktrees: set[str] | None = None,
+    protected: set[str] | None = None,
+    merged_names: set[str] | None = None,
+    lease_signals: dict[int, prune.LeaseSignal | None] | None = None,
+    retired_issues: set[int] | None = None,
+    default_branch: str = "main",
+) -> list[prune.Decision]:
+    """Run branch decisions against deterministic fixtures.
+
+    Args:
+        branches: Branch fixtures to evaluate.
+        open_pr_heads: PR records grouped by head branch name.
+        live_worktrees: Branch names checked out in local worktrees.
+        protected: Protected branch names.
+        merged_names: Branch names treated as merged into the default branch.
+        lease_signals: Lease signals keyed by linked issue number.
+        retired_issues: Issue numbers marked as retired.
+        default_branch: Default branch name for evaluation.
+
+    Returns:
+        A list of pruning decisions.
+    """
     pr_records = open_pr_heads or {}
-    live_worktrees = set(live_worktrees or set())
-    protected = set(protected or set())
-    merged_names = set(merged_names or set())
-    lease_signals = lease_signals or {}
-    retired_issues = set(retired_issues or set())
+    live_worktree_refs = set(live_worktrees or set())
+    protected_names = set(protected or set())
+    merged = set(merged_names or set())
+    leases = lease_signals or {}
+    retired = set(retired_issues or set())
 
     return prune.decide_branches(
         branches,
         default_branch=default_branch,
-        protected_names=protected,
+        protected_names=protected_names,
         pr_records=pr_records,
-        live_worktree_refs=live_worktrees,
+        live_worktree_refs=live_worktree_refs,
         now=NOW,
         age_days=14,
-        is_merged=lambda b: b.name in merged_names,
-        lease_lookup=lambda issue: lease_signals.get(issue),
-        retirement_lookup=lambda issue: issue in retired_issues,
+        is_merged=lambda b: b.name in merged,
+        lease_lookup=lambda issue: leases.get(issue),
+        retirement_lookup=lambda issue: issue in retired,
     )
 
 
-def by_name(decisions):
-    """Index decisions by branch name."""
+def by_name(decisions: list[prune.Decision]) -> dict[str, prune.Decision]:
+    """Index decisions by branch name.
+
+    Args:
+        decisions: Decisions to index.
+
+    Returns:
+        Mapping of branch name to decision.
+    """
     return {d.branch: d for d in decisions}
 
 
@@ -421,3 +460,60 @@ def test_fetch_issue_retired_uses_supported_pagination_query(monkeypatch):
     assert "--per_page" not in cmd
     assert "--paginate" in cmd and "--slurp" in cmd
     assert any(arg.endswith("comments?per_page=100") for arg in cmd)
+
+
+def test_normalize_repo_slug_accepts_common_remote_forms() -> None:
+    """Normalize owner/name, SSH, and HTTPS remote forms for comparison."""
+    assert prune.normalize_repo_slug("JoshCLWren/comic-pile") == "joshclwren/comic-pile"
+    assert (
+        prune.normalize_repo_slug("https://github.com/JoshCLWren/comic-pile.git")
+        == "joshclwren/comic-pile"
+    )
+    assert (
+        prune.normalize_repo_slug("git@github.com:JoshCLWren/comic-pile.git")
+        == "joshclwren/comic-pile"
+    )
+
+
+def test_remote_github_repo_resolves_remote_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve the GitHub repository slug for a configured git remote."""
+
+    def fake_run(cmd: list[str], *, check: bool = True) -> prune.subprocess.CompletedProcess[str]:
+        """Return a fake git remote URL lookup result.
+
+        Args:
+            cmd: Command arguments passed to the runner.
+            check: Whether failures should raise.
+
+        Returns:
+            Completed process containing the configured remote URL.
+        """
+        assert cmd[:4] == ["git", "-C", "/repo", "remote"]
+        return prune.subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout="git@github.com:JoshCLWren/comic-pile.git\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    assert prune.remote_github_repo(Path("/repo"), "origin") == "joshclwren/comic-pile"
+
+
+def test_remote_github_repo_returns_none_when_unresolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return None when the remote URL cannot be resolved to a GitHub slug."""
+
+    def fake_run(cmd: list[str], *, check: bool = True) -> prune.subprocess.CompletedProcess[str]:
+        """Return a failed git remote lookup.
+
+        Args:
+            cmd: Command arguments passed to the runner.
+            check: Whether failures should raise.
+
+        Returns:
+            Completed process representing a missing remote.
+        """
+        return prune.subprocess.CompletedProcess(cmd, 1, stdout="", stderr="missing")
+
+    monkeypatch.setattr(prune, "run", fake_run)
+    assert prune.remote_github_repo(Path("/repo"), "origin") is None

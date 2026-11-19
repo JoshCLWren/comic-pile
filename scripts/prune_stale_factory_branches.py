@@ -208,8 +208,59 @@ def list_remote_branches(repo_root: Path, remote: str = "origin") -> list[Branch
 
 def is_ancestor(repo_root: Path, ancestor_ref: str, descendant_ref: str) -> bool:
     """Return whether ancestor_ref is an ancestor of descendant_ref."""
-    proc = run(["git", "-C", str(repo_root), "merge-base", "--is-ancestor", ancestor_ref, descendant_ref], check=False)
+    proc = run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "merge-base",
+            "--is-ancestor",
+            ancestor_ref,
+            descendant_ref,
+        ],
+        check=False,
+    )
     return proc.returncode == 0
+
+
+def normalize_repo_slug(value: str) -> str:
+    """Normalize a GitHub repository slug for comparison.
+
+    Args:
+        value: Repository identifier as owner/name or a git/https URL.
+
+    Returns:
+        Normalized ``owner/name`` slug in lowercase without a trailing ``.git``.
+    """
+    slug = value.strip().removesuffix(".git").strip("/")
+    if slug.startswith(("http://", "https://", "ssh://", "git@")):
+        slug = slug.replace(":", "/")
+        parts = [part for part in slug.split("/") if part]
+        if len(parts) >= 2:
+            slug = f"{parts[-2]}/{parts[-1]}"
+    return slug.lower()
+
+
+def remote_github_repo(repo_root: Path, remote: str) -> str | None:
+    """Resolve the GitHub repository targeted by a git remote.
+
+    Args:
+        repo_root: Repository root containing the git remote configuration.
+        remote: Git remote name to inspect.
+
+    Returns:
+        Normalized ``owner/name`` slug, or ``None`` when it cannot be resolved.
+    """
+    proc = run(["git", "-C", str(repo_root), "remote", "get-url", remote], check=False)
+    if proc.returncode != 0:
+        return None
+    slug = normalize_repo_slug(proc.stdout.strip())
+    if "/" not in slug or slug.count("/") != 1:
+        return None
+    owner, name = slug.split("/", 1)
+    if not owner or not name:
+        return None
+    return slug
 
 
 def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
@@ -605,8 +656,26 @@ def delete_remote_branch(repo_root: Path, remote: str, branch: str, expected_sha
     run(["git", "-C", str(repo_root), "push", remote, "--delete", branch])
 
 
-def render_report(decisions: list[Decision], *, mode: str, now: datetime, remote: str, age_days: int) -> str:
-    """Render a human-readable prune report."""
+def render_report(
+    decisions: list[Decision],
+    *,
+    mode: str,
+    now: datetime,
+    remote: str,
+    age_days: int,
+) -> str:
+    """Render a human-readable prune report.
+
+    Args:
+        decisions: Evaluated branch decisions to include in the report.
+        mode: Report mode label, such as dry-run or apply.
+        now: Timestamp used for report generation.
+        remote: Remote name whose branches were evaluated.
+        age_days: Minimum age threshold in days.
+
+    Returns:
+        A Markdown-formatted report string.
+    """
     delete = [d for d in decisions if d.eligible]
     skip = [d for d in decisions if not d.eligible]
     lines = [
@@ -622,15 +691,23 @@ def render_report(decisions: list[Decision], *, mode: str, now: datetime, remote
     ]
     if delete:
         for d in sorted(delete, key=lambda x: x.branch):
+            state = "merged" if d.merged else "abandoned"
+            issue = d.linked_issue if d.linked_issue is not None else "n/a"
+            reasons = "; ".join(d.reasons)
             lines.append(
-                f"- `{d.branch}` — {'merged' if d.merged else 'abandoned'}, age={d.age_days}d, issue={d.linked_issue or 'n/a'}; { '; '.join(d.reasons)}"
+                f"- `{d.branch}` — {state}, age={d.age_days}d, "
+                f"issue={issue}; {reasons}"
             )
     else:
         lines.append("- (none)")
     lines.extend(["", "## Skipped branches"])
     for d in sorted(skip, key=lambda x: x.branch):
+        state = "merged" if d.merged else "not merged"
+        issue = d.linked_issue if d.linked_issue is not None else "n/a"
+        reasons = "; ".join(d.reasons)
         lines.append(
-            f"- `{d.branch}` — {'merged' if d.merged else 'not merged'}, age={d.age_days}d, open_pr={str(d.open_pr).lower()}, issue={d.linked_issue or 'n/a'}; { '; '.join(d.reasons)}"
+            f"- `{d.branch}` — {state}, age={d.age_days}d, "
+            f"open_pr={str(d.open_pr).lower()}, issue={issue}; {reasons}"
         )
     lines.append("")
     return "\n".join(lines)
@@ -649,7 +726,23 @@ def decide_branches(
     lease_lookup: Callable[[int], LeaseSignal | None],
     retirement_lookup: Callable[[int], bool],
 ) -> list[Decision]:
-    """Evaluate all branches and return pruning decisions."""
+    """Evaluate all branches and return pruning decisions.
+
+    Args:
+        branches: Remote branches to evaluate.
+        default_branch: Resolved default branch name for the remote.
+        protected_names: Branch names protected by policy or GitHub settings.
+        pr_records: Pull request records grouped by head branch name.
+        live_worktree_refs: Local branch refs checked out in live worktrees.
+        now: Current timestamp for age and lease calculations.
+        age_days: Minimum age threshold in days.
+        is_merged: Predicate that reports whether a branch is merged.
+        lease_lookup: Callable returning lease state for a linked issue.
+        retirement_lookup: Callable returning retirement state for an issue.
+
+    Returns:
+        A list of pruning decisions in input order.
+    """
     return [
         evaluate_branch(
             branch,
@@ -668,7 +761,11 @@ def decide_branches(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line argument parser."""
+    """Build the command-line argument parser.
+
+    Returns:
+        Configured argument parser for the pruning command.
+    """
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", help="GitHub repo (owner/name) for PR/issue/protection lookups")
     p.add_argument("--remote", default="origin", help="Git remote to inspect (default: origin)")
@@ -681,7 +778,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the stale branch pruning command."""
+    """Run the stale branch pruning command.
+
+    Args:
+        argv: Optional command-line arguments. Defaults to process arguments.
+
+    Returns:
+        Process exit code: 0 on success, 1 when apply-time deletions fail.
+    """
     args = build_parser().parse_args(argv)
     if not args.repo:
         raise SystemExit(
@@ -690,8 +794,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     repo_root = Path.cwd()
-    now = utc_now()
     remote = args.remote
+    remote_repo = remote_github_repo(repo_root, remote)
+    if remote_repo is None:
+        raise SystemExit(
+            f"error: unable to resolve GitHub repository for remote '{remote}'; "
+            "cannot verify --repo matches the remote being deleted from"
+        )
+    expected_repo = normalize_repo_slug(args.repo)
+    if remote_repo != expected_repo:
+        raise SystemExit(
+            f"error: --repo {args.repo} resolves to '{expected_repo}' but remote "
+            f"'{remote}' targets '{remote_repo}'; refusing to continue"
+        )
+
+    now = utc_now()
     default_branch = remote_default_branch(repo_root, remote)
 
     # Refresh remote-tracking refs before building the inventory so dry-run and
@@ -785,7 +902,64 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not decision.eligible:
                 continue
             try:
-                delete_remote_branch(repo_root, remote, decision.branch, decision.sha)
+                # Refresh remote-tracking refs and all safety checks immediately
+                # before deletion so protections that appeared during the
+                # inventory walk are honored even when the branch SHA is unchanged.
+                fetch_proc = run(
+                    ["git", "-C", str(repo_root), "fetch", remote, "--prune"],
+                    check=False,
+                )
+                if fetch_proc.returncode != 0:
+                    raise RuntimeError(
+                        "unable to refresh remote refs before delete: "
+                        f"{fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
+                    )
+
+                fresh_branches = {
+                    b.name: b for b in list_remote_branches(repo_root, remote)
+                }
+                fresh_branch = fresh_branches.get(decision.branch)
+                if fresh_branch is None:
+                    print(
+                        f"SKIPPED {decision.branch}: remote branch no longer exists",
+                        file=sys.stderr,
+                    )
+                    continue
+
+                fresh_protected = fetch_protected_branches(args.repo)
+                fresh_protected.update({default_branch, "main", "master", "gh-pages"})
+                fresh_pr_records = fetch_pr_records(args.repo)
+                fresh_live_refs = local_worktree_branches(repo_root)
+
+                def fresh_lease_lookup(issue_number: int) -> LeaseSignal | None:
+                    return fetch_issue_signal(args.repo, issue_number)
+
+                def fresh_retirement_lookup(issue_number: int) -> bool:
+                    return fetch_issue_retired(args.repo, issue_number)
+
+                fresh_decision = evaluate_branch(
+                    fresh_branch,
+                    default_branch=default_branch,
+                    protected_names=fresh_protected,
+                    pr_records=fresh_pr_records,
+                    live_worktree_refs=fresh_live_refs,
+                    now=utc_now(),
+                    age_days=args.age_days,
+                    is_merged=is_merged,
+                    lease_lookup=fresh_lease_lookup,
+                    retirement_lookup=fresh_retirement_lookup,
+                )
+                if not fresh_decision.eligible:
+                    print(
+                        f"SKIPPED {decision.branch}: protection appeared before delete; "
+                        f"{'; '.join(fresh_decision.reasons)}",
+                        file=sys.stderr,
+                    )
+                    continue
+
+                delete_remote_branch(
+                    repo_root, remote, decision.branch, fresh_decision.sha
+                )
                 deleted += 1
                 print(f"DELETED {remote}/{decision.branch}", file=sys.stderr)
             except Exception as exc:
