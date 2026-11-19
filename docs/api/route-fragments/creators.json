@@ -74,7 +74,7 @@
       "method": "GET",
       "path": "/api/v1/creators/{creator_key}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators/(?:compare|discoveries|summaries|team\\-chemistry)?$",
+      "src": "^/api/v1/creators/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4836
