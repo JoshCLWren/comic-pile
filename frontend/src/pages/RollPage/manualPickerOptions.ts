@@ -253,10 +253,22 @@ export function buildManualPickerOptions(params: {
 
   return {
     activeOptions: rows.flatMap((row) =>
-      row.group === 'active' ? [{ id: row.thread.id, label: row.label, threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url ?? null }] : [],
+      row.group === 'active' ? [{
+        id: row.thread.id,
+        label: row.label,
+        ...(row.thread.series_cover_image_url
+          ? { threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url }
+          : {}),
+      }] : [],
     ),
     snoozedOptions: rows.flatMap((row) =>
-      row.group === 'snoozed' ? [{ id: row.thread.id, label: row.label, threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url ?? null }] : [],
+      row.group === 'snoozed' ? [{
+        id: row.thread.id,
+        label: row.label,
+        ...(row.thread.series_cover_image_url
+          ? { threadTitle: row.thread.title, coverImageUrl: row.thread.series_cover_image_url }
+          : {}),
+      }] : [],
     ),
   }
 }
