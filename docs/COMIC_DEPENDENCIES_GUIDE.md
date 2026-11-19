@@ -405,7 +405,7 @@ await dependenciesApi.createDependency({
 
 ### Thread issue list (`frontend/src/pages/ThreadDetailView.tsx`)
 
-The former standalone `frontend/src/components/IssueList.tsx` was removed on
+The former standalone `frontend/src/components/IssueList.tsx` was removed on <!-- docs-path-check: ignore -->
 2026-11-18: it had no live callers and its row actions were superseded by the
 shared exact-issue card family (`ComicIssueCard` / `CompactIssueCardTrigger`,
 see `docs/ISSUE_CARD_MOUNT_INVENTORY.md`). The Thread detail view renders the
