@@ -313,30 +313,47 @@ async fn series_cover_uses_the_issue_card_mapping_preference() {
     let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
     set_frontier(&ctx, thread_id, Some(issue)).await;
     let client = ctx.state.pool.get().await.unwrap();
-    for (external_id, cover, confidence) in [
-        ("low-confidence-id", "https://cv.example/low.jpg", 0.4_f64),
-        ("high-confidence-id", "https://cv.example/high.jpg", 0.9_f64),
-    ] {
-        let metadata = json!({"image": {"original_url": cover}});
-        let identity: i32 = client
-            .query_one(
-                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
-                 created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
-                &[&external_id, &metadata],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        client
-            .execute(
-                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
-                 confidence, created_at, updated_at, evidence_json) \
-                 VALUES ($1, $2, 'confirmed', $3, NOW(), NOW(), '{}'::json)",
-                &[&issue, &identity, &confidence],
-            )
-            .await
-            .unwrap();
-    }
+    // Two identities and two mappings land in one set-based statement each, so
+    // the fixture does not issue SQL per row.
+    let external_ids = vec![
+        "low-confidence-id".to_owned(),
+        "high-confidence-id".to_owned(),
+    ];
+    let metadata: Vec<String> = ["https://cv.example/low.jpg", "https://cv.example/high.jpg"]
+        .iter()
+        .map(|cover| json!({"image": {"original_url": cover}}).to_string())
+        .collect();
+    let identity_rows = client
+        .query(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) \
+             SELECT 'comicvine', 'issue', ext, meta::json, NOW(), NOW() \
+             FROM unnest($1::text[], $2::text[]) AS t(ext, meta) \
+             ORDER BY ext \
+             RETURNING id, external_id",
+            &[&external_ids, &metadata],
+        )
+        .await
+        .unwrap();
+    let identity_by_external: std::collections::HashMap<String, i32> = identity_rows
+        .iter()
+        .map(|row| (row.get::<_, String>(1), row.get::<_, i32>(0)))
+        .collect();
+    let identity_ids: Vec<i32> = external_ids
+        .iter()
+        .map(|id| identity_by_external[id])
+        .collect();
+    let confidences = vec![0.4_f64, 0.9_f64];
+    client
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             confidence, created_at, updated_at, evidence_json) \
+             SELECT $1, ident, 'confirmed', conf, NOW(), NOW(), '{}'::json \
+             FROM unnest($2::int4[], $3::float8[]) AS m(ident, conf)",
+            &[&issue, &identity_ids, &confidences],
+        )
+        .await
+        .unwrap();
     drop(client);
 
     let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
