@@ -4583,7 +4583,7 @@ pub fn cbl_adoption_plan_documentation() {}
 /// Documentation-only operation for committing an adoption plan.
 #[utoipa::path(
     post,
-    path = "/api/v1/cbl/{list_id}/adoption-commit",
+    path = "/api/v2/reading-lists/{list_id}/adoption-commits",
     tag = "issue-identity",
     params(("list_id" = i32, Path, description = "CBL source list identifier")),
     request_body = CblAdoptionCommitRequest,
@@ -4601,7 +4601,7 @@ pub fn cbl_adoption_commit_documentation() {}
 /// Documentation-only operation for targeted adoption into an existing plan.
 #[utoipa::path(
     post,
-    path = "/api/v1/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
+    path = "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
     tag = "issue-identity",
     params(
         ("list_id" = i32, Path, description = "CBL source list identifier"),
@@ -4635,8 +4635,6 @@ pub fn cbl_targeted_adoption_commit_documentation() {}
         find_cbl_candidates_for_reading_list_documentation,
         cbl_adoption_preview_documentation,
         cbl_adoption_plan_documentation,
-        cbl_adoption_commit_documentation,
-        cbl_targeted_adoption_commit_documentation,
     ),
     components(schemas(
         CblSourceListDiscoveryItem,

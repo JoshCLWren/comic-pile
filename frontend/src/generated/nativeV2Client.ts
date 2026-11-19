@@ -23,6 +23,16 @@ export function compactQuery(
   return Object.keys(params).length > 0 ? params : undefined
 }
 
+export interface ApplyCustomCblRequest {
+  path: {
+    list_id: number
+    plan_id: number
+  }
+  body: components['schemas']['CustomCBLApplyRequest']
+}
+
+export type ApplyCustomCblResponse = components['schemas']['CustomCBLApplyResponse']
+
 export interface BootstrapRequest {
   query?: {
     timezone?: string
@@ -30,6 +40,25 @@ export interface BootstrapRequest {
 }
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
+
+export interface CblAdoptionCommitRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['CblAdoptionCommitRequest']
+}
+
+export type CblAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
+
+export interface CblTargetedAdoptionCommitRequest {
+  path: {
+    list_id: number
+    plan_id: number
+  }
+  body: components['schemas']['CblAdoptionCommitRequest']
+}
+
+export type CblTargetedAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
 
 export interface CommitRequest {
   body: components['schemas']['CommitRequest']
@@ -241,6 +270,18 @@ export interface DeleteLegacyDependencyRequest {
 
 export type DeleteLegacyDependencyResponse = unknown
 
+export interface DeleteOverlapDecisionRequest {
+  path: {
+    list_id: number
+    decision_id: number
+  }
+  query?: {
+    expected_updated_at?: string
+  }
+}
+
+export type DeleteOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
+
 export interface DeleteReadingListRequest {
   path: {
     list_id: number
@@ -274,6 +315,14 @@ export interface EligibleIssueIdsRequest {
 }
 
 export type EligibleIssueIdsResponse = components['schemas']['RollEligibleIssueIdsResponse']
+
+export interface ExportCustomCblRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type ExportCustomCblResponse = string
 
 export interface ForgotPasswordRequest {
   body: components['schemas']['ForgotPasswordRequest']
@@ -314,6 +363,14 @@ export interface GetLegacyDependencyRequest {
 export type GetLegacyDependencyResponse = components['schemas']['DependencyResponse']
 
 export type GetMetricsResponse = components['schemas']['StartupMetricsResponse']
+
+export interface GetOverlapDecisionsRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type GetOverlapDecisionsResponse = components['schemas']['OverlapDecisionSetResponse']
 
 export interface GetQueueEntryRequest {
   path: {
@@ -726,7 +783,25 @@ export interface RoleRequest {
 
 export type RoleResponse = components['schemas']['CreatorMetricDrilldown']
 
+export interface SaveOverlapDecisionRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['OverlapDecisionWrite']
+}
+
+export type SaveOverlapDecisionResponse = components['schemas']['OverlapDecisionSetResponse']
+
 export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
+
+export interface SearchCustomCblIssuesRequest {
+  query?: {
+    q?: string
+    limit?: number
+  }
+}
+
+export type SearchCustomCblIssuesResponse = Array<components['schemas']['CustomCBLIssueSearchResult']>
 
 export interface SeriesRequest {
   path: {
@@ -820,7 +895,10 @@ export interface UpdateReadingListRequest {
 export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
+  applyCustomCbl(args: ApplyCustomCblRequest): Promise<ApplyCustomCblResponse>
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  cblAdoptionCommit(args: CblAdoptionCommitRequest): Promise<CblAdoptionCommitResponse>
+  cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest): Promise<CblTargetedAdoptionCommitResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
@@ -850,18 +928,21 @@ export interface NativeV2Client {
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
+  deleteOverlapDecision(args: DeleteOverlapDecisionRequest): Promise<DeleteOverlapDecisionResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
   discoveries(): Promise<DiscoveriesResponse>
   dismissPending(): Promise<DismissPendingResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
+  exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
   getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
   getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getMetrics(): Promise<GetMetricsResponse>
+  getOverlapDecisions(args: GetOverlapDecisionsRequest): Promise<GetOverlapDecisionsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
@@ -917,7 +998,9 @@ export interface NativeV2Client {
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   role(args: RoleRequest): Promise<RoleResponse>
+  saveOverlapDecision(args: SaveOverlapDecisionRequest): Promise<SaveOverlapDecisionResponse>
   search(): Promise<SearchResponse>
+  searchCustomCblIssues(args?: SearchCustomCblIssuesRequest): Promise<SearchCustomCblIssuesResponse>
   series(args: SeriesRequest): Promise<SeriesResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   seriesIssues(args: SeriesIssuesRequest): Promise<SeriesIssuesResponse>
@@ -933,15 +1016,33 @@ export interface NativeV2Client {
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
   return {
+    applyCustomCbl(args: ApplyCustomCblRequest) {
+      return client.post<ApplyCustomCblResponse, ApplyCustomCblRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/applications`,
+        args.body,
+      )
+    },
     bootstrap(args: BootstrapRequest = {}) {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
       )
     },
+    cblAdoptionCommit(args: CblAdoptionCommitRequest) {
+      return client.post<CblAdoptionCommitResponse, CblAdoptionCommitRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/adoption-commits`,
+        args.body,
+      )
+    },
+    cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest) {
+      return client.post<CblTargetedAdoptionCommitResponse, CblTargetedAdoptionCommitRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/adoption-commits`,
+        args.body,
+      )
+    },
     commit(args: CommitRequest) {
       return client.post<CommitResponse, CommitRequest['body']>(
-        "/v1/catalog/series-mappings/commit",
+        "/v2/series-mapping-commits",
         args.body,
       )
     },
@@ -1092,6 +1193,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
+    deleteOverlapDecision(args: DeleteOverlapDecisionRequest) {
+      return client.delete<DeleteOverlapDecisionResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions/${encodeURIComponent(String(args.path.decision_id))}`,
+        { params: compactQuery(args.query) },
+      )
+    },
     deleteReadingList(args: DeleteReadingListRequest) {
       return client.delete<DeleteReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
@@ -1116,6 +1223,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<EligibleIssueIdsResponse>(
         "/v2/roll/eligible-issue-ids",
         { params: compactQuery(args.query) },
+      )
+    },
+    exportCustomCbl(args: ExportCustomCblRequest) {
+      return client.get<ExportCustomCblResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/export`,
       )
     },
     forgotPassword(args: ForgotPasswordRequest) {
@@ -1146,6 +1258,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     getMetrics() {
       return client.get<GetMetricsResponse>("/metrics")
+    },
+    getOverlapDecisions(args: GetOverlapDecisionsRequest) {
+      return client.get<GetOverlapDecisionsResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+      )
     },
     getQueueEntry(args: GetQueueEntryRequest) {
       return client.get<GetQueueEntryResponse>(
@@ -1439,8 +1556,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    saveOverlapDecision(args: SaveOverlapDecisionRequest) {
+      return client.put<SaveOverlapDecisionResponse, SaveOverlapDecisionRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+        args.body,
+      )
+    },
     search() {
       return client.get<SearchResponse>("/v2/identity-inbox/issue-matches")
+    },
+    searchCustomCblIssues(args: SearchCustomCblIssuesRequest = {}) {
+      return client.get<SearchCustomCblIssuesResponse>(
+        "/v2/reading-lists/issue-candidates",
+        { params: compactQuery(args.query) },
+      )
     },
     series(args: SeriesRequest) {
       return client.get<SeriesResponse>(

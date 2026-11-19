@@ -36,6 +36,8 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        crate::issue_identity::cbl_adoption_commit_documentation,
+        crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
         crate::bootstrap::bootstrap_documentation,
         crate::bootstrap::initialize_session_documentation,
@@ -236,6 +238,11 @@ use utoipa::OpenApi;
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
+        crate::issue_identity::CommitSeriesDecision,
+        crate::issue_identity::CommitEntryOverride,
+        crate::issue_identity::CblAdoptionCommitRequest,
+        crate::issue_identity::ContinuityPlanResponseWire,
+        crate::issue_identity::CblAdoptionCommitResponseWire,
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
@@ -308,7 +315,8 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
-        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
