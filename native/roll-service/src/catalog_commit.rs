@@ -136,7 +136,7 @@ fn python_json_string(value: &str) -> String {
     ascii
 }
 
-fn canonical_json(v: &Value) -> String {
+pub(crate) fn canonical_json(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
