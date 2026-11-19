@@ -202,7 +202,9 @@ export default function ThreadDetailView() {
   const visibleCardIds = issuesExpanded && !issuesError ? issues.map((issue) => issue.id) : []
   const issueCardsQuery = useIssueCards(
     nextBoundaryIssueId == null ? visibleCardIds : [nextBoundaryIssueId, ...visibleCardIds],
-    { enabled: nextBoundaryIssueId != null || (issuesExpanded && !issuesError) },
+    // The Next issue line renders the series title from these cards, so
+    // they refresh on focus like the boundary query (#5486).
+    { enabled: nextBoundaryIssueId != null || (issuesExpanded && !issuesError), refetchOnWindowFocus: 'always' },
   )
   const cardsByIssue = indexIssueCards(issueCardsQuery.data)
 
