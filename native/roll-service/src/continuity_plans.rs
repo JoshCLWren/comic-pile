@@ -864,14 +864,29 @@ pub(crate) async fn rebuild_plan_membership(
         }
     }
 
+    // Recovery relink records owned Reading List authority (`custom-cbl:<id>`)
+    // independently of plan nodes. Preserve that provenance across authoring
+    // saves: rebuilding only from node-carried paths would silently erase a
+    // former authority and make an orphaned plan look never-linked.
+    let authoritative_source =
+        "raw_source_path LIKE 'custom-cbl:%' OR custom_cbl_list_id IS NOT NULL";
     tx.execute(
-        "DELETE FROM reading_plan_source_placements WHERE plan_id = $1",
+        &format!(
+            "DELETE FROM reading_plan_source_placements WHERE plan_id = $1
+              AND plan_source_id IN (
+                 SELECT id FROM reading_plan_sources
+                  WHERE plan_id = $1 AND NOT ({authoritative_source})
+              )"
+        ),
         &[&plan_id],
     )
     .await
     .map_err(db::query_error)?;
     tx.execute(
-        "DELETE FROM reading_plan_sources WHERE plan_id = $1",
+        &format!(
+            "DELETE FROM reading_plan_sources WHERE plan_id = $1
+              AND NOT ({authoritative_source})"
+        ),
         &[&plan_id],
     )
     .await
@@ -915,6 +930,23 @@ pub(crate) async fn rebuild_plan_membership(
 
     let mut source_ids: BTreeMap<String, i32> = BTreeMap::new();
     for path in source_paths.keys() {
+        // A preserved Reading List source already carries this path; reuse it
+        // so its (possibly now-removed) List identity survives the save.
+        let preserved: Option<i32> = tx
+            .query_opt(
+                "SELECT id FROM reading_plan_sources
+                  WHERE plan_id=$1 AND raw_source_path=$2
+                    AND (raw_source_path LIKE 'custom-cbl:%' OR custom_cbl_list_id IS NOT NULL)
+                  LIMIT 1",
+                &[&plan_id, path],
+            )
+            .await
+            .map_err(db::query_error)?
+            .map(|row| row.get(0));
+        if let Some(id) = preserved {
+            source_ids.insert(path.clone(), id);
+            continue;
+        }
         let row = tx
             .query_one(
                 "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)

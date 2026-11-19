@@ -678,3 +678,109 @@ async fn plan_with_removed_list_authority_still_requires_recovery() {
         "{reader}"
     );
 }
+
+/// Recovery relink records Reading List authority independently of plan nodes.
+/// Saving through the authoring editor must not erase that provenance, or an
+/// orphaned plan could silently become a never-linked legacy plan.
+#[tokio::test]
+async fn authoring_save_preserves_removed_list_authority() {
+    let (state, _db) = database().await;
+    let (token, csrf) = register_and_login(&state, "cp-preserve-authority").await;
+
+    let (status, created) = create_plan(
+        &state,
+        &token,
+        &csrf,
+        json!({
+            "name": "QA relinked plan",
+            "ordering_mode": "informational",
+            "lanes": [],
+            "nodes": []
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let plan_id = created["id"].as_i64().expect("plan id");
+    let plan_id_i32 = i32::try_from(plan_id).expect("int4 plan id");
+    let user_id = user_id_for(&state, "cp-preserve-authority").await;
+
+    let conn = db::checkout(&state).await.expect("seed connection");
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+             VALUES ($1, 'QA authority', 'loose', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .expect("create owned list")
+        .get(0);
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    conn.execute(
+        "INSERT INTO reading_plan_sources
+            (plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+         VALUES ($1, $2, $3, NOW())",
+        &[&plan_id_i32, &raw_source_path, &list_id],
+    )
+    .await
+    .expect("relink plan to list");
+    conn.execute("DELETE FROM custom_cbl_lists WHERE id=$1", &[&list_id])
+        .await
+        .expect("delete the list; FK sets custom_cbl_list_id to NULL");
+    drop(conn);
+
+    let (status, reader) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reader}");
+
+    let (status, saved) = authed_json(
+        &state,
+        "PUT",
+        &format!("/api/v1/continuity-plans/{plan_id}"),
+        &token,
+        &csrf,
+        Some(json!({
+            "name": "QA relinked plan",
+            "ordering_mode": "informational",
+            "lanes": [{"id": "main", "name": "Main", "order": 0}],
+            "nodes": [],
+            "expected_updated_at": created["updated_at"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved}");
+
+    let (status, reopened) = authed_json(
+        &state,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &token,
+        &csrf,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reopened}");
+    assert!(
+        reopened.to_string().contains("Open recovery to relink"),
+        "{reopened}"
+    );
+
+    let conn = db::checkout(&state).await.expect("verify connection");
+    let preserved: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources
+              WHERE plan_id=$1 AND raw_source_path LIKE 'custom-cbl:%'",
+            &[&plan_id_i32],
+        )
+        .await
+        .expect("verify preserved provenance")
+        .get(0);
+    drop(conn);
+    assert_eq!(preserved, 1, "authoring save erased list provenance");
+}
