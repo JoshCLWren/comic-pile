@@ -36,6 +36,10 @@ export function useReadingPlanReader(planId: number | null) {
     queryKey: planId ? queryKeys.readingPlans.reader(planId) : [],
     queryFn: () => continuityPlansApi.getReader(planId!),
     enabled: planId != null,
+    // A thread rename or edit confirmed in another tab must not leave an open
+    // plan detail showing stale series titles (#5486). The app disables focus
+    // refetch globally, so this view opts back in like useThread (#4181).
+    refetchOnWindowFocus: 'always',
   })
 }
 

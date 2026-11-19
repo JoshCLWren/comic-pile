@@ -221,7 +221,7 @@ export default function ReadingPlanDetailPage() {
             : []),
         ]
       : [],
-    { enabled: readerQuery.isSuccess },
+    { enabled: readerQuery.isSuccess, refetchOnWindowFocus: 'always' },
   )
   const cardsByIssue = indexIssueCards(planCardsQuery.data)
 
