@@ -8,6 +8,7 @@ use crate::{
     auth::AuthenticatedUser, db, issue_service::refresh_blocked_threads, ApiError, AppState,
 };
 use axum::{
+    body::Bytes,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -79,80 +80,79 @@ fn internal_error(detail: impl Into<String>) -> ApiError {
     ApiError::with_status(StatusCode::INTERNAL_SERVER_ERROR, detail.into())
 }
 
+fn cycle_conflict(request: &ContinuityRuleRequest) -> ApiError {
+    ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({
+            "code": "continuity_cycle",
+            "source": {"type": request.source_type, "id": request.source_id},
+            "target": {"type": request.target_type, "id": request.target_id},
+        }),
+    )
+}
+
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
 fn validate_request(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
     if !matches!(request.source_type.as_str(), "issue" | "crossover")
         || !matches!(request.target_type.as_str(), "issue" | "crossover")
     {
-        return Err(bad_request(
-            "source_type and target_type must be 'issue' or 'crossover'",
-        ));
+        return Err(validation_failed());
     }
     if request.source_id <= 0 || request.target_id <= 0 {
-        return Err(bad_request("IDs must be greater than 0"));
+        return Err(validation_failed());
     }
     if request.source_type == request.target_type && request.source_id == request.target_id {
-        return Err(bad_request(
-            "A continuity rule cannot target its own source node",
-        ));
+        return Err(validation_failed());
     }
     if !matches!(
         request.satisfaction_type.as_str(),
         "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged"
     ) {
-        return Err(bad_request("Invalid satisfaction_type"));
+        return Err(validation_failed());
     }
     if request.satisfaction_type == "checkpoint" && request.checkpoint_issue_id.is_none() {
-        return Err(bad_request(
-            "checkpoint_issue_id is required for checkpoint rules",
-        ));
+        return Err(validation_failed());
     }
     if request.satisfaction_type != "checkpoint" && request.checkpoint_issue_id.is_some() {
-        return Err(bad_request(
-            "checkpoint_issue_id is only valid for checkpoint rules",
-        ));
+        return Err(validation_failed());
     }
     if request.satisfaction_type == "converged" && request.convergence_targets.is_empty() {
-        return Err(bad_request(
-            "convergence_targets are required for converged rules",
-        ));
+        return Err(validation_failed());
     }
     if request.satisfaction_type != "converged" && !request.convergence_targets.is_empty() {
-        return Err(bad_request(
-            "convergence_targets are only valid for converged rules",
-        ));
+        return Err(validation_failed());
     }
     if request.satisfaction_type == "selected_members_read"
         && request.selected_member_issue_ids.is_empty()
     {
-        return Err(bad_request(
-            "selected-member rules require at least one issue",
-        ));
+        return Err(validation_failed());
     }
     if request.satisfaction_type != "selected_members_read"
         && !request.selected_member_issue_ids.is_empty()
     {
-        return Err(bad_request(
-            "selected_member_issue_ids are only valid for selected-member rules",
-        ));
+        return Err(validation_failed());
     }
     if request
         .convergence_targets
         .iter()
         .any(|target| !matches!(target.node_type.as_str(), "issue" | "crossover") || target.id <= 0)
     {
-        return Err(bad_request("Invalid convergence target"));
+        return Err(validation_failed());
     }
     if request.checkpoint_issue_id.is_some_and(|id| id <= 0)
         || request.selected_member_issue_ids.iter().any(|id| *id <= 0)
     {
-        return Err(bad_request("Referenced issue IDs must be greater than 0"));
+        return Err(validation_failed());
     }
     if request
         .note
         .as_ref()
         .is_some_and(|note| note.chars().count() > 500)
     {
-        return Err(bad_request("String should have at most 500 characters"));
+        return Err(validation_failed());
     }
     Ok(())
 }
@@ -198,15 +198,27 @@ fn require_compilable(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
             .iter()
             .filter(|target| target.node_type != "issue")
             .count();
-        return Err(bad_request(format!(
-            "Rule has {count} non-issue prerequisite(s); all convergence targets must be issues to compile to canonical edges"
-        )));
+        return Err(ApiError::structured(
+            StatusCode::BAD_REQUEST,
+            json!({
+                "code": "continuity_rule_not_compilable",
+                "message": format!(
+                    "Rule has {count} non-issue prerequisite(s); all convergence targets must be issues to compile to canonical edges"
+                ),
+            }),
+        ));
     }
     if edge_pairs(request).is_empty() {
-        return Err(bad_request(format!(
-            "Rule with satisfaction_type={}, source_type={}, target_type={} does not compile to canonical edges and would never block Roll",
-            request.satisfaction_type, request.source_type, request.target_type
-        )));
+        return Err(ApiError::structured(
+            StatusCode::BAD_REQUEST,
+            json!({
+                "code": "continuity_rule_not_compilable",
+                "message": format!(
+                    "Rule with satisfaction_type={}, source_type={}, target_type={} does not compile to canonical edges and would never block Roll",
+                    request.satisfaction_type, request.source_type, request.target_type
+                ),
+            }),
+        ));
     }
     Ok(())
 }
@@ -417,6 +429,27 @@ pub(crate) async fn compile_edges(
     }
     let sources: Vec<i32> = pairs.iter().map(|pair| pair.0).collect();
     let targets: Vec<i32> = pairs.iter().map(|pair| pair.1).collect();
+    let collision = tx
+        .query_opt(
+            "SELECT 1 FROM dependencies d
+             JOIN unnest($1::int[], $2::int[]) AS u(s, t)
+               ON d.source_issue_id = u.s AND d.target_issue_id = u.t
+             WHERE d.note LIKE 'cbl-order:%' LIMIT 1",
+            &[&sources, &targets],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if collision.is_some() {
+        return Err(ApiError::structured(
+            StatusCode::CONFLICT,
+            json!({
+                "code": "continuity_cbl_collision",
+                "message": format!(
+                    "Rule {rule_id} collides with historical cbl-order rows"
+                ),
+            }),
+        ));
+    }
     tx.execute(
         "INSERT INTO dependencies (source_issue_id,target_issue_id,note,created_at)
          SELECT * FROM unnest($1::int[],$2::int[],$3::text[],ARRAY(SELECT now() FROM generate_series(1,cardinality($1))))
@@ -487,8 +520,12 @@ pub async fn list(
 pub async fn get(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
+    Path(rule_id): Path<String>,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
+    let rule_id: i32 = rule_id
+        .trim()
+        .parse()
+        .map_err(|_| validation_failed())?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -505,8 +542,10 @@ pub async fn get(
 pub async fn create(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(mut request): Json<ContinuityRuleRequest>,
+    body: Bytes,
 ) -> Result<(StatusCode, Json<ContinuityRuleResponse>), ApiError> {
+    let mut request: ContinuityRuleRequest =
+        serde_json::from_slice(&body).map_err(|_| validation_failed())?;
     normalize_request(&mut request);
     validate_request(&request)?;
     require_compilable(&request)?;
@@ -549,7 +588,7 @@ pub async fn create(
             cycle
         }
     {
-        return Err(conflict("continuity_cycle"));
+        return Err(cycle_conflict(&request));
     }
     let targets = if request.convergence_targets.is_empty() {
         None
@@ -563,7 +602,13 @@ pub async fn create(
             .to_string(),
         )
     };
-    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { conflict("continuity_rule_exists") } else { db::query_error(error) })?;
+    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| {
+        if error.as_db_error().is_some_and(|e| e.code().code() == "23505") {
+            ApiError::structured(StatusCode::CONFLICT, json!({"code": "continuity_rule_exists"}))
+        } else {
+            db::query_error(error)
+        }
+    })?;
     let rule_id: i32 = row.get(0);
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
     compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
@@ -578,9 +623,15 @@ pub async fn create(
 pub async fn update(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
-    Json(mut request): Json<ContinuityRuleRequest>,
+    Path(rule_id): Path<String>,
+    body: Bytes,
 ) -> Result<Json<ContinuityRuleResponse>, ApiError> {
+    let rule_id: i32 = rule_id
+        .trim()
+        .parse()
+        .map_err(|_| validation_failed())?;
+    let mut request: ContinuityRuleRequest =
+        serde_json::from_slice(&body).map_err(|_| validation_failed())?;
     normalize_request(&mut request);
     validate_request(&request)?;
     require_compilable(&request)?;
@@ -606,7 +657,7 @@ pub async fn update(
     )
     .await?
     {
-        return Err(conflict("continuity_cycle"));
+        return Err(cycle_conflict(&request));
     }
     for target in &request.convergence_targets {
         if would_create_cycle(
@@ -620,7 +671,7 @@ pub async fn update(
         )
         .await?
         {
-            return Err(conflict("continuity_cycle"));
+            return Err(cycle_conflict(&request));
         }
     }
     let old_request = ContinuityRuleRequest {
@@ -668,8 +719,12 @@ pub async fn update(
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path(rule_id): Path<i32>,
+    Path(rule_id): Path<String>,
 ) -> Result<Response, ApiError> {
+    let rule_id: i32 = rule_id
+        .trim()
+        .parse()
+        .map_err(|_| validation_failed())?;
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
