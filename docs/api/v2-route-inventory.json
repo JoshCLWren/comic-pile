@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 64,
-    "native_rust": 64,
+    "total_live_operations": 73,
+    "native_rust": 73,
     "python_fastapi": 0,
-    "native_rust_status": 64,
+    "native_rust_status": 73,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -888,6 +888,19 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-lists/issue-candidates",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 5435,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
@@ -970,6 +983,71 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/adoption-commits",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/export",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "PUT",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
@@ -986,6 +1064,32 @@
         "proof_reference": "native/roll-service/src/reading_list.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -1258,6 +1362,19 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4844,
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/series-mapping-commits",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4342,
       "consumers": [
         "frontend/src/services/api-threads.ts"
@@ -1339,7 +1456,7 @@
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 40,
       "v1_shadowed_by_rust": 0,
-      "v1_live_python": 15,
+      "v1_live_python": 13,
       "v1_orphaned": 0,
       "unversioned_total": 0,
       "unversioned_shadowed_by_rust": 0,
@@ -1347,7 +1464,7 @@
       "unversioned_orphaned": 0,
       "total_python_surface": 40,
       "total_shadowed_by_rust": 0,
-      "total_live_python": 15,
+      "total_live_python": 13,
       "total_orphaned": 0
     },
     "catch_all": {
@@ -1870,9 +1987,9 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4832,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
           "frontend/src/services/api-dependency-groups.ts",
@@ -1883,8 +2000,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/threads/{thread_id}/issues/creators",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1924,9 +2041,9 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4832,
         "consumers": [
           "frontend/src/services/api-dependencies.ts",
           "frontend/src/services/api-dependency-groups.ts",
@@ -1937,8 +2054,8 @@
         ],
         "method": "PUT",
         "path": "/api/v1/threads/{thread_id}/test-backdate",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       }
     ],
