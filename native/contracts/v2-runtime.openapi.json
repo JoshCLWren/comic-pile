@@ -6014,10 +6014,10 @@
           "issue": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineResolvedIssue"
               },
               {
-                "$ref": "#/components/schemas/ComicVineResolvedIssue"
+                "type": "null"
               }
             ]
           },
@@ -6039,10 +6039,10 @@
           "volume": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/ComicVineSeriesResult"
               },
               {
-                "$ref": "#/components/schemas/ComicVineSeriesResult"
+                "type": "null"
               }
             ]
           }
