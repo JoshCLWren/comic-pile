@@ -656,6 +656,30 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v1/creators/compare", get(native_dispatch))
+        .route("/api/v1/creators/discoveries", get(native_dispatch))
+        .route("/api/v1/creators/team-chemistry", get(native_dispatch))
+        .route("/api/v1/creators/{creator_key}", get(native_dispatch))
+        .route(
+            "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+            get(native_dispatch),
+        )
         .route("/api/v2/creators", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
