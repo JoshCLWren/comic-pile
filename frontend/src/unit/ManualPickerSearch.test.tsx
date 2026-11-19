@@ -47,6 +47,29 @@ function Harness({
 }
 
 describe('ManualPickerSearch', () => {
+  it('shows the shared series cover without changing the accessible choice or selection', async () => {
+    const onChange = vi.fn()
+    render(
+      <ManualPickerSearch
+        activeOptions={[{
+          id: 11,
+          label: 'Geiger (Comic)',
+          threadTitle: 'Geiger',
+          coverImageUrl: 'https://example.test/geiger.jpg',
+        }]}
+        value=""
+        onChange={onChange}
+      />,
+    )
+    await userEvent.click(screen.getByRole('combobox'))
+    const option = screen.getByRole('option', { name: 'Geiger (Comic)' })
+    expect(option.querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute(
+      'src', 'https://example.test/geiger.jpg',
+    )
+    await userEvent.click(option)
+    expect(onChange).toHaveBeenCalledWith('11')
+  })
+
   it('filters on the visible series identity and reports a no-match state', async () => {
     const user = userEvent.setup()
     render(<Harness />)
