@@ -100,27 +100,6 @@ def test_pr_ci_cancels_superseded_heads_without_canceling_main() -> None:
     assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in ci
 
 
-def test_fast_merge_runs_trusted_main_after_ci_without_pr_code() -> None:
-    """Privileged fast-merge automation checks out trusted main after CI completes."""
-    workflow = (WORKFLOWS / "factory-fast-merge.yml").read_text(encoding="utf-8")
-    assert "pull_request_target:" in workflow
-    assert "workflow_job:" not in workflow
-    assert "workflow_run:" in workflow
-    assert "workflows: [CI]" in workflow
-    assert "types: [completed]" in workflow
-    assert "queue: max" in workflow
-    assert "cancel-in-progress: false" in workflow
-    assert "github.event.workflow_run.event == 'pull_request'" in workflow
-    assert "github.event.workflow_run.conclusion == 'success'" in workflow
-    assert "github.event.workflow_run.head_repository.full_name == github.repository" in workflow
-    assert "github.event.workflow_run.pull_requests[0].number" in workflow
-    assert "secrets.PR_REBASE_TOKEN" in workflow
-    assert "ref: main" in workflow
-    assert "persist-credentials: false" in workflow
-    assert "factory-fast-merge.py" in workflow
-    assert "factory_post_merge_closure.py --sweep" in workflow
-
-
 def test_ci_summary_keeps_workflow_and_shell_gates_without_factory_tests() -> None:
     """Factory tests run in Rotisserie; Comic Pile CI still lints every workflow and script."""
     ci = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")

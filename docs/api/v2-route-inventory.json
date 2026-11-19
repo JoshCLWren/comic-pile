@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 53,
-    "native_rust": 53,
+    "total_live_operations": 64,
+    "native_rust": 64,
     "python_fastapi": 0,
-    "native_rust_status": 53,
+    "native_rust_status": 64,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -695,6 +695,58 @@
       }
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/queue-exclusion-groups/{group_id}/restore",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions/restore",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5435,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions/status:check",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/queue-orders",
       "runtime": "native-rust",
@@ -836,6 +888,19 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 5435,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/reading-lists/memberships:check",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
@@ -949,6 +1014,51 @@
       }
     },
     {
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-sessions/{session_id}/details",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4839,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/reading-sessions/{session_id}/snapshots",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4849,
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-releases.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/releases",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "GET",
       "path": "/api/v2/roll/bootstrap",
       "runtime": "native-rust",
@@ -1023,6 +1133,19 @@
       }
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/dismiss-pending",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "GET",
       "path": "/api/v2/roll/eligible-issue-ids",
       "runtime": "native-rust",
@@ -1071,6 +1194,19 @@
       }
     },
     {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/override",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "method": "POST",
       "path": "/api/v2/roll/reset",
       "runtime": "native-rust",
@@ -1092,6 +1228,19 @@
         "proof_reference": "native/roll-service/src/roll_reset.rs",
         "measurement_status": "pending-fixture"
       }
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4850,
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/roll/switch-prerequisite",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "runtime": "native-rust",
