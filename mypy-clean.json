@@ -28,7 +28,6 @@
   "app/repositories/perf_alarm_repository.py",
   "app/repositories/queue_ordering.py",
   "app/repositories/read_without_rating_audit.py",
-  "app/repositories/reading_boundary_repository.py",
   "app/repositories/reading_effort_repository.py",
   "app/repositories/reading_eligibility_queries.py",
   "app/repositories/reading_graph_preview_repository.py",
