@@ -70,7 +70,11 @@ pnpm exec playwright install chromium
 
 # Start backend (in separate terminal)
 cd ..
-# Start the Rust API per native/roll-service/README.md (listens on port 8000)
+# Start the Rust API against a disposable local test database (never a shared or production one)
+RUST_ROLL_BIND=127.0.0.1:8010 \
+RUST_ROLL_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/comic_pile_test" \
+RUST_ROLL_JWT_SECRET="test-secret-key-for-testing-only" \
+cargo run --locked -p comicpile-roll-service
 
 # Run tests
 cd frontend

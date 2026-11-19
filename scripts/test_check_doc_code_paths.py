@@ -77,6 +77,15 @@ class DocCodePathTests(unittest.TestCase):
         historical = "<!-- docs-path-check: historical -->\nOld `app/gone.py`.\n"
         self.assertEqual(_run({"README.md": historical}), [])
 
+    def test_quoted_markers_do_not_exempt(self) -> None:
+        """Quoted markers do not exempt."""
+        body = (
+            "Use `<!-- docs-path-check: historical -->` or "
+            "`<!-- docs-path-check: ignore -->` to mark history.\n"
+            "Quoted `<!-- docs-path-check: ignore -->` beside `app/gone.py`.\n"
+        )
+        self.assertEqual(len(_run({"README.md": body})), 1)
+
     def test_historical_prefixes_are_skipped(self) -> None:
         """Historical prefixes are skipped."""
         self.assertEqual(_run({"docs/issue-plans/1.md": "Old `app/gone.py`.\n"}), [])

@@ -68,8 +68,8 @@ This is out of scope for the domain rename. The internal model class is `Reading
 3. **Documentation in code**: key modules state the boundary explicitly:
    - `app/models/reading_session.py`: names the rationale and the auth state that lives elsewhere.
    - `app/repositories/reading_session_repository.py`: "nothing in this module revokes credentials or touches authentication state".
-   - `native/roll-service/src/auth/services.rs`: "The reading-history table is never touched here; reading sessions survive every password change/reset".
-   Two guard assertions keep those statements from drifting away.
+   - `native/roll-service/src/auth/services.rs`: `complete_reset` only consumes the `password_reset_tokens` row and updates `users` (`password_hash`, `password_changed_at`); it never touches the reading-history `sessions` table.
+   The Python-side guard assertions keep the first two statements from drifting away.
 
 4. **Agent guidance**: `AGENTS.md` → "Domain Nouns With Multiple Meanings (House Standard)" makes the
    qualified-name rule mandatory for every agent, so this document is reached without knowing its path.

@@ -76,7 +76,7 @@ def extract_paths(text: str) -> list[tuple[int, str]]:
         if FENCE_RE.match(line):
             in_fence = not in_fence
             continue
-        if in_fence or IGNORE_LINE_MARKER in line:
+        if in_fence or IGNORE_LINE_MARKER in INLINE_CODE_RE.sub("", line):
             continue
         for span in INLINE_CODE_RE.findall(line):
             candidate = SUFFIX_RE.sub("", span.strip())
@@ -101,6 +101,18 @@ def path_resolves(
     return candidate in basenames
 
 
+def _has_marker(text: str, marker: str) -> bool:
+    """Return whether ``marker`` appears as a real comment, not in a code span or fence."""
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if not in_fence and marker in INLINE_CODE_RE.sub("", line):
+            return True
+    return False
+
+
 def find_stale_paths(root: Path, markdown_files: list[Path]) -> list[str]:
     """Return one error per documented code path that no longer resolves."""
     tracked = set(tracked_files(root))
@@ -111,7 +123,7 @@ def find_stale_paths(root: Path, markdown_files: list[Path]) -> list[str]:
         if relative.startswith(HISTORICAL_PREFIXES):
             continue
         text = doc.read_text(encoding="utf-8")
-        if HISTORICAL_FILE_MARKER in text:
+        if _has_marker(text, HISTORICAL_FILE_MARKER):
             continue
         for number, candidate in extract_paths(text):
             if not path_resolves(root, doc, candidate, basenames, tracked):
