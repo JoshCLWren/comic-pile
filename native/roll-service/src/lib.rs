@@ -6,12 +6,14 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_plans;
+pub mod continuity_plans_project_preview;
 pub mod continuity_rules;
 pub mod creators;
 pub mod creators_v2;
@@ -27,6 +29,8 @@ pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_identity;
+pub mod issue_identity_adoption_preview;
+pub mod issue_identity_cbl_reading_graph_preview;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_read_state;
@@ -39,6 +43,7 @@ pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
 pub mod preferences;
+mod preview_validation;
 pub mod queue;
 pub mod reader_context;
 pub mod reading_blocker_projection;
@@ -53,6 +58,7 @@ pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_plan_sync;
+pub(crate) mod reading_preview_eval;
 pub mod reading_session;
 pub mod recommendation_explanation;
 pub mod releases;
@@ -629,6 +635,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/catalog/series-mappings/commit",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        .route(
+            "/api/v1/catalog/series-mappings/preview",
+            post(catalog_series_mapping_preview::preview_series_mapping_handler),
+        )
+        .route(
+            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            post(continuity_plans_project_preview::preview_plan_projection_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+            get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+            post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
@@ -1006,10 +1028,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
             get(issue_identity::find_cbl_candidates_for_reading_list),
-        )
-        .route(
-            "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
-            get(issue_identity::cbl_adoption_preview),
         )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",

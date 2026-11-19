@@ -1509,7 +1509,7 @@ fn cbl_series_group_id(entry: &serde_json::Map<String, JsonValue>) -> String {
 }
 
 // Minimal SHA-256 implementation for deterministic series_group_id parity with Python.
-fn sha256_hex(data: &[u8]) -> String {
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
     // Use a tiny pure-rust sha256 implementation inline to avoid new deps.
     // Constants
     const K: [u32; 64] = [
@@ -1593,18 +1593,18 @@ fn sha256_hex(data: &[u8]) -> String {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct CblListMeta {
-    id: i32,
+pub(crate) struct CblListMeta {
+    pub(crate) id: i32,
     source_repository: String,
     source_path: String,
-    content_hash: String,
-    revision_sha: String,
-    name: String,
+    pub(crate) content_hash: String,
+    pub(crate) revision_sha: String,
+    pub(crate) name: String,
     declared_issue_count: Option<i32>,
 }
 
-async fn load_active_cbl_list_meta(
-    pool: &deadpool_postgres::Object,
+pub(crate) async fn load_active_cbl_list_meta<E: DbExec>(
+    pool: &E,
     list_id: i32,
 ) -> Result<CblListMeta, ApiError> {
     let row = pool
@@ -1656,16 +1656,33 @@ pub async fn cbl_adoption_plan(
     Path(list_id): Path<i32>,
     Json(request): Json<CblAdoptionPlanRequest>,
 ) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
-    let pool = checkout(&state).await?;
-    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
-    // Build reconciliation entries (faithful port of core fields used by adoption plan).
-    let report_entries = reconcile_entries_for_adoption(&pool, auth.id(), &list_meta).await?;
-    let planned = calculate_adoption_plan_entries(
-        &report_entries,
+    adoption_preview_for(
+        &state,
+        auth.id(),
+        list_id,
         &request.series_decisions,
         &request.entry_decisions,
-    );
-    Ok(Json(build_adoption_preview_response(&list_meta, &planned)))
+    )
+    .await
+    .map(Json)
+}
+
+/// Shared read-only reconcile + adoption-plan calculation. Used by
+/// `POST .../adoption-plan` (explicit decisions) and
+/// `GET .../adoption-preview` (no decisions, Python `preview_cbl_adoption`).
+pub(crate) async fn adoption_preview_for(
+    state: &Arc<AppState>,
+    user_id: i32,
+    list_id: i32,
+    series_decisions: &HashMap<String, bool>,
+    entry_decisions: &HashMap<String, bool>,
+) -> Result<CblAdoptionPreviewResponse, IdentityError> {
+    let pool = checkout(state).await?;
+    let list_meta = load_active_cbl_list_meta(&pool, list_id).await?;
+    let report_entries = reconcile_entries_for_adoption(&pool, user_id, &list_meta).await?;
+    let planned =
+        calculate_adoption_plan_entries(&report_entries, series_decisions, entry_decisions);
+    Ok(build_adoption_preview_response(&list_meta, &planned))
 }
 
 fn build_adoption_preview_response(
@@ -2012,7 +2029,7 @@ fn add_metadata_volumes(
     }
 }
 
-trait DbExec {
+pub(crate) trait DbExec {
     async fn run_query(
         &self,
         sql: &str,
@@ -2915,14 +2932,63 @@ async fn do_cbl_adoption_commit(
     Ok((status, resp))
 }
 
-async fn reconcile_entries_for_adoption<E: DbExec>(
+pub(crate) async fn reconcile_entries_for_adoption<E: DbExec>(
     tx: &E,
     user_id: i32,
     list_meta: &CblListMeta,
 ) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
-    let rows = tx
-        .run_query(
-            r#"
+    reconcile_entries_impl(tx, user_id, list_meta, None).await
+}
+
+/// Reconcile only the requested source positions. Read-only preview callers use
+/// this variant so a short selection from a long list cannot fan out per-entry
+/// lookups across every row in the source list (#5342 review).
+pub(crate) async fn reconcile_entries_for_adoption_positions<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: &[i64],
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    // `cbl_source_entries.position` is int4; out-of-domain positions match no
+    // row and are reported as unknown by the caller's own position validation.
+    let positions: Vec<i32> = positions
+        .iter()
+        .filter_map(|position| i32::try_from(*position).ok())
+        .collect();
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    reconcile_entries_impl(tx, user_id, list_meta, Some(&positions)).await
+}
+
+async fn reconcile_entries_impl<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    list_meta: &CblListMeta,
+    positions: Option<&[i32]>,
+) -> Result<Vec<serde_json::Map<String, JsonValue>>, ApiError> {
+    let rows = match positions {
+        Some(positions) => tx
+            .run_query(
+                r#"
+        SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
+               ei.external_id AS comicvine_issue_id,
+               cse.external_issue_identity_id, cse.external_series_identity_id,
+               ev.provider AS series_provider, ev.external_id AS series_external_id,
+               cse.volume_year, cse.publication_year
+        FROM cbl_source_entries cse
+        LEFT JOIN external_identities ei ON ei.id = cse.external_issue_identity_id
+        LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id
+        WHERE cse.list_id = $1 AND cse.position = ANY($2::int[])
+        ORDER BY cse.position ASC, cse.id ASC
+        "#,
+                &[&list_meta.id, &positions],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+        None => tx
+            .run_query(
+                r#"
         SELECT cse.id, cse.position, cse.series_name, cse.issue_number,
                ei.external_id AS comicvine_issue_id,
                cse.external_issue_identity_id, cse.external_series_identity_id,
@@ -2934,10 +3000,11 @@ async fn reconcile_entries_for_adoption<E: DbExec>(
         WHERE cse.list_id = $1
         ORDER BY cse.position ASC, cse.id ASC
         "#,
-            &[&list_meta.id],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
+                &[&list_meta.id],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?,
+    };
     let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
