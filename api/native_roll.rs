@@ -758,6 +758,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retired_v1_creators_ingress_terminates_in_rust_404() {
+        // The v1 creator aliases are retired (#4836): every legacy URL must
+        // fall through to the Rust JSON 404 without touching Python.
+        for uri in [
+            "/api/v1/creators",
+            "/api/v1/creators/",
+            "/api/v1/creators/summaries",
+            "/api/v1/creators/creator%3A117106",
+            "/api/v1/creators/creator%3A117106/metrics/role-stats/writer",
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{uri} must hit the Rust JSON 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_creators_ingress_still_dispatches_to_rust_and_requires_auth() {
+        for uri in [
+            "/api/v2/creators",
+            "/api/v2/creators/summaries",
+            "/api/v2/creators/compare",
+            "/api/v2/creators/discoveries",
+            "/api/v2/creators/team-chemistry",
+            "/api/v2/creators/creator%3A117106",
+            "/api/v2/creators/creator%3A117106/metrics/role-stats/writer",
+            "/api/v2/creators/creator%3A117106/metrics/rating-distribution/5",
+            "/api/v2/creators/creator%3A117106/metrics/series-stats/series%3A1",
+            "/api/v2/creators/creator%3A117106/metrics/issues",
+            "/api/v2/creators/creator%3A117106/series/series%3A1/issues",
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn v1_taste_discovery_list_ingress_preserves_same_path_and_requires_auth() {
         let mut router = app();
         let response = router

@@ -257,6 +257,36 @@ mod tests {
         }
     }
 
+    /// The legacy v1 creator aliases are retired together with the Python
+    /// handlers (#4836): no ``/api/v1/creators`` path may remain in the
+    /// same-path contract, while the canonical v2 creator operations stay in
+    /// the v2 runtime document.
+    #[test]
+    fn same_path_contract_retires_legacy_v1_creators_paths() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for path in paths.keys() {
+            assert!(
+                !path.starts_with("/api/v1/creators"),
+                "retired v1 creator alias {path} must not remain in the same-path contract"
+            );
+        }
+        let canonical =
+            serde_json::to_value(crate::openapi::canonical_openapi()).expect("OpenAPI");
+        let canonical_paths = canonical["paths"].as_object().expect("paths");
+        for path in [
+            "/api/v2/creators",
+            "/api/v2/creators/{creator_key}",
+            "/api/v2/creators/{creator_key}/metrics/{metric_type}",
+            "/api/v2/creators/{creator_key}/series/{series_key}/issues",
+        ] {
+            assert!(
+                canonical_paths.get(path).is_some(),
+                "canonical v2 creator path {path} must remain deployed"
+            );
+        }
+    }
+
     /// The six same-path thread issue-management operations (#4832 part D)
     /// must keep their wire contract in the same-path document so the
     /// generated TypeScript client keeps those methods when the retained
