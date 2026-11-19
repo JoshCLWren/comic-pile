@@ -448,7 +448,7 @@ pub async fn preview_reading_graph(
     );
 
     // 7. Overlaps: strict_order cross-volume conflicts in the proposed list.
-    let (overlaps, blocked_by_pair) = build_overlaps(
+    let (overlaps, _blocked_by_pair) = build_overlaps(
         &context_for_overlaps(
             &issue_meta,
             &thread_names,
@@ -623,7 +623,6 @@ fn build_series_nodes(
 
 struct OverlapContext {
     issue_meta: HashMap<i32, IssueMeta>,
-    thread_names: HashMap<i32, String>,
     volume_by_thread: HashMap<i32, Option<String>>,
     series_refs: HashMap<String, ReadingGraphSeriesReference>,
 }
@@ -661,17 +660,16 @@ fn series_refs_for_volumes(
 
 fn context_for_overlaps(
     _issue_meta: &HashMap<i32, IssueMeta>,
-    thread_names: &HashMap<i32, String>,
+    _thread_names: &HashMap<i32, String>,
     volume_by_thread: &HashMap<i32, Option<String>>,
     thread_volumes: &std::collections::BTreeMap<i32, String>,
 ) -> OverlapContext {
     OverlapContext {
         issue_meta: _issue_meta.clone(),
-        thread_names: thread_names.clone(),
         volume_by_thread: volume_by_thread.clone(),
         series_refs: series_refs_for_volumes(
             _issue_meta,
-            thread_names,
+            _thread_names,
             volume_by_thread,
             thread_volumes,
         ),
