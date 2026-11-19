@@ -9,7 +9,8 @@
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/\\{comicvine_issue_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
-    "^/api/v1/issue\\-identity/reading\\-lists/\\{list_id\\}/cbl\\-candidates$"
+    "^/api/v1/issue\\-identity/reading\\-lists/\\{list_id\\}/cbl\\-candidates$",
+    "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/reading\\-graph\\-preview$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -106,6 +107,20 @@
         "frontend/src/services/api-reading-graph.ts"
       ],
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4842,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
