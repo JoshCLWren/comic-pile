@@ -1493,8 +1493,13 @@ pub async fn series_issues(
 const ROSTER_PAGE_SIZE: usize = 100;
 const MAX_ROSTER_PAGES: usize = 10;
 
-async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiError> {
+async fn provider_roster(
+    outbound: &Arc<dyn OutboundHttp>,
+    volume_id: i32,
+    key: &str,
+) -> Result<Vec<Value>, ApiError> {
     async fn fetch_page(
+        outbound: &Arc<dyn OutboundHttp>,
         volume_id: i32,
         key: &str,
         offset: usize,
@@ -1503,9 +1508,9 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
             "&filter=volume:{volume_id}&limit={ROSTER_PAGE_SIZE}&offset={offset}\
              &field_list=id,issue_number,name,cover_date,store_date,image,site_detail_url,volume"
         );
-        provider_response("issues", &extra, key).await
+        provider_response(outbound, "issues", &extra, key).await
     }
-    let first = fetch_page(volume_id, key, 0)
+    let first = fetch_page(outbound, volume_id, key, 0)
         .await
         .map_err(map_provider_failure)?;
     let mut rows: Vec<Value> = first
@@ -1517,7 +1522,7 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
     let mut offset = rows.len();
     while offset > 0 && offset < total as usize && rows.len() < MAX_ROSTER_PAGES * ROSTER_PAGE_SIZE
     {
-        let page = fetch_page(volume_id, key, offset)
+        let page = fetch_page(outbound, volume_id, key, offset)
             .await
             .map_err(map_provider_failure)?;
         let page_rows: Vec<Value> = page
@@ -1549,8 +1554,12 @@ async fn provider_roster(volume_id: i32, key: &str) -> Result<Vec<Value>, ApiErr
 
 /// Fetch a volume's canonical display name. Returns the raw name so callers
 /// can apply their own empty-name fallback.
-async fn provider_issue_volume(volume_id: i32, key: &str) -> Option<String> {
-    let payload = provider_response(&format!("volume/4050-{volume_id}"), "", key)
+async fn provider_issue_volume(
+    outbound: &Arc<dyn OutboundHttp>,
+    volume_id: i32,
+    key: &str,
+) -> Option<String> {
+    let payload = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", key)
         .await
         .ok()?;
     volume_name(&payload)
@@ -1558,6 +1567,7 @@ async fn provider_issue_volume(volume_id: i32, key: &str) -> Option<String> {
 
 /// `GET /api/v2/comicvine/resolve`.
 pub async fn resolve_input(
+    State(state): State<Arc<AppState>>,
     _user: AuthenticatedUser,
     Query(query): Query<ResolveQuery>,
 ) -> Result<Json<ComicVineResolveResponse>, ApiError> {
@@ -1615,7 +1625,7 @@ pub async fn resolve_input(
     };
     match parsed {
         ParsedResource::Issue(id) => {
-            let Ok(result) = provider_issue(id as u32, &key).await else {
+            let Ok(result) = provider_issue(&state.outbound, id as u32, &key).await else {
                 return Ok(failure());
             };
             let volume = result.get("volume").and_then(Value::as_object);
@@ -1650,7 +1660,7 @@ pub async fn resolve_input(
             }))
         }
         ParsedResource::Volume(id) => {
-            let Ok(payload) = provider_response(&format!("volume/4050-{id}"), "", &key).await
+            let Ok(payload) = provider_response(&state.outbound, &format!("volume/4050-{id}"), "", &key).await
             else {
                 return Ok(failure());
             };
@@ -1659,7 +1669,9 @@ pub async fn resolve_input(
             else {
                 return Ok(failure());
             };
-            let roster = provider_roster(id, &key).await.unwrap_or_default();
+            let roster = provider_roster(&state.outbound, id, &key)
+                .await
+                .unwrap_or_default();
             let issues: Vec<ComicVineIssueCandidate> =
                 roster.iter().filter_map(issue_candidate).collect();
             Ok(Json(ComicVineResolveResponse {
