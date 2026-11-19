@@ -58,12 +58,20 @@ def test_collect_routes_unions_methods_on_the_same_path() -> None:
     assert _collect_routes(app)["/api/v1/threads/"] == frozenset({"GET", "POST"})
 
 
-@pytest.mark.parametrize("family", ["threads", "sessions"])
+@pytest.mark.parametrize("family", ["threads"])
 def test_unused_unversioned_aliases_are_retired(family: str) -> None:
     """Bare aliases have no handlers; their existing versioned contracts survive."""
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     assert not any(path.startswith(f"/api/{family}/") for path in methods_by_path)
     assert any(path.startswith(f"/api/v1/{family}/") for path in methods_by_path)
+
+
+def test_python_session_routes_are_retired() -> None:
+    """Native Rust serves every session route; Python registers none."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    assert not any(
+        path.startswith(("/api/sessions/", "/api/v1/sessions/")) for path in methods_by_path
+    )
 
 
 def test_python_undo_routes_are_retired() -> None:
