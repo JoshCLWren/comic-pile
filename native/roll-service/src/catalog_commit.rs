@@ -91,7 +91,7 @@ fn _verify_signature(secret: &str, payload: &Value, signature: &str) -> bool {
     constant_time_eq(expected.as_bytes(), signature.as_bytes())
 }
 
-fn hex_digest(bytes: &[u8]) -> String {
+pub(crate) fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
