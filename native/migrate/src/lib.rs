@@ -19,7 +19,7 @@ use std::fmt;
 use tokio_postgres::Client;
 
 /// Alembic revision whose schema the baseline migration reproduces.
-pub const BASELINE_ALEMBIC_HEAD: &str = "c44050000002";
+pub const BASELINE_ALEMBIC_HEAD: &str = "s54350000001";
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
