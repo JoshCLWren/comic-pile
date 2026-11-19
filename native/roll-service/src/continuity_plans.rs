@@ -77,25 +77,35 @@ pub struct ContinuityPlanNode {
     #[serde(rename = "lane_id")]
     pub lane_id: String,
     pub position: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_role: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_confidence: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_explanation: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_paths: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_cbl_placements: Option<Vec<serde_json::Value>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_story_arc_ids: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub source_target_story_arc_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub reader_role: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[schema(required)]
     pub reader_optional: Option<bool>,
     #[serde(default)]
     pub is_checkpoint: bool,
@@ -103,7 +113,8 @@ pub struct ContinuityPlanNode {
     pub checkpoint_target_ref_id: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checkpoint_target_ref_ids: Vec<i32>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    #[schema(required)]
     pub convergence_gate: Vec<serde_json::Value>,
 }
 
@@ -128,9 +139,11 @@ pub struct ContinuityPlanResponse {
     pub name: String,
     #[serde(rename = "ordering_mode")]
     pub ordering_mode: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    #[schema(required)]
     pub lanes: Vec<ContinuityPlanLane>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    #[schema(required)]
     pub nodes: Vec<ContinuityPlanNode>,
     pub created_at: String,
     pub updated_at: String,
@@ -146,9 +159,9 @@ pub struct ContinuityPlanListItem {
     pub lane_count: i32,
     #[serde(rename = "step_count")]
     pub step_count: i32,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schema(required)]
     pub source_paths: Vec<String>,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    #[schema(required)]
     pub source_names: serde_json::Value,
     pub updated_at: String,
 }
@@ -834,7 +847,7 @@ fn source_metadata_for_node(node: &ContinuityPlanNode) -> Option<serde_json::Val
 /// Rebuild normalized membership, source snapshots and placements for one plan.
 /// Mirrors `rebuild_plan_membership` (issue rows only; non-issue nodes keep no
 /// normalized membership until an explicit mapping exists).
-async fn rebuild_plan_membership(
+pub(crate) async fn rebuild_plan_membership(
     tx: &Transaction<'_>,
     plan_id: i32,
     nodes: &[ContinuityPlanNode],
@@ -851,6 +864,15 @@ async fn rebuild_plan_membership(
         }
     }
 
+    // Recovery relink records owned Reading List authority (`custom-cbl:<id>`)
+    // independently of plan nodes. Preserve that provenance across authoring
+    // saves: rebuilding only from node-carried paths would silently erase a
+    // former authority and make an orphaned plan look never-linked.
+    let authoritative_source =
+        "raw_source_path LIKE 'custom-cbl:%' OR custom_cbl_list_id IS NOT NULL";
+    // Placement rows are always rebuilt from the submitted nodes. Keeping any
+    // old row would duplicate a still-present tuple or leave a removed one
+    // behind, so clear all of them while preserving the source history itself.
     tx.execute(
         "DELETE FROM reading_plan_source_placements WHERE plan_id = $1",
         &[&plan_id],
@@ -858,7 +880,10 @@ async fn rebuild_plan_membership(
     .await
     .map_err(db::query_error)?;
     tx.execute(
-        "DELETE FROM reading_plan_sources WHERE plan_id = $1",
+        &format!(
+            "DELETE FROM reading_plan_sources WHERE plan_id = $1
+              AND NOT ({authoritative_source})"
+        ),
         &[&plan_id],
     )
     .await
@@ -900,8 +925,29 @@ async fn rebuild_plan_membership(
         }
     }
 
+    // One set-based read of preserved authority sources; never a query per
+    // node path (AGENTS.md: no SQL inside loops / no per-item round trips).
+    let preserved_sources: BTreeMap<String, i32> = tx
+        .query(
+            &format!(
+                "SELECT raw_source_path, id FROM reading_plan_sources
+                  WHERE plan_id=$1 AND ({authoritative_source})"
+            ),
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
     let mut source_ids: BTreeMap<String, i32> = BTreeMap::new();
     for path in source_paths.keys() {
+        // A preserved Reading List source already carries this path; reuse it
+        // so its (possibly now-removed) List identity survives the save.
+        if let Some(id) = preserved_sources.get(path) {
+            source_ids.insert(path.clone(), *id);
+            continue;
+        }
         let row = tx
             .query_one(
                 "INSERT INTO reading_plan_sources (plan_id, raw_source_path, recorded_at)
@@ -4184,6 +4230,135 @@ mod tests {
         assert_eq!(
             error.structured_detail().expect("structured detail")["code"],
             "plan_version_conflict"
+        );
+    }
+
+    #[test]
+    fn list_item_always_serializes_empty_source_fields() {
+        // The plans list page reads `plan.source_paths[0]` and
+        // `plan.source_paths.map(...)`, and the TypeScript contract declares
+        // `source_paths: string[]` as required. The retired Python handler
+        // emitted both source fields even when empty (Pydantic
+        // `default_factory`). A prior Rust cutover omitted them via
+        // `skip_serializing_if`, which crashed the list page for any plan
+        // without CBL sources. Regression for issue #5394.
+        let item = ContinuityPlanListItem {
+            id: 1,
+            name: "Plan A".to_string(),
+            ordering_mode: "informational".to_string(),
+            lane_count: 1,
+            step_count: 5,
+            source_paths: Vec::new(),
+            source_names: serde_json::json!({}),
+            updated_at: "2026-11-17T00:00:00Z".to_string(),
+        };
+        let value = serde_json::to_value(&item).expect("serialize list item");
+        let obj = value.as_object().expect("list item is an object");
+        assert!(
+            obj.contains_key("source_paths"),
+            "source_paths must always be present, including when empty"
+        );
+        assert_eq!(
+            value["source_paths"],
+            serde_json::json!([]),
+            "source_paths must serialize as [] when empty"
+        );
+        assert!(
+            obj.contains_key("source_names"),
+            "source_names must always be present, including when empty"
+        );
+        assert_eq!(
+            value["source_names"],
+            serde_json::json!({}),
+            "source_names must serialize as {{}} when empty"
+        );
+    }
+
+    #[test]
+    fn continuity_plan_response_always_emits_empty_lanes_and_nodes() {
+        // Python ContinuityPlanResponse always emits lanes/nodes as arrays.
+        // The planner editor reads planData.lanes.length and [...planData.nodes]
+        // on required TS types, so omitting empty arrays crashes GET/create/update
+        // responses for plans with zero lanes or zero nodes.
+        let response = ContinuityPlanResponse {
+            id: 7,
+            user_id: 42,
+            name: "Empty Plan".to_string(),
+            ordering_mode: "informational".to_string(),
+            lanes: Vec::new(),
+            nodes: Vec::new(),
+            created_at: "2026-11-17T00:00:00Z".to_string(),
+            updated_at: "2026-11-17T00:00:00Z".to_string(),
+        };
+        let value = serde_json::to_value(&response).expect("serialize plan response");
+        let obj = value.as_object().expect("plan response is an object");
+        assert!(
+            obj.contains_key("lanes"),
+            "lanes must always be present, including when empty"
+        );
+        assert_eq!(
+            value["lanes"],
+            serde_json::json!([]),
+            "lanes must serialize as [] when empty"
+        );
+        assert!(
+            obj.contains_key("nodes"),
+            "nodes must always be present, including when empty"
+        );
+        assert_eq!(
+            value["nodes"],
+            serde_json::json!([]),
+            "nodes must serialize as [] when empty"
+        );
+    }
+
+    #[test]
+    fn continuity_plan_node_emits_null_optional_fields_and_empty_convergence_gate() {
+        // Python ContinuityPlanNode emits null for optional reader/source/label
+        // fields when absent (no exclude_if) and always emits convergence_gate as
+        // an array. Rust previously omitted these when None/empty, diverging from
+        // the frozen Python wire contract.
+        let plan_node = node("n1", "issue", 101, "l1", 0);
+        let value = serde_json::to_value(&plan_node).expect("serialize node");
+        let obj = value.as_object().expect("node is an object");
+
+        for field in [
+            "label",
+            "source_role",
+            "source_confidence",
+            "source_explanation",
+            "source_paths",
+            "source_cbl_placements",
+            "source_story_arc_ids",
+            "source_target_story_arc_id",
+            "reader_role",
+            "reader_optional",
+        ] {
+            assert!(obj.contains_key(field), "{field} must be present when None");
+            assert!(
+                value[field].is_null(),
+                "{field} must serialize as null when None"
+            );
+        }
+
+        assert!(
+            obj.contains_key("convergence_gate"),
+            "convergence_gate must always be present"
+        );
+        assert_eq!(
+            value["convergence_gate"],
+            serde_json::json!([]),
+            "convergence_gate must serialize as [] when empty"
+        );
+
+        // Fields Python intentionally excludes when absent must remain omitted.
+        assert!(
+            !obj.contains_key("checkpoint_target_ref_id"),
+            "checkpoint_target_ref_id should be omitted when None (Python exclude_if)"
+        );
+        assert!(
+            !obj.contains_key("checkpoint_target_ref_ids"),
+            "checkpoint_target_ref_ids should be omitted when empty (Python exclude_if)"
         );
     }
 

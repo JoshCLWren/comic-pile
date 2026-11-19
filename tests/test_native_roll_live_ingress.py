@@ -21,7 +21,10 @@ NATIVE_INGRESSES = {
     "/api/native_issue.rs": ROOT / "api/native_issue.rs",
 }
 AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
+# A capture always opens a path segment (``/:name``). A ``:action`` suffix inside
+# a segment (``groups:batch``, ``{id}:apply``) is a literal Google-style custom
+# method and must stay literal when building a concrete path.
+VERCEL_CAPTURE = re.compile(r"(?<=/):([A-Za-z_][A-Za-z0-9_]*)")
 
 # Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
 # no native ingress may ever publish it again.

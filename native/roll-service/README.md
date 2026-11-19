@@ -123,7 +123,7 @@ failures return the sanitized Python database-unavailable 503 envelope and
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
 canonical Alembic schema in `public`, loaded from
-`tests/fixtures/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
+`native/migrate/migrations/0001_baseline.sql` (a `pg_dump --schema-only` of a database
 at Alembic head — regenerate with `make roll-test-schema`). They truncate and
 reseed the application tables between cases and never hand-write them:
 
@@ -134,6 +134,11 @@ cargo test --locked -p comicpile-roll-service --all-targets
 ```
 
 Missing test configuration fails instead of silently skipping integration tests.
+CI also runs `node scripts/check_native_route_db_tests.mjs` (with its own
+`node --test` regression file): every module that registers an HTTP route in
+`lib.rs::router` must have at least one `tests/*.rs` HTTP test using this real
+database harness, or an explicit reason in the checker's allowlist. This closes
+the gap that let a route module ship with no database test at all (#5351).
 CI provisions PostgreSQL. `tests/fixtures/roll-v2/auth-matrix.json` is consumed by
 both Rust integration tests and `tests/test_native_auth_matrix.py`, pinning valid
 credentials and exact auth rejection status/detail/challenge across languages.

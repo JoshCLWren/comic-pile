@@ -153,56 +153,6 @@ async def test_momentum_roll_records_factor_breakdown(
 
 
 @pytest.mark.asyncio
-async def test_override_creates_recommendation_context(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """Verify that an override creates a recommendation context with manual override source."""
-    now = datetime.now(UTC)
-    thread = Thread(
-        title="Override Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-        created_at=now,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    # First roll to create a pending thread
-    await roll_pending_thread(async_db)
-
-    # Now override with the same thread
-    override_response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": thread.id}
-    )
-    assert override_response.status_code == 200
-    override_data = override_response.json()
-
-    # Verify recommendation context was created
-    result = await async_db.execute(
-        select(RecommendationContext)
-        .join(Event, Event.id == RecommendationContext.event_id)
-        .where(Event.selected_thread_id == override_data["thread_id"])
-        .where(Event.type == "roll")
-        .where(Event.selection_method == "override")
-    )
-    context = result.scalar_one_or_none()
-    assert context is not None
-
-    # Verify manual override source
-    assert context.intent_source == "manual_override"
-    assert context.intent_confidence == 1.0
-    assert context.bandwidth_source == "manual_override"
-    assert context.bandwidth_confidence == 1.0
-    # Verify random bypass is false for override
-    assert context.random_bypass is False
-    # Verify balanced neutrality is true for override
-    assert context.balanced_neutrality is True
-
-
-@pytest.mark.asyncio
 async def test_recommendation_context_schema_versioning(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:

@@ -97,7 +97,7 @@ def env_positive_int(name: str, default: int) -> int:
     return value
 
 
-LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
+LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 86400)
 # Long-running agents retain exclusive ownership through the full 100m budget.
 # Trusted release still runs immediately on exit; this is a crash-only ceiling.
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 7500)
