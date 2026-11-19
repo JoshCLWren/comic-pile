@@ -3,7 +3,7 @@
 //! scratch database on the server named by `MIGRATE_TEST_DATABASE_URL`.
 
 use comicpile_migrate::{
-    checksum, connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD, MIGRATIONS,
+    connect, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD, MIGRATIONS,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
@@ -235,12 +235,35 @@ async fn alembic_database_at_another_revision_is_refused() {
     client
         .execute(
             "UPDATE public.alembic_version SET version_num = $1",
-            &["some_other_revision"],
+            &[&"some_other_revision"],
         )
         .await
         .unwrap();
     let err = run(&mut client).await.unwrap_err();
     assert!(err.0.contains("alembic_version"), "{err}");
+    let tracked: i64 = client
+        .query_one(
+            "SELECT count(*) FROM pg_tables WHERE tablename = 'schema_migrations'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(tracked, 0, "a refused run must leave no trace");
+    drop(client);
+    db.drop_database().await;
+}
+
+#[tokio::test]
+async fn unmanaged_database_with_tables_is_refused() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    client
+        .batch_execute("CREATE TABLE public.stray (id int)")
+        .await
+        .unwrap();
+    let err = run(&mut client).await.unwrap_err();
+    assert!(err.0.contains("unmanaged"), "{err}");
     drop(client);
     db.drop_database().await;
 }

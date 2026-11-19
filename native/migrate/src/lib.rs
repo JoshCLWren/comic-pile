@@ -26,7 +26,13 @@ use tokio_postgres::Client;
 pub const BASELINE_SCHEMA_ALEMBIC_HEAD: &str = "c44050000002";
 
 /// Current Alembic head represented by the full Rust migration chain.
-pub const BASELINE_ALEMBIC_HEAD: &str = "s54350000001";
+pub const BASELINE_ALEMBIC_HEAD: &str = "m54i537800001";
+
+/// Prior Alembic head before merging the deferred-identity repair branch (#5378).
+const PREVIOUS_QUEUE_EXCLUSION_HEAD: &str = "s54350000001";
+
+/// Schema-equivalent deferred-identity repair head merged into the current head (#5378).
+const DEFERRED_IDENTITY_REPAIR_HEAD: &str = "i5378deferred01";
 
 /// Advisory-lock key serializing concurrent runners.
 const MIGRATE_LOCK: i64 = 5_554_000_001;
@@ -201,14 +207,20 @@ async fn adopt_alembic_migrations(client: &Client) -> Result<Vec<i64>, MigrateEr
             .map(|r| r.get(0))
             .collect();
         return match revisions.as_slice() {
-            [only] if only == BASELINE_SCHEMA_ALEMBIC_HEAD => Ok(vec![1]),
-            [only] if only == BASELINE_ALEMBIC_HEAD => {
+            [only]
+                if only == BASELINE_SCHEMA_ALEMBIC_HEAD
+                    || only == DEFERRED_IDENTITY_REPAIR_HEAD =>
+            {
+                Ok(vec![1])
+            }
+            [only] if only == PREVIOUS_QUEUE_EXCLUSION_HEAD || only == BASELINE_ALEMBIC_HEAD => {
                 Ok(MIGRATIONS.iter().map(|m| m.version).collect())
             }
             other => Err(MigrateError(format!(
-                "alembic_version is {other:?}, expected exactly [{BASELINE_SCHEMA_ALEMBIC_HEAD:?}] \
-                 or [{BASELINE_ALEMBIC_HEAD:?}]; run Alembic to a supported head before switching \
-                 to the Rust runner"
+                "alembic_version is {other:?}, expected exactly [{BASELINE_SCHEMA_ALEMBIC_HEAD:?}], \
+                 [{DEFERRED_IDENTITY_REPAIR_HEAD:?}], [{PREVIOUS_QUEUE_EXCLUSION_HEAD:?}], or \
+                 [{BASELINE_ALEMBIC_HEAD:?}]; run Alembic to a supported head before switching to \
+                 the Rust runner"
             ))),
         };
     }
