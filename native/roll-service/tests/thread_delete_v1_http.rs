@@ -23,11 +23,18 @@ type Conn = deadpool_postgres::Object;
 /// (pub(crate)); used to hold the queue lock while racing two writers.
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
 
+/// Bounded nanosecond suffix. The auth API caps usernames at 50 characters
+/// (`RegisterRequest.username`), and the full username is
+/// `{prefix}-{pid}-{suffix}`; a 19-digit suffix made longer prefixes (for
+/// example `thread-delete-nocascade`) exceed that limit depending on the PID
+/// width. Nine digits keep every username in this file well within the bound
+/// while staying unique across sequential calls.
 fn unique_suffix() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos()
+        % 1_000_000_000
 }
 
 async fn setup_user_with_pool(
