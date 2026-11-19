@@ -26,10 +26,7 @@ async fn database() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
     (state, guard)
 }
 
-async fn send(
-    state: &Arc<AppState>,
-    request: Request<Body>,
-) -> (StatusCode, Value, Vec<String>) {
+async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value, Vec<String>) {
     let response = router(state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
     let cookies = response
