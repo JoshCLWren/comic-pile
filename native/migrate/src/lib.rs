@@ -76,6 +76,16 @@ pub struct Report {
     pub adopted: Vec<i32>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum AlembicState {
+    /// `alembic_version` contains exactly the baseline head.
+    Head,
+    /// `alembic_version` exists but has no revision row.
+    Empty,
+    /// `alembic_version` contains revisions other than exactly the head.
+    Other(Vec<String>),
+}
+
 /// Connect, using TLS when the URL's `sslmode` asks for it.
 pub async fn connect(url: &str) -> Result<Client, MigrateError> {
     let config: tokio_postgres::Config = url
@@ -125,11 +135,32 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
         adopted: Vec::new(),
     };
 
-    let alembic_head = validate_alembic_version(client).await?;
+    let alembic_state = alembic_state(client).await?;
     let baseline_recorded = refinery_has_baseline(client).await?;
 
+    match &alembic_state {
+        Some(AlembicState::Head) | None => {}
+        Some(AlembicState::Empty) if baseline_recorded => {
+            // A verified refinery-managed baseline with an empty alembic_version
+            // row means a previous run applied/stamped history but failed before
+            // writing the Alembic revision; repair it below.
+        }
+        Some(AlembicState::Empty) => {
+            return Err(MigrateError(format!(
+                "alembic_version is empty, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
+                 run Alembic to the baseline head before switching to the Rust runner"
+            )));
+        }
+        Some(AlembicState::Other(revisions)) => {
+            return Err(MigrateError(format!(
+                "alembic_version is {revisions:?}, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
+                 run Alembic to the baseline head before switching to the Rust runner"
+            )));
+        }
+    }
+
     if !baseline_recorded {
-        if alembic_head {
+        if matches!(alembic_state, Some(AlembicState::Head)) {
             // Alembic database at the baseline head: record baseline as applied
             // without executing it, using refinery's own checksum/name.
             runner()
@@ -151,19 +182,15 @@ async fn run_locked(client: &mut Client) -> Result<Report, MigrateError> {
     Ok(report)
 }
 
-/// If `alembic_version` exists it must be exactly the baseline head.
-/// Returns whether it is present (and thus the head, after validation).
-async fn validate_alembic_version(client: &Client) -> Result<bool, MigrateError> {
+async fn alembic_state(client: &Client) -> Result<Option<AlembicState>, MigrateError> {
     let Some(revisions) = alembic_revisions(client).await? else {
-        return Ok(false);
+        return Ok(None);
     };
-    match revisions.as_slice() {
-        [only] if only == BASELINE_ALEMBIC_HEAD => Ok(true),
-        other => Err(MigrateError(format!(
-            "alembic_version is {other:?}, expected exactly [{BASELINE_ALEMBIC_HEAD:?}]; \
-             run Alembic to the baseline head before switching to the Rust runner"
-        ))),
-    }
+    Ok(Some(match revisions.as_slice() {
+        [only] if only == BASELINE_ALEMBIC_HEAD => AlembicState::Head,
+        [] => AlembicState::Empty,
+        _ => AlembicState::Other(revisions),
+    }))
 }
 
 async fn alembic_revisions(client: &Client) -> Result<Option<Vec<String>>, MigrateError> {

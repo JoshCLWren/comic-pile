@@ -258,3 +258,39 @@ async fn edited_applied_migration_is_refused() {
     drop(client);
     db.drop_database().await;
 }
+
+#[tokio::test]
+async fn interrupted_fresh_setup_repairs_missing_alembic_stamp() {
+    let db = Scratch::create().await;
+    let mut client = db.client().await;
+    run(&mut client).await.unwrap();
+
+    // Simulate a crash after refinery recorded/applied the baseline but before
+    // the Alembic head stamp was written.
+    client
+        .batch_execute("DELETE FROM public.alembic_version")
+        .await
+        .unwrap();
+
+    let report = run(&mut client).await.unwrap();
+    assert_eq!((report.applied, report.adopted), (vec![], vec![]));
+
+    let stamp: String = client
+        .query_one("SELECT version_num FROM public.alembic_version", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(stamp, BASELINE_ALEMBIC_HEAD);
+
+    let recorded: bool = client
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM public.refinery_schema_history WHERE version = 1)",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(recorded);
+    drop(client);
+    db.drop_database().await;
+}
