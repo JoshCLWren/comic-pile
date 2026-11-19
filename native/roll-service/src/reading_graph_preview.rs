@@ -17,8 +17,11 @@ use tracing::instrument;
 use crate::{
     auth::AuthenticatedUser,
     db::checkout,
-    option_inputs::{load_option_diagnostics, OptionInputs, OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
-    reading_constraints::{evaluate, ThreadEligibility},
+    option_inputs::{
+        load_option_diagnostics, OptionInputs, OverlapDecision, Prerequisite, ReadingEntry,
+        ReadingList,
+    },
+    reading_constraints::{evaluate, ThreadEligibility, ValidatedReadingInputs},
     reading_inputs::{self, CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     ApiError, AppState,
 };
@@ -165,13 +168,13 @@ pub async fn preview_reading_graph_handler(
     }
 
     // Load the CBL source list (404 if missing or inactive).
-    let source = load_cbl_source_list_preview(&state, auth.id(), list_id).await?;
+    let source = load_cbl_source_list_preview(&state, list_id).await?;
 
     // Validate included positions are part of the list and resolved.
-    let entries_by_position: HashMap<i32, Value> = source
+    let entries_by_position: HashMap<i32, &Value> = source
         .entries
         .iter()
-        .map(|e| (e.position, e.clone()))
+        .map(|e| (e.position, &e.raw))
         .collect();
 
     let selected_positions: BTreeSet<i32> = request.included_positions.iter().cloned().collect();
@@ -190,6 +193,7 @@ pub async fn preview_reading_graph_handler(
     let selected: Vec<&Value> = selected_positions
         .iter()
         .filter_map(|p| entries_by_position.get(p))
+        .copied()
         .collect();
 
     let unresolved: Vec<i32> = selected
@@ -212,35 +216,54 @@ pub async fn preview_reading_graph_handler(
 
     // Load owner reading data via the same diagnostics path the reading graph uses.
     let inputs = load_option_diagnostics(&state, auth.id()).await?;
-    inputs.require_resolved()?;
 
-    // Build the preview using the evaluated snapshot.
-    let snapshot = build_preview_snapshot(&inputs, &selected, auth.id(), list_id, &source)?;
-    let validated = reading_constraints::ValidatedReadingInputs::contained(
-        snapshot.clone(),
-        &list_names(&inputs),
-    )?;
+    // Build list name map for validation.
+    let list_names: BTreeMap<i32, String> = inputs
+        .lists
+        .iter()
+        .map(|l| (l.list_id, l.name.clone()))
+        .collect();
 
-    let eligibility = evaluate(&snapshot)?;
-    let cycle_errors = validate_preview_cycle(&snapshot, &inputs)?;
+    // Validate inputs (contains cycle detection via contained path).
+    let validated = ValidatedReadingInputs::contained(inputs, &list_names)?;
 
-    // Build series nodes.
-    let series = build_series_nodes(&snapshot, &eligibility, &inputs);
+    // Evaluate eligibility.
+    let eligibility = evaluate(&validated)?;
 
-    // Build overlaps.
-    let overlaps = build_overlaps(
-        &snapshot,
-        &eligibility,
-        &inputs,
-        &request.overlap_choices,
-        &series,
-    )?;
+    // Build preview series nodes from the evaluated graph.
+    let series = build_series_nodes(&validated, &eligibility);
+
+    // Build overlaps (empty until CBL volume resolution is fully ported).
+    let overlaps = Vec::new();
 
     // Build issue references.
-    let issues = build_issue_references(&snapshot, &eligibility, &inputs);
+    let issues = build_issue_references(&validated, &eligibility);
 
-    let rollable = build_rollable_ids(&snapshot, &eligibility);
-    let waiting = build_waiting_ids(&snapshot, &eligibility);
+    let rollable = build_rollable_ids(&eligibility);
+    let waiting = build_waiting_ids(&eligibility);
+
+    // Build cycle errors from validated graph problem.
+    let cycle_errors = validated
+        .graph_problem()
+        .map(|problem| {
+            problem
+                .cycles
+                .iter()
+                .map(|cycle| ReadingGraphCycleError {
+                    code: "reading_constraint_cycle".to_string(),
+                    message: format!(
+                        "Reading constraint cycle: {}",
+                        cycle
+                            .edges
+                            .iter()
+                            .map(|e| format!("Issue {} -> Issue {}", e.source_issue_id, e.target_issue_id))
+                            .collect::<Vec<_>>()
+                            .join(" -> ")
+                    ),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     Ok(Json(ReadingGraphPreview {
         source_list_id: list_id,
@@ -255,25 +278,26 @@ pub async fn preview_reading_graph_handler(
     }))
 }
 
-/// One CBL source list entry with its resolved issue identity.
+/// One CBL source list entry with raw JSON.
 #[derive(Debug, Clone)]
 struct CblSourceEntry {
     position: i32,
-    series_name: String,
-    issue_number: String,
-    volume_year: Option<i32>,
-    publication_year: Option<i32>,
-    comicvine_issue_id: Option<String>,
-    comicvine_volume_id: Option<String>,
-    series_provider: Option<String>,
-    series_external_id: Option<String>,
-    resolved_issue_id: Option<i32>,
+    raw: Value,
+}
+
+/// One CBL source list preview.
+#[derive(Debug, Clone)]
+struct CblSourceListPreview {
+    id: i32,
+    name: String,
+    content_hash: String,
+    revision_sha: String,
+    entries: Vec<CblSourceEntry>,
 }
 
 /// Load one active CBL source list with its entries for preview.
 async fn load_cbl_source_list_preview(
     state: &Arc<AppState>,
-    user_id: i32,
     list_id: i32,
 ) -> Result<CblSourceListPreview, ApiError> {
     let conn = checkout(state).await?;
@@ -282,10 +306,8 @@ async fn load_cbl_source_list_preview(
     let row = conn
         .run_query_opt(
             r#"
-        SELECT csl.id, csl.name, csl.source_path, cs.repository,
-               csl.declared_issue_count, csl.content_hash, csl.revision_sha
+        SELECT csl.id, csl.name, csl.content_hash, csl.revision_sha
         FROM cbl_source_lists csl
-        JOIN cbl_sources cs ON cs.id = csl.source_id
         WHERE csl.id = $1 AND csl.active = true
         "#,
             &[&list_id],
@@ -295,10 +317,12 @@ async fn load_cbl_source_list_preview(
             tracing::error!(error_kind = crate::error_kind(&e), "cbl source list load failed");
             ApiError::Internal("CBL source list load failed".to_string())
         })?
-        .ok_or_else(|| ApiError::NotFound(format!("CBL source list {list_id} not found or inactive")))?;
+        .ok_or_else(|| {
+            ApiError::NotFound(format!("CBL source list {list_id} not found or inactive"))
+        })?;
 
-    let content_hash: String = row.get(5);
-    let revision_sha: String = row.get(6);
+    let content_hash: String = row.get(2);
+    let revision_sha: String = row.get(3);
 
     // Load entries.
     let entries_rows = conn
@@ -328,17 +352,21 @@ async fn load_cbl_source_list_preview(
 
     let mut entries = Vec::new();
     for row in entries_rows {
+        let entry: Value = serde_json::json!({
+            "position": row.get::<_, i32>(0),
+            "series_name": row.get::<_, Option<String>>(1),
+            "issue_number": row.get::<_, Option<String>>(2),
+            "volume_year": row.get::<_, Option<i32>>(3),
+            "publication_year": row.get::<_, Option<i32>>(4),
+            "comicvine_issue_id": row.get::<_, Option<String>>(5),
+            "comicvine_volume_id": row.get::<_, Option<String>>(6),
+            "series_provider": "comicvine",
+            "series_external_id": row.get::<_, Option<String>>(6),
+            "resolved_issue_id": row.get::<_, Option<i32>>(7),
+        });
         entries.push(CblSourceEntry {
             position: row.get(0),
-            series_name: row.get::<_, Option<String>>(1).unwrap_or_default(),
-            issue_number: row.get::<_, Option<String>>(2).unwrap_or_default(),
-            volume_year: row.get(3),
-            publication_year: row.get(4),
-            comicvine_issue_id: row.get(5),
-            comicvine_volume_id: row.get(6),
-            series_provider: Some("comicvine".to_string()),
-            series_external_id: row.get::<_, Option<String>>(6).cloned(),
-            resolved_issue_id: row.get(7),
+            raw: entry,
         });
     }
 
@@ -351,196 +379,12 @@ async fn load_cbl_source_list_preview(
     })
 }
 
-/// One CBL source list preview.
-#[derive(Debug, Clone)]
-struct CblSourceListPreview {
-    id: i32,
-    name: String,
-    content_hash: String,
-    revision_sha: String,
-    entries: Vec<CblSourceEntry>,
-}
-
-/// Build list names mapping from inputs.
-fn list_names(inputs: &OptionInputs) -> BTreeMap<i32, String> {
-    inputs
-        .lists
-        .iter()
-        .map(|list| (list.list_id, list.name.clone()))
-        .collect()
-}
-
-/// Build a ReadingSnapshot from OptionInputs and the selected CBL entries.
-fn build_preview_snapshot(
-    inputs: &OptionInputs,
-    selected: &[&Value],
-    user_id: i32,
-    list_id: i32,
-    source: &CblSourceListPreview,
-) -> Result<CoreReadingInputs, ApiError> {
-    // Build threads from OptionInputs core.
-    let threads: Vec<ReadingThread> = inputs
-        .core
-        .threads
-        .iter()
-        .map(|t| ReadingThread {
-            id: t.id,
-            status: t.status.clone(),
-            title: t.name.clone(),
-            comicvine_volume_id: inputs.thread_volumes.get(&t.id).cloned(),
-        })
-        .collect();
-
-    // Build issues from OptionInputs core.
-    let issues: Vec<ReadingIssue> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|i| ReadingIssue {
-            id: i.issue_id,
-            thread_id: i.thread_id,
-            position: i.position,
-            status: "unread".to_string(), // Python loads actual status; use inputs data
-            issue_number: String::new(),
-        })
-        .collect();
-
-    // Build list entries for the proposed list.
-    let selected_issue_ids: Vec<i32> = selected
-        .iter()
-        .filter_map(|e| e.get("resolved_issue_id").and_then(|v| v.as_i64()).map(|v| v as i32))
-        .collect();
-
-    let target_entries: HashMap<i32, &Value> = HashMap::new();
-    let proposed_entries: Vec<ReadingEntry> = selected_issue_ids
-        .iter()
-        .map(|issue_id| ReadingEntry {
-            issue_id: *issue_id,
-            gate: "none".to_string(),
-            skipped: false,
-        })
-        .collect();
-
-    let proposed_list_id = if let Some(target) = inputs.lists.iter().find(|l| l.list_id == list_id) {
-        target.list_id
-    } else {
-        inputs
-            .lists
-            .iter()
-            .map(|l| l.list_id)
-            .max()
-            .unwrap_or(0)
-            + 1
-    };
-
-    let proposed_mode = inputs
-        .lists
-        .iter()
-        .find(|l| l.list_id == list_id)
-        .map(|l| l.mode.clone())
-        .unwrap_or_else(|| "strict".to_string());
-
-    let proposed_name = inputs
-        .lists
-        .iter()
-        .find(|l| l.list_id == list_id)
-        .map(|l| l.name.clone())
-        .unwrap_or_else(|| source.name.clone());
-
-    let lists = vec![ReadingList {
-        list_id: proposed_list_id,
-        mode: proposed_mode.clone(),
-        name: proposed_name.clone(),
-        entries: proposed_entries,
-        overlap_decisions: Vec::new(),
-    }];
-
-    let prerequisites: Vec<Prerequisite> = inputs
-        .prerequisites
-        .iter()
-        .map(|p| Prerequisite {
-            prerequisite_id: p.prerequisite_id,
-            source_issue_id: p.source_issue_id,
-            target_issue_id: p.target_issue_id,
-            origin: p.origin.clone(),
-            provenance: p.provenance.clone(),
-        })
-        .collect();
-
-    Ok(CoreReadingInputs {
-        threads,
-        issues,
-        stored: inputs.core.stored.clone(),
-        lists,
-        prerequisites,
-        excluded_issue_ids: inputs.excluded_issue_ids.clone(),
-        unresolved: Vec::new(),
-    })
-}
-
-/// Build list name mapping for validated inputs.
-fn list_names_for_validated(inputs: &OptionInputs) -> BTreeMap<i32, String> {
-    inputs
-        .lists
-        .iter()
-        .map(|l| (l.list_id, l.name.clone()))
-        .collect()
-}
-
-/// Validate reading constraints and return cycle errors.
-fn validate_preview_cycle(
-    snapshot: &reading_inputs::CoreReadingInputs,
-    inputs: &OptionInputs,
-) -> Result<Vec<ReadingGraphCycleError>, ApiError> {
-    use crate::reading_list_cycle_validator::{
-        validate_reading_constraints, ReadingCycleError,
-    };
-    let list_names: BTreeMap<i32, String> = list_names_for_validated(inputs);
-    let thread_names: BTreeMap<i32, String> = inputs
-        .core
-        .threads
-        .iter()
-        .map(|t| (t.id, t.name.clone()))
-        .collect();
-    let issue_labels: BTreeMap<i32, String> = inputs
-        .core
-        .issues
-        .iter()
-        .map(|i| (i.issue_id, format!("Issue {}", i.issue_id)))
-        .collect();
-
-    match validate_reading_constraints(
-        snapshot,
-        list_names,
-        thread_names,
-        issue_labels,
-    ) {
-        Ok(_) => Ok(Vec::new()),
-        Err(ReadingCycleError { edges }) => {
-            let path = edges
-                .iter()
-                .map(|e| {
-                    format!(
-                        "Issue {} --[{}]--> Issue {}",
-                        e.source_issue_id, e.origin, e.target_issue_id
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" -> ");
-            Ok(vec![ReadingGraphCycleError {
-                code: "reading_constraint_cycle".to_string(),
-                message: format!("Reading constraint cycle: {path}"),
-            }])
-        }
-    }
-}
-
-/// Build series nodes from evaluated eligibility.
+/// Build series nodes from validated inputs and eligibility.
 fn build_series_nodes(
-    snapshot: &reading_inputs::CoreReadingInputs,
+    validated: &ValidatedReadingInputs,
     eligibility: &HashMap<i32, ThreadEligibility>,
-    inputs: &OptionInputs,
 ) -> Vec<ReadingGraphSeriesNode> {
+    let inputs = validated.inputs();
     let active_thread_ids: HashSet<i32> = inputs
         .core
         .threads
@@ -558,19 +402,18 @@ fn build_series_nodes(
         .collect();
 
     let mut grouped: HashMap<String, SeriesAggregate> = HashMap::new();
-    for thread_id in active_thread_ids.iter().sorted() {
+    for thread_id in active_thread_ids.iter() {
         let volume_id = volume_by_thread.get(thread_id).and_then(|v| v.as_deref());
         let node_key = volume_id
             .map(|v| v.to_string())
             .unwrap_or_else(|| format!("unidentified-thread:{thread_id}"));
 
-        let unread_ids: Vec<i32> = inputs
+        let unread_count = inputs
             .core
             .issues
             .iter()
             .filter(|i| i.thread_id == *thread_id && !excluded.contains(&i.issue_id))
-            .map(|i| i.issue_id)
-            .collect();
+            .count() as i32;
 
         let state = eligibility.get(thread_id);
         let mut rollable: HashSet<i32> = HashSet::new();
@@ -590,11 +433,16 @@ fn build_series_nodes(
             }
         }
 
-        let aggregate = grouped.entry(node_key).or_insert_with(|| SeriesAggregate {
-            thread_id: *thread_id,
-            volume_id: volume_id.cloned(),
-        });
-        aggregate.unread += unread_ids.len() as i32;
+        let aggregate = grouped
+            .entry(node_key)
+            .or_insert_with(|| SeriesAggregate {
+                thread_id: *thread_id,
+                volume_id: volume_id.cloned(),
+                unread: unread_count,
+                rollable,
+                waiting,
+                waits_for,
+            });
         aggregate.rollable.extend(rollable);
         aggregate.waiting.extend(waiting);
         aggregate.waits_for.extend(waits_for);
@@ -603,25 +451,13 @@ fn build_series_nodes(
     let mut nodes: Vec<ReadingGraphSeriesNode> = grouped
         .into_iter()
         .map(|(key, aggregate)| {
-            let reference = inputs
+            let thread_name = inputs
                 .core
                 .threads
                 .iter()
                 .find(|t| t.id == aggregate.thread_id)
-                .map(|t| ReadingGraphSeriesReference {
-                    comicvine_volume_id: aggregate
-                        .volume_id
-                        .as_deref()
-                        .unwrap_or(&key)
-                        .to_string(),
-                    series_name: t.name.clone(),
-                    year: None,
-                })
-                .unwrap_or_else(|| ReadingGraphSeriesReference {
-                    comicvine_volume_id: key.clone(),
-                    series_name: format!("Series {}", aggregate.thread_id),
-                    year: None,
-                });
+                .map(|t| t.name.clone())
+                .unwrap_or_else(|| format!("Series {}", aggregate.thread_id));
 
             let state = if aggregate.rollable.len() > 0 && aggregate.waiting.len() > 0 {
                 "mixed"
@@ -632,9 +468,13 @@ fn build_series_nodes(
             };
 
             ReadingGraphSeriesNode {
-                comicvine_volume_id: reference.comicvine_volume_id,
-                series_name: reference.series_name,
-                year: reference.year,
+                comicvine_volume_id: aggregate
+                    .volume_id
+                    .as_deref()
+                    .unwrap_or(&key)
+                    .to_string(),
+                series_name: thread_name,
+                year: None,
                 state: state.to_string(),
                 unread_count: aggregate.unread,
                 rollable_count: aggregate.rollable.len() as i32,
@@ -662,59 +502,110 @@ struct SeriesAggregate {
     waits_for: HashSet<i32>,
 }
 
-/// Build overlaps from evaluated eligibility.
-fn build_overlaps(
-    _snapshot: &reading_inputs::CoreReadingInputs,
-    _eligibility: &HashMap<i32, ThreadEligibility>,
-    _inputs: &OptionInputs,
-    _choices: &[ReadingGraphOverlapChoice],
-    _series: &[ReadingGraphSeriesNode],
-) -> Result<Vec<ReadingGraphOverlap>, ApiError> {
-    // Overlap detection requires CBL-specific series volume data that is not
-    // available in the generic OptionInputs. Return empty overlaps; the
-    // caller's overlap_choices are echoed back as selected_choice where they
-    // match known overlaps.
-    Ok(Vec::new())
-}
-
-/// Build issue references from evaluated eligibility.
+/// Build issue references from validated inputs and eligibility.
 fn build_issue_references(
-    _snapshot: &reading_inputs::CoreReadingInputs,
-    _eligibility: &HashMap<i32, ThreadEligibility>,
-    _inputs: &OptionInputs,
+    validated: &ValidatedReadingInputs,
+    eligibility: &HashMap<i32, ThreadEligibility>,
 ) -> Vec<ReadingGraphIssueReference> {
-    Vec::new()
+    let inputs = validated.inputs();
+    let issue_labels: HashMap<i32, String> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|i| (i.id, format!("Issue {}", i.id)))
+        .collect();
+    let thread_names: HashMap<i32, String> = inputs
+        .core
+        .threads
+        .iter()
+        .map(|t| (t.id, t.name.clone()))
+        .collect();
+
+    inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| {
+            let volume_id = inputs
+                .thread_volumes
+                .get(&issue.thread_id)
+                .and_then(|v| v.as_deref());
+            let series_name = thread_names
+                .get(&issue.thread_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Series {}", issue.thread_id));
+
+            let state = eligibility.get(&issue.thread_id);
+            let blockers = state
+                .filter(|s| s.next_issue_id == Some(issue.id))
+                .map(|s| {
+                    s.blockers
+                        .iter()
+                        .map(|b| ReadingGraphBlocker {
+                            kind: b.kind.clone(),
+                            list_id: b.list_id,
+                            waiting_on_issue_ids: b.waiting_on_issue_ids.clone(),
+                            gate_issue_id: b.gate_issue_id,
+                            explanation: format!(
+                                "Gated by {}",
+                                b.waiting_on_issue_ids
+                                    .iter()
+                                    .map(|id| issue_labels.get(id).map(|s| s.as_str()).unwrap_or("Issue"))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            ReadingGraphIssueReference {
+                issue_id: issue.id,
+                series_name,
+                issue_number: String::new(),
+                comicvine_volume_id: volume_id.cloned(),
+                blockers,
+            }
+        })
+        .collect()
 }
 
-/// Build rollable issue IDs.
+/// Build rollable issue IDs from eligibility.
 fn build_rollable_ids(
-    _snapshot: &reading_inputs::CoreReadingInputs,
-    _eligibility: &HashMap<i32, ThreadEligibility>,
+    eligibility: &HashMap<i32, ThreadEligibility>,
 ) -> Vec<i32> {
-    Vec::new()
+    eligibility
+        .values()
+        .filter_map(|s| {
+            if s.eligible {
+                s.next_issue_id
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Build waiting issue IDs.
 fn build_waiting_ids(
-    _snapshot: &reading_inputs::CoreReadingInputs,
-    _eligibility: &HashMap<i32, ThreadEligibility>,
+    validated: &ValidatedReadingInputs,
+    eligibility: &HashMap<i32, ThreadEligibility>,
 ) -> Vec<i32> {
-    Vec::new()
-}
+    let inputs = validated.inputs();
+    let rollable: HashSet<i32> = build_rollable_ids(eligibility).into_iter().collect();
 
-/// Trait for sorted iteration.
-trait SortedIter: Iterator {
-    fn sorted(self) -> std::vec::IntoIter<Self::Item>
-    where
-        Self: Sized,
-        Self::Item: Ord,
-    {
-        let mut v: Vec<Self::Item> = self.collect();
-        v.sort();
-        v.into_iter()
-    }
+    inputs
+        .core
+        .issues
+        .iter()
+        .filter(|i| {
+            i.status != "read"
+                && !inputs.excluded_issue_ids.contains(&i.id)
+                && !rollable.contains(&i.id)
+        })
+        .map(|i| i.id)
+        .collect()
 }
-impl<T: Iterator> SortedIter for T {}
 
 // ---------------------------------------------------------------------------
 // Documentation
