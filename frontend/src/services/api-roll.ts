@@ -216,8 +216,8 @@ export function createRollApi(client: HttpClient) {
       writeRollSnoozes(readRollSnoozes().filter((id) => id !== threadId))
     },
     roll: offer,
-    override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
-    dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
+    override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v2/roll/override', data),
+    dismissPending: () => client.post<void>('/v2/roll/dismiss-pending'),
     reroll: offer,
     unsnooze: async (threadId: number): Promise<RollUnsnoozeResponse> => {
       const response = await client.post<RollUnsnoozeResponse, { thread_id: number }>('/v2/roll/unsnooze', { thread_id: threadId })

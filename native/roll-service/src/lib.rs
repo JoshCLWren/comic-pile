@@ -75,10 +75,8 @@ pub mod roll_switch_prerequisite;
 pub mod roll_v1_openapi;
 pub mod same_path_openapi;
 mod session_bandwidth;
-pub mod session_detail;
 pub mod session_details;
 pub mod session_history;
-pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod thread_issues;
@@ -682,14 +680,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/metrics", get(metrics::get_metrics))
-        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route("/api/v1/roll/override", post(roll_override::override_roll))
-        .route("/api/roll/override", post(roll_override::override_roll))
+        .route("/api/v2/roll/override", post(roll_override::override_roll))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(recommendation_explanation::get_recommendation_explanation),
@@ -699,39 +695,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(recommendation_explanation::get_recommendation_explanation),
         )
         .route(
-            "/api/v1/roll/switch-prerequisite",
+            "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
         )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
         )
+        // Session reads moved to the resource-shaped v2 surface (#4335).
+        // The v1 single-session/list reads and the unversioned aliases are
+        // retired (#4343); only the snapshot and details reads remain.
         .route(
-            "/api/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}",
-            get(session_detail::get_session),
-        )
-        .route(
-            "/api/sessions/{session_id}/snapshots",
+            "/api/v2/reading-sessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
         .route(
-            "/api/v1/sessions/{session_id}/snapshots",
-            get(session_history::list_session_snapshots),
-        )
-        // Session list (issue #4839)
-        .route("/api/sessions/", get(session_list::list_sessions))
-        .route("/api/v1/sessions/", get(session_list::list_sessions))
-        // Session details (issue #4839)
-        .route(
-            "/api/sessions/{session_id}/details",
-            get(session_details::get_session_details),
-        )
-        .route(
-            "/api/v1/sessions/{session_id}/details",
+            "/api/v2/reading-sessions/{session_id}/details",
             get(session_details::get_session_details),
         )
         // Undo snapshots list (issue #4839)
@@ -1138,11 +1117,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(dependencies::get_thread_dependencies),
         )
         .route(
-            "/api/v1/roll/dismiss-pending",
-            post(dismiss_pending::dismiss_pending),
-        )
-        .route(
-            "/api/roll/dismiss-pending",
+            "/api/v2/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
         .route(
@@ -1300,10 +1275,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route(
-            "/api/v1/releases/",
-            get(releases::list).put(releases::publish),
-        )
+        .route("/api/v1/releases/", put(releases::publish))
+        .route("/api/v2/releases", get(releases::list))
         .route("/api/v1/releases/source", get(releases::reconcile))
         .route("/api/v1/releases/{release_id}", get(releases::get))
         .route(
