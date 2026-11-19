@@ -120,6 +120,7 @@ pub struct ReadingGraphPreview {
 // Internal graph model
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone)]
 struct IssueMeta {
     issue_id: i32,
     thread_id: i32,
@@ -463,7 +464,7 @@ pub async fn preview_reading_graph(
             &volume_by_thread,
             &inputs.thread_volumes,
         ),
-        proposed_list_id,
+        &proposed_list_id,
         &payload.overlap_choices,
     );
 
