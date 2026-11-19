@@ -1077,3 +1077,97 @@ async fn bootstrap_reload_pending_offer_queue_position_matches_queue_and_detail(
         "bootstrap position must be canonical, not the stored 20"
     );
 }
+
+#[tokio::test]
+async fn roll_unsnooze_restores_pending_roll_and_reverts_die() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-unsnooze").await;
+    let conn = state.pool.get().await.unwrap();
+
+    // The thread that will be snoozed (initially pending).
+    let snoozed = thread(&conn, user_id, "Snoozed").await;
+    // A replacement thread with an unread issue so the offer has a candidate.
+    let replacement = thread(&conn, user_id, "Replacement").await;
+    let issue_id = issue(&conn, replacement, "1", 1, "unread").await;
+    frontier(&conn, replacement, issue_id).await;
+    conn.execute(
+        "UPDATE threads SET issues_remaining = 1 WHERE id = $1",
+        &[&replacement],
+    )
+    .await
+    .unwrap();
+
+    // Start with the snoozed thread as the pending roll.
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die, pending_thread_id) VALUES ($1, NOW(), 6, $2)",
+        &[&user_id, &snoozed],
+    )
+    .await
+    .unwrap();
+
+    // Snooze the pending thread through the native offer; this advances the die
+    // and records the snoozed thread on the session.
+    let (offer_status, offer_body) = send(
+        &state,
+        post(
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "unsnooze-restore-001",
+                "snoozed_thread_ids": []
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+    assert_eq!(offer_body["snoozed_thread_id"].as_i64(), Some(snoozed as i64), "{offer_body:?}");
+    assert_eq!(offer_body["thread_id"].as_i64(), Some(replacement as i64), "{offer_body:?}");
+
+    // Unsnooze must restore the snoozed thread as the pending roll and revert
+    // the die to its pre-snooze size.
+    let (unsnooze_status, unsnooze_body) = send(
+        &state,
+        post(
+            "/api/v2/roll/unsnooze",
+            &token,
+            &csrf,
+            Some(json!({ "thread_id": snoozed })),
+        ),
+    )
+    .await;
+    assert_eq!(unsnooze_status, StatusCode::OK, "{unsnooze_body:?}");
+    assert_eq!(unsnooze_body["thread_id"].as_i64(), Some(snoozed as i64), "{unsnooze_body:?}");
+    assert_eq!(unsnooze_body["die_size"].as_i64(), Some(6), "{unsnooze_body:?}");
+
+    let pool = state.pool.get().await.unwrap();
+    let pending: Option<i32> = pool
+        .query_one(
+            "SELECT pending_thread_id FROM sessions WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(pending, Some(snoozed), "unsnooze must restore the pending roll");
+
+    let snoozed_ids: String = pool
+        .query_one(
+            "SELECT snoozed_thread_ids::text FROM sessions WHERE user_id = $1",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let decoded: Vec<i32> = serde_json::from_str(&snoozed_ids).unwrap_or_default();
+    assert!(!decoded.contains(&snoozed), "unsnooze must remove the thread from snoozed_thread_ids");
+
+    let unsnoozes: i64 = pool
+        .query_one(
+            "SELECT count(*) FROM events WHERE type = 'unsnooze' AND thread_id = $1",
+            &[&snoozed],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(unsnoozes, 1);
+}

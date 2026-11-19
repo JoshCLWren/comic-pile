@@ -179,9 +179,11 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
-            const { removeRollSnooze } = await import('../../services/api-roll')
-            removeRollSnooze(selectedThread!.id)
+            // Call the server endpoint to restore the previously snoozed roll
+            // and revert the die. The endpoint also clears the browser snooze
+            // cookie.
+            const { rollApi } = await import('../../services/api-roll')
+            await rollApi.unsnooze(selectedThread!.id)
             await refetchBootstrap()
             break
           }

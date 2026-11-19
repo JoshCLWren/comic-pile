@@ -4,7 +4,7 @@ import type { RollResponse } from '../../types'
 import type { ThreadMetadata } from './types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
-import { removeRollSnooze } from '../../services/api-roll'
+import { rollApi } from '../../services/api-roll'
 
 interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
@@ -56,8 +56,9 @@ export function useRollSnooze({
 
   async function handleUnsnooze(threadId: number) {
     try {
-      // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
-      removeRollSnooze(threadId)
+      // Call the server endpoint to restore the previously snoozed roll and
+      // revert the die. The endpoint also clears the browser snooze cookie.
+      await rollApi.unsnooze(threadId)
       await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)
