@@ -2506,17 +2506,39 @@ mod tests {
         drop(connection);
 
         let _env = TempGitHubEnv::install();
-        let probe = IssuerProbe::new();
-        let error = create_with_issuer(
-            state.clone(),
-            1101,
+        // The test-configured app must hold the recording fake outbound
+        // client, so this call can never reach the real GitHub API (#5339).
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        assert!(state.outbound.is_fake());
+        fake.clear();
+        let error = create(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1101),
             Bytes::from(r#"{"title":"Something broke","description":"Details"}"#),
-            &probe.issuer("SYNTHETIC_ISSUER_FAILURE"),
         )
         .await
-        .expect_err("synthetic issuer must fail so the claim rolls back");
+        .expect_err("the recording fake must fail closed so the claim rolls back");
         assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
-        probe.assert_issued_via_fake(&error);
+
+        // The fake received exactly one GitHub issue creation carrying the
+        // submitted report, and opened no socket.
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "the fake must record the issuer call");
+        assert_eq!(calls[0].host, "api.github.com");
+        assert_eq!(calls[0].method, "POST");
+        assert!(
+            calls[0].path.starts_with("/repos/") && calls[0].path.ends_with("/issues"),
+            "unexpected GitHub path {}",
+            calls[0].path
+        );
+        let sent: serde_json::Value =
+            serde_json::from_slice(&calls[0].body).expect("recorded GitHub payload is JSON");
+        assert_eq!(sent["title"], "Something broke");
+        assert!(sent["body"]
+            .as_str()
+            .is_some_and(|body| body.contains("Details")));
 
         let connection = db::checkout(&state).await.expect("verify connection");
         let consumed: i64 = connection
