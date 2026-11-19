@@ -1243,7 +1243,7 @@ mod tests {
         let Json(updated) = update(
             State(state),
             user,
-            Path(created.id),
+            Ok(Path(created.id.to_string())),
             json_body(&ContinuityRuleRequest {
                 source_id: 3002,
                 target_id: 3001,
@@ -1275,7 +1275,7 @@ mod tests {
         .await
         .expect("create continuity rule");
 
-        let response = delete(State(state.clone()), user, Path(created.id))
+        let response = delete(State(state.clone()), user, Ok(Path(created.id.to_string())))
             .await
             .expect("delete continuity rule");
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
