@@ -657,6 +657,7 @@ async fn display_position(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
+    option_e: bool,
 ) -> Result<i32, ApiError> {
     let rows = tx
         .query(
@@ -667,7 +668,7 @@ async fn display_position(
         )
         .await
         .map_err(db::query_error)?;
-    let candidates: Option<HashSet<i32>> = if queue::option_e_enabled() {
+    let candidates: Option<HashSet<i32>> = if option_e {
         let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
         let frontiers = validated
             .eligible_frontiers()
@@ -704,6 +705,7 @@ async fn thread_response(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
+    option_e: bool,
 ) -> Result<ThreadResponse, ApiError> {
     let sql = format!(
         "SELECT t.title, t.format, t.issues_remaining, t.status, t.last_rating, {last_activity}, \
@@ -727,7 +729,7 @@ async fn thread_response(
     } else {
         row.get(2)
     };
-    let queue_position = display_position(tx, user, thread_id).await?;
+    let queue_position = display_position(tx, user, thread_id, option_e).await?;
     let credits: Option<String> = row.get(13);
     Ok(ThreadResponse {
         id: thread_id,
@@ -1281,7 +1283,7 @@ pub(crate) async fn migrate_to_issues(
         .await
         .map_err(db::query_error)?;
     }
-    let response = thread_response(&tx, user, thread_id).await?;
+    let response = thread_response(&tx, user, thread_id, state.option_e).await?;
     tx.commit().await.map_err(db::tx_error)?;
     Ok(Json(response).into_response())
 }
@@ -1380,7 +1382,7 @@ pub(crate) async fn migrate_to_issues_simple(
     )
     .await
     .map_err(db::query_error)?;
-    let response = thread_response(&tx, user, thread_id).await?;
+    let response = thread_response(&tx, user, thread_id, state.option_e).await?;
     tx.commit().await.map_err(db::tx_error)?;
     Ok(Json(response).into_response())
 }
@@ -1398,7 +1400,7 @@ pub(crate) async fn set_current_issue(
 ) -> Result<Response, ApiError> {
     let thread_id = thread_ordering::parse_int_text(raw_id).ok_or_else(validation_failed)?;
     let requested = parse_set_current_body(body)?;
-    let option_e = queue::option_e_enabled();
+    let option_e = state.option_e;
 
     // Reject before any session side effect, exactly as Python orders it.
     {
@@ -1505,7 +1507,7 @@ pub(crate) async fn set_current_issue(
     .await
     .map_err(db::query_error)?;
 
-    let queue_position = display_position(&tx, user, thread_id).await?;
+    let queue_position = display_position(&tx, user, thread_id, option_e).await?;
     let meta = tx
         .query_one(
             "SELECT title, format FROM threads WHERE id = $1",

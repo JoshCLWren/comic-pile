@@ -170,8 +170,6 @@ fn normalize_search(search: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-pub(crate) use crate::option_e_setting::option_e_enabled;
-
 /// Canonical SQL expression that groups blocked rows last in display order.
 ///
 /// The Queue list, the single-thread detail and the pending Roll offer all use
@@ -336,7 +334,7 @@ pub async fn list_threads(
         return Err(unprocessable("search must be at least 1 character"));
     }
     let search = normalize_search(raw_search);
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let execution = if option_e { "option_e" } else { "legacy" };
     let cursor = query
         .page_token
@@ -439,7 +437,7 @@ pub async fn get_thread_detail(
     // The detail must rank by the same blocked expression as the Queue list,
     // otherwise a stored `is_blocked` flag that disagrees with the Option E
     // evaluation gives the two views different positions for the same thread.
-    let option_e = option_e_enabled();
+    let option_e = state.option_e;
     let mut candidates: Vec<i32> = Vec::new();
     if option_e {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
