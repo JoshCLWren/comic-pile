@@ -91,7 +91,7 @@
       "exclude_from_inventory": true
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
       "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
       "dest": "/api/native_roll.rs",
