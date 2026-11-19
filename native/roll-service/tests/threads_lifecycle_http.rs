@@ -45,15 +45,18 @@ async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
     .get(0)
 }
 
-/// Block until exactly `expected` sessions wait on the queue lock. This reads
-/// database state, never sleeps as synchronization; the bound only fails a
-/// hung run.
+/// Block until at least `expected` sessions wait on the queue lock. This spins
+/// on `yield_now` rather than sleeping: PostgreSQL records a lock wait the
+/// moment the request issues its lock statement, so the condition is
+/// guaranteed to become true and no elapsed-time window is involved. The bound
+/// only fails a hung run. Matches the sibling lock-order tests in
+/// `thread_issues_v1_http.rs`.
 async fn wait_for_queue_lock_waiters(conn: &Conn, user_id: i32, expected: i64) {
-    for _ in 0..3000 {
-        if queue_lock_waiters(conn, user_id).await == expected {
+    for _ in 0..1_000_000 {
+        if queue_lock_waiters(conn, user_id).await >= expected {
             return;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
     }
     panic!("expected {expected} queue-lock waiters");
 }
