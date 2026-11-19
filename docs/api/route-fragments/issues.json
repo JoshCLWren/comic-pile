@@ -3,7 +3,8 @@
   "owned_path_patterns": [
     "^/api/v1/issues(?::.*|/.*)?$",
     "^/api/v2/issues(?:/.*)?$",
-    "^/api/v2/issue\\-read\\-markers(?:/.*)?$"
+    "^/api/v2/issue\\-read\\-markers(?:/.*)?$",
+    "^/api/v2/issue\\-read\\-marker\\-removals(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
