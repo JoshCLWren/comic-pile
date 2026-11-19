@@ -46,7 +46,7 @@ fn default_scope_mode() -> String {
     SCOPE_MODE_CONFIRMED_ORIGIN.to_string()
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewScope {
     pub status: String,
     pub scope_key: Option<String>,
@@ -55,7 +55,7 @@ pub struct SeriesMappingPreviewScope {
     pub basis: Option<String>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewCounts {
     pub already_confirmed: i32,
     pub safe_exact_match: i32,
@@ -65,7 +65,7 @@ pub struct SeriesMappingPreviewCounts {
     pub excluded_special: i32,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewRow {
     pub row_id: String,
     pub issue_id: i32,
@@ -84,7 +84,7 @@ pub struct SeriesMappingPreviewRow {
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewProviderSeries {
     pub id: String,
     pub name: Option<String>,
@@ -95,7 +95,7 @@ pub struct SeriesMappingPreviewProviderSeries {
     pub image: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct SeriesMappingPreviewResponse {
     pub preview_token: Option<String>,
     pub scope: SeriesMappingPreviewScope,
@@ -106,7 +106,7 @@ pub struct SeriesMappingPreviewResponse {
     pub expires_at: Option<f64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 struct ValidationErrorItem {
     #[serde(rename = "type")]
     error_type: String,
@@ -117,7 +117,7 @@ struct ValidationErrorItem {
     ctx: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 struct ValidationErrorResponse {
     detail: Vec<ValidationErrorItem>,
 }
