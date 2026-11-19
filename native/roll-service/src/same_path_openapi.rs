@@ -8,8 +8,6 @@ use utoipa::OpenApi;
     crate::reading_mode::set_reading_mode_documentation,
     crate::reading_mode::dismiss_reading_mode_suggestion_documentation,
     crate::reading_mode::suggest_reading_mode_documentation,
-    crate::dismiss_pending::dismiss_pending_documentation,
-    crate::dismiss_pending::dismiss_pending_legacy_documentation,
     crate::tags::list_tags_documentation,
     crate::tags::create_tag_documentation,
     crate::tags::effective_issue_documentation,
@@ -24,11 +22,6 @@ use utoipa::OpenApi;
     crate::tags::bulk_unassign_tag_documentation,
     crate::tags::unassign_tag_documentation,
     crate::tags::usage_tag_documentation,
-    crate::session_history::list_session_snapshots_documentation,
-    crate::session_list::list_sessions_documentation,
-    crate::session_list::list_sessions_v1_documentation,
-    crate::session_details::get_session_details_documentation,
-    crate::session_details::get_session_details_v1_documentation,
     crate::undo_snapshots::list_undo_snapshots_documentation,
     crate::undo_snapshots::list_undo_snapshots_v1_documentation,
     crate::undo_apply::undo_to_snapshot_documentation,
@@ -41,6 +34,10 @@ use utoipa::OpenApi;
     crate::taste_discoveries::dismiss_documentation,
     crate::creators::list_creators_documentation,
     crate::creators::get_summaries_documentation,
+    crate::catalog_series_mapping_preview::documentation,
+    crate::continuity_plans_project_preview::documentation,
+    crate::issue_identity_adoption_preview::documentation,
+    crate::issue_identity_cbl_reading_graph_preview::documentation,
 ))]
 struct SamePathApi;
 
@@ -82,9 +79,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::bug_reports::BugReportsApi::openapi())
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
-        .merge_from(crate::session_detail::SessionDetailApi::openapi())
-        .merge_from(crate::session_list::SessionListApi::openapi())
-        .merge_from(crate::session_details::SessionDetailsApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
         .merge_from(crate::undo_apply::UndoApplyApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
@@ -96,7 +90,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         // client types after the shadowed Python handlers retire (#5440).
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
-        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi());
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
+        .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi());
 
     // Each alias is mounted to the identical handler in the native router.
     // Copying that handler's generated contract avoids a second DTO definition.
@@ -133,10 +128,6 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         (
             "/api/v2/threads/{thread_id}/issue-dependencies",
             "/api/v1/threads/{thread_id}/issue-dependencies",
-        ),
-        (
-            "/api/v1/sessions/{session_id}/snapshots",
-            "/api/sessions/{session_id}/snapshots",
         ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {
@@ -354,6 +345,51 @@ mod tests {
             operation.operation_id.as_deref(),
             Some("reading_plan_sync_status")
         );
+    }
+
+    /// The generated frontend client declares one property per operation id, so
+    /// reusing a function name (for example `documentation`) for several preview
+    /// handlers would produce duplicate TypeScript identifiers. Keep each
+    /// preview operation id unique and identical to the Python wire contract.
+    #[test]
+    fn preview_operations_keep_unique_python_operation_ids() {
+        let document = same_path_openapi();
+        let expected = [
+            (
+                "/api/v1/catalog/series-mappings/preview",
+                "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
+            ),
+            (
+                "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+                "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+            ),
+            (
+                "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+                "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
+            ),
+            (
+                "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+                "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
+            ),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for (path, operation_id) in expected {
+            let item = document
+                .paths
+                .paths
+                .get(path)
+                .unwrap_or_else(|| panic!("missing native preview path {path}"));
+            let operation = item
+                .get
+                .as_ref()
+                .or(item.post.as_ref())
+                .unwrap_or_else(|| panic!("missing preview operation for {path}"));
+            assert_eq!(operation.operation_id.as_deref(), Some(operation_id));
+            assert!(
+                seen.insert(operation_id),
+                "duplicate preview operation id {operation_id}"
+            );
+        }
     }
 
     /// Both browser-called taste-discovery operations (#4853) must keep their

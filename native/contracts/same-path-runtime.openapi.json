@@ -375,214 +375,6 @@
         }
       }
     },
-    "/api/roll/dismiss-pending": {
-      "post": {
-        "tags": [
-          "roll"
-        ],
-        "summary": "Also mount the legacy-handler alias.",
-        "operationId": "dismiss_pending_legacy_documentation",
-        "responses": {
-          "204": {
-            "description": "No Content. Pending thread cleared."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/sessions/": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the unversioned list.",
-        "operationId": "list_sessions_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated session history",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionHistoryListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/sessions/{session_id}": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the unversioned mounted read.",
-        "operationId": "get_session_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Single session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/sessions/{session_id}/details": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the unversioned details.",
-        "operationId": "get_session_details_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Session details with events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/sessions/{session_id}/snapshots": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "OpenAPI declaration for both legacy and versioned same-path aliases.",
-        "operationId": "list_session_snapshots_documentation___api_sessions__session_id__snapshots",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Session restore snapshots",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSnapshotsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/threads/{thread_id}": {
       "get": {
         "tags": [
@@ -1114,6 +906,47 @@
           },
           "422": {
             "description": "invalid_approved_row"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalog/series-mappings/preview": {
+      "post": {
+        "tags": [
+          "crate::catalog_series_mapping_preview"
+        ],
+        "operationId": "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only series mapping preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -1750,6 +1583,65 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+      "post": {
+        "tags": [
+          "crate::continuity_plans_project_preview"
+        ],
+        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Continuity plan id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic projection preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -3697,25 +3589,24 @@
     "/api/v1/issue-identity/cbl/{list_id}/adoption-preview": {
       "get": {
         "tags": [
-          "issue-identity"
+          "crate::issue_identity_adoption_preview"
         ],
-        "summary": "Documentation-only operation for the CBL adoption preview.",
-        "operationId": "cbl_adoption_preview_documentation",
+        "operationId": "api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get",
         "parameters": [
           {
             "name": "list_id",
             "in": "path",
-            "description": "CBL source list identifier",
+            "description": "CBL source list id",
             "required": true,
             "schema": {
               "type": "integer",
-              "format": "int32"
+              "format": "int64"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Adoption preview for the active CBL list",
+            "description": "Read-only adoption preview",
             "content": {
               "application/json": {
                 "schema": {
@@ -3724,21 +3615,70 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "404": {
             "description": "CBL source list not found or not active"
           },
           "422": {
-            "description": "Path failed validation",
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview": {
+      "post": {
+        "tags": [
+          "crate::issue_identity_cbl_reading_graph_preview"
+        ],
+        "operationId": "preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only graph preview",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                  "$ref": "#/components/schemas/ReadingGraphPreview"
                 }
               }
             }
           },
-          "503": {
-            "description": "Database temporarily unavailable"
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
+          },
+          "422": {
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
           }
         },
         "security": [
@@ -4238,27 +4178,6 @@
         ]
       }
     },
-    "/api/v1/metrics": {
-      "get": {
-        "tags": [
-          "metrics"
-        ],
-        "summary": "OpenAPI documentation for the versioned metrics alias.",
-        "operationId": "get_v1_metrics_documentation",
-        "responses": {
-          "200": {
-            "description": "Simple application startup metrics",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartupMetricsResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/reading-mode": {
       "get": {
         "tags": [
@@ -4382,6 +4301,631 @@
           },
           "401": {
             "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for listing reading-order groups.",
+        "operationId": "dependency_groups_list",
+        "responses": {
+          "200": {
+            "description": "Owned groups with memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DependencyGroupResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for creating a reading-order group.",
+        "operationId": "dependency_groups_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for listing groups for a thread.",
+        "operationId": "dependency_groups_list_thread_groups",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Groups containing the thread or its issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for fetching one group.",
+        "operationId": "dependency_groups_get",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for deleting one group.",
+        "operationId": "dependency_groups_delete",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for renaming one group.",
+        "operationId": "dependency_groups_update",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/detail": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for fetching enriched group detail.",
+        "operationId": "dependency_groups_get_detail",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned group detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
+      "post": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for adding an issue-position range.",
+        "operationId": "dependency_groups_add_issue_range",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Range membership result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupIssueRangeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/members": {
+      "post": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for adding a group member.",
+        "operationId": "dependency_groups_add_member",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupMemberCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created membership",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, thread, or issue not found"
+          },
+          "409": {
+            "description": "This member is already in the group"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/members/{member_id}": {
+      "delete": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for removing a group member.",
+        "operationId": "dependency_groups_remove_member",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "description": "Membership identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or member not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/order": {
+      "put": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for setting crossover order.",
+        "operationId": "dependency_groups_set_order",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupOrderUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated group with reordered memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, issue, or membership not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reading-order-groups/{group_id}/plans": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for listing linked continuity plans.",
+        "operationId": "dependency_groups_list_plans",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Linked continuity plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DependencyGroupSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -4561,49 +5105,6 @@
       }
     },
     "/api/v1/releases/": {
-      "get": {
-        "tags": [
-          "releases"
-        ],
-        "summary": "Documentation-only operation for the mounted releases list handler.",
-        "operationId": "releases_list",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum releases to return (1-100, default 20)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Number of matching releases to skip (default 0)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReleaseListResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid pagination"
-          }
-        }
-      },
       "put": {
         "tags": [
           "releases"
@@ -4805,213 +5306,6 @@
             "description": "Release writer authorization is not configured"
           }
         }
-      }
-    },
-    "/api/v1/roll/dismiss-pending": {
-      "post": {
-        "tags": [
-          "roll"
-        ],
-        "operationId": "dismiss_pending_documentation",
-        "responses": {
-          "204": {
-            "description": "No Content. Pending thread cleared."
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/sessions/": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the versioned list.",
-        "operationId": "list_sessions_v1_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated session history",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionHistoryListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the versioned mounted read.",
-        "operationId": "get_session_v1_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Single session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/details": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only operation for the versioned details.",
-        "operationId": "get_session_details_v1_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Session details with events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetailsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/snapshots": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "OpenAPI declaration for both legacy and versioned same-path aliases.",
-        "operationId": "list_session_snapshots_documentation",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Owned reading session",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Session restore snapshots",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSnapshotsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Session not found"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
       }
     },
     "/api/v1/tags/": {
@@ -12382,6 +12676,331 @@
         },
         "additionalProperties": false
       },
+      "DependencyGroupCreateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyGroupDetailMemberResponse": {
+        "type": "object",
+        "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
+        "required": [
+          "membership",
+          "other_crossovers"
+        ],
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IssueDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "membership": {
+            "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+          },
+          "other_crossovers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ThreadDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "DependencyGroupDetailResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupDetailResponse`.",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "linked_plans"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "linked_plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupSummary"
+            }
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupDetailMemberResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyGroupIssueRangeCreateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position"
+        ],
+        "properties": {
+          "end_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyGroupIssueRangeResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupIssueRangeResponse`.",
+        "required": [
+          "thread_id",
+          "start_position",
+          "end_position",
+          "added_issue_ids",
+          "already_present_issue_ids"
+        ],
+        "properties": {
+          "added_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "already_present_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "end_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyGroupMemberCreateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupMemberCreate` payload.",
+        "properties": {
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "sequence_order": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyGroupMemberResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupMemberResponse`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sequence_order": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyGroupOrderItem": {
+        "type": "object",
+        "description": "Wire request item mirroring the Python `DependencyGroupOrderItem` payload.",
+        "required": [
+          "issue_id",
+          "sequence_order"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sequence_order": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DependencyGroupOrderUpdateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupOrderUpdate` payload.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupOrderItem"
+            }
+          }
+        }
+      },
+      "DependencyGroupResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "read_issues",
+          "total_issues",
+          "reading_progress"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "read_issues": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DependencyGroupSummary": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyGroupUpdateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "DependencyNoteUpdate": {
         "type": "object",
         "properties": {
@@ -15164,6 +15783,85 @@
           }
         }
       },
+      "ReadingGraphBlocker": {
+        "type": "object",
+        "required": [
+          "kind",
+          "waiting_on_issue_ids",
+          "explanation"
+        ],
+        "properties": {
+          "explanation": {
+            "type": "string"
+          },
+          "gate_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "waiting_on_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "ReadingGraphChoiceEffect": {
+        "type": "object",
+        "required": [
+          "choice",
+          "label",
+          "detail",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "series"
+        ],
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            }
+          },
+          "waiting_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
       "ReadingGraphCycle": {
         "type": "object",
         "description": "One cycle with its concrete edge path.",
@@ -15177,6 +15875,21 @@
             "items": {
               "$ref": "#/components/schemas/ReadingGraphEdge"
             }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphCycleError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
           },
           "message": {
             "type": "string"
@@ -15253,6 +15966,39 @@
           }
         }
       },
+      "ReadingGraphIssueReference": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "blockers"
+        ],
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphBlocker"
+            }
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        }
+      },
       "ReadingGraphList": {
         "type": "object",
         "description": "One affected Reading List.",
@@ -15271,6 +16017,154 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "ReadingGraphOverlap": {
+        "type": "object",
+        "required": [
+          "overlap_id",
+          "continuing_series",
+          "waiting_series",
+          "question",
+          "blocked_issue_ids",
+          "choices"
+        ],
+        "properties": {
+          "blocked_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphChoiceEffect"
+            }
+          },
+          "continuing_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          },
+          "overlap_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "selected_choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          }
+        }
+      },
+      "ReadingGraphOverlapChoice": {
+        "type": "object",
+        "required": [
+          "overlap_id",
+          "choice"
+        ],
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "overlap_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphPreview": {
+        "type": "object",
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "series",
+          "overlaps",
+          "issues",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "cycle_errors"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "cycle_errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphCycleError"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphIssueReference"
+            }
+          },
+          "overlaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlap"
+            }
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            }
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waiting_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "ReadingGraphPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "included_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "overlap_choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlapChoice"
+            }
+          },
+          "target_list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -15430,6 +16324,77 @@
           "unresolved_reference_count": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "ReadingGraphSeriesNode": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "state",
+          "unread_count",
+          "rollable_count",
+          "waiting_count",
+          "waits_for_issue_ids"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "rollable_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waiting_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waits_for_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingGraphSeriesReference": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -16031,6 +16996,140 @@
             "items": {
               "$ref": "#/components/schemas/ReadingOrderSummary"
             }
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewConflict": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewEntry": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewResponse": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewConflict"
+            }
+          },
+          "dropped_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewEntry"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -17293,6 +18392,171 @@
           }
         }
       },
+      "RollOverrideRequest": {
+        "type": "object",
+        "description": "Request body for the manual override.",
+        "required": [
+          "thread_id"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Reader-selected thread identifier."
+          }
+        }
+      },
+      "RollPrerequisiteSwitchRequest": {
+        "type": "object",
+        "description": "Request body for accepting one current recovery recommendation.",
+        "required": [
+          "node_type",
+          "node_id"
+        ],
+        "properties": {
+          "node_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Recommended continuity-node identifier."
+          },
+          "node_type": {
+            "type": "string",
+            "description": "Recommended continuity-node type. Only concrete issues are accepted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RollPrerequisiteSwitchResponse": {
+        "type": "object",
+        "description": "Durable active-target state after accepting a recovery recommendation.",
+        "required": [
+          "original_thread_id",
+          "target_thread_id",
+          "target_thread_title",
+          "target_issue_id",
+          "target_issue_number",
+          "changed"
+        ],
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "original_thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_issue_number": {
+            "type": "string"
+          },
+          "target_thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_thread_title": {
+            "type": "string"
+          }
+        }
+      },
+      "RollResponse": {
+        "type": "object",
+        "description": "Response body: the Python `RollResponse` projection for a manual pick.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "properties": {
+          "die_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SeriesImportStatusResponse": {
         "type": "object",
         "description": "Wire parity with Python `SeriesImportStatusResponse`.",
@@ -17327,6 +18591,276 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "SeriesMappingPreviewCounts": {
+        "type": "object",
+        "required": [
+          "already_confirmed",
+          "safe_exact_match",
+          "needs_review_ambiguous",
+          "needs_review_conflict",
+          "unresolved",
+          "excluded_special"
+        ],
+        "properties": {
+          "already_confirmed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_special": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "needs_review_ambiguous": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "needs_review_conflict": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "safe_exact_match": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unresolved": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SeriesMappingPreviewProviderSeries": {
+        "type": "object",
+        "description": "Wire-exact mirror of\n`app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.\n\nPydantic coerces `start_year` and `count_of_issues` from strings to integers;\nthe conversion helper below does the same so the generated contract types\nthese as integers rather than `unknown`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "count_of_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {},
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SeriesMappingPreviewRequest": {
+        "type": "object",
+        "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
+        "required": [
+          "origin_issue_id",
+          "provider",
+          "provider_series_external_id"
+        ],
+        "properties": {
+          "origin_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_series_external_id": {
+            "type": "string"
+          },
+          "scope_mode": {
+            "type": "string"
+          }
+        }
+      },
+      "SeriesMappingPreviewResponse": {
+        "type": "object",
+        "required": [
+          "scope",
+          "counts",
+          "rows",
+          "issued_at"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewCounts"
+          },
+          "expires_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issued_at": {
+            "type": "number",
+            "format": "double"
+          },
+          "preview_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesMappingPreviewRow"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewScope"
+          }
+        }
+      },
+      "SeriesMappingPreviewRow": {
+        "type": "object",
+        "description": "Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.\n\nEvery field is always emitted, including the nullable ones and the two\ndefaults (`metadata_refresh_required: false`, `reason: null`). Internal plan\nfields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,\n`_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the\nPython Pydantic model drops them, so a raw `Value` would leak them and omit\nthe defaults.",
+        "required": [
+          "row_id",
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected",
+          "metadata_refresh_required"
+        ],
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_selected": {
+            "type": "boolean"
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "metadata_refresh_required": {
+            "type": "boolean"
+          },
+          "proposed_mapping": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SeriesMappingPreviewScope": {
+        "type": "object",
+        "required": [
+          "status",
+          "origin_issue_id"
+        ],
+        "properties": {
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scope_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
           }
         }
       },
@@ -17462,167 +18996,6 @@
               "string",
               "null"
             ]
-          }
-        }
-      },
-      "SessionDetailResponse": {
-        "type": "object",
-        "description": "Wire shape of Python `SessionResponse` for `get_session`.",
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "snoozed_thread_ids",
-          "snoozed_threads",
-          "skipped_thread_ids",
-          "skipped_threads",
-          "reading_mode_suggested"
-        ],
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bandwidth": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionBandwidthState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "correction": {},
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "intent": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionIntentState"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "pending_thread_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "skipped_thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "skipped_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            }
-          },
-          "snapshot_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "snoozed_thread_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "snoozed_threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionThreadSummary"
-            }
-          },
-          "start_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user_id": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -17779,27 +19152,6 @@
           }
         }
       },
-      "SessionHistoryListResponse": {
-        "type": "object",
-        "description": "Paginated session history list response.",
-        "required": [
-          "sessions"
-        ],
-        "properties": {
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sessions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionListItemResponse"
-            }
-          }
-        }
-      },
       "SessionIntentState": {
         "type": "object",
         "description": "Canonical intent state.",
@@ -17830,125 +19182,6 @@
             ]
           },
           "source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "SessionListItemResponse": {
-        "type": "object",
-        "description": "List-item session response (history list endpoint).",
-        "required": [
-          "id",
-          "started_at",
-          "start_die",
-          "user_id",
-          "ladder_path",
-          "current_die",
-          "has_restore_point",
-          "snapshot_count",
-          "reading_mode_suggested"
-        ],
-        "properties": {
-          "active_thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SessionActiveThread"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "has_restore_point": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "ladder_path": {
-            "type": "string"
-          },
-          "last_rolled_result": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "reading_bandwidth": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_intent": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_source": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_mode_suggested": {
-            "type": "boolean"
-          },
-          "snapshot_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "start_die": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "started_at": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "SessionListParams": {
-        "type": "object",
-        "description": "Query parameters for session history pagination.",
-        "properties": {
-          "page_size": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "default": 50,
-            "maximum": 200,
-            "minimum": 1
-          },
-          "page_token": {
             "type": [
               "string",
               "null"
