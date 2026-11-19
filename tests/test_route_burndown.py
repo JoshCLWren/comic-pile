@@ -471,8 +471,7 @@ def test_creator_v2_operations_are_native_rust_in_source_fragment() -> None:
     post-merge from fragments, so the source fragment is the reviewable proof
     that each ``/api/v2/creators`` operation serves the native ingress with the
     native-rust runtime, target status and owning issue (overriding the
-    family's python-fastapi/transitional/null defaults). The legacy v1 creator
-    declarations are retained here and retired by a later change.
+    family's python-fastapi/transitional/null defaults).
     """
     fragment = _fragment_named("creators")
     v2_operations = [
@@ -489,6 +488,27 @@ def test_creator_v2_operations_are_native_rust_in_source_fragment() -> None:
         assert operation["runtime"] == "native-rust", operation
         assert operation["status"] == "target", operation
         assert operation["owning_issue"] == 4836, operation
+
+
+def test_creator_fragment_retires_legacy_v1_ingress_exceptions() -> None:
+    """Issue #4836: no ``/api/v1/creators`` operation may keep a native alias.
+
+    The v1 creator ingress exceptions (``GET /api/v1/creators`` and
+    ``GET /api/v1/creators/summaries`` routed to the Rust binary as shadow
+    aliases) are retired with the Python handlers: the family keeps owning the
+    v1 path pattern so post-merge route regeneration drops their generated
+    rewrites, and any remaining v1 creator URL falls through to the Rust
+    catch-all JSON 404 instead of Python. Creator-adjacent v1 metadata owned
+    by other families (thread issue creators) stays declared.
+    """
+    fragment = _fragment_named("creators")
+    paths = {operation["path"] for operation in fragment.operations}
+    assert not any(str(path).startswith("/api/v1/creators") for path in paths)
+    assert "/api/v1/threads/{thread_id}/issues/creators" in paths
+    assert any(
+        pattern == r"^/api/v1/creators(?:/.*)?$"
+        for pattern in fragment.owned_path_patterns
+    )
 
 
 def test_dependency_fragment_covers_native_and_python_metadata() -> None:
