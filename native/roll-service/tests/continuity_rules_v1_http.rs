@@ -494,7 +494,7 @@ async fn converged_and_checkpoint_rules_compile_canonical_edges() {
     let (state, _db) = database().await;
     let (token, csrf) = register_and_login(&state, "cr-converged").await;
     let user_id = user_id_for(&state, "cr-converged").await;
-    seed_thread_issues(&state, user_id, 830001, &[830011, 830012, 830013]).await;
+    seed_thread_issues(&state, user_id, 830001, &[830011, 830012, 830013, 830014]).await;
 
     let uri = "/api/v1/continuity-rules/";
 
@@ -523,12 +523,13 @@ async fn converged_and_checkpoint_rules_compile_canonical_edges() {
     assert_eq!(dependency_count(&state, 830011, 830012).await, 1);
     assert_eq!(dependency_count(&state, 830013, 830012).await, 1);
 
-    // Checkpoint rule: the canonical edge runs from the checkpoint issue.
+    // Checkpoint rule on a disjoint pair: the canonical edge runs from the
+    // checkpoint issue, not the source.
     let checkpoint = json!({
         "source_type": "issue",
-        "source_id": 830012,
+        "source_id": 830013,
         "target_type": "issue",
-        "target_id": 830013,
+        "target_id": 830014,
         "satisfaction_type": "checkpoint",
         "checkpoint_issue_id": 830011,
         "convergence_targets": [],
@@ -538,7 +539,8 @@ async fn converged_and_checkpoint_rules_compile_canonical_edges() {
     let (status, created) = authed_json(&state, "POST", uri, &token, &csrf, Some(checkpoint)).await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
     assert_eq!(created["checkpoint_issue_id"], 830011);
-    assert_eq!(dependency_count(&state, 830011, 830013).await, 1);
+    assert_eq!(dependency_count(&state, 830011, 830014).await, 1);
+    assert_eq!(dependency_count(&state, 830013, 830014).await, 0);
 
     // Deleting the converged rule retires only its own canonical edges.
     let (status, _) = authed_json(
@@ -554,5 +556,5 @@ async fn converged_and_checkpoint_rules_compile_canonical_edges() {
     assert_eq!(dependency_count(&state, 830011, 830012).await, 0);
     assert_eq!(dependency_count(&state, 830013, 830012).await, 0);
     // The checkpoint edge belongs to the other rule and must survive.
-    assert_eq!(dependency_count(&state, 830011, 830013).await, 1);
+    assert_eq!(dependency_count(&state, 830011, 830014).await, 1);
 }
