@@ -548,8 +548,14 @@ fn app() -> Router {
         )
         .route("/api/v2/tags", get(native_dispatch))
         .route("/api/v2/tags", post(native_dispatch))
-        .route("/api/v2/tags/effective/issues/{issue_id}", get(native_dispatch))
-        .route("/api/v2/tags/effective/plans/{plan_id}", get(native_dispatch))
+        .route(
+            "/api/v2/tags/effective/issues/{issue_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/tags/effective/plans/{plan_id}",
+            get(native_dispatch),
+        )
         .route(
             "/api/v2/tags/effective/threads/{thread_id}",
             get(native_dispatch),
