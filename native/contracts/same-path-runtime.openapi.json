@@ -1426,6 +1426,7 @@
         "tags": [
           "comicvine-resolution"
         ],
+        "summary": "OpenAPI documentation for the migrated same-path operation.",
         "operationId": "series_import_status_documentation",
         "parameters": [
           {
@@ -18896,6 +18897,7 @@
       },
       "SeriesImportStatusResponse": {
         "type": "object",
+        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
         "required": [
           "comicvine_volume_id",
           "imported"
