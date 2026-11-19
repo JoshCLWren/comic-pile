@@ -140,8 +140,7 @@
       "src": "^/api/v1/threads/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 5461,
-      "exclude_from_inventory": true
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",

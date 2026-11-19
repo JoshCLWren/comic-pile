@@ -87,3 +87,11 @@
 **Test:** Open Queue, expand Finished Series, reload and navigate away and back.
 
 **Expected:** Completed series remain listed (read from the completed collection, not the active-only Queue rows). Source: #5171, fixed by #5297.
+
+## MQA-QUEUE-012: Delete series removes events and related rows atomically
+
+**Setup:** QA account with a queued series that has roll events (for example, after a manual roll pick and a remove/restore cycle) and appears in a reading order.
+
+**Test:** From the Queue row menu choose "Delete series" and confirm "Delete Series" in the "Permanently delete …?" dialog. Reload Queue and reopen the reading order.
+
+**Expected:** The series disappears from Queue with no foreign-key error banner. Its issues, reading history, ratings, events and reading-order entries are removed atomically in one transaction, a delete audit event is recorded, and unrelated series are untouched. Source: #5461, fixed by #5468.
